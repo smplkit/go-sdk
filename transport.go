@@ -92,27 +92,16 @@ func classifyError(err error) error {
 		}
 	}
 
-	// Check for network-level errors.
+	// Check for network-level timeout errors (e.g. http.Client.Timeout).
 	var netErr net.Error
-	if errors.As(err, &netErr) {
-		if netErr.Timeout() {
-			return &SmplTimeoutError{
-				SmplError: SmplError{Message: fmt.Sprintf("request timed out: %s", err)},
-			}
-		}
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("connection error: %s", err)},
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return &SmplTimeoutError{
+			SmplError: SmplError{Message: fmt.Sprintf("request timed out: %s", err)},
 		}
 	}
 
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("connection error: %s", err)},
-		}
-	}
-
+	// All remaining errors are connection failures.
 	return &SmplConnectionError{
-		SmplError: SmplError{Message: fmt.Sprintf("request failed: %s", err)},
+		SmplError: SmplError{Message: fmt.Sprintf("connection error: %s", err)},
 	}
 }
