@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -55,3 +55,57 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+
+  release:
+    needs: [lint, test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Record latest tag before release
+        id: before
+        run: echo "tag=$(git describe --tags --abbrev=0 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --yes semantic-release
+
+      - name: Check if a new release was created
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST_TAG=$(gh api repos/${{ github.repository }}/tags --jq '.[0].name' 2>/dev/null || echo '')
+          if [ "$LATEST_TAG" != "${{ steps.before.outputs.tag }}" ] && [ -n "$LATEST_TAG" ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "version=${LATEST_TAG#v}" >> "$GITHUB_OUTPUT"
+            echo "New release detected: ${LATEST_TAG}"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "No new release."
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Release" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.check.outputs.released }}" = "true" ]; then
+            echo "**Version:** v${{ steps.check.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Go module:** \`go get github.com/${{ github.repository }}@v${{ steps.check.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No release warranted by commits since last release." >> "$GITHUB_STEP_SUMMARY"
+          fi
