@@ -2,11 +2,25 @@
 
 The official Go client for the [smplkit](https://docs.smplkit.com) platform.
 
+## Requirements
+
+Go 1.21 or later.
+
 ## Installation
 
 ```bash
 go get github.com/smplkit/go-sdk
 ```
+
+## Authentication
+
+Create a client with your API key (prefixed `sk_api_`):
+
+```go
+client := smplkit.NewClient("sk_api_your_key_here")
+```
+
+The key is sent as a Bearer token on every request. Never log or expose your API key.
 
 ## Quick Start
 
@@ -108,6 +122,10 @@ if err != nil {
 ## Documentation
 
 Full documentation is available at [docs.smplkit.com](https://docs.smplkit.com).
+
+## Contributing
+
+This project is in its initial development phase. Contributions are not currently accepted, but feel free to open issues for bugs or feature requests.
 
 ## License
 

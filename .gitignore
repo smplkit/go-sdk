@@ -1,7 +1,22 @@
+# Test and coverage artifacts
 coverage.out
-*.exe
+coverage.html
 *.test
 *.prof
+
+# Build artifacts
+*.exe
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+
+# Dependency directories
 vendor/
+
+# IDE artifacts
 .idea/
 .vscode/
+*.swp
+*.swo
