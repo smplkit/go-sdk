@@ -18,7 +18,7 @@ type Client struct {
 // NewClient creates a new smplkit API client.
 //
 // The apiKey is used for Bearer token authentication on every request.
-// Use ClientOption functions to customise the base URL, timeout, or HTTP client.
+// Use ClientOption functions to customize the base URL, timeout, or HTTP client.
 func NewClient(apiKey string, opts ...ClientOption) *Client {
 	cfg := defaultConfig()
 	for _, opt := range opts {

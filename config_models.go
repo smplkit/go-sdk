@@ -70,8 +70,8 @@ type jsonAPIRequest struct {
 
 // jsonAPIResourceRequest is a single JSON:API resource in a request.
 type jsonAPIResourceRequest struct {
-	Type       string                 `json:"type"`
-	Attributes jsonAPIConfigAttrsReq  `json:"attributes"`
+	Type       string                `json:"type"`
+	Attributes jsonAPIConfigAttrsReq `json:"attributes"`
 }
 
 // jsonAPIConfigAttrsReq holds the config attributes for a create/update request.
@@ -95,9 +95,9 @@ type jsonAPIListResponse struct {
 
 // jsonAPIResource is a single JSON:API resource in a response.
 type jsonAPIResource struct {
-	ID         string              `json:"id"`
-	Type       string              `json:"type"`
-	Attributes jsonAPIConfigAttrs  `json:"attributes"`
+	ID         string             `json:"id"`
+	Type       string             `json:"type"`
+	Attributes jsonAPIConfigAttrs `json:"attributes"`
 }
 
 // jsonAPIConfigAttrs holds the config attributes from a JSON:API response.
@@ -106,10 +106,10 @@ type jsonAPIConfigAttrs struct {
 	Key          string                            `json:"key"`
 	Description  *string                           `json:"description"`
 	Parent       *string                           `json:"parent"`
-	Values       map[string]interface{}             `json:"values"`
-	Environments map[string]map[string]interface{}  `json:"environments"`
-	CreatedAt    *time.Time                         `json:"created_at"`
-	UpdatedAt    *time.Time                         `json:"updated_at"`
+	Values       map[string]interface{}            `json:"values"`
+	Environments map[string]map[string]interface{} `json:"environments"`
+	CreatedAt    *time.Time                        `json:"created_at"`
+	UpdatedAt    *time.Time                        `json:"updated_at"`
 }
 
 // toConfig converts a JSON:API resource into a public Config.

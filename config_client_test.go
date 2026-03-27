@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/smplkit/go-sdk"
+	smplkit "github.com/smplkit/go-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

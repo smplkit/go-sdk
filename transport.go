@@ -14,13 +14,13 @@ import (
 const userAgent = "smplkit-go-sdk/0.0.0"
 
 // doRequest executes an HTTP request with standard headers and maps errors.
-// It returns the raw response body and status code, or a typed SDK error.
-func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, int, error) {
+// It returns the raw response body, or a typed SDK error.
+func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
-			return nil, 0, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
+			return nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
 		}
 		bodyReader = bytes.NewReader(data)
 	}
@@ -29,7 +29,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
-		return nil, 0, fmt.Errorf("smplkit: failed to create request: %w", err)
+		return nil, fmt.Errorf("smplkit: failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/vnd.api+json")
@@ -38,22 +38,22 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, classifyError(err)
+		return nil, classifyError(err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, resp.StatusCode, &SmplConnectionError{
+		return nil, &SmplConnectionError{
 			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 
 	if err := checkStatus(resp.StatusCode, respBody); err != nil {
-		return respBody, resp.StatusCode, err
+		return respBody, err
 	}
 
-	return respBody, resp.StatusCode, nil
+	return respBody, nil
 }
 
 // checkStatus maps HTTP error status codes to typed SDK errors.

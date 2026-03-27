@@ -37,7 +37,7 @@ func (c *ConfigClient) Get(ctx context.Context, opts ...GetOption) (*Config, err
 // GetByID retrieves a config by its UUID.
 func (c *ConfigClient) GetByID(ctx context.Context, id string) (*Config, error) {
 	path := fmt.Sprintf("/api/v1/configs/%s", url.PathEscape(id))
-	body, _, err := c.client.doRequest(ctx, "GET", path, nil)
+	body, err := c.client.doRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (c *ConfigClient) GetByKey(ctx context.Context, key string) (*Config, error
 		"filter[key]": {key},
 	}.Encode())
 
-	body, _, err := c.client.doRequest(ctx, "GET", path, nil)
+	body, err := c.client.doRequest(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -85,17 +85,11 @@ func (c *ConfigClient) Create(ctx context.Context, params CreateConfigParams) (*
 	reqBody := jsonAPIRequest{
 		Data: jsonAPIResourceRequest{
 			Type: "config",
-			Attributes: jsonAPIConfigAttrsReq{
-				Name:        params.Name,
-				Key:         params.Key,
-				Description: params.Description,
-				Parent:      params.Parent,
-				Values:      params.Values,
-			},
+			Attributes: jsonAPIConfigAttrsReq(params),
 		},
 	}
 
-	body, _, err := c.client.doRequest(ctx, "POST", "/api/v1/configs", reqBody)
+	body, err := c.client.doRequest(ctx, "POST", "/api/v1/configs", reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +104,7 @@ func (c *ConfigClient) Create(ctx context.Context, params CreateConfigParams) (*
 
 // List returns all configs for the account.
 func (c *ConfigClient) List(ctx context.Context) ([]*Config, error) {
-	body, _, err := c.client.doRequest(ctx, "GET", "/api/v1/configs", nil)
+	body, err := c.client.doRequest(ctx, "GET", "/api/v1/configs", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +125,6 @@ func (c *ConfigClient) List(ctx context.Context) ([]*Config, error) {
 // Delete removes a config by its UUID. Returns nil on success (HTTP 204).
 func (c *ConfigClient) Delete(ctx context.Context, id string) error {
 	path := fmt.Sprintf("/api/v1/configs/%s", url.PathEscape(id))
-	_, _, err := c.client.doRequest(ctx, "DELETE", path, nil)
+	_, err := c.client.doRequest(ctx, "DELETE", path, nil)
 	return err
 }
