@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
-	smplkit "github.com/smplkit/go-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	smplkit "github.com/smplkit/go-sdk"
 )
 
 // sampleConfigJSON returns a JSON:API single-resource response body.

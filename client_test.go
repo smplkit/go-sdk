@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	smplkit "github.com/smplkit/go-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	smplkit "github.com/smplkit/go-sdk"
 )
 
 func TestNewClient_Defaults(t *testing.T) {
