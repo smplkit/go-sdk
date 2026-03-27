@@ -84,7 +84,7 @@ func (c *ConfigClient) GetByKey(ctx context.Context, key string) (*Config, error
 func (c *ConfigClient) Create(ctx context.Context, params CreateConfigParams) (*Config, error) {
 	reqBody := jsonAPIRequest{
 		Data: jsonAPIResourceRequest{
-			Type: "config",
+			Type:       "config",
 			Attributes: jsonAPIConfigAttrsReq(params),
 		},
 	}
