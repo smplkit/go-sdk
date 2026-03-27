@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -363,6 +364,65 @@ func TestConfigClient_ContentType(t *testing.T) {
 
 	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
 	require.NoError(t, err)
+}
+
+func TestConfigClient_ContextCanceled_TimeoutError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	_, err := client.Config().List(ctx)
+	require.Error(t, err)
+
+	var timeoutErr *smplkit.SmplTimeoutError
+	require.True(t, errors.As(err, &timeoutErr))
+}
+
+func TestConfigClient_GenericHTTPError(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"internal server error"}`))
+	})
+
+	_, err := client.Config().List(context.Background())
+	require.Error(t, err)
+
+	var smplErr *smplkit.SmplError
+	require.True(t, errors.As(err, &smplErr))
+	assert.Equal(t, 500, smplErr.StatusCode)
+}
+
+func TestConfigClient_GenericError_FallsBackToConnectionError(t *testing.T) {
+	// Use a custom RoundTripper that returns a generic (non-net, non-context) error.
+	transport := &errorRoundTripper{err: fmt.Errorf("some unknown error")}
+	httpClient := &http.Client{Transport: transport}
+	client := smplkit.NewClient("sk_test_key",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+
+	_, err := client.Config().List(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+	assert.Contains(t, connErr.Error(), "error")
+}
+
+// errorRoundTripper is a test helper that always returns the given error.
+type errorRoundTripper struct {
+	err error
+}
+
+func (t *errorRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return nil, t.err
 }
 
 func TestConfigClient_ParsesEnvironments(t *testing.T) {

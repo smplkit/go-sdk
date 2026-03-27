@@ -89,6 +89,46 @@ func TestErrorsAs_SpecificTypes(t *testing.T) {
 	assert.False(t, errors.As(err, &conflict))
 }
 
+func TestSubtypeErrors_Error(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected string
+	}{
+		{
+			name:     "connection error",
+			err:      &smplkit.SmplConnectionError{SmplError: smplkit.SmplError{Message: "conn failed"}},
+			expected: "conn failed",
+		},
+		{
+			name:     "timeout error",
+			err:      &smplkit.SmplTimeoutError{SmplError: smplkit.SmplError{Message: "timed out"}},
+			expected: "timed out",
+		},
+		{
+			name:     "not found error",
+			err:      &smplkit.SmplNotFoundError{SmplError: smplkit.SmplError{Message: "missing", StatusCode: 404}},
+			expected: "missing (status 404)",
+		},
+		{
+			name:     "conflict error",
+			err:      &smplkit.SmplConflictError{SmplError: smplkit.SmplError{Message: "conflict", StatusCode: 409}},
+			expected: "conflict (status 409)",
+		},
+		{
+			name:     "validation error",
+			err:      &smplkit.SmplValidationError{SmplError: smplkit.SmplError{Message: "invalid", StatusCode: 422}},
+			expected: "invalid (status 422)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.err.Error())
+		})
+	}
+}
+
 func TestErrorUnwrap(t *testing.T) {
 	inner := smplkit.SmplError{Message: "inner", StatusCode: 500}
 	err := &smplkit.SmplConnectionError{SmplError: inner}
