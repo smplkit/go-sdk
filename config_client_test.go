@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -440,3 +441,140 @@ func TestConfigClient_ParsesEnvironments(t *testing.T) {
 	prodEnv := cfg.Environments["production"]
 	require.Contains(t, prodEnv, "values")
 }
+
+func TestConfigClient_GetByID_MalformedJSON(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid json}`))
+	})
+
+	_, err := client.Config().GetByID(context.Background(), "some-id")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestConfigClient_GetByKey_MalformedJSON(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not valid}`))
+	})
+
+	_, err := client.Config().GetByKey(context.Background(), "some-key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestConfigClient_GetByKey_NetworkError(t *testing.T) {
+	transport := &errorRoundTripper{err: fmt.Errorf("some network error")}
+	httpClient := &http.Client{Transport: transport}
+	client := smplkit.NewClient("sk_test_key",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+
+	_, err := client.Config().GetByKey(context.Background(), "some-key")
+	require.Error(t, err)
+}
+
+func TestConfigClient_Create_UnmarshalableValues(t *testing.T) {
+	// Channels cannot be JSON-marshaled — exercises the marshal error path in doRequest.
+	client := smplkit.NewClient("sk_test_key")
+
+	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{
+		Name:   "Test",
+		Values: map[string]interface{}{"ch": make(chan int)},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to marshal request body")
+}
+
+func TestConfigClient_Create_MalformedJSON(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not valid}`))
+	})
+
+	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestConfigClient_List_MalformedJSON(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not valid}`))
+	})
+
+	_, err := client.Config().List(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestConfigClient_ReadBodyError(t *testing.T) {
+	transport := &brokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client := smplkit.NewClient("sk_test_key",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+
+	_, err := client.Config().List(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+	assert.Contains(t, connErr.Error(), "failed to read response body")
+}
+
+func TestConfigClient_InvalidURL_RequestCreateError(t *testing.T) {
+	// A URL containing a null byte causes http.NewRequestWithContext to fail.
+	client := smplkit.NewClient("sk_test_key",
+		smplkit.WithBaseURL("http://bad\x00host"),
+	)
+
+	_, err := client.Config().List(context.Background())
+	require.Error(t, err)
+}
+
+func TestClassifyError_NetErrorTimeout(t *testing.T) {
+	transport := &timeoutNetErrorRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client := smplkit.NewClient("sk_test_key",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+
+	_, err := client.Config().List(context.Background())
+	require.Error(t, err)
+
+	var timeoutErr *smplkit.SmplTimeoutError
+	require.True(t, errors.As(err, &timeoutErr), "expected SmplTimeoutError, got %T: %v", err, err)
+}
+
+// brokenBodyRoundTripper returns a 200 response whose body fails on Read.
+type brokenBodyRoundTripper struct{}
+
+func (t *brokenBodyRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(&errReader{err: fmt.Errorf("simulated read error")}),
+		Header:     make(http.Header),
+	}, nil
+}
+
+type errReader struct{ err error }
+
+func (r *errReader) Read(_ []byte) (int, error) { return 0, r.err }
+
+// timeoutNetErrorRoundTripper returns a net.Error with Timeout()=true.
+type timeoutNetErrorRoundTripper struct{}
+
+func (t *timeoutNetErrorRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return nil, &mockTimeoutNetError{}
+}
+
+type mockTimeoutNetError struct{}
+
+func (e *mockTimeoutNetError) Error() string   { return "mock timeout" }
+func (e *mockTimeoutNetError) Timeout() bool   { return true }
+func (e *mockTimeoutNetError) Temporary() bool { return true }
