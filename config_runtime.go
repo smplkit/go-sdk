@@ -64,9 +64,12 @@ type ConfigRuntime struct {
 	closeOnce sync.Once
 	wsDone    chan struct{}
 
-	fetchChain func() ([]chainEntry, error)
-	apiKey     string
-	wsBase     string // base WebSocket URL (ws:// or wss://)
+	fetchChain  func() ([]chainEntry, error)
+	apiKey      string
+	wsBase      string // base WebSocket URL (ws:// or wss://)
+	initBackoff time.Duration
+	maxBackoff  time.Duration
+	dialWS      func(url string) (*websocket.Conn, error)
 }
 
 func newConfigRuntime(configID, environment string, cache map[string]interface{}, fetchChain func() ([]chainEntry, error), apiKey, baseURL string) *ConfigRuntime {
@@ -82,7 +85,15 @@ func newConfigRuntime(configID, environment string, cache map[string]interface{}
 		fetchChain:  fetchChain,
 		apiKey:      apiKey,
 		wsBase:      toWSBase(baseURL),
+		initBackoff: time.Second,
+		maxBackoff:  60 * time.Second,
+		dialWS:      defaultDialWS,
 	}
+}
+
+func defaultDialWS(url string) (*websocket.Conn, error) {
+	conn, _, err := websocket.DefaultDialer.DialContext(context.Background(), url, nil)
+	return conn, err
 }
 
 // Get returns the resolved value for key, or defaultVal (or nil) if absent.
@@ -274,7 +285,10 @@ func (rt *ConfigRuntime) wsLoop() {
 		close(rt.wsDone)
 	}()
 
-	backoff := time.Second
+	backoff := rt.initBackoff
+	if backoff == 0 {
+		backoff = time.Second
+	}
 
 	for {
 		select {
@@ -283,11 +297,8 @@ func (rt *ConfigRuntime) wsLoop() {
 		default:
 		}
 
-		closed, err := rt.wsConnect()
+		closed, _ := rt.wsConnect()
 		if closed {
-			return
-		}
-		if err == nil {
 			return
 		}
 
@@ -297,10 +308,14 @@ func (rt *ConfigRuntime) wsLoop() {
 			return
 		case <-time.After(backoff):
 		}
-		if backoff < 60*time.Second {
+		maxBo := rt.maxBackoff
+		if maxBo == 0 {
+			maxBo = 60 * time.Second
+		}
+		if backoff < maxBo {
 			backoff *= 2
-			if backoff > 60*time.Second {
-				backoff = 60 * time.Second
+			if backoff > maxBo {
+				backoff = maxBo
 			}
 		}
 	}
@@ -311,7 +326,11 @@ func (rt *ConfigRuntime) wsLoop() {
 func (rt *ConfigRuntime) wsConnect() (closed bool, err error) {
 	wsURL := rt.wsBase + "/api/ws/v1/configs?" + url.Values{"api_key": {rt.apiKey}}.Encode()
 
-	conn, _, dialErr := websocket.DefaultDialer.DialContext(context.Background(), wsURL, nil)
+	dial := rt.dialWS
+	if dial == nil {
+		dial = defaultDialWS
+	}
+	conn, dialErr := dial(wsURL)
 	if dialErr != nil {
 		select {
 		case <-rt.closeCh:
