@@ -105,7 +105,11 @@ func main() {
 		fatal("failed to create user_service config", err)
 	}
 	fmt.Printf("Created config: key=%q  id=%s\n", userService.Key, userService.ID)
-	fmt.Printf("  Parent: %v (inherits from common by default)\n", userService.Parent)
+	parentStr := "<none>"
+	if userService.Parent != nil {
+		parentStr = *userService.Parent
+	}
+	fmt.Printf("  Parent: %s (inherits from common by default)\n", parentStr)
 	fmt.Printf("  Values: %v\n", userService.Values)
 
 	// --- SKIPPED: Environment overrides and SetValue on user_service ---
