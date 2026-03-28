@@ -228,7 +228,7 @@ func TestWsConnect_WriteJSONError(t *testing.T) {
 				return nil, err
 			}
 			// Set write deadline to the past so WriteJSON fails immediately.
-			conn.SetWriteDeadline(time.Now().Add(-time.Hour))
+			_ = conn.SetWriteDeadline(time.Now().Add(-time.Hour))
 			return conn, nil
 		},
 	}
