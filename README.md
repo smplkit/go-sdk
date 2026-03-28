@@ -1,10 +1,6 @@
 # smplkit Go SDK
 
-The official Go client for the [smplkit](https://docs.smplkit.com) platform.
-
-## Requirements
-
-Go 1.21 or later.
+The official Go SDK for [smplkit](https://smplkit.com) — simple application infrastructure for developers.
 
 ## Installation
 
@@ -12,15 +8,9 @@ Go 1.21 or later.
 go get github.com/smplkit/go-sdk
 ```
 
-## Authentication
+## Requirements
 
-Create a client with your API key (prefixed `sk_api_`):
-
-```go
-client := smplkit.NewClient("sk_api_your_key_here")
-```
-
-The key is sent as a Bearer token on every request. Never log or expose your API key.
+- Go 1.24+
 
 ## Quick Start
 
@@ -28,105 +18,92 @@ The key is sent as a Bearer token on every request. Never log or expose your API
 package main
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"log"
+    "fmt"
+    "log"
 
-	smplkit "github.com/smplkit/go-sdk"
+    smplkit "github.com/smplkit/go-sdk"
 )
 
 func main() {
-	client := smplkit.NewClient("sk_api_your_key_here")
+    client := smplkit.NewClient("sk_api_...")
 
-	ctx := context.Background()
+    // Get a config by key
+    config, err := client.Config().GetByKey("user_service")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(config.Key)
 
-	// List all configs
-	configs, err := client.Config().List(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, cfg := range configs {
-		fmt.Printf("%s: %s\n", cfg.Key, cfg.Name)
-	}
+    // List all configs
+    configs, err := client.Config().List()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(len(configs))
 
-	// Get a config by key
-	cfg, err := client.Config().GetByKey(ctx, "my-service")
-	if err != nil {
-		var notFound *smplkit.SmplNotFoundError
-		if errors.As(err, &notFound) {
-			fmt.Println("Config not found")
-			return
-		}
-		log.Fatal(err)
-	}
-	fmt.Printf("Config: %s (values: %v)\n", cfg.Name, cfg.Values)
+    // Create a config
+    newConfig, err := client.Config().Create(smplkit.CreateConfigParams{
+        Name:        "My Service",
+        Key:         strPtr("my_service"),
+        Description: strPtr("Configuration for my service"),
+        Values:      map[string]any{"timeout": 30, "retries": 3},
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
 
-	// Create a config
-	key := "new-service"
-	newCfg, err := client.Config().Create(ctx, smplkit.CreateConfigParams{
-		Name:   "New Service",
-		Key:    &key,
-		Values: map[string]interface{}{"log_level": "info"},
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Created: %s\n", newCfg.ID)
-
-	// Delete a config
-	if err := client.Config().Delete(ctx, newCfg.ID); err != nil {
-		log.Fatal(err)
-	}
+    // Delete a config
+    err = client.Config().Delete(newConfig.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
 }
+
+func strPtr(s string) *string { return &s }
 ```
 
 ## Configuration
 
-Use functional options to customise the client:
-
 ```go
 client := smplkit.NewClient("sk_api_...",
-	smplkit.WithBaseURL("https://custom.example.com"),
-	smplkit.WithTimeout(10 * time.Second),
-	smplkit.WithHTTPClient(myHTTPClient),
+    smplkit.WithTimeout(30 * time.Second),   // default
+    smplkit.WithHTTPClient(customHTTPClient),
 )
 ```
 
 ## Error Handling
 
-All SDK errors embed `SmplError` and support `errors.Is()` / `errors.As()`:
-
-| Error Type             | HTTP Status | Description                          |
-|------------------------|-------------|--------------------------------------|
-| `SmplNotFoundError`    | 404         | Resource does not exist              |
-| `SmplConflictError`    | 409         | Operation conflicts with state       |
-| `SmplValidationError`  | 422         | Server rejected the request          |
-| `SmplConnectionError`  | ---         | Network request failed               |
-| `SmplTimeoutError`     | ---         | Request exceeded timeout             |
+All SDK errors extend `SmplError` and support `errors.Is()` / `errors.As()`:
 
 ```go
-cfg, err := client.Config().GetByKey(ctx, "missing")
+import "errors"
+
+config, err := client.Config().GetByKey("nonexistent")
 if err != nil {
-	var notFound *smplkit.SmplNotFoundError
-	if errors.As(err, &notFound) {
-		// handle 404
-	}
-	var base *smplkit.SmplError
-	if errors.As(err, &base) {
-		fmt.Println(base.StatusCode, base.ResponseBody)
-	}
+    var notFound *smplkit.SmplNotFoundError
+    if errors.As(err, &notFound) {
+        fmt.Println("Not found:", notFound.Message)
+    } else {
+        fmt.Println("Error:", err)
+    }
 }
 ```
 
+| Error                  | Cause                        |
+|------------------------|------------------------------|
+| `SmplNotFoundError`    | HTTP 404 — resource not found |
+| `SmplConflictError`    | HTTP 409 — conflict           |
+| `SmplValidationError`  | HTTP 422 — validation error   |
+| `SmplTimeoutError`     | Request timed out             |
+| `SmplConnectionError`  | Network connectivity issue    |
+| `SmplError`            | Any other SDK error           |
+
 ## Documentation
 
-Full documentation is available at [docs.smplkit.com](https://docs.smplkit.com).
-
-## Contributing
-
-This project is in its initial development phase. Contributions are not currently accepted, but feel free to open issues for bugs or feature requests.
+- [Getting Started](https://docs.smplkit.com/getting-started)
+- [Go SDK Guide](https://docs.smplkit.com/sdks/go)
+- [API Reference](https://docs.smplkit.com/api)
 
 ## License
 
-MIT --- see [LICENSE](LICENSE).
+MIT
