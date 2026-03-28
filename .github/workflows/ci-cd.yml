@@ -32,6 +32,22 @@ jobs:
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
 
+      - name: Check 100% line coverage
+        run: |
+          # Filter out generated code from coverage profile
+          grep -v 'internal/generated/' coverage.out > coverage-sdk.out || true
+          # Re-add the mode line
+          head -1 coverage.out > coverage-filtered.out
+          tail -n +2 coverage-sdk.out >> coverage-filtered.out
+          # Check total coverage
+          COVERAGE=$(go tool cover -func=coverage-filtered.out | grep '^total:' | awk '{print $3}' | tr -d '%')
+          echo "SDK line coverage: ${COVERAGE}%"
+          if [ "$(echo "$COVERAGE < 100.0" | bc)" -eq 1 ]; then
+            echo "FAIL: Line coverage ${COVERAGE}% is below 100%"
+            go tool cover -func=coverage-filtered.out | grep -v '100.0%'
+            exit 1
+          fi
+
       - name: Upload coverage
         if: matrix.go-version == '1.23'
         uses: actions/upload-artifact@v4
