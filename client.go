@@ -1,6 +1,11 @@
 package smplkit
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+
+	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
+)
 
 // Client is the top-level entry point for the smplkit SDK.
 //
@@ -44,12 +49,24 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 		base:  base,
 	}
 
+	// Build the generated config client, passing the auth-wrapped httpClient
+	// and a request editor that injects Accept + User-Agent headers.
+	headerEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genClient, _ := genconfig.NewClient(cfg.baseURL,
+		genconfig.WithHTTPClient(httpClient),
+		headerEditor,
+	)
+
 	c := &Client{
 		apiKey:     apiKey,
 		baseURL:    cfg.baseURL,
 		httpClient: httpClient,
 	}
-	c.config = &ConfigClient{client: c}
+	c.config = &ConfigClient{client: c, generated: genClient}
 	return c
 }
 
