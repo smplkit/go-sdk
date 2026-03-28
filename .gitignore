@@ -20,3 +20,8 @@ vendor/
 .vscode/
 *.swp
 *.swo
+
+# Claude Code
+CLAUDE.md
+CLAUDE.local.md
+.claude/
