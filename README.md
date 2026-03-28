@@ -1,6 +1,6 @@
 # smplkit Go SDK
 
-The official Go SDK for [smplkit](https://smplkit.com) — simple application infrastructure for developers.
+The official Go SDK for [smplkit](https://www.smplkit.com) — simple application infrastructure that just works.
 
 ## Installation
 
