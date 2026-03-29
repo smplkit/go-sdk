@@ -115,7 +115,7 @@ func (c *ConfigClient) Create(ctx context.Context, params CreateConfigParams) (*
 		return nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
 	}
 
-	resp, err := c.generated.CreateConfig(ctx, genconfig.CreateConfigJSONRequestBody(reqBody))
+	resp, err := c.generated.CreateConfig(ctx, reqBody)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -203,7 +203,7 @@ func (c *ConfigClient) updateByID(ctx context.Context, id, name, key string, des
 		return nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
 	}
 
-	resp, err := c.generated.UpdateConfig(ctx, uid, genconfig.UpdateConfigJSONRequestBody(reqBody))
+	resp, err := c.generated.UpdateConfig(ctx, uid, reqBody)
 	if err != nil {
 		return nil, classifyError(err)
 	}
