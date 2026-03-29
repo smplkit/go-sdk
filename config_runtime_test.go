@@ -104,7 +104,8 @@ func TestConfigRuntime_Refresh(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -134,7 +135,8 @@ func TestConfigRuntime_OnChange_GlobalListener(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -176,7 +178,8 @@ func TestConfigRuntime_OnChange_KeySpecificListener(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -232,7 +235,8 @@ func TestConfigRuntime_InheritanceChain(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	child, err := client.Config().GetByID(context.Background(), childID)
 	require.NoError(t, err)
 
@@ -271,7 +275,8 @@ func runtimeFromServer(t *testing.T, configs []serverConfig, environment string)
 	}))
 	t.Cleanup(server.Close)
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	config, err := client.Config().GetByID(context.Background(), cfg.id)
 	require.NoError(t, err)
 
@@ -332,7 +337,8 @@ func TestConfigRuntime_Refresh_UpdatesFetchTime(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -401,7 +407,8 @@ func TestConfigRuntime_WebSocketUpdate(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -484,7 +491,8 @@ func TestConfigRuntime_WebSocketConfigDeleted(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -583,7 +591,8 @@ func TestConfigRuntime_Refresh_FetchError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -612,7 +621,8 @@ func TestConfigRuntime_FireListeners_RemovedKey(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -656,7 +666,8 @@ func TestConfigRuntime_DeepMerge_RecursiveMaps(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	child, err := client.Config().GetByID(context.Background(), childID)
 	require.NoError(t, err)
 
@@ -691,7 +702,8 @@ func TestConfigRuntime_DeepMerge_OverrideMapWithScalar(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	child, err := client.Config().GetByID(context.Background(), childID)
 	require.NoError(t, err)
 
@@ -729,7 +741,8 @@ func TestConfigRuntime_WsConnect_WriteJSONError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -788,7 +801,8 @@ func TestConfigRuntime_HandleWSUpdate_FetchError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -825,7 +839,8 @@ func TestConfigRuntime_WsLoop_CloseBeforeConnect(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -853,7 +868,8 @@ func TestConfigRuntime_WsLoop_BackoffCapping(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 
@@ -885,7 +901,8 @@ func TestConfigRuntime_WsConnect_DialErrorThenClose(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	cfg, err := client.Config().GetByID(context.Background(), testUUID0)
 	require.NoError(t, err)
 

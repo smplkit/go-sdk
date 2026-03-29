@@ -25,7 +25,21 @@ import (
 )
 
 func main() {
-    client := smplkit.NewClient("sk_api_...")
+    // Option 1: Explicit API key
+    client, err := smplkit.NewClient("sk_api_...")
+
+    // Option 2: Environment variable (SMPLKIT_API_KEY)
+    // export SMPLKIT_API_KEY=sk_api_...
+    client, err = smplkit.NewClient("")
+
+    // Option 3: Configuration file (~/.smplkit)
+    // [default]
+    // api_key = "sk_api_..."
+    client, err = smplkit.NewClient("")
+
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Get a config by key
     config, err := client.Config().GetByKey("user_service")
@@ -64,8 +78,21 @@ func strPtr(s string) *string { return &s }
 
 ## Configuration
 
+The API key is resolved using the following priority:
+
+1. **Explicit argument:** Pass `apiKey` to `NewClient()`.
+2. **Environment variable:** Set `SMPLKIT_API_KEY`.
+3. **Configuration file:** Add `api_key` under `[default]` in `~/.smplkit` (TOML format):
+
+```toml
+[default]
+api_key = "sk_api_..."
+```
+
+If none of these are set, `NewClient` returns a `SmplError` listing all three methods.
+
 ```go
-client := smplkit.NewClient("sk_api_...",
+client, err := smplkit.NewClient("sk_api_...",
     smplkit.WithTimeout(30 * time.Second),   // default
     smplkit.WithHTTPClient(customHTTPClient),
 )

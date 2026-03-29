@@ -11,7 +11,7 @@ import (
 //
 // Create one with NewClient and access sub-clients via accessor methods:
 //
-//	client := smplkit.NewClient("sk_api_...")
+//	client, err := smplkit.NewClient("sk_api_...")
 //	cfgs, err := client.Config().List(ctx)
 type Client struct {
 	apiKey     string
@@ -23,8 +23,15 @@ type Client struct {
 // NewClient creates a new smplkit API client.
 //
 // The apiKey is used for Bearer token authentication on every request.
+// Pass an empty string to resolve the API key automatically from the
+// SMPLKIT_API_KEY environment variable or the ~/.smplkit config file.
 // Use ClientOption functions to customize the base URL, timeout, or HTTP client.
-func NewClient(apiKey string, opts ...ClientOption) *Client {
+func NewClient(apiKey string, opts ...ClientOption) (*Client, error) {
+	resolved, err := resolveAPIKey(apiKey)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := defaultConfig()
 	for _, opt := range opts {
 		opt(&cfg)
@@ -45,7 +52,7 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 		base = http.DefaultTransport
 	}
 	httpClient.Transport = &authTransport{
-		token: apiKey,
+		token: resolved,
 		base:  base,
 	}
 
@@ -62,12 +69,12 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 	)
 
 	c := &Client{
-		apiKey:     apiKey,
+		apiKey:     resolved,
 		baseURL:    cfg.baseURL,
 		httpClient: httpClient,
 	}
 	c.config = &ConfigClient{client: c, generated: genClient}
-	return c
+	return c, nil
 }
 
 // Config returns the sub-client for config management operations.

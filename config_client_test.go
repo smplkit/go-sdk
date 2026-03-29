@@ -74,7 +74,9 @@ func newTestClient(t *testing.T, handler http.HandlerFunc) *smplkit.Client {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
+	return client
 }
 
 func TestConfigClient_GetByID(t *testing.T) {
@@ -163,15 +165,17 @@ func TestConfigClient_Get_WithID(t *testing.T) {
 }
 
 func TestConfigClient_Get_NeitherKeyNorID(t *testing.T) {
-	client := smplkit.NewClient("sk_test_key")
-	_, err := client.Config().Get(context.Background())
+	client, err := smplkit.NewClient("sk_test_key")
+	require.NoError(t, err)
+	_, err = client.Config().Get(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "exactly one")
 }
 
 func TestConfigClient_Get_BothKeyAndID(t *testing.T) {
-	client := smplkit.NewClient("sk_test_key")
-	_, err := client.Config().Get(context.Background(), smplkit.WithKey("k"), smplkit.WithID(testUUID1))
+	client, err := smplkit.NewClient("sk_test_key")
+	require.NoError(t, err)
+	_, err = client.Config().Get(context.Background(), smplkit.WithKey("k"), smplkit.WithID(testUUID1))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "exactly one")
 }
@@ -492,9 +496,10 @@ func TestConfigClient_NetworkError_ConnectionError(t *testing.T) {
 	addr := listener.Addr().String()
 	listener.Close()
 
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://"+addr),
 	)
+	require.NoError(t, err)
 
 	_, listErr := client.Config().List(context.Background())
 	require.Error(t, listErr)
@@ -511,12 +516,13 @@ func TestConfigClient_ContextTimeout_TimeoutError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	_, err := client.Config().List(ctx)
+	_, err = client.Config().List(ctx)
 	require.Error(t, err)
 
 	var timeoutErr *smplkit.SmplTimeoutError
@@ -569,12 +575,13 @@ func TestConfigClient_ContextCanceled_TimeoutError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	_, err := client.Config().List(ctx)
+	_, err = client.Config().List(ctx)
 	require.Error(t, err)
 
 	var timeoutErr *smplkit.SmplTimeoutError
@@ -599,12 +606,13 @@ func TestConfigClient_GenericError_FallsBackToConnectionError(t *testing.T) {
 	// Use a custom RoundTripper that returns a generic (non-net, non-context) error.
 	transport := &errorRoundTripper{err: fmt.Errorf("some unknown error")}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().List(context.Background())
+	_, err = client.Config().List(context.Background())
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -661,20 +669,22 @@ func TestConfigClient_GetByKey_MalformedJSON(t *testing.T) {
 func TestConfigClient_GetByKey_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("some network error")}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().GetByKey(context.Background(), "some-key")
+	_, err = client.Config().GetByKey(context.Background(), "some-key")
 	require.Error(t, err)
 }
 
 func TestConfigClient_Create_UnmarshalableValues(t *testing.T) {
 	// Channels cannot be JSON-marshaled — exercises the marshal error path.
-	client := smplkit.NewClient("sk_test_key")
+	client, err := smplkit.NewClient("sk_test_key")
+	require.NoError(t, err)
 
-	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{
+	_, err = client.Config().Create(context.Background(), smplkit.CreateConfigParams{
 		Name:   "Test",
 		Values: map[string]interface{}{"ch": make(chan int)},
 	})
@@ -707,12 +717,13 @@ func TestConfigClient_List_MalformedJSON(t *testing.T) {
 func TestConfigClient_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().List(context.Background())
+	_, err = client.Config().List(context.Background())
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -722,23 +733,25 @@ func TestConfigClient_ReadBodyError(t *testing.T) {
 
 func TestConfigClient_InvalidURL_RequestCreateError(t *testing.T) {
 	// A URL containing a null byte causes request creation to fail.
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://bad\x00host"),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().List(context.Background())
+	_, err = client.Config().List(context.Background())
 	require.Error(t, err)
 }
 
 func TestClassifyError_NetErrorTimeout(t *testing.T) {
 	transport := &timeoutNetErrorRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().List(context.Background())
+	_, err = client.Config().List(context.Background())
 	require.Error(t, err)
 
 	var timeoutErr *smplkit.SmplTimeoutError
@@ -776,8 +789,9 @@ func (e *mockTimeoutNetError) Temporary() bool { return true }
 // --- Additional tests for 100% coverage ---
 
 func TestConfigClient_GetByID_InvalidUUID(t *testing.T) {
-	client := smplkit.NewClient("sk_test_key")
-	_, err := client.Config().GetByID(context.Background(), "not-a-uuid")
+	client, err := smplkit.NewClient("sk_test_key")
+	require.NoError(t, err)
+	_, err = client.Config().GetByID(context.Background(), "not-a-uuid")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid config ID")
 }
@@ -785,12 +799,13 @@ func TestConfigClient_GetByID_InvalidUUID(t *testing.T) {
 func TestConfigClient_GetByID_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().GetByID(context.Background(), testUUID0)
+	_, err = client.Config().GetByID(context.Background(), testUUID0)
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -799,12 +814,13 @@ func TestConfigClient_GetByID_NetworkError(t *testing.T) {
 func TestConfigClient_GetByID_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().GetByID(context.Background(), testUUID0)
+	_, err = client.Config().GetByID(context.Background(), testUUID0)
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -814,12 +830,13 @@ func TestConfigClient_GetByID_ReadBodyError(t *testing.T) {
 func TestConfigClient_GetByKey_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().GetByKey(context.Background(), "some-key")
+	_, err = client.Config().GetByKey(context.Background(), "some-key")
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -842,12 +859,13 @@ func TestConfigClient_GetByKey_HTTPError(t *testing.T) {
 func TestConfigClient_Create_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
+	_, err = client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -856,12 +874,13 @@ func TestConfigClient_Create_NetworkError(t *testing.T) {
 func TestConfigClient_Create_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
+	_, err = client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -869,8 +888,9 @@ func TestConfigClient_Create_ReadBodyError(t *testing.T) {
 }
 
 func TestConfigClient_Delete_InvalidUUID(t *testing.T) {
-	client := smplkit.NewClient("sk_test_key")
-	err := client.Config().Delete(context.Background(), "not-a-uuid")
+	client, err := smplkit.NewClient("sk_test_key")
+	require.NoError(t, err)
+	err = client.Config().Delete(context.Background(), "not-a-uuid")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid config ID")
 }
@@ -878,12 +898,13 @@ func TestConfigClient_Delete_InvalidUUID(t *testing.T) {
 func TestConfigClient_Delete_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	err := client.Config().Delete(context.Background(), testUUID0)
+	err = client.Config().Delete(context.Background(), testUUID0)
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -892,12 +913,13 @@ func TestConfigClient_Delete_NetworkError(t *testing.T) {
 func TestConfigClient_Delete_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
-	err := client.Config().Delete(context.Background(), testUUID0)
+	err = client.Config().Delete(context.Background(), testUUID0)
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -971,7 +993,8 @@ func TestConfigClient_UpdateByID_NetworkError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 
 	cfg, err := client.Config().GetByID(context.Background(), configID)
 	require.NoError(t, err)
@@ -1003,10 +1026,11 @@ func TestConfigClient_UpdateByID_ReadBodyError(t *testing.T) {
 		},
 	}
 	httpClient := &http.Client{Transport: transport}
-	client := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
 	)
+	require.NoError(t, err)
 
 	cfg, err := client.Config().GetByID(context.Background(), configID)
 	require.NoError(t, err)
@@ -1033,7 +1057,8 @@ func TestConfigClient_UpdateByID_MalformedResponse(t *testing.T) {
 	}))
 	defer updateServer.Close()
 
-	updateClient := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(updateServer.URL))
+	updateClient, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(updateServer.URL))
+	require.NoError(t, err)
 	cfg, err := updateClient.Config().GetByID(context.Background(), configID)
 	require.NoError(t, err)
 
@@ -1084,7 +1109,8 @@ func TestConfigClient_FetchChain_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
 	child, err := client.Config().GetByID(context.Background(), childID)
 	require.NoError(t, err)
 

@@ -62,7 +62,14 @@ func main() {
 	// ====================================================================
 	section("1. SDK Initialization")
 
-	client := smplkit.NewClient(apiKey)
+	// You can also omit the API key entirely — the SDK will resolve it from
+	// the SMPLKIT_API_KEY environment variable or ~/.smplkit config file.
+	// See the SDK README for details.
+	client, err := smplkit.NewClient(apiKey)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
 	step("smplkit.Client initialized")
 
 	// ====================================================================
