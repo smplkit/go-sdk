@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "smplkit API",
     "description": "API for the smplkit platform.",
@@ -118,9 +118,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Code",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
             }
           },
           {
@@ -128,9 +134,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "State",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
             }
           },
           {
@@ -138,9 +150,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Error",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
             }
           },
           {
@@ -148,9 +166,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Error Description",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error Description"
             }
           }
         ],
@@ -779,9 +803,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Filter[Key]",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Key]"
             }
           }
         ],
@@ -1164,9 +1194,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Filter[Status]",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Status]"
             }
           }
         ],
@@ -1627,9 +1663,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Filter[Key]",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Key]"
             }
           }
         ],
@@ -2012,9 +2054,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Filter[Status]",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Status]"
             }
           }
         ],
@@ -2316,9 +2364,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Filter[Account]",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Account]"
             }
           }
         ],
@@ -2608,6 +2662,130 @@
           }
         }
       }
+    },
+    "/api/v1/limits": {
+      "get": {
+        "tags": [
+          "Plans"
+        ],
+        "summary": "List Limits",
+        "description": "Return all limit definitions as JSON:API resources.",
+        "operationId": "list_limits",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plans": {
+      "get": {
+        "tags": [
+          "Plans"
+        ],
+        "summary": "List Plans",
+        "description": "Return all subscription plans as JSON:API resources.",
+        "operationId": "list_plans",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2632,18 +2810,30 @@
             "readOnly": true
           },
           "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Deleted At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           }
         },
         "type": "object",
@@ -2662,9 +2852,15 @@
       "AccountResource": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -2735,31 +2931,61 @@
             "readOnly": true
           },
           "expires_at": {
-            "title": "Expires At",
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
           },
           "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Last Used At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Updated At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -2798,9 +3024,15 @@
       "ApiKeyResource": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -2871,31 +3103,55 @@
             "title": "Name"
           },
           "key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Key",
-            "x-immutable": true,
-            "type": "string",
-            "maxLength": 64,
-            "nullable": true
+            "x-immutable": true
           },
           "color": {
-            "title": "Color",
-            "type": "string",
-            "maxLength": 50,
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
           },
           "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Updated At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           }
         },
         "type": "object",
@@ -2930,9 +3186,15 @@
       "EnvironmentResource": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -2984,15 +3246,27 @@
             "title": "Title"
           },
           "detail": {
-            "title": "Detail",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
           },
           "source": {
-            "title": "Source",
-            "additionalProperties": true,
-            "type": "object",
-            "nullable": true
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",
@@ -3047,25 +3321,43 @@
             "readOnly": true
           },
           "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Expires At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Updated At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           }
         },
         "type": "object",
@@ -3136,9 +3428,15 @@
       "InvitationResource": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -3181,6 +3479,85 @@
         ],
         "title": "InvitationResponse"
       },
+      "Limit": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "display_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Format"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "description",
+          "unit"
+        ],
+        "title": "Limit"
+      },
+      "LimitListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/LimitResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "LimitListResponse"
+      },
+      "LimitResource": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "limit",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "LimitResource"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -3210,6 +3587,82 @@
         ],
         "title": "OidcProvider"
       },
+      "Plan": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "price_monthly_cents": {
+            "type": "integer",
+            "title": "Price Monthly Cents"
+          },
+          "limits": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Limits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "description",
+          "price_monthly_cents",
+          "limits"
+        ],
+        "title": "Plan"
+      },
+      "PlanListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PlanResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "PlanListResponse"
+      },
+      "PlanResource": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "plan",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Plan"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "PlanResource"
+      },
       "RegisterRequest": {
         "properties": {
           "email": {
@@ -3234,9 +3687,15 @@
       "ServiceResource": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -3267,9 +3726,15 @@
       "UserResource": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -3333,25 +3798,43 @@
             "title": "Name"
           },
           "key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Key",
-            "x-immutable": true,
-            "type": "string",
-            "maxLength": 64,
-            "nullable": true
+            "x-immutable": true
           },
           "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Updated At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           }
         },
         "type": "object",
@@ -3397,10 +3880,16 @@
             "title": "Display Name"
           },
           "profile_pic": {
-            "title": "Profile Pic",
-            "type": "string",
-            "maxLength": 2048,
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Pic"
           },
           "auth_provider": {
             "type": "string",
@@ -3415,10 +3904,16 @@
             "readOnly": true
           },
           "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Role",
-            "description": "Role in current account context",
-            "type": "string",
-            "nullable": true
+            "description": "Role in current account context"
           },
           "account": {
             "type": "string",
@@ -3428,11 +3923,17 @@
             "readOnly": true
           },
           "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           }
         },
         "type": "object",
@@ -3498,6 +3999,9 @@
     },
     {
       "name": "Users"
+    },
+    {
+      "name": "Plans"
     }
   ]
 }
