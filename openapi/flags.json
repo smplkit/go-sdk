@@ -1,5 +1,5 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.3",
   "info": {
     "title": "smplkit Flags API",
     "version": "0.1.0"
@@ -67,15 +67,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Filter[Key]"
+              "title": "Filter[Key]",
+              "type": "string",
+              "nullable": true
             }
           },
           {
@@ -83,15 +77,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Filter[Type]"
+              "title": "Filter[Type]",
+              "type": "string",
+              "nullable": true
             }
           }
         ],
@@ -278,15 +266,9 @@
             "description": "Human-readable display name"
           },
           "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
+            "title": "Description",
+            "type": "string",
+            "nullable": true
           },
           "type": {
             "type": "string",
@@ -314,30 +296,18 @@
             "title": "Environments"
           },
           "created_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "title": "Created At",
-            "readOnly": true
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "title": "Updated At",
-            "readOnly": true
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "type": "object",
@@ -399,13 +369,8 @@
             "default": false
           },
           "default": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default"
+            "title": "Default",
+            "nullable": true
           },
           "rules": {
             "items": {
@@ -437,15 +402,9 @@
       "FlagResource": {
         "properties": {
           "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
+            "title": "Id",
+            "type": "string",
+            "nullable": true
           },
           "type": {
             "type": "string",
@@ -518,15 +477,9 @@
       "FlagRule": {
         "properties": {
           "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
+            "title": "Description",
+            "type": "string",
+            "nullable": true
           },
           "logic": {
             "additionalProperties": true,
@@ -577,15 +530,9 @@
       "Resource_Flag_": {
         "properties": {
           "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
+            "title": "Id",
+            "type": "string",
+            "nullable": true
           },
           "type": {
             "type": "string",

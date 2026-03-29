@@ -115,7 +115,7 @@ func (c *ConfigClient) Create(ctx context.Context, params CreateConfigParams) (*
 		return nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
 	}
 
-	resp, err := c.generated.CreateConfigWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	resp, err := c.generated.CreateConfig(ctx, genconfig.CreateConfigJSONRequestBody(reqBody))
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -203,7 +203,7 @@ func (c *ConfigClient) updateByID(ctx context.Context, id, name, key string, des
 		return nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
 	}
 
-	resp, err := c.generated.UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx, uid, reqBody)
+	resp, err := c.generated.UpdateConfig(ctx, uid, genconfig.UpdateConfigJSONRequestBody(reqBody))
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -293,18 +293,19 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 	}
 }
 
-// buildConfigRequest constructs a ConfigRequest for create or update.
+// buildConfigRequest constructs a ResponseConfig for create or update.
 // Pass empty id for create (omitted in JSON).
-func buildConfigRequest(id, name string, key, desc, parent *string, values map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigRequest {
+func buildConfigRequest(id, name string, key, desc, parent *string, values map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
 	var idPtr *string
 	if id != "" {
 		idPtr = &id
 	}
-	return genconfig.ConfigRequest{
-		Data: genconfig.ConfigResource{
+	configType := "config"
+	return genconfig.ResponseConfig{
+		Data: genconfig.ResourceConfig{
 			Id:   idPtr,
-			Type: genconfig.Config,
-			Attributes: genconfig.ConfigAttrs{
+			Type: &configType,
+			Attributes: genconfig.Config{
 				Name:         name,
 				Key:          key,
 				Description:  desc,

@@ -1,5 +1,5 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.3",
   "info": {
     "title": "smplkit Config API",
     "description": "Configuration management API for smplkit.",
@@ -68,15 +68,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Filter[Key]"
+              "title": "Filter[Key]",
+              "type": "string",
+              "nullable": true
             }
           },
           {
@@ -84,15 +78,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Filter[Parent]"
+              "title": "Filter[Parent]",
+              "type": "string",
+              "nullable": true
             }
           }
         ],
@@ -269,16 +257,10 @@
       "Config": {
         "properties": {
           "key": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 64
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Key"
+            "title": "Key",
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
           },
           "name": {
             "type": "string",
@@ -286,77 +268,41 @@
             "title": "Name"
           },
           "description": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 1000
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
+            "title": "Description",
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
           },
           "parent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent"
+            "title": "Parent",
+            "type": "string",
+            "nullable": true
           },
           "values": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Values"
+            "title": "Values",
+            "additionalProperties": true,
+            "type": "object",
+            "nullable": true
           },
           "environments": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Environments"
+            "title": "Environments",
+            "additionalProperties": true,
+            "type": "object",
+            "nullable": true
           },
           "created_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "title": "Created At",
-            "readOnly": true
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "title": "Updated At",
-            "readOnly": true
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "type": "object",
@@ -399,15 +345,9 @@
       "ConfigResource": {
         "properties": {
           "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
+            "title": "Id",
+            "type": "string",
+            "nullable": true
           },
           "type": {
             "type": "string",
@@ -472,15 +412,9 @@
       "Resource_Config_": {
         "properties": {
           "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
+            "title": "Id",
+            "type": "string",
+            "nullable": true
           },
           "type": {
             "type": "string",
