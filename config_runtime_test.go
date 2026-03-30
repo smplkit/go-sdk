@@ -21,7 +21,7 @@ import (
 
 func TestConfigRuntime_GetFromCache(t *testing.T) {
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"a":1,"b":2}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"a":{"value":1,"type":"NUMBER"},"b":{"value":2,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 
 	assert.Equal(t, float64(1), rt.Get("a"))
@@ -32,7 +32,7 @@ func TestConfigRuntime_GetFromCache(t *testing.T) {
 
 func TestConfigRuntime_TypedAccessors(t *testing.T) {
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"s":"hello","n":42,"b":true}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"s":{"value":"hello","type":"STRING"},"n":{"value":42,"type":"NUMBER"},"b":{"value":true,"type":"BOOLEAN"}}`, envs: `{}`},
 	}, "")
 
 	assert.Equal(t, "hello", rt.GetString("s"))
@@ -50,7 +50,7 @@ func TestConfigRuntime_TypedAccessors(t *testing.T) {
 
 func TestConfigRuntime_Exists(t *testing.T) {
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"x":1}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"x":{"value":1,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 
 	assert.True(t, rt.Exists("x"))
@@ -59,7 +59,7 @@ func TestConfigRuntime_Exists(t *testing.T) {
 
 func TestConfigRuntime_GetAll(t *testing.T) {
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"a":1,"b":2}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"a":{"value":1,"type":"NUMBER"},"b":{"value":2,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 
 	all := rt.GetAll()
@@ -73,7 +73,7 @@ func TestConfigRuntime_GetAll(t *testing.T) {
 
 func TestConfigRuntime_Stats(t *testing.T) {
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"x":1}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"x":{"value":1,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 
 	stats := rt.Stats()
@@ -97,9 +97,9 @@ func TestConfigRuntime_Refresh(t *testing.T) {
 		// n=2: fetchChain inside Connect
 		// n=3+: Refresh (and background WS retries)
 		if n <= 2 {
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"v":1}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"v":{"value":1,"type":"NUMBER"}}`, `{}`)))
 		} else {
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"v":2}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"v":{"value":2,"type":"NUMBER"}}`, `{}`)))
 		}
 	}))
 	defer server.Close()
@@ -128,9 +128,9 @@ func TestConfigRuntime_OnChange_GlobalListener(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if n <= 2 {
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":1}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":{"value":1,"type":"NUMBER"}}`, `{}`)))
 		} else {
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":2}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":{"value":2,"type":"NUMBER"}}`, `{}`)))
 		}
 	}))
 	defer server.Close()
@@ -170,10 +170,10 @@ func TestConfigRuntime_OnChange_KeySpecificListener(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if n <= 2 {
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"a":1,"b":10}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"a":{"value":1,"type":"NUMBER"},"b":{"value":10,"type":"NUMBER"}}`, `{}`)))
 		} else {
 			// Change b but not a
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"a":1,"b":20}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"a":{"value":1,"type":"NUMBER"},"b":{"value":20,"type":"NUMBER"}}`, `{}`)))
 		}
 	}))
 	defer server.Close()
@@ -200,7 +200,7 @@ func TestConfigRuntime_OnChange_KeySpecificListener(t *testing.T) {
 
 func TestConfigRuntime_Close_Idempotent(t *testing.T) {
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"x":1}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"x":{"value":1,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 
 	rt.Close()
@@ -210,9 +210,9 @@ func TestConfigRuntime_Close_Idempotent(t *testing.T) {
 
 func TestConfigRuntime_EnvironmentResolution(t *testing.T) {
 	// Base: {a:1, b:2}; production env overrides: {b:99}
-	envJSON := `{"production":{"values":{"b":99}}}`
+	envJSON := `{"production":{"values":{"b":{"value":99}}}}`
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"a":1,"b":2}`, envs: envJSON},
+		{id: testUUID0, key: "root", values: `{"a":{"value":1,"type":"NUMBER"},"b":{"value":2,"type":"NUMBER"}}`, envs: envJSON},
 	}, "production")
 
 	assert.Equal(t, float64(1), rt.Get("a"))  // from base
@@ -228,9 +228,9 @@ func TestConfigRuntime_InheritanceChain(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if r.URL.Path == "/api/v1/configs/"+rootID {
-			_, _ = w.Write([]byte(singleConfigResp(rootID, "root", `{"x":1}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(rootID, "root", `{"x":{"value":1,"type":"NUMBER"}}`, `{}`)))
 		} else {
-			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"y":2}`, `{}`, rootID)))
+			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"y":{"value":2,"type":"NUMBER"}}`, `{}`, rootID)))
 		}
 	}))
 	defer server.Close()
@@ -286,12 +286,12 @@ func runtimeFromServer(t *testing.T, configs []serverConfig, environment string)
 	return rt
 }
 
-func singleConfigResp(id, key, valuesJSON, envsJSON string) string {
-	return buildConfigResp(id, key, valuesJSON, envsJSON, "null")
+func singleConfigResp(id, key, itemsJSON, envsJSON string) string {
+	return buildConfigResp(id, key, itemsJSON, envsJSON, "null")
 }
 
-func singleConfigRespWithParent(id, key, valuesJSON, envsJSON, parentID string) string {
-	return buildConfigResp(id, key, valuesJSON, envsJSON, `"`+parentID+`"`)
+func singleConfigRespWithParent(id, key, itemsJSON, envsJSON, parentID string) string {
+	return buildConfigResp(id, key, itemsJSON, envsJSON, `"`+parentID+`"`)
 }
 
 func waitForStatus(t *testing.T, rt *smplkit.ConfigRuntime, want string, timeout time.Duration) {
@@ -306,21 +306,21 @@ func waitForStatus(t *testing.T, rt *smplkit.ConfigRuntime, want string, timeout
 	t.Fatalf("timed out waiting for ConnectionStatus to be %q (got %q)", want, rt.ConnectionStatus())
 }
 
-func buildConfigResp(id, key, valuesJSON, envsJSON, parentJSON string) string {
+func buildConfigResp(id, key, itemsJSON, envsJSON, parentJSON string) string {
 	// Validate JSON inputs to catch test bugs early.
-	for _, s := range []string{valuesJSON, envsJSON} {
+	for _, s := range []string{itemsJSON, envsJSON} {
 		var tmp interface{}
 		if err := json.Unmarshal([]byte(s), &tmp); err != nil {
 			panic("bad test JSON: " + err.Error())
 		}
 	}
-	return `{"data":{"id":"` + id + `","type":"config","attributes":{"name":"` + key + `","key":"` + key + `","values":` + valuesJSON + `,"environments":` + envsJSON + `,"parent":` + parentJSON + `}}}`
+	return `{"data":{"id":"` + id + `","type":"config","attributes":{"name":"` + key + `","key":"` + key + `","items":` + itemsJSON + `,"environments":` + envsJSON + `,"parent":` + parentJSON + `}}}`
 }
 
 func TestConfigRuntime_ConnectionStatus_Initial(t *testing.T) {
 	// A runtime that connects to a non-existent WS server should start as "connecting".
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"x":1}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"x":{"value":1,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 
 	// The status may be "connecting" or "disconnected" depending on race timing,
@@ -333,7 +333,7 @@ func TestConfigRuntime_Refresh_UpdatesFetchTime(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"v":1}`, `{}`)))
+		_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"v":{"value":1,"type":"NUMBER"}}`, `{}`)))
 	}))
 	defer server.Close()
 
@@ -372,9 +372,9 @@ func TestConfigRuntime_WebSocketUpdate(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if n <= 2 {
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"score":10}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"score":{"value":10,"type":"NUMBER"}}`, `{}`)))
 		} else {
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"score":20}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"score":{"value":20,"type":"NUMBER"}}`, `{}`)))
 		}
 	})
 
@@ -469,7 +469,7 @@ func TestConfigRuntime_WebSocketConfigDeleted(t *testing.T) {
 	mux.HandleFunc("/api/v1/configs/"+testUUID0, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":1}`, `{}`)))
+		_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":{"value":1,"type":"NUMBER"}}`, `{}`)))
 	})
 	mux.HandleFunc("/api/ws/v1/configs", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := wsUpgrader.Upgrade(w, r, nil)
@@ -519,7 +519,7 @@ func TestConfigRuntime_WebSocketConfigDeleted(t *testing.T) {
 
 func TestConfigRuntime_GetInt_Float64(t *testing.T) {
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"n":3.7}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"n":{"value":3.7,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 	// JSON numbers are float64; GetInt truncates.
 	assert.Equal(t, 3, rt.GetInt("n"))
@@ -530,14 +530,14 @@ func TestConfigRuntime_GetInt_Int64(t *testing.T) {
 	// We can't easily inject int64 from JSON (JSON numbers decode to float64),
 	// so we verify the float64→int path is sufficient for normal use.
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"n":42}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"n":{"value":42,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 	assert.Equal(t, 42, rt.GetInt("n"))
 }
 
 func TestDeepMerge_NilInputs(t *testing.T) {
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"a":1}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"a":{"value":1,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 	// Accessing a key that doesn't exist returns nil — exercises the default path.
 	assert.Nil(t, rt.Get("nonexistent"))
@@ -546,7 +546,7 @@ func TestDeepMerge_NilInputs(t *testing.T) {
 func TestConfigRuntime_Refresh_NoChange_NoListeners(t *testing.T) {
 	// Refresh with no listeners and no change should complete without error.
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"x":1}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"x":{"value":1,"type":"NUMBER"}}`, envs: `{}`},
 	}, "")
 	require.NoError(t, rt.Refresh())
 	assert.Equal(t, float64(1), rt.Get("x"))
@@ -565,7 +565,7 @@ func TestConfigRuntime_GetInt_NativeInt(t *testing.T) {
 	// through handleWSUpdate. Since JSON always produces float64, let's
 	// verify the int branch using GetInt on a string value (wrong type).
 	rt := runtimeFromServer(t, []serverConfig{
-		{id: testUUID0, key: "root", values: `{"s":"hello"}`, envs: `{}`},
+		{id: testUUID0, key: "root", values: `{"s":{"value":"hello","type":"STRING"}}`, envs: `{}`},
 	}, "")
 
 	// GetInt on a non-numeric type should return the default or 0.
@@ -582,7 +582,7 @@ func TestConfigRuntime_Refresh_FetchError(t *testing.T) {
 		if n <= 2 {
 			// Initial fetch and Connect succeed.
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"v":1}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"v":{"value":1,"type":"NUMBER"}}`, `{}`)))
 		} else {
 			// Refresh will fail.
 			w.WriteHeader(http.StatusInternalServerError)
@@ -613,10 +613,10 @@ func TestConfigRuntime_FireListeners_RemovedKey(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if n <= 2 {
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"a":1,"b":2}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"a":{"value":1,"type":"NUMBER"},"b":{"value":2,"type":"NUMBER"}}`, `{}`)))
 		} else {
 			// Remove key "b" in the updated config.
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"a":1}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"a":{"value":1,"type":"NUMBER"}}`, `{}`)))
 		}
 	}))
 	defer server.Close()
@@ -659,9 +659,9 @@ func TestConfigRuntime_DeepMerge_RecursiveMaps(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if r.URL.Path == "/api/v1/configs/"+rootID {
-			_, _ = w.Write([]byte(singleConfigResp(rootID, "root", `{"db":{"host":"localhost","port":5432}}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(rootID, "root", `{"db":{"value":{"host":"localhost","port":5432},"type":"JSON"}}`, `{}`)))
 		} else {
-			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"db":{"port":3306,"name":"mydb"}}`, `{}`, rootID)))
+			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"db":{"value":{"port":3306,"name":"mydb"},"type":"JSON"}}`, `{}`, rootID)))
 		}
 	}))
 	defer server.Close()
@@ -695,9 +695,9 @@ func TestConfigRuntime_DeepMerge_OverrideMapWithScalar(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if r.URL.Path == "/api/v1/configs/"+rootID {
-			_, _ = w.Write([]byte(singleConfigResp(rootID, "root", `{"db":{"host":"localhost"}}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(rootID, "root", `{"db":{"value":{"host":"localhost"},"type":"JSON"}}`, `{}`)))
 		} else {
-			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"db":"sqlite"}`, `{}`, rootID)))
+			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"db":{"value":"sqlite","type":"STRING"}}`, `{}`, rootID)))
 		}
 	}))
 	defer server.Close()
@@ -725,7 +725,7 @@ func TestConfigRuntime_WsConnect_WriteJSONError(t *testing.T) {
 	mux.HandleFunc("/api/v1/configs/"+testUUID0, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":1}`, `{}`)))
+		_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":{"value":1,"type":"NUMBER"}}`, `{}`)))
 	})
 	mux.HandleFunc("/api/ws/v1/configs", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := wsUpgrader.Upgrade(w, r, nil)
@@ -768,7 +768,7 @@ func TestConfigRuntime_HandleWSUpdate_FetchError(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		if n <= 2 {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"score":10}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"score":{"value":10,"type":"NUMBER"}}`, `{}`)))
 		} else {
 			// Return error for fetch triggered by handleWSUpdate.
 			w.WriteHeader(http.StatusInternalServerError)
@@ -835,7 +835,7 @@ func TestConfigRuntime_WsLoop_CloseBeforeConnect(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":1}`, `{}`)))
+		_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":{"value":1,"type":"NUMBER"}}`, `{}`)))
 	}))
 	defer server.Close()
 
@@ -860,7 +860,7 @@ func TestConfigRuntime_WsLoop_BackoffCapping(t *testing.T) {
 		if r.URL.Path == "/api/v1/configs/"+testUUID0 {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":1}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":{"value":1,"type":"NUMBER"}}`, `{}`)))
 		} else {
 			// Reject all WS connections with 403.
 			w.WriteHeader(http.StatusForbidden)
@@ -892,7 +892,7 @@ func TestConfigRuntime_WsConnect_DialErrorThenClose(t *testing.T) {
 		if r.URL.Path == "/api/v1/configs/"+testUUID0 {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":1}`, `{}`)))
+			_, _ = w.Write([]byte(singleConfigResp(testUUID0, "root", `{"x":{"value":1,"type":"NUMBER"}}`, `{}`)))
 		} else {
 			// Return non-WS response to cause dial error.
 			w.WriteHeader(http.StatusOK)

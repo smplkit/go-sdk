@@ -17,10 +17,11 @@ type Config struct {
 	Description *string
 	// Parent is the parent config UUID, or nil for root configs.
 	Parent *string
-	// Values holds the base configuration values.
-	Values map[string]interface{}
+	// Items holds the base configuration values (extracted raw values from typed items).
+	Items map[string]interface{}
 	// Environments maps environment names to their value overrides.
-	// Each environment entry is a map that contains a "values" key.
+	// Each environment entry is a map that contains a "values" key
+	// with extracted raw values from wrapped overrides.
 	Environments map[string]map[string]interface{}
 	// CreatedAt is the creation timestamp.
 	CreatedAt *time.Time
@@ -46,14 +47,14 @@ func (c *Config) Update(ctx context.Context, params UpdateConfigParams) error {
 //
 // Returns SmplNotFoundError if the config no longer exists.
 func (c *Config) SetValues(ctx context.Context, values map[string]interface{}, environment string) error {
-	var newValues map[string]interface{}
+	var newItems map[string]interface{}
 	var newEnvs map[string]map[string]interface{}
 
 	if environment == "" {
-		newValues = values
+		newItems = values
 		newEnvs = c.Environments
 	} else {
-		newValues = c.Values
+		newItems = c.Items
 		envEntry := make(map[string]interface{})
 		if existing, ok := c.Environments[environment]; ok {
 			for k, v := range existing {
@@ -69,7 +70,7 @@ func (c *Config) SetValues(ctx context.Context, values map[string]interface{}, e
 	}
 
 	return c.update(ctx, UpdateConfigParams{
-		Values:       newValues,
+		Items:        newItems,
 		Environments: newEnvs,
 	})
 }
@@ -82,7 +83,7 @@ func (c *Config) SetValues(ctx context.Context, values map[string]interface{}, e
 func (c *Config) SetValue(ctx context.Context, key string, value interface{}, environment string) error {
 	if environment == "" {
 		merged := make(map[string]interface{})
-		for k, v := range c.Values {
+		for k, v := range c.Items {
 			merged[k] = v
 		}
 		merged[key] = value
@@ -122,22 +123,22 @@ func (c *Config) update(ctx context.Context, params UpdateConfigParams) error {
 	if params.Description != nil {
 		desc = params.Description
 	}
-	values := c.Values
-	if params.Values != nil {
-		values = params.Values
+	items := c.Items
+	if params.Items != nil {
+		items = params.Items
 	}
 	envs := c.Environments
 	if params.Environments != nil {
 		envs = params.Environments
 	}
 
-	updated, err := c.client.updateByID(ctx, c.ID, name, c.Key, desc, c.Parent, values, envs)
+	updated, err := c.client.updateByID(ctx, c.ID, name, c.Key, desc, c.Parent, items, envs)
 	if err != nil {
 		return err
 	}
 	c.Name = updated.Name
 	c.Description = updated.Description
-	c.Values = updated.Values
+	c.Items = updated.Items
 	c.Environments = updated.Environments
 	c.UpdatedAt = updated.UpdatedAt
 	return nil
@@ -150,8 +151,8 @@ type UpdateConfigParams struct {
 	Name *string
 	// Description overrides the config's description.
 	Description *string
-	// Values replaces the config's base values entirely.
-	Values map[string]interface{}
+	// Items replaces the config's base values entirely (raw values, not wrapped).
+	Items map[string]interface{}
 	// Environments replaces the config's environments map entirely.
 	Environments map[string]map[string]interface{}
 }
@@ -166,8 +167,8 @@ type CreateConfigParams struct {
 	Description *string
 	// Parent is the parent config UUID.
 	Parent *string
-	// Values holds the initial base values.
-	Values map[string]interface{}
+	// Items holds the initial base values (raw values, not wrapped).
+	Items map[string]interface{}
 	// Environments holds the initial environment-specific overrides.
 	Environments map[string]map[string]interface{}
 }

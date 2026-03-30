@@ -31,6 +31,8 @@ const (
 )
 
 // sampleConfigJSON returns a JSON:API single-resource response body.
+// Items use the typed format: {key: {"value": raw, "type": "STRING"}}.
+// Environment overrides use: {envName: {"values": {key: {"value": raw}}}}.
 func sampleConfigJSON(id, key, name string) string {
 	return `{
 		"data": {
@@ -41,8 +43,8 @@ func sampleConfigJSON(id, key, name string) string {
 				"key": "` + key + `",
 				"description": "A test config",
 				"parent": null,
-				"values": {"log_level": "info"},
-				"environments": {"production": {"values": {"log_level": "warn"}}},
+				"items": {"log_level": {"value": "info", "type": "STRING"}},
+				"environments": {"production": {"values": {"log_level": {"value": "warn"}}}},
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": "2024-06-15T12:00:00Z"
 			}
@@ -61,7 +63,7 @@ func sampleListJSON(id, key, name string) string {
 				"key": "` + key + `",
 				"description": null,
 				"parent": null,
-				"values": {},
+				"items": {},
 				"environments": {},
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": null
@@ -102,7 +104,7 @@ func TestConfigClient_GetByID(t *testing.T) {
 	require.NotNil(t, cfg.Description)
 	assert.Equal(t, "A test config", *cfg.Description)
 	assert.Nil(t, cfg.Parent)
-	assert.Equal(t, "info", cfg.Values["log_level"])
+	assert.Equal(t, "info", cfg.Items["log_level"])
 	require.NotNil(t, cfg.CreatedAt)
 	assert.Equal(t, 2024, cfg.CreatedAt.Year())
 	require.NotNil(t, cfg.UpdatedAt)
@@ -188,8 +190,8 @@ func TestConfigClient_List(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
 			"data": [
-				{"id": "1", "type": "config", "attributes": {"name": "A", "key": "a", "values": {}, "environments": {}}},
-				{"id": "2", "type": "config", "attributes": {"name": "B", "key": "b", "values": {}, "environments": {}}}
+				{"id": "1", "type": "config", "attributes": {"name": "A", "key": "a", "items": {}, "environments": {}}},
+				{"id": "2", "type": "config", "attributes": {"name": "B", "key": "b", "items": {}, "environments": {}}}
 			]
 		}`))
 	})
@@ -237,7 +239,7 @@ func TestConfigClient_Create(t *testing.T) {
 		Name:        "New Config",
 		Key:         &key,
 		Description: &desc,
-		Values:      map[string]interface{}{"enabled": true},
+		Items:       map[string]interface{}{"enabled": true},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "new-id", cfg.ID)
@@ -365,8 +367,9 @@ func TestConfig_SetValues_Base(t *testing.T) {
 			var body map[string]interface{}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			attrs := body["data"].(map[string]interface{})["attributes"].(map[string]interface{})
-			vals := attrs["values"].(map[string]interface{})
-			assert.Equal(t, "debug", vals["log_level"])
+			items := attrs["items"].(map[string]interface{})
+			logItem := items["log_level"].(map[string]interface{})
+			assert.Equal(t, "debug", logItem["value"])
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
@@ -396,7 +399,8 @@ func TestConfig_SetValues_Environment(t *testing.T) {
 			envs := attrs["environments"].(map[string]interface{})
 			prodEnv := envs["production"].(map[string]interface{})
 			vals := prodEnv["values"].(map[string]interface{})
-			assert.Equal(t, "warn", vals["log_level"])
+			logOverride := vals["log_level"].(map[string]interface{})
+			assert.Equal(t, "warn", logOverride["value"])
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
@@ -423,11 +427,13 @@ func TestConfig_SetValue(t *testing.T) {
 			var body map[string]interface{}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			attrs := body["data"].(map[string]interface{})["attributes"].(map[string]interface{})
-			vals := attrs["values"].(map[string]interface{})
+			items := attrs["items"].(map[string]interface{})
 			// Should still have the original log_level from sampleConfigJSON.
-			assert.Equal(t, "info", vals["log_level"])
+			logItem := items["log_level"].(map[string]interface{})
+			assert.Equal(t, "info", logItem["value"])
 			// And the new key.
-			assert.Equal(t, true, vals["debug"])
+			debugItem := items["debug"].(map[string]interface{})
+			assert.Equal(t, true, debugItem["value"])
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
@@ -642,6 +648,8 @@ func TestConfigClient_ParsesEnvironments(t *testing.T) {
 	require.Contains(t, cfg.Environments, "production")
 	prodEnv := cfg.Environments["production"]
 	require.Contains(t, prodEnv, "values")
+	vals := prodEnv["values"].(map[string]interface{})
+	assert.Equal(t, "warn", vals["log_level"])
 }
 
 func TestConfigClient_GetByID_MalformedJSON(t *testing.T) {
@@ -685,8 +693,8 @@ func TestConfigClient_Create_UnmarshalableValues(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = client.Config().Create(context.Background(), smplkit.CreateConfigParams{
-		Name:   "Test",
-		Values: map[string]interface{}{"ch": make(chan int)},
+		Name:  "Test",
+		Items: map[string]interface{}{"ch": make(chan int)},
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to marshal request body")
@@ -933,7 +941,7 @@ func TestConfigClient_UpdateByID_InvalidUUID(t *testing.T) {
 		// Return a list response with a non-UUID ID.
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"not-a-uuid","type":"config","attributes":{"name":"Test","key":"test","values":{},"environments":{}}}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"not-a-uuid","type":"config","attributes":{"name":"Test","key":"test","items":{},"environments":{}}}]}`))
 	})
 
 	// Use GetByKey to get a Config (GetByKey uses list endpoint, doesn't validate UUID).
@@ -959,9 +967,9 @@ func TestConfigClient_UpdateByID_MarshalError(t *testing.T) {
 	cfg, err := client.Config().GetByID(context.Background(), configID)
 	require.NoError(t, err)
 
-	// Set values with an unmarshalable type (channel).
+	// Set items with an unmarshalable type (channel).
 	err = cfg.Update(context.Background(), smplkit.UpdateConfigParams{
-		Values: map[string]interface{}{"ch": make(chan int)},
+		Items: map[string]interface{}{"ch": make(chan int)},
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to marshal request body")
@@ -1136,8 +1144,11 @@ func TestConfig_SetValue_WithEnvironment(t *testing.T) {
 			vals := prodEnv["values"].(map[string]interface{})
 			// The production env in sampleConfigJSON has {"log_level": "warn"}.
 			// SetValue should merge "debug":true into those existing values.
-			assert.Equal(t, "warn", vals["log_level"])
-			assert.Equal(t, true, vals["debug"])
+			// Values are wrapped as {"value": raw} for the API.
+			logOverride := vals["log_level"].(map[string]interface{})
+			assert.Equal(t, "warn", logOverride["value"])
+			debugOverride := vals["debug"].(map[string]interface{})
+			assert.Equal(t, true, debugOverride["value"])
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
@@ -1159,10 +1170,10 @@ func TestConfig_SetValue_WithEnvironment_NoExistingEnv(t *testing.T) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","values":{"log_level":"info"},"environments":{}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{}}}}`))
 		} else {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","values":{"log_level":"info"},"environments":{"staging":{"values":{"debug":true}}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"debug":{"value":true}}}}}}}`))
 		}
 	})
 
@@ -1174,18 +1185,18 @@ func TestConfig_SetValue_WithEnvironment_NoExistingEnv(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestConfig_SetValue_WithEnvironment_NoValuesKey(t *testing.T) {
+func TestConfig_SetValue_WithEnvironment_ExistingEnvKeys(t *testing.T) {
 	configID := testUUID0
 
-	// Server returns a config with an environment that has no "values" key.
+	// Server returns a config with an environment that has existing override keys.
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","values":{"log_level":"info"},"environments":{"staging":{"other":"data"}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"other":{"value":"data"}}}}}}}`))
 		} else {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","values":{"log_level":"info"},"environments":{"staging":{"other":"data","values":{"debug":true}}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"other":{"value":"data"},"debug":{"value":true}}}}}}}`))
 		}
 	})
 
@@ -1196,18 +1207,18 @@ func TestConfig_SetValue_WithEnvironment_NoValuesKey(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestConfig_SetValue_WithEnvironment_NonMapValues(t *testing.T) {
+func TestConfig_SetValue_WithEnvironment_NonMapOverride(t *testing.T) {
 	configID := testUUID0
 
-	// Server returns a config with an environment whose "values" is not a map.
+	// Server returns a config with an environment whose override value is not a wrapped map (edge case).
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","values":{"log_level":"info"},"environments":{"staging":{"values":"not-a-map"}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":"not-a-map"}}}}}`))
 		} else {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","values":{"log_level":"info"},"environments":{"staging":{"values":{"debug":true}}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"debug":{"value":true}}}}}}}`))
 		}
 	})
 

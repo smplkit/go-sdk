@@ -100,7 +100,7 @@ func main() {
 	// Set base values — these apply to all environments by default.
 	err = common.Update(ctx, smplkit.UpdateConfigParams{
 		Description: strPtr("Organization-wide shared configuration"),
-		Values: map[string]interface{}{
+		Items: map[string]interface{}{
 			"app_name":                       "Acme SaaS Platform",
 			"support_email":                  "support@acme.dev",
 			"max_retries":                    3,
@@ -156,7 +156,7 @@ func main() {
 		Name:        "User Service",
 		Key:         strPtr("user_service"),
 		Description: strPtr("Configuration for the user microservice and its dependencies."),
-		Values: map[string]interface{}{
+		Items: map[string]interface{}{
 			"database": map[string]interface{}{
 				"host":      "localhost",
 				"port":      5432,
@@ -217,7 +217,7 @@ func main() {
 		Key:         strPtr("auth_module"),
 		Description: strPtr("Authentication and authorization module config."),
 		Parent:      &userService.ID,
-		Values: map[string]interface{}{
+		Items: map[string]interface{}{
 			"token_expiry_minutes": 60,
 			"algorithm":            "RS256",
 			"issuer":               "acme-auth",
@@ -473,7 +473,7 @@ func main() {
 	// Reset common to empty state.
 	err = common.Update(ctx, smplkit.UpdateConfigParams{
 		Description:  strPtr(""),
-		Values:       map[string]interface{}{},
+		Items:        map[string]interface{}{},
 		Environments: map[string]map[string]interface{}{},
 	})
 	if err != nil {

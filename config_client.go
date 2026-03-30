@@ -108,7 +108,7 @@ func (c *ConfigClient) GetByKey(ctx context.Context, key string) (*Config, error
 
 // Create creates a new config resource.
 func (c *ConfigClient) Create(ctx context.Context, params CreateConfigParams) (*Config, error) {
-	reqBody := buildConfigRequest("", params.Name, params.Key, params.Description, params.Parent, params.Values, params.Environments)
+	reqBody := buildConfigRequest("", params.Name, params.Key, params.Description, params.Parent, params.Items, params.Environments)
 
 	// Pre-validate marshaling to give a clear error message.
 	if _, err := json.Marshal(reqBody); err != nil {
@@ -191,13 +191,13 @@ func (c *ConfigClient) Delete(ctx context.Context, id string) error {
 }
 
 // updateByID sends a PUT request to replace the config identified by id.
-func (c *ConfigClient) updateByID(ctx context.Context, id, name, key string, desc, parent *string, values map[string]interface{}, envs map[string]map[string]interface{}) (*Config, error) {
+func (c *ConfigClient) updateByID(ctx context.Context, id, name, key string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) (*Config, error) {
 	uid, err := uuid.Parse(id)
 	if err != nil {
 		return nil, fmt.Errorf("smplkit: invalid config ID %q: %w", id, err)
 	}
 
-	reqBody := buildConfigRequest(id, name, &key, desc, parent, values, envs)
+	reqBody := buildConfigRequest(id, name, &key, desc, parent, items, envs)
 
 	if _, err := json.Marshal(reqBody); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
@@ -239,7 +239,7 @@ func (c *ConfigClient) fetchChain(ctx context.Context, rootID string) ([]chainEn
 		}
 		chain = append(chain, chainEntry{
 			ID:           node.ID,
-			Values:       node.Values,
+			Values:       node.Items,
 			Environments: node.Environments,
 		})
 		if node.Parent == nil {
@@ -269,6 +269,8 @@ func (c *ConfigClient) connect(ctx context.Context, cfg *Config, environment str
 }
 
 // resourceToConfig converts a generated ConfigResource to the SDK Config type.
+// It extracts raw values from typed items (each item has {value, type, description})
+// and extracts raw values from environment overrides (each override has {value}).
 func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 	attrs := r.Attributes
 	id := ""
@@ -285,8 +287,8 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 		Name:         attrs.Name,
 		Description:  attrs.Description,
 		Parent:       attrs.Parent,
-		Values:       derefMap(attrs.Values),
-		Environments: derefEnvs(attrs.Environments),
+		Items:        extractItemValues(derefMap(attrs.Items)),
+		Environments: extractEnvOverrides(derefEnvs(attrs.Environments)),
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
 		client:       c,
@@ -295,7 +297,10 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 
 // buildConfigRequest constructs a ResponseConfig for create or update.
 // Pass empty id for create (omitted in JSON).
-func buildConfigRequest(id, name string, key, desc, parent *string, values map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
+// The items parameter contains raw values which are wrapped into typed item format
+// ({key: {"value": raw, "type": "JSON"}}) for the API. Environment override values
+// within envs[env]["values"] are wrapped as {key: {"value": raw}}.
+func buildConfigRequest(id, name string, key, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
 	var idPtr *string
 	if id != "" {
 		idPtr = &id
@@ -310,8 +315,8 @@ func buildConfigRequest(id, name string, key, desc, parent *string, values map[s
 				Key:          key,
 				Description:  desc,
 				Parent:       parent,
-				Values:       refMap(values),
-				Environments: refEnvs(envs),
+				Items:        refMap(wrapItemValues(items)),
+				Environments: refEnvs(wrapEnvOverrides(envs)),
 			},
 		},
 	}
@@ -357,4 +362,105 @@ func refEnvs(envs map[string]map[string]interface{}) *map[string]interface{} {
 		result[k] = v
 	}
 	return &result
+}
+
+// extractItemValues extracts raw values from typed items.
+// Each item is expected to be {"value": raw, "type": "STRING"|..., "description": "..."}.
+// Returns a map of key -> raw value.
+func extractItemValues(items map[string]interface{}) map[string]interface{} {
+	if items == nil {
+		return nil
+	}
+	result := make(map[string]interface{}, len(items))
+	for k, v := range items {
+		if m, ok := v.(map[string]interface{}); ok {
+			if val, exists := m["value"]; exists {
+				result[k] = val
+				continue
+			}
+		}
+		// Fallback: use the value as-is (backward compatibility).
+		result[k] = v
+	}
+	return result
+}
+
+// extractEnvOverrides extracts raw values from environment overrides.
+// Each environment entry has a "values" key containing wrapped overrides:
+// {"values": {key: {"value": raw}}}. Extracts the raw values so the SDK
+// stores {"values": {key: raw}}.
+func extractEnvOverrides(envs map[string]map[string]interface{}) map[string]map[string]interface{} {
+	if envs == nil {
+		return nil
+	}
+	result := make(map[string]map[string]interface{}, len(envs))
+	for envName, envEntry := range envs {
+		extracted := make(map[string]interface{}, len(envEntry))
+		for k, v := range envEntry {
+			if k == "values" {
+				if valsMap, ok := v.(map[string]interface{}); ok {
+					unwrapped := make(map[string]interface{}, len(valsMap))
+					for vk, vv := range valsMap {
+						if m, ok := vv.(map[string]interface{}); ok {
+							if val, exists := m["value"]; exists {
+								unwrapped[vk] = val
+								continue
+							}
+						}
+						unwrapped[vk] = vv
+					}
+					extracted[k] = unwrapped
+					continue
+				}
+			}
+			extracted[k] = v
+		}
+		result[envName] = extracted
+	}
+	return result
+}
+
+// wrapItemValues wraps raw values into typed item format for the API.
+// Each value becomes {"value": raw, "type": "JSON"}.
+func wrapItemValues(items map[string]interface{}) map[string]interface{} {
+	if items == nil {
+		return nil
+	}
+	result := make(map[string]interface{}, len(items))
+	for k, v := range items {
+		result[k] = map[string]interface{}{
+			"value": v,
+			"type":  "JSON",
+		}
+	}
+	return result
+}
+
+// wrapEnvOverrides wraps environment override values into the API format.
+// Each value within envEntry["values"] becomes {"value": raw}.
+func wrapEnvOverrides(envs map[string]map[string]interface{}) map[string]map[string]interface{} {
+	if envs == nil {
+		return nil
+	}
+	result := make(map[string]map[string]interface{}, len(envs))
+	for envName, envEntry := range envs {
+		wrapped := make(map[string]interface{}, len(envEntry))
+		for k, v := range envEntry {
+			if k == "values" {
+				if valsMap, ok := v.(map[string]interface{}); ok {
+					wrappedVals := make(map[string]interface{}, len(valsMap))
+					for vk, vv := range valsMap {
+						wrappedVals[vk] = map[string]interface{}{
+							"value": vv,
+						}
+					}
+					wrapped[k] = wrappedVals
+					continue
+				}
+			}
+			wrapped[k] = v
+		}
+		result[envName] = wrapped
+	}
+	return result
 }
