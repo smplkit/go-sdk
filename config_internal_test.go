@@ -325,6 +325,141 @@ func TestWsConnect_ReadError_CloseCh(t *testing.T) {
 	}
 }
 
+// ---------- extractItemValues ----------
+
+func TestExtractItemValues_Nil(t *testing.T) {
+	assert.Nil(t, extractItemValues(nil))
+}
+
+func TestExtractItemValues_NonMapItem(t *testing.T) {
+	items := map[string]interface{}{
+		"plain": "hello",
+		"num":   42,
+	}
+	result := extractItemValues(items)
+	assert.Equal(t, "hello", result["plain"])
+	assert.Equal(t, 42, result["num"])
+}
+
+func TestExtractItemValues_MapWithoutValueKey(t *testing.T) {
+	items := map[string]interface{}{
+		"no_val": map[string]interface{}{"type": "STRING", "description": "desc"},
+	}
+	result := extractItemValues(items)
+	// Fallback: entire map is used as-is
+	assert.Equal(t, items["no_val"], result["no_val"])
+}
+
+func TestExtractItemValues_MapWithValueKey(t *testing.T) {
+	items := map[string]interface{}{
+		"log_level": map[string]interface{}{"value": "info", "type": "STRING"},
+	}
+	result := extractItemValues(items)
+	assert.Equal(t, "info", result["log_level"])
+}
+
+// ---------- extractEnvOverrides ----------
+
+func TestExtractEnvOverrides_Nil(t *testing.T) {
+	assert.Nil(t, extractEnvOverrides(nil))
+}
+
+func TestExtractEnvOverrides_ValuesNotMap(t *testing.T) {
+	// "values" key exists but is not map[string]interface{}
+	envs := map[string]map[string]interface{}{
+		"staging": {"values": "not-a-map", "other": "keep"},
+	}
+	result := extractEnvOverrides(envs)
+	// "values" falls through to the passthrough branch
+	assert.Equal(t, "not-a-map", result["staging"]["values"])
+	assert.Equal(t, "keep", result["staging"]["other"])
+}
+
+func TestExtractEnvOverrides_NonValuesKey(t *testing.T) {
+	envs := map[string]map[string]interface{}{
+		"prod": {"name": "production"},
+	}
+	result := extractEnvOverrides(envs)
+	assert.Equal(t, "production", result["prod"]["name"])
+}
+
+func TestExtractEnvOverrides_InnerNonMap(t *testing.T) {
+	// A value inside "values" that is not a map — uses fallback
+	envs := map[string]map[string]interface{}{
+		"staging": {
+			"values": map[string]interface{}{
+				"raw_val": "plain-string",
+			},
+		},
+	}
+	result := extractEnvOverrides(envs)
+	assert.Equal(t, "plain-string", result["staging"]["values"].(map[string]interface{})["raw_val"])
+}
+
+func TestExtractEnvOverrides_InnerMapMissingValueKey(t *testing.T) {
+	envs := map[string]map[string]interface{}{
+		"staging": {
+			"values": map[string]interface{}{
+				"no_val": map[string]interface{}{"type": "STRING"},
+			},
+		},
+	}
+	result := extractEnvOverrides(envs)
+	inner := result["staging"]["values"].(map[string]interface{})
+	// Fallback: entire map is used as-is
+	assert.Equal(t, map[string]interface{}{"type": "STRING"}, inner["no_val"])
+}
+
+func TestExtractEnvOverrides_InnerMapWithValueKey(t *testing.T) {
+	envs := map[string]map[string]interface{}{
+		"staging": {
+			"values": map[string]interface{}{
+				"debug": map[string]interface{}{"value": true},
+			},
+		},
+	}
+	result := extractEnvOverrides(envs)
+	inner := result["staging"]["values"].(map[string]interface{})
+	assert.Equal(t, true, inner["debug"])
+}
+
+// ---------- wrapEnvOverrides ----------
+
+func TestWrapEnvOverrides_Nil(t *testing.T) {
+	assert.Nil(t, wrapEnvOverrides(nil))
+}
+
+func TestWrapEnvOverrides_ValuesNotMap(t *testing.T) {
+	envs := map[string]map[string]interface{}{
+		"staging": {"values": "not-a-map", "meta": "data"},
+	}
+	result := wrapEnvOverrides(envs)
+	// "values" falls through to passthrough since it is not a map
+	assert.Equal(t, "not-a-map", result["staging"]["values"])
+	assert.Equal(t, "data", result["staging"]["meta"])
+}
+
+func TestWrapEnvOverrides_NonValuesKey(t *testing.T) {
+	envs := map[string]map[string]interface{}{
+		"prod": {"name": "production"},
+	}
+	result := wrapEnvOverrides(envs)
+	assert.Equal(t, "production", result["prod"]["name"])
+}
+
+func TestWrapEnvOverrides_WrapsValues(t *testing.T) {
+	envs := map[string]map[string]interface{}{
+		"staging": {
+			"values": map[string]interface{}{
+				"debug": true,
+			},
+		},
+	}
+	result := wrapEnvOverrides(envs)
+	inner := result["staging"]["values"].(map[string]interface{})
+	assert.Equal(t, map[string]interface{}{"value": true}, inner["debug"])
+}
+
 func TestFireListeners_RemovedKey_InternalPath(t *testing.T) {
 	rt := &ConfigRuntime{}
 
