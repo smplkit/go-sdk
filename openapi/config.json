@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "smplkit Config API",
     "description": "Configuration management API for smplkit.",
@@ -68,9 +68,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Filter[Key]",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Key]"
             }
           },
           {
@@ -78,9 +84,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Filter[Parent]",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Parent]"
             }
           }
         ],
@@ -254,13 +266,19 @@
   },
   "components": {
     "schemas": {
-      "Config": {
+      "Config-Input": {
         "properties": {
           "key": {
-            "title": "Key",
-            "type": "string",
-            "maxLength": 64,
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
           },
           "name": {
             "type": "string",
@@ -268,41 +286,81 @@
             "title": "Name"
           },
           "description": {
-            "title": "Description",
-            "type": "string",
-            "maxLength": 1000,
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
           },
           "parent": {
-            "title": "Parent",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
           },
-          "values": {
-            "title": "Values",
-            "additionalProperties": true,
-            "type": "object",
-            "nullable": true
+          "items": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ConfigItemDefinition"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
           },
           "environments": {
-            "title": "Environments",
-            "additionalProperties": true,
-            "type": "object",
-            "nullable": true
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/EnvironmentOverride"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environments"
           },
           "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Updated At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           }
         },
         "type": "object",
@@ -312,19 +370,224 @@
         "title": "Config",
         "example": {
           "created_at": "2026-03-27T10:00:00Z",
-          "description": "PostgreSQL connection string",
+          "description": "Database configuration",
           "environments": {
-            "production": {},
-            "staging": {}
+            "prod": {
+              "values": {
+                "host": {
+                  "value": "db-prod.internal"
+                },
+                "pool_size": {
+                  "value": 20
+                }
+              }
+            }
           },
-          "key": "database_url",
-          "name": "Database URL",
-          "updated_at": "2026-03-27T10:00:00Z",
-          "values": {
-            "production": "postgresql://prod-db:5432/smplkit",
-            "staging": "postgresql://staging-db:5432/smplkit_test"
-          }
+          "items": {
+            "host": {
+              "description": "Primary database hostname",
+              "type": "STRING",
+              "value": "db.internal"
+            },
+            "pool_size": {
+              "description": "Connection pool size",
+              "type": "NUMBER",
+              "value": 10
+            }
+          },
+          "key": "database",
+          "name": "Database",
+          "updated_at": "2026-03-27T10:00:00Z"
         }
+      },
+      "Config-Output": {
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ConfigItemDefinition"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "environments": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/EnvironmentOverride"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environments"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "readOnly": true
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Config",
+        "example": {
+          "created_at": "2026-03-27T10:00:00Z",
+          "description": "Database configuration",
+          "environments": {
+            "prod": {
+              "values": {
+                "host": {
+                  "value": "db-prod.internal"
+                },
+                "pool_size": {
+                  "value": 20
+                }
+              }
+            }
+          },
+          "items": {
+            "host": {
+              "description": "Primary database hostname",
+              "type": "STRING",
+              "value": "db.internal"
+            },
+            "pool_size": {
+              "description": "Connection pool size",
+              "type": "NUMBER",
+              "value": 10
+            }
+          },
+          "key": "database",
+          "name": "Database",
+          "updated_at": "2026-03-27T10:00:00Z"
+        }
+      },
+      "ConfigItemDefinition": {
+        "properties": {
+          "value": {
+            "title": "Value"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "STRING",
+                  "NUMBER",
+                  "BOOLEAN",
+                  "JSON"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "ConfigItemDefinition",
+        "description": "Schema for a single config item."
+      },
+      "ConfigItemOverride": {
+        "properties": {
+          "value": {
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "ConfigItemOverride",
+        "description": "Schema for an environment override \u2014 value only, no type/description."
       },
       "ConfigListResponse": {
         "properties": {
@@ -345,9 +608,15 @@
       "ConfigResource": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -355,7 +624,7 @@
             "title": "Type"
           },
           "attributes": {
-            "$ref": "#/components/schemas/Config"
+            "$ref": "#/components/schemas/Config-Output"
           }
         },
         "type": "object",
@@ -367,18 +636,26 @@
         "example": {
           "attributes": {
             "created_at": "2026-03-27T10:00:00Z",
-            "description": "PostgreSQL connection string",
+            "description": "Database configuration",
             "environments": {
-              "production": {},
-              "staging": {}
+              "prod": {
+                "values": {
+                  "host": {
+                    "value": "db-prod.internal"
+                  }
+                }
+              }
             },
-            "key": "database_url",
-            "name": "Database URL",
-            "updated_at": "2026-03-27T10:00:00Z",
-            "values": {
-              "production": "postgresql://prod-db:5432/smplkit",
-              "staging": "postgresql://staging-db:5432/smplkit_test"
-            }
+            "items": {
+              "host": {
+                "description": "Primary database hostname",
+                "type": "STRING",
+                "value": "db.internal"
+              }
+            },
+            "key": "database",
+            "name": "Database",
+            "updated_at": "2026-03-27T10:00:00Z"
           },
           "id": "550e8400-e29b-41d4-a716-446655440000",
           "type": "config"
@@ -396,6 +673,27 @@
         ],
         "title": "ConfigResponse"
       },
+      "EnvironmentOverride": {
+        "properties": {
+          "values": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ConfigItemOverride"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "title": "EnvironmentOverride",
+        "description": "Schema for per-environment overrides."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -412,9 +710,15 @@
       "Resource_Config_": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -422,7 +726,7 @@
             "default": ""
           },
           "attributes": {
-            "$ref": "#/components/schemas/Config"
+            "$ref": "#/components/schemas/Config-Input"
           }
         },
         "type": "object",
