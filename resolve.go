@@ -3,11 +3,8 @@ package smplkit
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
-
-var apiKeyRegexp = regexp.MustCompile(`\[default\]\s*[\s\S]*?api_key\s*=\s*"([^"]+)"`)
 
 // resolveAPIKey resolves an API key from an explicit value, the SMPLKIT_API_KEY
 // environment variable, or the ~/.smplkit config file. It returns an error if
@@ -36,20 +33,32 @@ func resolveAPIKey(explicit string) (string, error) {
 		Message: "No API key provided. Set one of:\n" +
 			"  1. Pass apiKey to NewClient()\n" +
 			"  2. Set the SMPLKIT_API_KEY environment variable\n" +
-			"  3. Add api_key to [default] in ~/.smplkit",
+			"  3. Create a ~/.smplkit file with:\n" +
+			"     [default]\n" +
+			"     api_key = your_key_here",
 	}
 }
 
-// parseAPIKeyFromConfig extracts api_key from a TOML-like config file content.
+// parseAPIKeyFromConfig extracts api_key from an INI-format config file content.
 func parseAPIKeyFromConfig(content string) string {
-	// Find [default] section first
-	idx := strings.Index(content, "[default]")
-	if idx == -1 {
-		return ""
-	}
-	matches := apiKeyRegexp.FindStringSubmatch(content)
-	if len(matches) >= 2 {
-		return matches[1]
+	inDefault := false
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "[") {
+			inDefault = strings.EqualFold(trimmed, "[default]")
+			continue
+		}
+		if inDefault && strings.HasPrefix(trimmed, "api_key") {
+			if eqIdx := strings.Index(trimmed, "="); eqIdx != -1 {
+				value := strings.TrimSpace(trimmed[eqIdx+1:])
+				if value != "" {
+					return value
+				}
+			}
+		}
 	}
 	return ""
 }

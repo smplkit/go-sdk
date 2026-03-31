@@ -34,7 +34,7 @@ func main() {
 
     // Option 3: Configuration file (~/.smplkit)
     // [default]
-    // api_key = "sk_api_..."
+    // api_key = sk_api_...
     client, err = smplkit.NewClient("")
 
     if err != nil {
@@ -82,11 +82,13 @@ The API key is resolved using the following priority:
 
 1. **Explicit argument:** Pass `apiKey` to `NewClient()`.
 2. **Environment variable:** Set `SMPLKIT_API_KEY`.
-3. **Configuration file:** Add `api_key` under `[default]` in `~/.smplkit` (TOML format):
+3. **Configuration file:** Add `api_key` under `[default]` in `~/.smplkit`:
 
-```toml
+```ini
+# ~/.smplkit
+
 [default]
-api_key = "sk_api_..."
+api_key = sk_api_your_key_here
 ```
 
 If none of these are set, `NewClient` returns a `SmplError` listing all three methods.
