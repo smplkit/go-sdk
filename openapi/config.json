@@ -266,141 +266,7 @@
   },
   "components": {
     "schemas": {
-      "Config-Input": {
-        "properties": {
-          "key": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 64
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Key"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 255,
-            "title": "Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 1000
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "parent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent"
-          },
-          "items": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "$ref": "#/components/schemas/ConfigItemDefinition"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Items"
-          },
-          "environments": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "$ref": "#/components/schemas/EnvironmentOverride"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Environments"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At",
-            "readOnly": true
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At",
-            "readOnly": true
-          }
-        },
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "Config",
-        "example": {
-          "created_at": "2026-03-27T10:00:00Z",
-          "description": "Database configuration",
-          "environments": {
-            "prod": {
-              "values": {
-                "host": {
-                  "value": "db-prod.internal"
-                },
-                "pool_size": {
-                  "value": 20
-                }
-              }
-            }
-          },
-          "items": {
-            "host": {
-              "description": "Primary database hostname",
-              "type": "STRING",
-              "value": "db.internal"
-            },
-            "pool_size": {
-              "description": "Connection pool size",
-              "type": "NUMBER",
-              "value": 10
-            }
-          },
-          "key": "database",
-          "name": "Database",
-          "updated_at": "2026-03-27T10:00:00Z"
-        }
-      },
-      "Config-Output": {
+      "Config": {
         "properties": {
           "key": {
             "anyOf": [
@@ -624,7 +490,7 @@
             "title": "Type"
           },
           "attributes": {
-            "$ref": "#/components/schemas/Config-Output"
+            "$ref": "#/components/schemas/Config"
           }
         },
         "type": "object",
@@ -726,7 +592,7 @@
             "default": ""
           },
           "attributes": {
-            "$ref": "#/components/schemas/Config-Input"
+            "$ref": "#/components/schemas/Config"
           }
         },
         "type": "object",
