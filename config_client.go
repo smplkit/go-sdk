@@ -322,44 +322,99 @@ func buildConfigRequest(id, name string, key, desc, parent *string, items map[st
 	}
 }
 
-// derefMap converts *map[string]interface{} to map[string]interface{}.
-func derefMap(m *map[string]interface{}) map[string]interface{} {
+// derefMap converts *map[string]ConfigItemDefinition to the wire-format map
+// used by extractItemValues: {key: {"value": raw, ...}}.
+func derefMap(m *map[string]genconfig.ConfigItemDefinition) map[string]interface{} {
 	if m == nil {
 		return nil
 	}
-	return *m
-}
-
-// refMap converts map[string]interface{} to *map[string]interface{}.
-func refMap(m map[string]interface{}) *map[string]interface{} {
-	if m == nil {
-		return nil
-	}
-	return &m
-}
-
-// derefEnvs converts *map[string]interface{} to map[string]map[string]interface{}.
-func derefEnvs(envs *map[string]interface{}) map[string]map[string]interface{} {
-	if envs == nil {
-		return nil
-	}
-	result := make(map[string]map[string]interface{})
-	for k, v := range *envs {
-		if m, ok := v.(map[string]interface{}); ok {
-			result[k] = m
+	result := make(map[string]interface{}, len(*m))
+	for k, v := range *m {
+		entry := map[string]interface{}{"value": v.Value}
+		if v.Type != nil {
+			entry["type"] = string(*v.Type)
 		}
+		if v.Description != nil {
+			entry["description"] = *v.Description
+		}
+		result[k] = entry
 	}
 	return result
 }
 
-// refEnvs converts map[string]map[string]interface{} to *map[string]interface{}.
-func refEnvs(envs map[string]map[string]interface{}) *map[string]interface{} {
+// refMap converts the wire-format map produced by wrapItemValues
+// ({key: {"value": raw, "type": "JSON"}}) back to *map[string]ConfigItemDefinition.
+func refMap(m map[string]interface{}) *map[string]genconfig.ConfigItemDefinition {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]genconfig.ConfigItemDefinition, len(m))
+	for k, v := range m {
+		item := genconfig.ConfigItemDefinition{}
+		if inner, ok := v.(map[string]interface{}); ok {
+			if val, exists := inner["value"]; exists {
+				item.Value = val
+			} else {
+				item.Value = v
+			}
+			if typeStr, ok := inner["type"].(string); ok {
+				t := genconfig.ConfigItemDefinitionType(typeStr)
+				item.Type = &t
+			}
+		} else {
+			item.Value = v
+		}
+		result[k] = item
+	}
+	return &result
+}
+
+// derefEnvs converts *map[string]EnvironmentOverride to the wire-format map
+// used by extractEnvOverrides: {envName: {"values": {key: {"value": raw}}}}.
+func derefEnvs(envs *map[string]genconfig.EnvironmentOverride) map[string]map[string]interface{} {
 	if envs == nil {
 		return nil
 	}
-	result := make(map[string]interface{})
-	for k, v := range envs {
-		result[k] = v
+	result := make(map[string]map[string]interface{}, len(*envs))
+	for k, v := range *envs {
+		entry := make(map[string]interface{})
+		if v.Values != nil {
+			vals := make(map[string]interface{}, len(*v.Values))
+			for vk, vv := range *v.Values {
+				vals[vk] = map[string]interface{}{"value": vv.Value}
+			}
+			entry["values"] = vals
+		}
+		result[k] = entry
+	}
+	return result
+}
+
+// refEnvs converts the wire-format map produced by wrapEnvOverrides back to
+// *map[string]EnvironmentOverride.
+func refEnvs(envs map[string]map[string]interface{}) *map[string]genconfig.EnvironmentOverride {
+	if envs == nil {
+		return nil
+	}
+	result := make(map[string]genconfig.EnvironmentOverride, len(envs))
+	for envName, envEntry := range envs {
+		var override genconfig.EnvironmentOverride
+		if vals, ok := envEntry["values"]; ok {
+			if valsMap, ok := vals.(map[string]interface{}); ok {
+				wrapped := make(map[string]genconfig.ConfigItemOverride, len(valsMap))
+				for vk, vv := range valsMap {
+					if inner, ok := vv.(map[string]interface{}); ok {
+						if val, exists := inner["value"]; exists {
+							wrapped[vk] = genconfig.ConfigItemOverride{Value: val}
+							continue
+						}
+					}
+					wrapped[vk] = genconfig.ConfigItemOverride{Value: vv}
+				}
+				override.Values = &wrapped
+			}
+		}
+		result[envName] = override
 	}
 	return &result
 }

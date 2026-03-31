@@ -1105,7 +1105,7 @@ func TestConfigClient_FetchChain_Error(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		if r.URL.Path == "/api/v1/configs/"+childID {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"y":2}`, `{}`, parentID)))
+			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"y":{"value":2,"type":"NUMBER"}}`, `{}`, parentID)))
 		} else if r.URL.Path == "/api/v1/configs/"+parentID {
 			// Parent returns error.
 			w.WriteHeader(http.StatusNotFound)
@@ -1215,7 +1215,7 @@ func TestConfig_SetValue_WithEnvironment_NonMapOverride(t *testing.T) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":"not-a-map"}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":null}}}}}`))
 		} else {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"debug":{"value":true}}}}}}}`))
