@@ -2663,6 +2663,68 @@
         }
       }
     },
+    "/api/v1/plans": {
+      "get": {
+        "tags": [
+          "Plans"
+        ],
+        "summary": "List Plans",
+        "description": "Return all plan tier definitions as JSON:API resources.",
+        "operationId": "list_plans",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/products": {
       "get": {
         "tags": [
@@ -3480,7 +3542,7 @@
         ],
         "title": "OidcProvider"
       },
-      "PlanDefinition": {
+      "Plan": {
         "properties": {
           "display_name": {
             "type": "string",
@@ -3490,6 +3552,21 @@
             "type": "string",
             "title": "Description"
           },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "description",
+          "sort_order"
+        ],
+        "title": "Plan"
+      },
+      "PlanDefinition": {
+        "properties": {
           "price_monthly_cents": {
             "type": "integer",
             "title": "Price Monthly Cents"
@@ -3504,12 +3581,55 @@
         },
         "type": "object",
         "required": [
-          "display_name",
-          "description",
           "price_monthly_cents",
           "limits"
         ],
         "title": "PlanDefinition"
+      },
+      "PlanListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PlanResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "PlanListResponse"
+      },
+      "PlanResource": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "plan",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Plan"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "PlanResource"
       },
       "Product": {
         "properties": {
@@ -3926,6 +4046,9 @@
     },
     {
       "name": "Users"
+    },
+    {
+      "name": "Plans"
     },
     {
       "name": "Products"
