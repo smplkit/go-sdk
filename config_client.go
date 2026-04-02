@@ -262,7 +262,7 @@ func (c *ConfigClient) connect(ctx context.Context, cfg *Config, environment str
 
 	rt := newConfigRuntime(cfg.ID, environment, cache, func() ([]chainEntry, error) {
 		return c.fetchChain(context.Background(), rootID)
-	}, c.client.apiKey, c.client.baseURL)
+	}, c.client.apiKey, c.client.baseURL, nil)
 
 	go rt.wsLoop()
 	return rt, nil

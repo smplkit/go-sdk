@@ -3,9 +3,13 @@ package smplkit
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
+	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
 )
+
+const appBaseURL = "https://app.smplkit.com"
 
 // Client is the top-level entry point for the smplkit SDK.
 //
@@ -13,11 +17,17 @@ import (
 //
 //	client, err := smplkit.NewClient("sk_api_...")
 //	cfgs, err := client.Config().List(ctx)
+//	flags, err := client.Flags().List(ctx)
 type Client struct {
 	apiKey     string
 	baseURL    string
 	httpClient *http.Client
-	config     *ConfigClient
+
+	config *ConfigClient
+	flags  *FlagsClient
+
+	wsMu sync.Mutex
+	ws   *sharedWebSocket
 }
 
 // NewClient creates a new smplkit API client.
@@ -63,9 +73,20 @@ func NewClient(apiKey string, opts ...ClientOption) (*Client, error) {
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
-	genClient, _ := genconfig.NewClient(cfg.baseURL,
+	genConfigClient, _ := genconfig.NewClient(cfg.baseURL,
 		genconfig.WithHTTPClient(httpClient),
 		headerEditor,
+	)
+
+	// Build the generated flags client with the same pattern.
+	flagsHeaderEditor := genflags.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genFlagsClient, _ := genflags.NewClient("https://flags.smplkit.com",
+		genflags.WithHTTPClient(httpClient),
+		flagsHeaderEditor,
 	)
 
 	c := &Client{
@@ -73,11 +94,39 @@ func NewClient(apiKey string, opts ...ClientOption) (*Client, error) {
 		baseURL:    cfg.baseURL,
 		httpClient: httpClient,
 	}
-	c.config = &ConfigClient{client: c, generated: genClient}
+	c.config = &ConfigClient{client: c, generated: genConfigClient}
+	c.flags = &FlagsClient{client: c, generated: genFlagsClient}
+	c.flags.runtime = newFlagsRuntime(c.flags)
 	return c, nil
 }
 
 // Config returns the sub-client for config management operations.
 func (c *Client) Config() *ConfigClient {
 	return c.config
+}
+
+// Flags returns the sub-client for flags management and runtime operations.
+func (c *Client) Flags() *FlagsClient {
+	return c.flags
+}
+
+// ensureWS returns the shared WebSocket, starting it if needed.
+func (c *Client) ensureWS() *sharedWebSocket {
+	c.wsMu.Lock()
+	defer c.wsMu.Unlock()
+	if c.ws == nil {
+		c.ws = newSharedWebSocket(appBaseURL, c.apiKey)
+		c.ws.start()
+	}
+	return c.ws
+}
+
+// stopWS stops the shared WebSocket if running.
+func (c *Client) stopWS() {
+	c.wsMu.Lock()
+	ws := c.ws
+	c.wsMu.Unlock()
+	if ws != nil {
+		ws.stop()
+	}
 }

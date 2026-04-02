@@ -127,6 +127,95 @@ if err != nil {
 | `SmplConnectionError`  | Network connectivity issue    |
 | `SmplError`            | Any other SDK error           |
 
+## Feature Flags
+
+The SDK includes a full-featured feature flags client with management API, prescriptive runtime evaluation, and real-time updates.
+
+### Management API
+
+```go
+ctx := context.Background()
+flags := client.Flags()
+
+// Create a flag
+flag, err := flags.Create(ctx, smplkit.CreateFlagParams{
+    Key:     "checkout-v2",
+    Name:    "Checkout V2",
+    Type:    smplkit.FlagTypeBoolean,
+    Default: false,
+})
+
+// Update with environment rules
+err = flag.Update(ctx, smplkit.UpdateFlagParams{
+    Environments: map[string]interface{}{
+        "staging": map[string]interface{}{
+            "enabled": true,
+            "rules": []interface{}{
+                smplkit.NewRule("Enable for enterprise").
+                    When("user.plan", "==", "enterprise").
+                    Serve(true).
+                    Build(),
+            },
+        },
+    },
+})
+
+// List, get, delete
+allFlags, _ := flags.List(ctx)
+fetched, _ := flags.Get(ctx, flag.ID)
+err = flags.Delete(ctx, flag.ID)
+```
+
+### Runtime Evaluation
+
+```go
+// Define typed flag handles
+checkout := flags.BoolFlag("checkout-v2", false)
+banner   := flags.StringFlag("banner-color", "red")
+retries  := flags.NumberFlag("max-retries", 3)
+
+// Register a context provider
+flags.SetContextProvider(func(ctx context.Context) []smplkit.Context {
+    return []smplkit.Context{
+        smplkit.NewContext("user", "user-42", map[string]interface{}{
+            "plan": "enterprise",
+        }),
+    }
+})
+
+// Connect to an environment
+err := flags.Connect(ctx, "staging")
+
+// Evaluate — uses provider context, caches results
+isV2 := checkout.Get(ctx)            // true (rule matched)
+color := banner.Get(ctx)             // "blue"
+
+// Explicit context override
+basicUser := smplkit.NewContext("user", "u-1", map[string]interface{}{"plan": "free"})
+isV2 = checkout.Get(ctx, basicUser)  // false
+
+// Change listeners
+flags.OnChange(func(evt *smplkit.FlagChangeEvent) {
+    fmt.Println("flag changed:", evt.Key)
+})
+
+// Cache stats
+stats := flags.Stats()
+fmt.Printf("hits=%d misses=%d\n", stats.CacheHits, stats.CacheMisses)
+
+// Cleanup
+flags.Disconnect(ctx)
+```
+
+### Flag Types
+
+| Constant              | Value       |
+|-----------------------|-------------|
+| `FlagTypeBoolean`     | `"BOOLEAN"` |
+| `FlagTypeString`      | `"STRING"`  |
+| `FlagTypeNumeric`     | `"NUMERIC"` |
+| `FlagTypeJSON`        | `"JSON"`    |
+
 ## Documentation
 
 - [Getting Started](https://docs.smplkit.com/getting-started)

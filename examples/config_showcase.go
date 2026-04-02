@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Config Showcase — end-to-end walkthrough of the Smpl Config Go SDK.
 //
 // Demonstrates the full SDK surface:
@@ -18,7 +20,7 @@
 // Usage:
 //
 //	export SMPLKIT_API_KEY="sk_api_..."
-//	go run examples/config_showcase.go
+//	go run examples/config_showcase.go examples/helpers.go
 package main
 
 import (
@@ -29,23 +31,6 @@ import (
 
 	smplkit "github.com/smplkit/go-sdk"
 )
-
-func section(title string) {
-	fmt.Printf("\n%s\n", "════════════════════════════════════════════════════════════════")
-	fmt.Printf("  %s\n", title)
-	fmt.Printf("%s\n\n", "════════════════════════════════════════════════════════════════")
-}
-
-func step(description string) {
-	fmt.Printf("  → %s\n", description)
-}
-
-func fatal(msg string, err error) {
-	fmt.Fprintf(os.Stderr, "FATAL: %s: %v\n", msg, err)
-	os.Exit(1)
-}
-
-func strPtr(s string) *string { return &s }
 
 func main() {
 	ctx := context.Background()

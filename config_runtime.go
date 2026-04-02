@@ -64,15 +64,20 @@ type ConfigRuntime struct {
 	closeOnce sync.Once
 	wsDone    chan struct{}
 
-	fetchChain  func() ([]chainEntry, error)
-	apiKey      string
-	wsBase      string // base WebSocket URL (ws:// or wss://)
+	fetchChain func() ([]chainEntry, error)
+	apiKey     string
+	wsBase     string // base WebSocket URL (ws:// or wss://)
+
+	// Shared WebSocket support.
+	wsManager *sharedWebSocket
+
+	// Legacy per-config WS fields (used by tests via dialWS injection).
 	initBackoff time.Duration
 	maxBackoff  time.Duration
 	dialWS      func(url string) (*websocket.Conn, error)
 }
 
-func newConfigRuntime(configID, environment string, cache map[string]interface{}, fetchChain func() ([]chainEntry, error), apiKey, baseURL string) *ConfigRuntime {
+func newConfigRuntime(configID, environment string, cache map[string]interface{}, fetchChain func() ([]chainEntry, error), apiKey, baseURL string, ws *sharedWebSocket) *ConfigRuntime {
 	return &ConfigRuntime{
 		configID:    configID,
 		environment: environment,
@@ -85,6 +90,7 @@ func newConfigRuntime(configID, environment string, cache map[string]interface{}
 		fetchChain:  fetchChain,
 		apiKey:      apiKey,
 		wsBase:      toWSBase(baseURL),
+		wsManager:   ws,
 		initBackoff: time.Second,
 		maxBackoff:  60 * time.Second,
 		dialWS:      defaultDialWS,
@@ -278,13 +284,46 @@ func (rt *ConfigRuntime) fireListeners(old, newCache map[string]interface{}, sou
 }
 
 // wsLoop runs the WebSocket connection lifecycle in a goroutine.
-// It reconnects with exponential backoff until rt.closeCh is closed.
+// If a shared WebSocket is available, it registers on it.
+// Otherwise falls back to per-config WebSocket (for tests).
 func (rt *ConfigRuntime) wsLoop() {
 	defer func() {
 		rt.setStatus("disconnected")
 		close(rt.wsDone)
 	}()
 
+	if rt.wsManager != nil {
+		// Use shared WebSocket: register event handlers and wait for close.
+		rt.wsManager.on("config_changed", rt.handleSharedWSEvent)
+		rt.wsManager.on("config_deleted", rt.handleSharedWSEvent)
+		rt.setStatus("connected")
+
+		<-rt.closeCh
+
+		rt.wsManager.off("config_changed", rt.handleSharedWSEvent)
+		rt.wsManager.off("config_deleted", rt.handleSharedWSEvent)
+		return
+	}
+
+	// Fallback: per-config WebSocket (legacy, used by tests).
+	rt.wsLoopLegacy()
+}
+
+// handleSharedWSEvent handles config events from the shared WebSocket.
+func (rt *ConfigRuntime) handleSharedWSEvent(data map[string]interface{}) {
+	// The shared WS dispatches all events for the account.
+	// We only care about events for our config.
+	eventType, _ := data["event"].(string)
+	switch eventType {
+	case "config_changed":
+		rt.handleWSUpdate()
+	case "config_deleted":
+		rt.setStatus("disconnected")
+	}
+}
+
+// wsLoopLegacy runs the legacy per-config WebSocket lifecycle.
+func (rt *ConfigRuntime) wsLoopLegacy() {
 	backoff := rt.initBackoff
 	if backoff == 0 {
 		backoff = time.Second
