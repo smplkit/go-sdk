@@ -5,6 +5,7 @@ Converts:
   - openapi version 3.1.x -> 3.0.3
   - anyOf with {"type": "null"} -> nullable: true on the remaining schema
   - Bare {"type": ["string", "null"]} -> {"type": "string", "nullable": true}
+  - const -> enum with single value (3.1 feature not in 3.0)
 
 Writes the result to stdout so it can be piped or redirected.
 
@@ -36,6 +37,11 @@ def downgrade_schema(obj):
             else:
                 result[key] = [downgrade_schema(s) for s in value]
                 continue
+
+        if key == "const":
+            # {"const": "value"} -> {"enum": ["value"]}
+            result["enum"] = [value]
+            continue
 
         if key == "type" and isinstance(value, list):
             # {"type": ["string", "null"]} -> {"type": "string", "nullable": true}
