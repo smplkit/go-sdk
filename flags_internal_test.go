@@ -2574,6 +2574,43 @@ func TestSharedWebSocket_Run_BackoffCap(t *testing.T) {
 	mu.Unlock()
 }
 
+// --- ws.go run: closeCh already closed before loop starts ---
+
+func TestSharedWebSocket_Run_ClosedBeforeLoop(t *testing.T) {
+	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws.initBackoff = time.Millisecond
+	ws.maxBackoff = time.Millisecond
+	// Close the channel before run() starts — exercises the top-of-loop select
+	close(ws.closeCh)
+	go ws.run()
+	<-ws.wsDone
+	assert.Equal(t, "disconnected", ws.connectionStatus())
+}
+
+// --- ws.go run: closeCh signaled during backoff select ---
+
+func TestSharedWebSocket_Run_ClosedDuringBackoff(t *testing.T) {
+	var mu sync.Mutex
+	connectCount := 0
+	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws.initBackoff = 500 * time.Millisecond
+	ws.maxBackoff = 500 * time.Millisecond
+	ws.dialWS = func(url string) (*websocket.Conn, error) {
+		mu.Lock()
+		connectCount++
+		mu.Unlock()
+		return nil, assert.AnError
+	}
+
+	go ws.run()
+	// Wait for first connect to fail and backoff to start
+	time.Sleep(100 * time.Millisecond)
+	// Signal close during the backoff select
+	ws.closeOnce.Do(func() { close(ws.closeCh) })
+	<-ws.wsDone
+	assert.Equal(t, "disconnected", ws.connectionStatus())
+}
+
 // --- FlagsRuntime Connect error ---
 
 func TestFlagsRuntime_Connect_FetchError(t *testing.T) {
