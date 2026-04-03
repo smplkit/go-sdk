@@ -133,13 +133,9 @@ func (b *contextRegistrationBuffer) observe(contexts []Context) {
 			b.seen = make(map[string]struct{})
 		}
 		b.seen[cacheKey] = struct{}{}
-		name := ctx.Name
-		if name == "" {
-			name = ctx.Key
-		}
 		item := map[string]interface{}{
-			"id":         fmt.Sprintf("%s:%s", ctx.Type, ctx.Key),
-			"name":       name,
+			"type":       ctx.Type,
+			"key":        ctx.Key,
 			"attributes": copyMap(ctx.Attributes),
 		}
 		b.pending = append(b.pending, item)

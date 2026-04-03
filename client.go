@@ -187,8 +187,8 @@ func (c *Client) registerServiceContext(ctx context.Context) {
 	payload := map[string]interface{}{
 		"contexts": []map[string]interface{}{
 			{
-				"id":         fmt.Sprintf("service:%s", c.service),
-				"name":       c.service,
+				"type":       "service",
+				"key":        c.service,
 				"attributes": map[string]interface{}{"name": c.service},
 			},
 		},
