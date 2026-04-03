@@ -63,6 +63,21 @@ func (e *SmplConflictError) Error() string { return e.SmplError.Error() }
 // Unwrap returns the embedded SmplError for errors.Is/errors.As support.
 func (e *SmplConflictError) Unwrap() error { return &e.SmplError }
 
+// SmplNotConnectedError is raised when a method requiring Connect() is called
+// before the client is connected.
+type SmplNotConnectedError struct {
+	SmplError
+}
+
+// Error implements the error interface.
+func (e *SmplNotConnectedError) Error() string { return e.SmplError.Error() }
+
+// Unwrap returns the embedded SmplError for errors.Is/errors.As support.
+func (e *SmplNotConnectedError) Unwrap() error { return &e.SmplError }
+
+// ErrNotConnected is a convenience sentinel for SmplNotConnectedError checks.
+var ErrNotConnected = &SmplNotConnectedError{SmplError{Message: "SmplClient is not connected. Call client.Connect() first."}}
+
 // SmplValidationError is raised when the server rejects a request due to validation errors (HTTP 422).
 type SmplValidationError struct {
 	SmplError

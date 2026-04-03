@@ -981,6 +981,9 @@ func TestContextRegistrationBuffer_Eviction(t *testing.T) {
 
 func TestFlagsClient_BoolFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
+	fc.runtime.mu.Lock()
+	fc.runtime.connected = true
+	fc.runtime.mu.Unlock()
 	handle := fc.BoolFlag("feature", false)
 	assert.NotNil(t, handle)
 	assert.Equal(t, false, handle.Get(context.Background()))
@@ -988,18 +991,27 @@ func TestFlagsClient_BoolFlag(t *testing.T) {
 
 func TestFlagsClient_StringFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
+	fc.runtime.mu.Lock()
+	fc.runtime.connected = true
+	fc.runtime.mu.Unlock()
 	handle := fc.StringFlag("theme", "light")
 	assert.Equal(t, "light", handle.Get(context.Background()))
 }
 
 func TestFlagsClient_NumberFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
+	fc.runtime.mu.Lock()
+	fc.runtime.connected = true
+	fc.runtime.mu.Unlock()
 	handle := fc.NumberFlag("max-retries", 3.0)
 	assert.Equal(t, 3.0, handle.Get(context.Background()))
 }
 
 func TestFlagsClient_JsonFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
+	fc.runtime.mu.Lock()
+	fc.runtime.connected = true
+	fc.runtime.mu.Unlock()
 	dflt := map[string]interface{}{"color": "blue"}
 	handle := fc.JsonFlag("settings", dflt)
 	assert.Equal(t, dflt, handle.Get(context.Background()))
@@ -1073,24 +1085,36 @@ func TestFlagsClient_Evaluate_ConnectedWithStore(t *testing.T) {
 
 func TestBoolFlagHandle_GetWithContext(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	handle := rt.BoolFlag("feature", false)
 	assert.Equal(t, false, handle.GetWithContext(context.Background(), nil))
 }
 
 func TestStringFlagHandle_GetWithContext(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	handle := rt.StringFlag("theme", "light")
 	assert.Equal(t, "light", handle.GetWithContext(context.Background(), nil))
 }
 
 func TestNumberFlagHandle_GetWithContext(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	handle := rt.NumberFlag("retries", 5.0)
 	assert.Equal(t, 5.0, handle.GetWithContext(context.Background(), nil))
 }
 
 func TestJsonFlagHandle_GetWithContext(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	dflt := map[string]interface{}{"a": "b"}
 	handle := rt.JsonFlag("config", dflt)
 	assert.Equal(t, dflt, handle.GetWithContext(context.Background(), nil))
@@ -1118,6 +1142,9 @@ func TestNumberFlagHandle_GetInt(t *testing.T) {
 
 func TestNumberFlagHandle_GetWithContext_Int(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	handle := rt.NumberFlag("retries", 5.0)
 	assert.Equal(t, 5.0, handle.GetWithContext(context.Background(), nil))
 }
@@ -1633,7 +1660,7 @@ func TestFlagsRuntime_Connect(t *testing.T) {
 		_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
 	}))
 
-	err := fc.Connect(context.Background(), "production")
+	err := fc.connectInternal(context.Background(), "production")
 	require.NoError(t, err)
 
 	// Should be connected with flag in store
@@ -1656,7 +1683,7 @@ func TestFlagsRuntime_Disconnect(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
 
-	_ = fc.Connect(context.Background(), "staging")
+	_ = fc.connectInternal(context.Background(), "staging")
 	fc.Disconnect(context.Background())
 
 	fc.runtime.mu.RLock()
@@ -2619,7 +2646,7 @@ func TestFlagsRuntime_Connect_FetchError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
 	}))
 
-	err := fc.Connect(context.Background(), "production")
+	err := fc.connectInternal(context.Background(), "production")
 	assert.Error(t, err)
 }
 
@@ -3017,4 +3044,93 @@ func TestSharedWebSocket_Run_BackoffExceedsMax(t *testing.T) {
 	mu.Lock()
 	assert.True(t, connectCount >= 3, "expected at least 3 connects (enough to cap backoff), got %d", connectCount)
 	mu.Unlock()
+}
+
+// --- Service context auto-injection ---
+
+func TestFlagsRuntime_ServiceContextAutoInjection(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature", "Feature", "BOOLEAN")))
+	}))
+
+	// Set service on the client
+	fc.client.service = "my-service"
+
+	// Connect and set up a flag with a rule that checks service.key
+	err := fc.connectInternal(context.Background(), "production")
+	require.NoError(t, err)
+
+	fc.runtime.mu.Lock()
+	fc.runtime.flagStore["feature"] = map[string]interface{}{
+		"default": false,
+		"environments": map[string]interface{}{
+			"production": map[string]interface{}{
+				"enabled": true,
+				"default": false,
+				"rules": []interface{}{
+					map[string]interface{}{
+						"logic": map[string]interface{}{
+							"==": []interface{}{
+								map[string]interface{}{"var": "service.key"},
+								"my-service",
+							},
+						},
+						"value": true,
+					},
+				},
+			},
+		},
+	}
+	fc.runtime.mu.Unlock()
+
+	// Evaluate without providing service context — should be auto-injected
+	handle := fc.BoolFlag("feature", false)
+	result := handle.Get(context.Background())
+	assert.Equal(t, true, result, "service context should be auto-injected and match the rule")
+
+	fc.Disconnect(context.Background())
+	fc.client.stopWS()
+}
+
+func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	fc.client.service = "auto-service"
+
+	fc.runtime.mu.Lock()
+	fc.runtime.connected = true
+	fc.runtime.environment = "production"
+	fc.runtime.flagStore = map[string]map[string]interface{}{
+		"feature": {
+			"default": false,
+			"environments": map[string]interface{}{
+				"production": map[string]interface{}{
+					"enabled": true,
+					"default": false,
+					"rules": []interface{}{
+						map[string]interface{}{
+							"logic": map[string]interface{}{
+								"==": []interface{}{
+									map[string]interface{}{"var": "service.key"},
+									"custom-service",
+								},
+							},
+							"value": true,
+						},
+					},
+				},
+			},
+		},
+	}
+	fc.runtime.mu.Unlock()
+
+	// Provide explicit service context — should NOT be overridden by auto-injection
+	handle := fc.BoolFlag("feature", false)
+	result := handle.GetWithContext(context.Background(), []Context{
+		{Type: "service", Key: "custom-service"},
+	})
+	assert.Equal(t, true, result, "customer-provided service context should take precedence")
+
+	fc.client.stopWS()
 }

@@ -14,8 +14,10 @@ import (
 // ConfigClient provides CRUD operations for config resources.
 // Obtain one via Client.Config().
 type ConfigClient struct {
-	client    *Client
-	generated genconfig.ClientInterface
+	client     *Client
+	generated  genconfig.ClientInterface
+	configCache map[string]map[string]interface{}
+	connected   bool
 }
 
 // Get retrieves a single config using functional options. Exactly one of
@@ -248,6 +250,57 @@ func (c *ConfigClient) fetchChain(ctx context.Context, rootID string) ([]chainEn
 		currentID = *node.Parent
 	}
 	return chain, nil
+}
+
+// connectInternal fetches all configs, resolves values for the environment,
+// and caches them. Called by Client.Connect().
+func (c *ConfigClient) connectInternal(ctx context.Context, environment string) error {
+	configs, err := c.List(ctx)
+	if err != nil {
+		return err
+	}
+
+	cache := make(map[string]map[string]interface{})
+	for _, cfg := range configs {
+		chain, fetchErr := c.fetchChain(ctx, cfg.ID)
+		if fetchErr != nil {
+			return fetchErr
+		}
+		cache[cfg.Key] = resolveChain(chain, environment)
+	}
+	c.configCache = cache
+	c.connected = true
+	return nil
+}
+
+// GetValue reads a resolved config value (prescriptive access).
+//
+// Requires Client.Connect() to have been called.
+//
+// With one argument (configKey), returns a copy of all resolved values as map[string]interface{}.
+// With two arguments (configKey, itemKey), returns the specific item value.
+// Returns defaultVal (or nil) if the key is missing.
+func (c *ConfigClient) GetValue(configKey string, itemKey ...string) (interface{}, error) {
+	if !c.connected {
+		return nil, ErrNotConnected
+	}
+	resolved, ok := c.configCache[configKey]
+	if !ok {
+		return nil, nil
+	}
+	if len(itemKey) == 0 {
+		// Return a copy
+		cp := make(map[string]interface{}, len(resolved))
+		for k, v := range resolved {
+			cp[k] = v
+		}
+		return cp, nil
+	}
+	val, ok := resolved[itemKey[0]]
+	if !ok {
+		return nil, nil
+	}
+	return val, nil
 }
 
 // connect builds a ConfigRuntime for cfg in the given environment.

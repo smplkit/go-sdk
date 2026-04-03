@@ -104,11 +104,12 @@ func (c *Config) SetValue(ctx context.Context, key string, value interface{}, en
 	return c.SetValues(ctx, existing, environment)
 }
 
-// Connect resolves this config (and its ancestors) for the given environment,
-// populates an in-process cache, and opens a WebSocket connection for real-time
-// updates. Returns immediately; value reads work from the cache right away.
+// Connect creates a live, reactive ConfigRuntime for this config in the given
+// environment. The runtime maintains a WebSocket connection for real-time updates
+// and supports OnChange listeners. Call Close on the returned runtime when done.
 //
-// Call Close on the returned ConfigRuntime when done.
+// For simple prescriptive access, use ConfigClient.GetValue after calling
+// Client.Connect instead.
 func (c *Config) Connect(ctx context.Context, environment string) (*ConfigRuntime, error) {
 	return c.client.connect(ctx, c, environment)
 }

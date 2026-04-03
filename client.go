@@ -1,8 +1,13 @@
 package smplkit
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"sync"
 
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
@@ -15,19 +20,22 @@ const appBaseURL = "https://app.smplkit.com"
 //
 // Create one with NewClient and access sub-clients via accessor methods:
 //
-//	client, err := smplkit.NewClient("sk_api_...")
+//	client, err := smplkit.NewClient("sk_api_...", "production")
+//	err = client.Connect(ctx)
 //	cfgs, err := client.Config().List(ctx)
-//	flags, err := client.Flags().List(ctx)
 type Client struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+	apiKey      string
+	environment string
+	service     string
+	baseURL     string
+	httpClient  *http.Client
 
 	config *ConfigClient
 	flags  *FlagsClient
 
-	wsMu sync.Mutex
-	ws   *sharedWebSocket
+	wsMu      sync.Mutex
+	ws        *sharedWebSocket
+	connected bool
 }
 
 // NewClient creates a new smplkit API client.
@@ -35,16 +43,38 @@ type Client struct {
 // The apiKey is used for Bearer token authentication on every request.
 // Pass an empty string to resolve the API key automatically from the
 // SMPLKIT_API_KEY environment variable or the ~/.smplkit config file.
-// Use ClientOption functions to customize the base URL, timeout, or HTTP client.
-func NewClient(apiKey string, opts ...ClientOption) (*Client, error) {
+//
+// The environment is required; pass an empty string to resolve from
+// SMPLKIT_ENVIRONMENT.
+//
+// Use ClientOption functions to customize the base URL, timeout, HTTP client,
+// or service name.
+func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client, error) {
 	resolved, err := resolveAPIKey(apiKey)
 	if err != nil {
 		return nil, err
 	}
 
+	resolvedEnv := environment
+	if resolvedEnv == "" {
+		resolvedEnv = os.Getenv("SMPLKIT_ENVIRONMENT")
+	}
+	if resolvedEnv == "" {
+		return nil, &SmplError{
+			Message: "No environment provided. Set one of:\n" +
+				"  1. Pass environment to NewClient\n" +
+				"  2. Set the SMPLKIT_ENVIRONMENT environment variable",
+		}
+	}
+
 	cfg := defaultConfig()
 	for _, opt := range opts {
 		opt(&cfg)
+	}
+
+	resolvedService := cfg.service
+	if resolvedService == "" {
+		resolvedService = os.Getenv("SMPLKIT_SERVICE")
 	}
 
 	var httpClient *http.Client
@@ -84,21 +114,33 @@ func NewClient(apiKey string, opts ...ClientOption) (*Client, error) {
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
-	genFlagsClient, _ := genflags.NewClient("https://flags.smplkit.com",
+	flagsBaseURL := "https://flags.smplkit.com"
+	if cfg.baseURL != "" && cfg.baseURL != defaultConfig().baseURL {
+		flagsBaseURL = cfg.baseURL
+	}
+	genFlagsClient, _ := genflags.NewClient(flagsBaseURL,
 		genflags.WithHTTPClient(httpClient),
 		flagsHeaderEditor,
 	)
 
 	c := &Client{
-		apiKey:     resolved,
-		baseURL:    cfg.baseURL,
-		httpClient: httpClient,
+		apiKey:      resolved,
+		environment: resolvedEnv,
+		service:     resolvedService,
+		baseURL:     cfg.baseURL,
+		httpClient:  httpClient,
 	}
 	c.config = &ConfigClient{client: c, generated: genConfigClient}
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient}
 	c.flags.runtime = newFlagsRuntime(c.flags)
 	return c, nil
 }
+
+// Environment returns the resolved environment name.
+func (c *Client) Environment() string { return c.environment }
+
+// Service returns the resolved service name, or empty string if not set.
+func (c *Client) Service() string { return c.service }
 
 // Config returns the sub-client for config management operations.
 func (c *Client) Config() *ConfigClient {
@@ -108,6 +150,72 @@ func (c *Client) Config() *ConfigClient {
 // Flags returns the sub-client for flags management and runtime operations.
 func (c *Client) Flags() *FlagsClient {
 	return c.flags
+}
+
+// Connect connects to the smplkit platform: fetches initial flag and config
+// data, opens the shared WebSocket, and registers the service as a context
+// instance (if provided).
+//
+// This method is idempotent — calling it multiple times is safe.
+func (c *Client) Connect(ctx context.Context) error {
+	if c.connected {
+		return nil
+	}
+
+	// Register service context (fire-and-forget)
+	if c.service != "" {
+		c.registerServiceContext(ctx)
+	}
+
+	// Connect flags (fetch definitions, register WS listeners)
+	if err := c.flags.connectInternal(ctx, c.environment); err != nil {
+		return err
+	}
+
+	// Connect config (fetch all, resolve, cache)
+	if err := c.config.connectInternal(ctx, c.environment); err != nil {
+		return err
+	}
+
+	c.connected = true
+	return nil
+}
+
+// registerServiceContext sends a service context registration to the app service.
+// Errors are logged but not returned (fire-and-forget).
+func (c *Client) registerServiceContext(ctx context.Context) {
+	payload := map[string]interface{}{
+		"contexts": []map[string]interface{}{
+			{
+				"type":       "service",
+				"key":        c.service,
+				"attributes": map[string]interface{}{"name": c.service},
+			},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
+	appURL := appBaseURL
+	if c.baseURL != "" && c.baseURL != defaultConfig().baseURL {
+		appURL = c.baseURL
+	}
+	url := fmt.Sprintf("%s/api/v1/contexts/bulk", appURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Printf("smplkit: failed to register service context: %v", err)
+		return
+	}
+	resp.Body.Close()
 }
 
 // ensureWS returns the shared WebSocket, starting it if needed.

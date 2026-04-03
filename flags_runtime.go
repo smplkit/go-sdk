@@ -462,6 +462,13 @@ func (rt *FlagsRuntime) FlushContexts(ctx context.Context) {
 func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment string, contexts []Context) interface{} {
 	evalDict := contextsToEvalDict(contexts)
 
+	// Auto-inject service context if set and not already provided.
+	if rt.flagsClient != nil && rt.flagsClient.client != nil && rt.flagsClient.client.service != "" {
+		if _, has := evalDict["service"]; !has {
+			evalDict["service"] = map[string]interface{}{"key": rt.flagsClient.client.service}
+		}
+	}
+
 	rt.mu.RLock()
 	connected := rt.connected
 	flagDef, ok := rt.flagStore[key]
@@ -493,7 +500,7 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 	rt.mu.RUnlock()
 
 	if !connected {
-		return defaultVal
+		panic(ErrNotConnected)
 	}
 
 	var evalDict map[string]interface{}
@@ -513,6 +520,13 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 			}
 		} else {
 			evalDict = map[string]interface{}{}
+		}
+	}
+
+	// Auto-inject service context if set and not already provided.
+	if rt.flagsClient != nil && rt.flagsClient.client != nil && rt.flagsClient.client.service != "" {
+		if _, has := evalDict["service"]; !has {
+			evalDict["service"] = map[string]interface{}{"key": rt.flagsClient.client.service}
 		}
 	}
 

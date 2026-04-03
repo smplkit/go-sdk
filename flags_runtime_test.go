@@ -346,25 +346,37 @@ func TestHashContext_Different(t *testing.T) {
 
 func TestBoolFlagHandle_Default(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	handle := rt.BoolFlag("feature-x", false)
-	// Not connected — should return default.
+	// Connected but flag not in store — should return default.
 	assert.Equal(t, false, handle.Get(context.Background()))
 }
 
 func TestStringFlagHandle_Default(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	handle := rt.StringFlag("theme", "light")
 	assert.Equal(t, "light", handle.Get(context.Background()))
 }
 
 func TestNumberFlagHandle_Default(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	handle := rt.NumberFlag("max-items", 10.0)
 	assert.Equal(t, 10.0, handle.Get(context.Background()))
 }
 
 func TestJsonFlagHandle_Default(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.mu.Lock()
+	rt.connected = true
+	rt.mu.Unlock()
 	dflt := map[string]interface{}{"color": "blue"}
 	handle := rt.JsonFlag("settings", dflt)
 	assert.Equal(t, dflt, handle.Get(context.Background()))
@@ -387,8 +399,9 @@ func TestFlagHandle_OnChange(t *testing.T) {
 
 func TestFlagsRuntime_EvaluateHandle_NotConnected(t *testing.T) {
 	rt := newFlagsRuntime(nil)
-	value := rt.evaluateHandle(context.Background(), "key", "default", nil)
-	assert.Equal(t, "default", value)
+	assert.PanicsWithValue(t, ErrNotConnected, func() {
+		rt.evaluateHandle(context.Background(), "key", "default", nil)
+	})
 }
 
 func TestFlagsRuntime_EvaluateHandle_Connected_WithStore(t *testing.T) {

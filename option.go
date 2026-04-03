@@ -11,6 +11,7 @@ type clientConfig struct {
 	baseURL    string
 	timeout    time.Duration
 	httpClient *http.Client
+	service    string
 }
 
 // defaultConfig returns sensible defaults for a new Client.
@@ -43,5 +44,14 @@ func WithTimeout(d time.Duration) ClientOption {
 func WithHTTPClient(c *http.Client) ClientOption {
 	return func(cfg *clientConfig) {
 		cfg.httpClient = c
+	}
+}
+
+// WithService sets the service name for automatic context injection.
+// When set, the SDK registers the service as a context instance during
+// Connect() and includes it in flag evaluation context.
+func WithService(name string) ClientOption {
+	return func(cfg *clientConfig) {
+		cfg.service = name
 	}
 }

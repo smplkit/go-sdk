@@ -15,33 +15,33 @@ import (
 )
 
 func TestNewClient_Defaults(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key")
+	client, err := smplkit.NewClient("sk_test_key", "test")
 	require.NoError(t, err)
 	require.NotNil(t, client)
 	require.NotNil(t, client.Config())
 }
 
 func TestNewClient_WithBaseURL(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL("https://custom.example.com"))
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL("https://custom.example.com"))
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
 
 func TestNewClient_WithTimeout(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", smplkit.WithTimeout(5*time.Second))
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithTimeout(5*time.Second))
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
 
 func TestNewClient_WithHTTPClient(t *testing.T) {
 	custom := &http.Client{Timeout: 10 * time.Second}
-	client, err := smplkit.NewClient("sk_test_key", smplkit.WithHTTPClient(custom))
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithHTTPClient(custom))
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
 
 func TestNewClient_MultipleOptions(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key",
+	client, err := smplkit.NewClient("sk_test_key", "test",
 		smplkit.WithBaseURL("https://custom.example.com"),
 		smplkit.WithTimeout(10*time.Second),
 	)
@@ -50,7 +50,7 @@ func TestNewClient_MultipleOptions(t *testing.T) {
 }
 
 func TestClient_ConfigReturnsSubClient(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key")
+	client, err := smplkit.NewClient("sk_test_key", "test")
 	require.NoError(t, err)
 	cfg := client.Config()
 	require.NotNil(t, cfg)
@@ -60,7 +60,7 @@ func TestClient_ConfigReturnsSubClient(t *testing.T) {
 
 func TestNewClient_EnvVar(t *testing.T) {
 	t.Setenv("SMPLKIT_API_KEY", "sk_api_env")
-	client, err := smplkit.NewClient("")
+	client, err := smplkit.NewClient("", "test")
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
@@ -73,7 +73,7 @@ func TestNewClient_ConfigFile(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("HOME", dir)
 
-	client, err := smplkit.NewClient("")
+	client, err := smplkit.NewClient("", "test")
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
@@ -82,7 +82,7 @@ func TestNewClient_ErrorWhenNoKey(t *testing.T) {
 	t.Setenv("SMPLKIT_API_KEY", "")
 	t.Setenv("HOME", t.TempDir())
 
-	client, err := smplkit.NewClient("")
+	client, err := smplkit.NewClient("", "test")
 	require.Error(t, err)
 	require.Nil(t, client)
 
@@ -95,7 +95,7 @@ func TestNewClient_ErrorWhenNoKey(t *testing.T) {
 
 func TestNewClient_ExplicitTakesPrecedence(t *testing.T) {
 	t.Setenv("SMPLKIT_API_KEY", "sk_api_env")
-	client, err := smplkit.NewClient("sk_api_explicit")
+	client, err := smplkit.NewClient("sk_api_explicit", "test")
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
@@ -108,7 +108,7 @@ func TestNewClient_EnvTakesPrecedenceOverFile(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("HOME", dir)
 
-	client, err := smplkit.NewClient("")
+	client, err := smplkit.NewClient("", "test")
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
@@ -121,7 +121,7 @@ func TestNewClient_EmptyEnvTreatedAsUnset(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("HOME", dir)
 
-	client, err := smplkit.NewClient("")
+	client, err := smplkit.NewClient("", "test")
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
@@ -134,7 +134,7 @@ func TestNewClient_MalformedConfigFile(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("HOME", dir)
 
-	_, err = smplkit.NewClient("")
+	_, err = smplkit.NewClient("", "test")
 	require.Error(t, err)
 }
 
@@ -146,7 +146,7 @@ func TestNewClient_ConfigFileNoApiKey(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("HOME", dir)
 
-	_, err = smplkit.NewClient("")
+	_, err = smplkit.NewClient("", "test")
 	require.Error(t, err)
 }
 
@@ -158,7 +158,7 @@ func TestNewClient_CommentsIgnored(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("HOME", dir)
 
-	client, err := smplkit.NewClient("")
+	client, err := smplkit.NewClient("", "test")
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
@@ -171,7 +171,7 @@ func TestNewClient_MissingDefaultSection(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("HOME", dir)
 
-	_, err = smplkit.NewClient("")
+	_, err = smplkit.NewClient("", "test")
 	require.Error(t, err)
 }
 
@@ -183,6 +183,53 @@ func TestNewClient_DefaultSectionWithoutApiKey(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("HOME", dir)
 
-	_, err = smplkit.NewClient("")
+	_, err = smplkit.NewClient("", "test")
 	require.Error(t, err)
+}
+
+func TestNewClient_MissingEnvironment(t *testing.T) {
+	t.Setenv("SMPLKIT_ENVIRONMENT", "")
+	_, err := smplkit.NewClient("sk_test_key", "")
+	require.Error(t, err)
+	var smplErr *smplkit.SmplError
+	require.True(t, errors.As(err, &smplErr))
+	assert.Contains(t, smplErr.Message, "No environment provided")
+}
+
+func TestNewClient_EnvironmentFromEnvVar(t *testing.T) {
+	t.Setenv("SMPLKIT_ENVIRONMENT", "staging")
+	client, err := smplkit.NewClient("sk_test_key", "")
+	require.NoError(t, err)
+	require.NotNil(t, client)
+}
+
+func TestNewClient_WithService(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("my-service"))
+	require.NoError(t, err)
+	require.NotNil(t, client)
+}
+
+func TestClient_Environment(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "staging")
+	require.NoError(t, err)
+	assert.Equal(t, "staging", client.Environment())
+}
+
+func TestClient_Service(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("api-service"))
+	require.NoError(t, err)
+	assert.Equal(t, "api-service", client.Service())
+}
+
+func TestClient_Service_Empty(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test")
+	require.NoError(t, err)
+	assert.Equal(t, "", client.Service())
+}
+
+func TestClient_ServiceFromEnvVar(t *testing.T) {
+	t.Setenv("SMPLKIT_SERVICE", "env-service")
+	client, err := smplkit.NewClient("sk_test_key", "test")
+	require.NoError(t, err)
+	assert.Equal(t, "env-service", client.Service())
 }

@@ -615,8 +615,9 @@ func (c *FlagsClient) SetContextProvider(fn func(ctx context.Context) []Context)
 	c.runtime.SetContextProvider(fn)
 }
 
-// Connect fetches flag definitions and registers on the shared WebSocket.
-func (c *FlagsClient) Connect(ctx context.Context, environment string) error {
+// connectInternal fetches flag definitions and registers on the shared WebSocket.
+// Called by Client.Connect().
+func (c *FlagsClient) connectInternal(ctx context.Context, environment string) error {
 	return c.runtime.Connect(ctx, environment)
 }
 
