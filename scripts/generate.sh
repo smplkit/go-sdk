@@ -26,13 +26,14 @@ for spec in "$SPEC_DIR"/*.json; do
     mkdir -p "$out_dir"
 
     echo "Generating $name from $spec ..."
-    if ! "$OAPI_CODEGEN" \
+    if "$OAPI_CODEGEN" \
         -generate types,client \
         -package "$name" \
         -o "$out_dir/gen.go" \
         "$spec" 2>/dev/null; then
-        echo "  WARNING: generation failed for $name (spec may need OpenAPI 3.0 downgrade), skipping."
-        rm -f "$out_dir/gen.go"
+        echo "  OK: $name generated."
+    else
+        echo "  WARNING: generation failed for $name (spec may need OpenAPI 3.0 downgrade), keeping existing file."
     fi
 done
 
