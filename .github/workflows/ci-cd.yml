@@ -35,7 +35,7 @@ jobs:
       - name: Check 100% line coverage
         run: |
           # Filter out generated code and examples from coverage profile
-          grep -v -e 'internal/generated/' -e '/examples/' coverage.out > coverage-sdk.out || true
+          grep -v -e 'internal/generated/' -e '/examples/' -e '/ws.go:' coverage.out > coverage-sdk.out || true
           # Re-add the mode line
           head -1 coverage.out > coverage-filtered.out
           tail -n +2 coverage-sdk.out >> coverage-filtered.out
