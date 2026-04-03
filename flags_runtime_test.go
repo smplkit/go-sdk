@@ -101,11 +101,11 @@ func TestContextRegistrationBuffer_ObserveDrain(t *testing.T) {
 	assert.Len(t, batch, 2)
 	assert.Equal(t, 0, buf.pendingCount())
 
-	// Check format.
-	assert.Equal(t, "user", batch[0]["type"])
-	assert.Equal(t, "u1", batch[0]["key"])
-	assert.Equal(t, "account", batch[1]["type"])
-	assert.Equal(t, "a1", batch[1]["key"])
+	// Check format: {id, name, attributes}.
+	assert.Equal(t, "user:u1", batch[0]["id"])
+	assert.Equal(t, "Alice", batch[0]["name"])
+	assert.Equal(t, "account:a1", batch[1]["id"])
+	assert.Equal(t, "a1", batch[1]["name"]) // Name falls back to Key when empty
 }
 
 func TestContextRegistrationBuffer_Deduplication(t *testing.T) {

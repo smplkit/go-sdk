@@ -405,10 +405,10 @@ func TestFlushContexts_SendsBatch(t *testing.T) {
 	}))
 
 	batch := []map[string]interface{}{
-		{"type": "user", "key": "u1"},
+		{"id": "user:u1", "name": "u1"},
 	}
 	// Need to route through test server — call doJSONWithBase directly
-	_, _, _ = fc.doJSONWithBase(context.Background(), "PUT", fc.client.baseURL+"/api/v1/contexts/bulk",
+	_, _, _ = fc.doJSONWithBase(context.Background(), "POST", fc.client.baseURL+"/api/v1/contexts/bulk",
 		map[string]interface{}{"contexts": batch})
 
 	mu.Lock()
@@ -1526,7 +1526,7 @@ func TestFlagsClient_ListContexts_FullMethod(t *testing.T) {
 func TestFlagsClient_FlushContexts_FullMethod(t *testing.T) {
 	var receivedPayload map[string]interface{}
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" && r.URL.Path == "/api/v1/contexts/bulk" {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/contexts/bulk" {
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &receivedPayload)
 			w.WriteHeader(http.StatusOK)
@@ -1535,7 +1535,7 @@ func TestFlagsClient_FlushContexts_FullMethod(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	batch := []map[string]interface{}{{"type": "user", "key": "u1"}}
+	batch := []map[string]interface{}{{"id": "user:u1", "name": "u1"}}
 	fc.flushContexts(context.Background(), batch)
 
 	require.NotNil(t, receivedPayload)
@@ -1829,7 +1829,7 @@ func TestFlagsRuntime_HandleFlagDeleted(t *testing.T) {
 func TestFlagsClient_FlushContexts_Lifecycle(t *testing.T) {
 	var received bool
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" && r.URL.Path == "/api/v1/contexts/bulk" {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/contexts/bulk" {
 			received = true
 			w.WriteHeader(http.StatusOK)
 			return
@@ -1842,7 +1842,7 @@ func TestFlagsClient_FlushContexts_Lifecycle(t *testing.T) {
 	// Use the direct doJSONWithBase to route through test server
 	batch := fc.runtime.contextBuffer.drain()
 	if len(batch) > 0 {
-		_, _, _ = fc.doJSONWithBase(context.Background(), "PUT", fc.client.baseURL+"/api/v1/contexts/bulk",
+		_, _, _ = fc.doJSONWithBase(context.Background(), "POST", fc.client.baseURL+"/api/v1/contexts/bulk",
 			map[string]interface{}{"contexts": batch})
 	}
 	assert.True(t, received)

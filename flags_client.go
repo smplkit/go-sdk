@@ -670,5 +670,5 @@ func (c *FlagsClient) flushContexts(ctx context.Context, batch []map[string]inte
 		"contexts": batch,
 	}
 	// Fire-and-forget — errors are silently ignored.
-	_, _, _ = c.doJSONApp(ctx, "PUT", "/api/v1/contexts/bulk", payload)
+	_, _, _ = c.doJSONApp(ctx, "POST", "/api/v1/contexts/bulk", payload)
 }

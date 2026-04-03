@@ -187,8 +187,8 @@ func (c *Client) registerServiceContext(ctx context.Context) {
 	payload := map[string]interface{}{
 		"contexts": []map[string]interface{}{
 			{
-				"type":       "service",
-				"key":        c.service,
+				"id":         fmt.Sprintf("service:%s", c.service),
+				"name":       c.service,
 				"attributes": map[string]interface{}{"name": c.service},
 			},
 		},
@@ -201,7 +201,7 @@ func (c *Client) registerServiceContext(ctx context.Context) {
 		appURL = c.baseURL
 	}
 	url := fmt.Sprintf("%s/api/v1/contexts/bulk", appURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return
 	}

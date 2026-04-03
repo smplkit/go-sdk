@@ -1348,14 +1348,14 @@ func TestClient_Connect_WithService(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/contexts/bulk", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "PUT", r.Method)
+		assert.Equal(t, "POST", r.Method)
 		var body map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		contexts := body["contexts"].([]interface{})
 		require.Len(t, contexts, 1)
 		ctx0 := contexts[0].(map[string]interface{})
-		assert.Equal(t, "service", ctx0["type"])
-		assert.Equal(t, "my-svc", ctx0["key"])
+		assert.Equal(t, "service:my-svc", ctx0["id"])
+		assert.Equal(t, "my-svc", ctx0["name"])
 		serviceRegistered = true
 		w.WriteHeader(http.StatusOK)
 	})
