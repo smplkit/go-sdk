@@ -1,0 +1,298 @@
+package smplkit
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
+	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
+)
+
+// newTestFullClient builds a Client with both config and flags sub-clients
+// pointed at the given test server.
+func newTestFullClient(t *testing.T, server *httptest.Server, service string) *Client {
+	t.Helper()
+	httpClient := &http.Client{}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: "sk_test", base: base}
+
+	headerEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genConfigClient, _ := genconfig.NewClient(server.URL,
+		genconfig.WithHTTPClient(httpClient),
+		headerEditor,
+	)
+
+	flagsHeaderEditor := genflags.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genFlagsClient, _ := genflags.NewClient(server.URL,
+		genflags.WithHTTPClient(httpClient),
+		flagsHeaderEditor,
+	)
+
+	c := &Client{
+		apiKey:      "sk_test",
+		environment: "test",
+		service:     service,
+		baseURL:     server.URL,
+		httpClient:  httpClient,
+	}
+	c.config = &ConfigClient{client: c, generated: genConfigClient}
+	c.flags = &FlagsClient{client: c, generated: genFlagsClient}
+	c.flags.runtime = newFlagsRuntime(c.flags)
+	return c
+}
+
+// --- Client.Connect error paths ---
+
+func TestConnect_FlagsConnectInternalError(t *testing.T) {
+	mux := http.NewServeMux()
+	// flags endpoint returns an error
+	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"flags down"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestFullClient(t, server, "")
+	err := c.Connect(context.Background())
+	require.Error(t, err)
+	assert.False(t, c.connected)
+}
+
+func TestConnect_ConfigConnectInternalError(t *testing.T) {
+	mux := http.NewServeMux()
+	// flags endpoint succeeds
+	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	// configs endpoint fails
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"configs down"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestFullClient(t, server, "")
+	err := c.Connect(context.Background())
+	require.Error(t, err)
+	assert.False(t, c.connected)
+}
+
+// --- registerServiceContext error path ---
+
+func TestRegisterServiceContext_HTTPDoError(t *testing.T) {
+	// Use a server URL that is immediately closed so httpClient.Do returns a connection error.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	serverURL := server.URL
+	server.Close() // Close immediately so connections fail.
+
+	c := &Client{
+		apiKey:     "sk_test",
+		service:    "my-svc",
+		baseURL:    serverURL,
+		httpClient: &http.Client{},
+	}
+	// Should not panic — errors are logged and swallowed.
+	c.registerServiceContext(context.Background())
+}
+
+func TestRegisterServiceContext_InvalidURL(t *testing.T) {
+	// Use a baseURL with a control character to trigger http.NewRequestWithContext error.
+	c := &Client{
+		apiKey:     "sk_test",
+		service:    "my-svc",
+		baseURL:    "http://invalid\x7f.example.com",
+		httpClient: &http.Client{},
+	}
+	// Should not panic — errors are silently swallowed.
+	c.registerServiceContext(context.Background())
+}
+
+// --- ConfigClient.connectInternal fetchChain error ---
+
+func TestConfigClient_ConnectInternal_FetchChainError(t *testing.T) {
+	callCount := 0
+	mux := http.NewServeMux()
+	// List configs returns one config
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"550e8400-e29b-41d4-a716-446655440000","type":"config","attributes":{"name":"Test","key":"test","description":"desc","parent":null,"items":{},"environments":{},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}}]}`))
+	})
+	// Get config by ID (fetchChain) returns error
+	mux.HandleFunc("/api/v1/configs/550e8400-e29b-41d4-a716-446655440000", func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"fetch chain failed"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c := newTestFullClient(t, server, "")
+	err := c.config.connectInternal(context.Background(), "test")
+	require.Error(t, err)
+	assert.Greater(t, callCount, 0)
+}
+
+// --- FlagsRuntime.Evaluate uncovered paths ---
+
+func TestEvaluate_ServiceAutoInjection(t *testing.T) {
+	// Set up a runtime with a flagsClient that has a service set.
+	fc, _ := newTestFlagsClient(t, nil)
+	fc.client.service = "my-svc"
+	rt := fc.runtime
+
+	rt.mu.Lock()
+	rt.connected = true
+	rt.flagStore = map[string]map[string]interface{}{
+		"feature-x": {
+			"default": false,
+			"environments": map[string]interface{}{
+				"prod": map[string]interface{}{
+					"enabled": true,
+					"rules": []interface{}{
+						map[string]interface{}{
+							"logic": map[string]interface{}{
+								"==": []interface{}{map[string]interface{}{"var": "service.key"}, "my-svc"},
+							},
+							"value": true,
+						},
+					},
+				},
+			},
+		},
+	}
+	rt.mu.Unlock()
+
+	// Evaluate without providing service context — should auto-inject.
+	result := rt.Evaluate(context.Background(), "feature-x", "prod", nil)
+	assert.Equal(t, true, result)
+}
+
+func TestEvaluate_ServiceAutoInjection_AlreadyProvided(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	fc.client.service = "my-svc"
+	rt := fc.runtime
+
+	rt.mu.Lock()
+	rt.connected = true
+	rt.flagStore = map[string]map[string]interface{}{
+		"feature-x": {
+			"default": false,
+			"environments": map[string]interface{}{
+				"prod": map[string]interface{}{
+					"enabled": true,
+					"rules": []interface{}{
+						map[string]interface{}{
+							"logic": map[string]interface{}{
+								"==": []interface{}{map[string]interface{}{"var": "service.key"}, "other-svc"},
+							},
+							"value": true,
+						},
+					},
+				},
+			},
+		},
+	}
+	rt.mu.Unlock()
+
+	// Provide an explicit service context — should NOT be overridden.
+	contexts := []Context{
+		{Type: "service", Key: "other-svc"},
+	}
+	result := rt.Evaluate(context.Background(), "feature-x", "prod", contexts)
+	assert.Equal(t, true, result)
+}
+
+func TestEvaluate_NotConnected_FetchesList(t *testing.T) {
+	flagsJSON := map[string]interface{}{
+		"data": []map[string]interface{}{
+			{
+				"id":   "550e8400-e29b-41d4-a716-446655440000",
+				"type": "flag",
+				"attributes": map[string]interface{}{
+					"name":        "My Flag",
+					"key":         "my-flag",
+					"description": "A test flag",
+					"default":     "default-val",
+					"environments": map[string]interface{}{
+						"prod": map[string]interface{}{
+							"enabled": true,
+							"default": "env-val",
+							"rules":   []interface{}{},
+						},
+					},
+					"values": []interface{}{},
+				},
+			},
+		},
+	}
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		b, _ := json.Marshal(flagsJSON)
+		_, _ = w.Write(b)
+	}))
+	rt := fc.runtime
+
+	// rt is NOT connected, so Evaluate should fetch.
+	result := rt.Evaluate(context.Background(), "my-flag", "prod", nil)
+	assert.Equal(t, "env-val", result)
+}
+
+func TestEvaluate_NotConnected_FlagNotFound(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	rt := fc.runtime
+
+	// Not connected, flag not in fetched list.
+	result := rt.Evaluate(context.Background(), "nonexistent", "prod", nil)
+	assert.Nil(t, result)
+}
+
+func TestEvaluate_NotConnected_FetchError(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"server error"}`))
+	}))
+	rt := fc.runtime
+
+	result := rt.Evaluate(context.Background(), "my-flag", "prod", nil)
+	assert.Nil(t, result)
+}

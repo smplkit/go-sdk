@@ -45,6 +45,7 @@ func TestErrorTypes_ImplementError(t *testing.T) {
 		{"SmplTimeoutError", &smplkit.SmplTimeoutError{}},
 		{"SmplNotFoundError", &smplkit.SmplNotFoundError{}},
 		{"SmplConflictError", &smplkit.SmplConflictError{}},
+		{"SmplNotConnectedError", &smplkit.SmplNotConnectedError{}},
 		{"SmplValidationError", &smplkit.SmplValidationError{}},
 	}
 
@@ -65,6 +66,7 @@ func TestErrorsAs_BaseError(t *testing.T) {
 		{"not found", &smplkit.SmplNotFoundError{smplkit.SmplError{Message: "404"}}},
 		{"conflict", &smplkit.SmplConflictError{smplkit.SmplError{Message: "409"}}},
 		{"validation", &smplkit.SmplValidationError{smplkit.SmplError{Message: "422"}}},
+		{"not connected", &smplkit.SmplNotConnectedError{smplkit.SmplError{Message: "not connected"}}},
 	}
 
 	for _, tt := range tests {
@@ -121,6 +123,11 @@ func TestSubtypeErrors_Error(t *testing.T) {
 			err:      &smplkit.SmplValidationError{SmplError: smplkit.SmplError{Message: "invalid", StatusCode: 422}},
 			expected: "invalid (status 422)",
 		},
+		{
+			name:     "not connected error",
+			err:      &smplkit.SmplNotConnectedError{SmplError: smplkit.SmplError{Message: "not connected"}},
+			expected: "not connected",
+		},
 	}
 
 	for _, tt := range tests {
@@ -140,4 +147,18 @@ func TestErrorUnwrap(t *testing.T) {
 	var base *smplkit.SmplError
 	require.True(t, errors.As(unwrapped, &base))
 	assert.Equal(t, "inner (status 500)", base.Error())
+}
+
+func TestSmplNotConnectedError_ErrorAndUnwrap(t *testing.T) {
+	inner := smplkit.SmplError{Message: "not connected", StatusCode: 0}
+	err := &smplkit.SmplNotConnectedError{SmplError: inner}
+
+	assert.Equal(t, "not connected", err.Error())
+
+	unwrapped := errors.Unwrap(err)
+	require.NotNil(t, unwrapped)
+
+	var base *smplkit.SmplError
+	require.True(t, errors.As(unwrapped, &base))
+	assert.Equal(t, "not connected", base.Error())
 }

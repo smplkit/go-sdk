@@ -193,10 +193,8 @@ func (c *Client) registerServiceContext(ctx context.Context) {
 			},
 		},
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
+	// json.Marshal cannot fail here — the payload contains only string values.
+	body, _ := json.Marshal(payload)
 
 	appURL := appBaseURL
 	if c.baseURL != "" && c.baseURL != defaultConfig().baseURL {

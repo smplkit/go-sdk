@@ -14,8 +14,8 @@ import (
 // ConfigClient provides CRUD operations for config resources.
 // Obtain one via Client.Config().
 type ConfigClient struct {
-	client     *Client
-	generated  genconfig.ClientInterface
+	client      *Client
+	generated   genconfig.ClientInterface
 	configCache map[string]map[string]interface{}
 	connected   bool
 }
