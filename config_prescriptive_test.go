@@ -255,6 +255,92 @@ func TestRefresh_UpdatesCache(t *testing.T) {
 	assert.Equal(t, 7, val)
 }
 
+func TestRefresh_ListError(t *testing.T) {
+	failList := false
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		if failList {
+			w.WriteHeader(500)
+			return
+		}
+		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+			map[string]interface{}{"a": 1},
+			map[string]interface{}{}, nil)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{cfg}}) //nolint:errcheck
+	})
+	mux.HandleFunc("/api/v1/configs/", func(w http.ResponseWriter, r *http.Request) {
+		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+			map[string]interface{}{"a": 1},
+			map[string]interface{}{}, nil)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": cfg}) //nolint:errcheck
+	})
+	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}}) //nolint:errcheck
+	})
+	mux.HandleFunc("/api/v1/contexts/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	client, err := smplkit.NewClient("sk_api_test", "production",
+		smplkit.WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+	require.NoError(t, client.Connect(context.Background()))
+
+	failList = true
+	err = client.Config().Refresh(context.Background())
+	assert.Error(t, err)
+}
+
+func TestRefresh_FetchChainError(t *testing.T) {
+	refreshCount := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+			map[string]interface{}{"a": 1},
+			map[string]interface{}{}, nil)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{cfg}}) //nolint:errcheck
+	})
+	mux.HandleFunc("/api/v1/configs/", func(w http.ResponseWriter, r *http.Request) {
+		refreshCount++
+		if refreshCount <= 1 {
+			cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+				map[string]interface{}{"a": 1},
+				map[string]interface{}{}, nil)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"data": cfg}) //nolint:errcheck
+		} else {
+			w.WriteHeader(500)
+		}
+	})
+	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}}) //nolint:errcheck
+	})
+	mux.HandleFunc("/api/v1/contexts/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	client, err := smplkit.NewClient("sk_api_test", "production",
+		smplkit.WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+	require.NoError(t, client.Connect(context.Background()))
+
+	err = client.Config().Refresh(context.Background())
+	assert.Error(t, err)
+}
+
 func TestRefresh_NotConnected(t *testing.T) {
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL("http://localhost:0"),

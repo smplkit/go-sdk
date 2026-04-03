@@ -1,6 +1,7 @@
 package smplkit
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -282,4 +283,113 @@ func TestGetInt_Int64(t *testing.T) {
 	val, err := c.GetInt("app", "n")
 	assert.NoError(t, err)
 	assert.Equal(t, 99, val)
+}
+
+// ---------- deepMerge ----------
+
+func TestDeepMerge_RecursiveMerge(t *testing.T) {
+	base := map[string]interface{}{
+		"db": map[string]interface{}{
+			"host": "localhost",
+			"port": 5432,
+		},
+		"name": "app",
+	}
+	override := map[string]interface{}{
+		"db": map[string]interface{}{
+			"host": "prod-server",
+			"ssl":  true,
+		},
+		"version": "2.0",
+	}
+	result := deepMerge(base, override)
+	db := result["db"].(map[string]interface{})
+	assert.Equal(t, "prod-server", db["host"])
+	assert.Equal(t, 5432, db["port"])
+	assert.Equal(t, true, db["ssl"])
+	assert.Equal(t, "app", result["name"])
+	assert.Equal(t, "2.0", result["version"])
+}
+
+func TestDeepMerge_OverrideNonMapWithMap(t *testing.T) {
+	base := map[string]interface{}{
+		"db": "string-value",
+	}
+	override := map[string]interface{}{
+		"db": map[string]interface{}{"host": "localhost"},
+	}
+	result := deepMerge(base, override)
+	assert.Equal(t, map[string]interface{}{"host": "localhost"}, result["db"])
+}
+
+func TestDeepMerge_OverrideMapWithNonMap(t *testing.T) {
+	base := map[string]interface{}{
+		"db": map[string]interface{}{"host": "localhost"},
+	}
+	override := map[string]interface{}{
+		"db": "string-value",
+	}
+	result := deepMerge(base, override)
+	assert.Equal(t, "string-value", result["db"])
+}
+
+// ---------- Refresh edge cases ----------
+
+func TestRefresh_NoEnvironment(t *testing.T) {
+	c := &ConfigClient{
+		connected: true,
+		client:    &Client{environment: ""},
+	}
+	err := c.Refresh(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "No environment set")
+}
+
+// ---------- diffAndFire edge cases ----------
+
+func TestDiffAndFire_NewConfig(t *testing.T) {
+	c := &ConfigClient{}
+
+	var events []*ConfigChangeEvent
+	c.listeners = []configChangeListener{
+		{cb: func(evt *ConfigChangeEvent) {
+			events = append(events, evt)
+		}},
+	}
+
+	oldCache := map[string]map[string]interface{}{}
+	newCache := map[string]map[string]interface{}{
+		"app": {"a": 1},
+	}
+
+	c.diffAndFire(oldCache, newCache, "manual")
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, "a", events[0].ItemKey)
+	assert.Nil(t, events[0].OldValue)
+	assert.Equal(t, 1, events[0].NewValue)
+}
+
+func TestDiffAndFire_RemovedConfig(t *testing.T) {
+	c := &ConfigClient{}
+
+	var events []*ConfigChangeEvent
+	c.listeners = []configChangeListener{
+		{cb: func(evt *ConfigChangeEvent) {
+			events = append(events, evt)
+		}},
+	}
+
+	oldCache := map[string]map[string]interface{}{
+		"app": {"a": 1},
+	}
+	newCache := map[string]map[string]interface{}{}
+
+	c.diffAndFire(oldCache, newCache, "manual")
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, 1, events[0].OldValue)
+	assert.Nil(t, events[0].NewValue)
 }

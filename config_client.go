@@ -462,7 +462,7 @@ func WithItemKey(key string) ChangeListenerOption {
 }
 
 // diffAndFire compares old and new caches and fires change listeners.
-func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]interface{}, source string) {
+func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]interface{}, source string) { //nolint:unparam // "websocket" source will be used when real-time config push is wired up
 	c.listenersMu.Lock()
 	listeners := make([]configChangeListener, len(c.listeners))
 	copy(listeners, c.listeners)
