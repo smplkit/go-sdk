@@ -72,8 +72,20 @@ jobs:
         with:
           version: latest
 
-  release:
+  ci-gate:
+    if: always()
     needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all checks passed
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required jobs failed or were cancelled."
+            exit 1
+          fi
+
+  release:
+    needs: [ci-gate]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
