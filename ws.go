@@ -24,10 +24,14 @@ type sharedWebSocket struct {
 	status   string // "disconnected" | "connecting" | "connected" | "reconnecting"
 
 	closeCh   chan struct{}
-	closeOnce sync.Once
+	closeOnce sync.Once //nolint:unused // used by stop(), which is part of the shutdown lifecycle
 	wsDone    chan struct{}
 
 	dialWS func(url string) (*websocket.Conn, error)
+
+	// initBackoff and maxBackoff allow tests to override defaults; zero means use defaults.
+	initBackoff time.Duration
+	maxBackoff  time.Duration
 }
 
 type eventCallback struct {
@@ -66,7 +70,7 @@ func (ws *sharedWebSocket) on(eventName string, callback func(map[string]interfa
 }
 
 // off unregisters a listener for a specific event type (by function pointer).
-func (ws *sharedWebSocket) off(eventName string, callback func(map[string]interface{})) {
+func (ws *sharedWebSocket) off(eventName string, _ func(map[string]interface{})) {
 	ws.listenersMu.Lock()
 	defer ws.listenersMu.Unlock()
 	// Compare function pointers using the address of the function value.
@@ -117,7 +121,7 @@ func (ws *sharedWebSocket) start() {
 }
 
 // stop closes the WebSocket connection and waits for the goroutine to exit.
-func (ws *sharedWebSocket) stop() {
+func (ws *sharedWebSocket) stop() { //nolint:unused // lifecycle method called by Client.stopWS
 	ws.closeOnce.Do(func() {
 		close(ws.closeCh)
 	})
@@ -144,8 +148,14 @@ func (ws *sharedWebSocket) run() {
 		close(ws.wsDone)
 	}()
 
-	backoff := time.Second
-	maxBackoff := 60 * time.Second
+	backoff := ws.initBackoff
+	if backoff == 0 {
+		backoff = time.Second
+	}
+	maxBackoff := ws.maxBackoff
+	if maxBackoff == 0 {
+		maxBackoff = 60 * time.Second
+	}
 
 	for {
 		select {

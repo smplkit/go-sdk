@@ -31,12 +31,12 @@ type FlagStats struct {
 const defaultCacheMaxSize = 10000
 
 type resolutionCache struct {
-	mu       sync.Mutex
-	maxSize  int
-	items    map[string]*list.Element
-	order    *list.List
-	hits     int
-	misses   int
+	mu      sync.Mutex
+	maxSize int
+	items   map[string]*list.Element
+	order   *list.List
+	hits    int
+	misses  int
 }
 
 type cacheEntry struct {

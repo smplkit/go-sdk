@@ -300,12 +300,6 @@ func (c *FlagsClient) doJSONApp(ctx context.Context, method, path string, payloa
 	return c.doJSONWithBase(ctx, method, baseURL+path, payload)
 }
 
-// doJSON performs a JSON HTTP request against the flags base URL.
-func (c *FlagsClient) doJSON(ctx context.Context, method, path string, payload interface{}) ([]byte, *http.Response, error) {
-	baseURL := flagsBaseURL(c.client.baseURL)
-	return c.doJSONWithBase(ctx, method, baseURL+path, payload)
-}
-
 // doJSONWithBase performs a JSON HTTP request against the given full URL.
 func (c *FlagsClient) doJSONWithBase(ctx context.Context, method, u string, payload interface{}) ([]byte, *http.Response, error) {
 
@@ -343,15 +337,13 @@ func (c *FlagsClient) doJSONWithBase(ctx context.Context, method, u string, payl
 	return body, resp, nil
 }
 
-// flagsBaseURL derives the flags service URL from the config base URL.
-func flagsBaseURL(configBaseURL string) string {
-	return "https://flags.smplkit.com"
-}
-
 // appServiceBaseURL derives the app service URL from the config base URL.
 // When configBaseURL is overridden (e.g. in tests), we use it directly;
 // otherwise we return the production app URL.
 func appServiceBaseURL(configBaseURL string) string {
+	if configBaseURL != "" && configBaseURL != "https://config.smplkit.com" {
+		return configBaseURL
+	}
 	return "https://app.smplkit.com"
 }
 

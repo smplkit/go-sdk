@@ -122,7 +122,7 @@ func (c *Client) ensureWS() *sharedWebSocket {
 }
 
 // stopWS stops the shared WebSocket if running.
-func (c *Client) stopWS() {
+func (c *Client) stopWS() { //nolint:unused // lifecycle method for future Close() implementation
 	c.wsMu.Lock()
 	ws := c.ws
 	c.wsMu.Unlock()

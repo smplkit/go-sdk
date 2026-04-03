@@ -61,7 +61,7 @@ func TestResolutionCache_Clear(t *testing.T) {
 func TestResolutionCache_Stats(t *testing.T) {
 	c := newResolutionCache(100)
 	c.put("a", 1)
-	c.get("a")       // hit
+	c.get("a")        // hit
 	c.get("missing")  // miss
 	c.get("missing2") // miss
 	hits, misses := c.stats()

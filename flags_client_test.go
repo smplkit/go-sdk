@@ -41,40 +41,6 @@ func sampleFlagJSON(id, key, name, flagType string) string {
 	}`
 }
 
-func sampleFlagListJSON(id, key, name, flagType string) string {
-	return `{
-		"data": [{
-			"id": "` + id + `",
-			"type": "flag",
-			"attributes": {
-				"name": "` + name + `",
-				"key": "` + key + `",
-				"type": "` + flagType + `",
-				"default": true,
-				"values": [{"name": "True", "value": true}],
-				"description": null,
-				"environments": {},
-				"created_at": "2024-01-01T00:00:00Z",
-				"updated_at": null
-			}
-		}]
-	}`
-}
-
-func newFlagsTestClient(t *testing.T, flagsHandler http.HandlerFunc) *smplkit.Client {
-	t.Helper()
-	flagsServer := httptest.NewServer(flagsHandler)
-	t.Cleanup(flagsServer.Close)
-	// We need the flags client to point at our test server.
-	// The flags client uses https://flags.smplkit.com by default.
-	// We use WithBaseURL for config, and the flags client gets constructed with the flags URL.
-	// For testing, we create a client with a dummy config URL and override the flags generated client.
-	// Unfortunately the flags URL is hardcoded. Let's set up a server that handles both.
-	client, err := smplkit.NewClient("sk_test_key", smplkit.WithBaseURL(flagsServer.URL))
-	require.NoError(t, err)
-	return client
-}
-
 func TestClient_FlagsReturnsSubClient(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key")
 	require.NoError(t, err)

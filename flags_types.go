@@ -59,10 +59,8 @@ func NewContext(contextType, key string, attrs map[string]interface{}, opts ...C
 		Key:        key,
 		Attributes: make(map[string]interface{}),
 	}
-	if attrs != nil {
-		for k, v := range attrs {
-			c.Attributes[k] = v
-		}
+	for k, v := range attrs {
+		c.Attributes[k] = v
 	}
 	for _, opt := range opts {
 		opt(&c)
@@ -202,19 +200,19 @@ func marshalSorted(v interface{}) ([]byte, error) {
 			vb, _ := marshalSorted(val[k])
 			entries = append(entries, string(kb)+":"+string(vb))
 		}
-		return []byte("{" + joinStrings(entries, ",") + "}"), nil
+		return []byte("{" + joinStrings(entries) + "}"), nil
 	default:
 		return json.Marshal(v)
 	}
 }
 
-func joinStrings(parts []string, sep string) string {
+func joinStrings(parts []string) string {
 	if len(parts) == 0 {
 		return ""
 	}
 	result := parts[0]
 	for _, p := range parts[1:] {
-		result += sep + p
+		result += "," + p
 	}
 	return result
 }
