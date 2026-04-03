@@ -405,7 +405,7 @@ func TestFlushContexts_SendsBatch(t *testing.T) {
 	}))
 
 	batch := []map[string]interface{}{
-		{"id": "user:u1", "name": "User 1"},
+		{"type": "user", "key": "u1"},
 	}
 	// Need to route through test server — call doJSONWithBase directly
 	_, _, _ = fc.doJSONWithBase(context.Background(), "PUT", fc.client.baseURL+"/api/v1/contexts/bulk",
@@ -1535,7 +1535,7 @@ func TestFlagsClient_FlushContexts_FullMethod(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	batch := []map[string]interface{}{{"id": "user:u1", "name": "User 1"}}
+	batch := []map[string]interface{}{{"type": "user", "key": "u1"}}
 	fc.flushContexts(context.Background(), batch)
 
 	require.NotNil(t, receivedPayload)
