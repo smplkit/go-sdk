@@ -20,21 +20,34 @@ else
     exit 1
 fi
 
+DOWNGRADE="$SCRIPT_DIR/downgrade-spec.py"
+
 for spec in "$SPEC_DIR"/*.json; do
     name="$(basename "$spec" .json)"
     out_dir="$GEN_DIR/$name"
     mkdir -p "$out_dir"
+
+    # oapi-codegen doesn't support OpenAPI 3.1. Downgrade to 3.0 if needed.
+    tmp_spec="$spec"
+    if python3 -c "import json,sys; sys.exit(0 if json.load(open('$spec')).get('openapi','').startswith('3.1') else 1)" 2>/dev/null; then
+        tmp_spec=$(mktemp)
+        python3 "$DOWNGRADE" "$spec" > "$tmp_spec"
+        echo "  Downgraded $name spec from 3.1 to 3.0.3"
+    fi
 
     echo "Generating $name from $spec ..."
     if "$OAPI_CODEGEN" \
         -generate types,client \
         -package "$name" \
         -o "$out_dir/gen.go" \
-        "$spec" 2>/dev/null; then
+        "$tmp_spec" 2>/dev/null; then
         echo "  OK: $name generated."
     else
-        echo "  WARNING: generation failed for $name (spec may need OpenAPI 3.0 downgrade), keeping existing file."
+        echo "  WARNING: generation failed for $name, keeping existing file."
     fi
+
+    # Clean up temp file if we created one
+    [ "$tmp_spec" != "$spec" ] && rm -f "$tmp_spec"
 done
 
 echo "Done."
