@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "smplkit Logging API",
     "description": "API for the smplkit logging service.",
@@ -32,7 +32,7 @@
           "201": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoggerResponse"
                 }
@@ -42,7 +42,7 @@
           "400": {
             "description": "Validation error or malformed request",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -52,7 +52,7 @@
           "401": {
             "description": "Missing or invalid authentication",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -62,7 +62,7 @@
           "404": {
             "description": "Resource not found",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -72,7 +72,7 @@
           "429": {
             "description": "Rate limit exceeded",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -82,7 +82,7 @@
           "422": {
             "description": "Validation Error",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
@@ -108,9 +108,31 @@
             "in": "query",
             "required": false,
             "schema": {
-              "title": "Filter[Key]",
-              "type": "string",
-              "nullable": true
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Key]"
+            }
+          },
+          {
+            "name": "filter[managed]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Managed]"
             }
           }
         ],
@@ -118,7 +140,7 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoggerListResponse"
                 }
@@ -128,7 +150,7 @@
           "400": {
             "description": "Validation error or malformed request",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -138,7 +160,7 @@
           "401": {
             "description": "Missing or invalid authentication",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -148,7 +170,7 @@
           "404": {
             "description": "Resource not found",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -158,7 +180,7 @@
           "429": {
             "description": "Rate limit exceeded",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -168,7 +190,7 @@
           "422": {
             "description": "Validation Error",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
@@ -206,7 +228,7 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoggerResponse"
                 }
@@ -216,7 +238,7 @@
           "400": {
             "description": "Validation error or malformed request",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -226,7 +248,7 @@
           "401": {
             "description": "Missing or invalid authentication",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -236,7 +258,7 @@
           "404": {
             "description": "Resource not found",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -246,7 +268,7 @@
           "429": {
             "description": "Rate limit exceeded",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -256,7 +278,7 @@
           "422": {
             "description": "Validation Error",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
@@ -302,7 +324,7 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoggerResponse"
                 }
@@ -312,7 +334,7 @@
           "400": {
             "description": "Validation error or malformed request",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -322,7 +344,7 @@
           "401": {
             "description": "Missing or invalid authentication",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -332,7 +354,7 @@
           "404": {
             "description": "Resource not found",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -342,7 +364,7 @@
           "429": {
             "description": "Rate limit exceeded",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -352,7 +374,7 @@
           "422": {
             "description": "Validation Error",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
@@ -391,7 +413,7 @@
           "400": {
             "description": "Validation error or malformed request",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -401,7 +423,7 @@
           "401": {
             "description": "Missing or invalid authentication",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -411,7 +433,7 @@
           "404": {
             "description": "Resource not found",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -421,7 +443,7 @@
           "429": {
             "description": "Rate limit exceeded",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -431,7 +453,506 @@
           "422": {
             "description": "Validation Error",
             "content": {
-              "application/json": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/loggers/bulk": {
+      "post": {
+        "tags": [
+          "Loggers"
+        ],
+        "summary": "Bulk Register Loggers",
+        "operationId": "bulk_register_loggers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoggerBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggerBulkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/log_groups": {
+      "get": {
+        "tags": [
+          "Log Groups"
+        ],
+        "summary": "List Log Groups",
+        "operationId": "list_log_groups",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogGroupListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Log Groups"
+        ],
+        "summary": "Create Log Group",
+        "operationId": "create_log_group",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Response_LogGroup_"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogGroupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/log_groups/{id}": {
+      "get": {
+        "tags": [
+          "Log Groups"
+        ],
+        "summary": "Get Log Group",
+        "operationId": "get_log_group",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogGroupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Log Groups"
+        ],
+        "summary": "Update Log Group",
+        "operationId": "update_log_group",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Response_LogGroup_"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogGroupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Log Groups"
+        ],
+        "summary": "Delete Log Group",
+        "operationId": "delete_log_group",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
@@ -455,15 +976,27 @@
             "title": "Title"
           },
           "detail": {
-            "title": "Detail",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
           },
           "source": {
-            "title": "Source",
-            "additionalProperties": true,
-            "type": "object",
-            "nullable": true
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",
@@ -504,75 +1037,376 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "Logger": {
+      "LogGroup": {
         "properties": {
           "key": {
-            "title": "Key",
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
           },
           "name": {
             "type": "string",
             "maxLength": 255,
             "title": "Name"
           },
-          "description": {
-            "title": "Description",
-            "type": "string",
-            "maxLength": 1000,
-            "nullable": true
+          "level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
           },
-          "aliases": {
-            "title": "Aliases",
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "nullable": true
-          },
-          "default": {
-            "type": "string",
-            "maxLength": 10,
-            "title": "Default"
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
           },
           "environments": {
-            "title": "Environments",
-            "additionalProperties": true,
-            "type": "object",
-            "nullable": true
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environments"
           },
           "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           },
           "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Updated At",
-            "readOnly": true,
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "readOnly": true
           }
         },
         "type": "object",
         "required": [
-          "name",
-          "default"
+          "name"
+        ],
+        "title": "LogGroup",
+        "example": {
+          "created_at": "2026-04-01T10:00:00Z",
+          "environments": {
+            "production": {
+              "level": "ERROR"
+            }
+          },
+          "key": "database-loggers",
+          "level": "WARN",
+          "name": "Database Loggers",
+          "updated_at": "2026-04-01T10:00:00Z"
+        }
+      },
+      "LogGroupListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/LogGroupResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "LogGroupListResponse"
+      },
+      "LogGroupResource": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "log_group",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/LogGroup"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "LogGroupResource",
+        "example": {
+          "attributes": {
+            "created_at": "2026-04-01T10:00:00Z",
+            "environments": {
+              "production": {
+                "level": "ERROR"
+              }
+            },
+            "key": "database-loggers",
+            "level": "WARN",
+            "name": "Database Loggers",
+            "updated_at": "2026-04-01T10:00:00Z"
+          },
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "log_group"
+        }
+      },
+      "LogGroupResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LogGroupResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "LogGroupResponse"
+      },
+      "Logger": {
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Name"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "managed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed",
+            "readOnly": true
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources",
+            "readOnly": true
+          },
+          "environments": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environments"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "readOnly": true
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
         ],
         "title": "Logger",
         "example": {
-          "aliases": [
-            "sequelize"
+          "created_at": "2026-04-01T10:00:00Z",
+          "environments": {
+            "production": {
+              "level": "WARN"
+            },
+            "staging": {
+              "level": "DEBUG"
+            }
+          },
+          "group": "550e8400-e29b-41d4-a716-446655440000",
+          "key": "com.example.sql",
+          "level": "DEBUG",
+          "managed": true,
+          "name": "SQL Logger",
+          "sources": [
+            {
+              "first_observed": "2026-04-01T10:00:00Z",
+              "service": "api-gateway"
+            }
           ],
-          "default": "DEBUG",
-          "description": "Controls SQL query log verbosity.",
-          "environments": {},
-          "key": "sql",
-          "name": "SQL Logger"
+          "updated_at": "2026-04-01T10:00:00Z"
         }
+      },
+      "LoggerBulkItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Normalized logger name"
+          },
+          "level": {
+            "type": "string",
+            "title": "Level",
+            "description": "Observed log level in smplkit canonical format"
+          },
+          "service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service",
+            "description": "Service name that discovered this logger"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "level"
+        ],
+        "title": "LoggerBulkItem"
+      },
+      "LoggerBulkRequest": {
+        "properties": {
+          "loggers": {
+            "items": {
+              "$ref": "#/components/schemas/LoggerBulkItem"
+            },
+            "type": "array",
+            "title": "Loggers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loggers"
+        ],
+        "title": "LoggerBulkRequest"
+      },
+      "LoggerBulkResponse": {
+        "properties": {
+          "registered": {
+            "type": "integer",
+            "title": "Registered"
+          }
+        },
+        "type": "object",
+        "required": [
+          "registered"
+        ],
+        "title": "LoggerBulkResponse"
       },
       "LoggerListResponse": {
         "properties": {
@@ -593,9 +1427,15 @@
       "LoggerResource": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -611,7 +1451,34 @@
           "type",
           "attributes"
         ],
-        "title": "LoggerResource"
+        "title": "LoggerResource",
+        "example": {
+          "attributes": {
+            "created_at": "2026-04-01T10:00:00Z",
+            "environments": {
+              "production": {
+                "level": "WARN"
+              },
+              "staging": {
+                "level": "DEBUG"
+              }
+            },
+            "group": "660e8400-e29b-41d4-a716-446655440000",
+            "key": "com.example.sql",
+            "level": "DEBUG",
+            "managed": true,
+            "name": "SQL Logger",
+            "sources": [
+              {
+                "first_observed": "2026-04-01T10:00:00Z",
+                "service": "api-gateway"
+              }
+            ],
+            "updated_at": "2026-04-01T10:00:00Z"
+          },
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "logger"
+        }
       },
       "LoggerResponse": {
         "properties": {
@@ -625,12 +1492,46 @@
         ],
         "title": "LoggerResponse"
       },
+      "Resource_LogGroup_": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": ""
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/LogGroup"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attributes"
+        ],
+        "title": "Resource[LogGroup]"
+      },
       "Resource_Logger_": {
         "properties": {
           "id": {
-            "title": "Id",
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
           },
           "type": {
             "type": "string",
@@ -646,6 +1547,18 @@
           "attributes"
         ],
         "title": "Resource[Logger]"
+      },
+      "Response_LogGroup_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Resource_LogGroup_"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "Response[LogGroup]"
       },
       "Response_Logger_": {
         "properties": {
@@ -703,6 +1616,9 @@
   "tags": [
     {
       "name": "Loggers"
+    },
+    {
+      "name": "Log Groups"
     }
   ]
 }

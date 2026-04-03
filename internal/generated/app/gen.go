@@ -22,6 +22,96 @@ const (
 	HTTPBearerScopes = "HTTPBearer.Scopes"
 )
 
+// Defines values for AccountResourceType.
+const (
+	AccountResourceTypeAccount AccountResourceType = "account"
+)
+
+// Valid indicates whether the value is a known member of the AccountResourceType enum.
+func (e AccountResourceType) Valid() bool {
+	switch e {
+	case AccountResourceTypeAccount:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ApiKeyResourceType.
+const (
+	ApiKeyResourceTypeApiKey ApiKeyResourceType = "api_key"
+)
+
+// Valid indicates whether the value is a known member of the ApiKeyResourceType enum.
+func (e ApiKeyResourceType) Valid() bool {
+	switch e {
+	case ApiKeyResourceTypeApiKey:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ContextResourceType.
+const (
+	ContextResourceTypeContext ContextResourceType = "context"
+)
+
+// Valid indicates whether the value is a known member of the ContextResourceType enum.
+func (e ContextResourceType) Valid() bool {
+	switch e {
+	case ContextResourceTypeContext:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ContextTypeResourceType.
+const (
+	ContextTypeResourceTypeContextType ContextTypeResourceType = "context_type"
+)
+
+// Valid indicates whether the value is a known member of the ContextTypeResourceType enum.
+func (e ContextTypeResourceType) Valid() bool {
+	switch e {
+	case ContextTypeResourceTypeContextType:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvironmentResourceType.
+const (
+	EnvironmentResourceTypeEnvironment EnvironmentResourceType = "environment"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentResourceType enum.
+func (e EnvironmentResourceType) Valid() bool {
+	switch e {
+	case EnvironmentResourceTypeEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvitationResourceType.
+const (
+	InvitationResourceTypeInvitation InvitationResourceType = "invitation"
+)
+
+// Valid indicates whether the value is a known member of the InvitationResourceType enum.
+func (e InvitationResourceType) Valid() bool {
+	switch e {
+	case InvitationResourceTypeInvitation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OidcProvider.
 const (
 	Google    OidcProvider = "google"
@@ -40,6 +130,66 @@ func (e OidcProvider) Valid() bool {
 	}
 }
 
+// Defines values for PlanResourceType.
+const (
+	PlanResourceTypePlan PlanResourceType = "plan"
+)
+
+// Valid indicates whether the value is a known member of the PlanResourceType enum.
+func (e PlanResourceType) Valid() bool {
+	switch e {
+	case PlanResourceTypePlan:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProductResourceType.
+const (
+	ProductResourceTypeProduct ProductResourceType = "product"
+)
+
+// Valid indicates whether the value is a known member of the ProductResourceType enum.
+func (e ProductResourceType) Valid() bool {
+	switch e {
+	case ProductResourceTypeProduct:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServiceResourceType.
+const (
+	ServiceResourceTypeService ServiceResourceType = "service"
+)
+
+// Valid indicates whether the value is a known member of the ServiceResourceType enum.
+func (e ServiceResourceType) Valid() bool {
+	switch e {
+	case ServiceResourceTypeService:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UserResourceType.
+const (
+	UserResourceTypeUser UserResourceType = "user"
+)
+
+// Valid indicates whether the value is a known member of the UserResourceType enum.
+func (e UserResourceType) Valid() bool {
+	switch e {
+	case UserResourceTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
 // Account defines model for Account.
 type Account struct {
 	CreatedAt         *time.Time `json:"created_at,omitempty"`
@@ -51,10 +201,13 @@ type Account struct {
 
 // AccountResource defines model for AccountResource.
 type AccountResource struct {
-	Attributes Account `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes Account             `json:"attributes"`
+	Id         *string             `json:"id,omitempty"`
+	Type       AccountResourceType `json:"type"`
 }
+
+// AccountResourceType defines model for AccountResource.Type.
+type AccountResourceType string
 
 // AccountResponse defines model for AccountResponse.
 type AccountResponse struct {
@@ -82,10 +235,13 @@ type ApiKeyListResponse struct {
 
 // ApiKeyResource defines model for ApiKeyResource.
 type ApiKeyResource struct {
-	Attributes ApiKey  `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes ApiKey             `json:"attributes"`
+	Id         *string            `json:"id,omitempty"`
+	Type       ApiKeyResourceType `json:"type"`
 }
+
+// ApiKeyResourceType defines model for ApiKeyResource.Type.
+type ApiKeyResourceType string
 
 // ApiKeyResponse defines model for ApiKeyResponse.
 type ApiKeyResponse struct {
@@ -143,10 +299,13 @@ type ContextListResponse struct {
 
 // ContextResource defines model for ContextResource.
 type ContextResource struct {
-	Attributes Context `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes Context             `json:"attributes"`
+	Id         *string             `json:"id,omitempty"`
+	Type       ContextResourceType `json:"type"`
 }
+
+// ContextResourceType defines model for ContextResource.Type.
+type ContextResourceType string
 
 // ContextResponse defines model for ContextResponse.
 type ContextResponse struct {
@@ -174,10 +333,13 @@ type ContextTypeListResponse struct {
 
 // ContextTypeResource defines model for ContextTypeResource.
 type ContextTypeResource struct {
-	Attributes ContextType `json:"attributes"`
-	Id         *string     `json:"id,omitempty"`
-	Type       string      `json:"type"`
+	Attributes ContextType             `json:"attributes"`
+	Id         *string                 `json:"id,omitempty"`
+	Type       ContextTypeResourceType `json:"type"`
 }
+
+// ContextTypeResourceType defines model for ContextTypeResource.Type.
+type ContextTypeResourceType string
 
 // ContextTypeResponse defines model for ContextTypeResponse.
 type ContextTypeResponse struct {
@@ -200,10 +362,13 @@ type EnvironmentListResponse struct {
 
 // EnvironmentResource defines model for EnvironmentResource.
 type EnvironmentResource struct {
-	Attributes Environment `json:"attributes"`
-	Id         *string     `json:"id,omitempty"`
-	Type       string      `json:"type"`
+	Attributes Environment             `json:"attributes"`
+	Id         *string                 `json:"id,omitempty"`
+	Type       EnvironmentResourceType `json:"type"`
 }
+
+// EnvironmentResourceType defines model for EnvironmentResource.Type.
+type EnvironmentResourceType string
 
 // EnvironmentResponse defines model for EnvironmentResponse.
 type EnvironmentResponse struct {
@@ -252,10 +417,13 @@ type InvitationListResponse struct {
 
 // InvitationResource defines model for InvitationResource.
 type InvitationResource struct {
-	Attributes Invitation `json:"attributes"`
-	Id         *string    `json:"id,omitempty"`
-	Type       string     `json:"type"`
+	Attributes Invitation             `json:"attributes"`
+	Id         *string                `json:"id,omitempty"`
+	Type       InvitationResourceType `json:"type"`
 }
+
+// InvitationResourceType defines model for InvitationResource.Type.
+type InvitationResourceType string
 
 // InvitationResponse defines model for InvitationResponse.
 type InvitationResponse struct {
@@ -299,10 +467,13 @@ type PlanListResponse struct {
 
 // PlanResource defines model for PlanResource.
 type PlanResource struct {
-	Attributes Plan    `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes Plan             `json:"attributes"`
+	Id         *string          `json:"id,omitempty"`
+	Type       PlanResourceType `json:"type"`
 }
+
+// PlanResourceType defines model for PlanResource.Type.
+type PlanResourceType string
 
 // Product defines model for Product.
 type Product struct {
@@ -320,10 +491,13 @@ type ProductListResponse struct {
 
 // ProductResource defines model for ProductResource.
 type ProductResource struct {
-	Attributes Product `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes Product             `json:"attributes"`
+	Id         *string             `json:"id,omitempty"`
+	Type       ProductResourceType `json:"type"`
 }
+
+// ProductResourceType defines model for ProductResource.Type.
+type ProductResourceType string
 
 // RegisterRequest defines model for RegisterRequest.
 type RegisterRequest struct {
@@ -346,10 +520,13 @@ type ServiceListResponse struct {
 
 // ServiceResource defines model for ServiceResource.
 type ServiceResource struct {
-	Attributes Service `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes Service             `json:"attributes"`
+	Id         *string             `json:"id,omitempty"`
+	Type       ServiceResourceType `json:"type"`
 }
+
+// ServiceResourceType defines model for ServiceResource.Type.
+type ServiceResourceType string
 
 // ServiceResponse defines model for ServiceResponse.
 type ServiceResponse struct {
@@ -380,10 +557,13 @@ type UserListResponse struct {
 
 // UserResource defines model for UserResource.
 type UserResource struct {
-	Attributes User    `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes User             `json:"attributes"`
+	Id         *string          `json:"id,omitempty"`
+	Type       UserResourceType `json:"type"`
 }
+
+// UserResourceType defines model for UserResource.Type.
+type UserResourceType string
 
 // UserResponse defines model for UserResponse.
 type UserResponse struct {
