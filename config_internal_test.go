@@ -1,14 +1,9 @@
 package smplkit
 
 import (
-	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"sync"
+	"context"
 	"testing"
-	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,308 +16,6 @@ func TestDerefMap_Nil(t *testing.T) {
 func TestDerefEnvs_Nil(t *testing.T) {
 	result := derefEnvs(nil)
 	assert.Nil(t, result)
-}
-
-func TestGetInt_NativeInt(t *testing.T) {
-	rt := &ConfigRuntime{
-		cache: map[string]interface{}{"n": int(42)},
-	}
-	assert.Equal(t, 42, rt.GetInt("n"))
-}
-
-func TestGetInt_Int64(t *testing.T) {
-	rt := &ConfigRuntime{
-		cache: map[string]interface{}{"n": int64(99)},
-	}
-	assert.Equal(t, 99, rt.GetInt("n"))
-}
-
-func TestWsLoop_ClosedBeforeConnect(t *testing.T) {
-	rt := &ConfigRuntime{
-		configID:    "test-id",
-		environment: "test",
-		cache:       map[string]interface{}{},
-		status:      "connecting",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		fetchChain:  func() ([]chainEntry, error) { return nil, nil },
-		apiKey:      "test",
-		wsBase:      "ws://localhost:0",
-		initBackoff: time.Second,
-	}
-
-	close(rt.closeCh)
-	rt.wsLoop()
-
-	assert.Equal(t, "disconnected", rt.status)
-}
-
-func TestWsLoop_ZeroBackoff(t *testing.T) {
-	// Test that initBackoff=0 defaults to 1 second.
-	rt := &ConfigRuntime{
-		configID:    "test-id",
-		environment: "test",
-		cache:       map[string]interface{}{},
-		status:      "connecting",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		fetchChain:  func() ([]chainEntry, error) { return nil, nil },
-		apiKey:      "test",
-		wsBase:      "ws://localhost:0",
-		initBackoff: 0, // Should default to time.Second
-		dialWS: func(url string) (*websocket.Conn, error) {
-			return nil, fmt.Errorf("dial error")
-		},
-	}
-
-	go rt.wsLoop()
-
-	// Close quickly during the backoff wait.
-	time.Sleep(50 * time.Millisecond)
-	close(rt.closeCh)
-	<-rt.wsDone
-
-	assert.Equal(t, "disconnected", rt.status)
-}
-
-func TestWsLoop_BackoffWaitAndClose(t *testing.T) {
-	// Test the close-during-backoff path.
-	rt := &ConfigRuntime{
-		configID:    "test-id",
-		environment: "test",
-		cache:       map[string]interface{}{},
-		status:      "connecting",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		fetchChain:  func() ([]chainEntry, error) { return nil, nil },
-		apiKey:      "test",
-		wsBase:      "ws://127.0.0.1:1",
-		initBackoff: time.Second,
-	}
-
-	go rt.wsLoop()
-
-	// Wait for the first dial to fail and the loop to enter backoff.
-	time.Sleep(200 * time.Millisecond)
-
-	close(rt.closeCh)
-	<-rt.wsDone
-
-	assert.Equal(t, "disconnected", rt.status)
-}
-
-func TestWsLoop_BackoffTimerFiresAndRetries(t *testing.T) {
-	// Test that the backoff timer fires, the loop retries, and we get multiple
-	// dial attempts.
-	var dialCount int32
-	var mu sync.Mutex
-
-	rt := &ConfigRuntime{
-		configID:    "test-id",
-		environment: "test",
-		cache:       map[string]interface{}{},
-		status:      "connecting",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		fetchChain:  func() ([]chainEntry, error) { return nil, nil },
-		apiKey:      "test",
-		wsBase:      "ws://localhost:0",
-		initBackoff: time.Millisecond,
-		dialWS: func(url string) (*websocket.Conn, error) {
-			mu.Lock()
-			dialCount++
-			mu.Unlock()
-			return nil, fmt.Errorf("dial error")
-		},
-	}
-
-	go rt.wsLoop()
-
-	// With 1ms backoff doubling, we should get many attempts quickly.
-	time.Sleep(300 * time.Millisecond)
-	close(rt.closeCh)
-	<-rt.wsDone
-
-	mu.Lock()
-	count := dialCount
-	mu.Unlock()
-
-	assert.True(t, count >= 3, "expected at least 3 dial attempts, got %d", count)
-	assert.Equal(t, "disconnected", rt.status)
-}
-
-func TestWsLoop_BackoffCaps(t *testing.T) {
-	// Test that the backoff caps at maxBackoff. Use initBackoff=5ms, maxBackoff=20ms.
-	// Doubling: 5, 10, 20->20 (capped), 20, 20...
-	// So after ~3 iterations (5+10+20=35ms) the cap kicks in.
-	var mu sync.Mutex
-	var dialCount int
-
-	rt := &ConfigRuntime{
-		configID:    "test-id",
-		environment: "test",
-		cache:       map[string]interface{}{},
-		status:      "connecting",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		fetchChain:  func() ([]chainEntry, error) { return nil, nil },
-		apiKey:      "test",
-		wsBase:      "ws://localhost:0",
-		initBackoff: 5 * time.Millisecond,
-		maxBackoff:  8 * time.Millisecond, // 5 doubles to 10 > 8, triggers the inner cap
-		dialWS: func(url string) (*websocket.Conn, error) {
-			mu.Lock()
-			dialCount++
-			mu.Unlock()
-			return nil, fmt.Errorf("dial error")
-		},
-	}
-
-	go rt.wsLoop()
-
-	// Wait for backoff doubling to exceed maxBackoff.
-	// 5ms + 10ms + 20ms + 20ms + 20ms = 75ms. Wait 200ms to be safe.
-	time.Sleep(200 * time.Millisecond)
-	close(rt.closeCh)
-	<-rt.wsDone
-
-	mu.Lock()
-	count := dialCount
-	mu.Unlock()
-
-	// Should have at least 4 dial attempts (enough for backoff to cap).
-	assert.True(t, count >= 4, "expected at least 4 dial attempts, got %d", count)
-	assert.Equal(t, "disconnected", rt.status)
-}
-
-func TestWsConnect_WriteJSONError(t *testing.T) {
-	// Use a real WS server but inject a dialer that sets the write deadline
-	// to the past, forcing WriteJSON to fail.
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		// Keep connection open for a bit so dial succeeds.
-		time.Sleep(time.Second)
-	}))
-	defer server.Close()
-
-	rt := &ConfigRuntime{
-		configID:    "test-id",
-		environment: "test",
-		cache:       map[string]interface{}{},
-		status:      "connecting",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		fetchChain:  func() ([]chainEntry, error) { return nil, nil },
-		apiKey:      "test",
-		wsBase:      toWSBase(server.URL),
-		initBackoff: time.Millisecond,
-		dialWS: func(wsURL string) (*websocket.Conn, error) {
-			conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-			if err != nil {
-				return nil, err
-			}
-			// Set write deadline to the past so WriteJSON fails immediately.
-			_ = conn.SetWriteDeadline(time.Now().Add(-time.Hour))
-			return conn, nil
-		},
-	}
-
-	closed, err := rt.wsConnect()
-	assert.False(t, closed)
-	assert.Error(t, err)
-}
-
-func TestWsConnect_DialError_CloseCh(t *testing.T) {
-	rt := &ConfigRuntime{
-		configID:    "test-id",
-		environment: "test",
-		cache:       map[string]interface{}{},
-		status:      "connecting",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		fetchChain:  func() ([]chainEntry, error) { return nil, nil },
-		apiKey:      "test",
-		wsBase:      "ws://127.0.0.1:1",
-		initBackoff: time.Millisecond,
-	}
-
-	close(rt.closeCh)
-
-	closed, err := rt.wsConnect()
-	assert.True(t, closed)
-	assert.NoError(t, err)
-}
-
-func TestWsConnect_ReadError_CloseCh(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	subscribed := make(chan struct{})
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-
-		var msg map[string]interface{}
-		_ = conn.ReadJSON(&msg)
-
-		close(subscribed)
-
-		// Block until client disconnects.
-		for {
-			_, _, err := conn.ReadMessage()
-			if err != nil {
-				return
-			}
-		}
-	}))
-	defer server.Close()
-
-	rt := &ConfigRuntime{
-		configID:    "test-id",
-		environment: "test",
-		cache:       map[string]interface{}{},
-		status:      "connecting",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		fetchChain:  func() ([]chainEntry, error) { return nil, nil },
-		apiKey:      "test",
-		wsBase:      toWSBase(server.URL),
-		initBackoff: time.Millisecond,
-	}
-
-	type result struct {
-		closed bool
-		err    error
-	}
-	done := make(chan result, 1)
-	go func() {
-		c, e := rt.wsConnect()
-		done <- result{c, e}
-	}()
-
-	select {
-	case <-subscribed:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for subscribe")
-	}
-
-	close(rt.closeCh)
-
-	select {
-	case r := <-done:
-		assert.True(t, r.closed)
-		assert.NoError(t, r.err)
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for wsConnect to return")
-	}
 }
 
 // ---------- extractItemValues ----------
@@ -346,7 +39,6 @@ func TestExtractItemValues_MapWithoutValueKey(t *testing.T) {
 		"no_val": map[string]interface{}{"type": "STRING", "description": "desc"},
 	}
 	result := extractItemValues(items)
-	// Fallback: entire map is used as-is
 	assert.Equal(t, items["no_val"], result["no_val"])
 }
 
@@ -365,12 +57,10 @@ func TestExtractEnvOverrides_Nil(t *testing.T) {
 }
 
 func TestExtractEnvOverrides_ValuesNotMap(t *testing.T) {
-	// "values" key exists but is not map[string]interface{}
 	envs := map[string]map[string]interface{}{
 		"staging": {"values": "not-a-map", "other": "keep"},
 	}
 	result := extractEnvOverrides(envs)
-	// "values" falls through to the passthrough branch
 	assert.Equal(t, "not-a-map", result["staging"]["values"])
 	assert.Equal(t, "keep", result["staging"]["other"])
 }
@@ -384,7 +74,6 @@ func TestExtractEnvOverrides_NonValuesKey(t *testing.T) {
 }
 
 func TestExtractEnvOverrides_InnerNonMap(t *testing.T) {
-	// A value inside "values" that is not a map — uses fallback
 	envs := map[string]map[string]interface{}{
 		"staging": {
 			"values": map[string]interface{}{
@@ -406,7 +95,6 @@ func TestExtractEnvOverrides_InnerMapMissingValueKey(t *testing.T) {
 	}
 	result := extractEnvOverrides(envs)
 	inner := result["staging"]["values"].(map[string]interface{})
-	// Fallback: entire map is used as-is
 	assert.Equal(t, map[string]interface{}{"type": "STRING"}, inner["no_val"])
 }
 
@@ -434,7 +122,6 @@ func TestWrapEnvOverrides_ValuesNotMap(t *testing.T) {
 		"staging": {"values": "not-a-map", "meta": "data"},
 	}
 	result := wrapEnvOverrides(envs)
-	// "values" falls through to passthrough since it is not a map
 	assert.Equal(t, "not-a-map", result["staging"]["values"])
 	assert.Equal(t, "data", result["staging"]["meta"])
 }
@@ -460,27 +147,249 @@ func TestWrapEnvOverrides_WrapsValues(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"value": true}, inner["debug"])
 }
 
-func TestFireListeners_RemovedKey_InternalPath(t *testing.T) {
-	rt := &ConfigRuntime{}
+// ---------- diffAndFire ----------
+
+func TestDiffAndFire_RemovedKey(t *testing.T) {
+	c := &ConfigClient{}
 
 	var events []*ConfigChangeEvent
-	var mu sync.Mutex
-	rt.listeners = []changeListener{
-		{key: "", cb: func(evt *ConfigChangeEvent) {
-			mu.Lock()
+	c.listeners = []configChangeListener{
+		{configKey: "", itemKey: "", cb: func(evt *ConfigChangeEvent) {
 			events = append(events, evt)
-			mu.Unlock()
 		}},
 	}
 
-	oldCache := map[string]interface{}{"a": 1, "b": 2}
-	newCache := map[string]interface{}{"a": 1}
+	oldCache := map[string]map[string]interface{}{
+		"app": {"a": 1, "b": 2},
+	}
+	newCache := map[string]map[string]interface{}{
+		"app": {"a": 1},
+	}
 
-	rt.fireListeners(oldCache, newCache, "manual")
+	c.diffAndFire(oldCache, newCache, "manual")
 
-	mu.Lock()
-	defer mu.Unlock()
 	require.Len(t, events, 1)
-	assert.Equal(t, "b", events[0].Key)
+	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, "b", events[0].ItemKey)
+	assert.Nil(t, events[0].NewValue)
+}
+
+func TestDiffAndFire_ListenerPanic(t *testing.T) {
+	c := &ConfigClient{}
+
+	var events []*ConfigChangeEvent
+	c.listeners = []configChangeListener{
+		{cb: func(evt *ConfigChangeEvent) {
+			panic("bad listener")
+		}},
+		{cb: func(evt *ConfigChangeEvent) {
+			events = append(events, evt)
+		}},
+	}
+
+	oldCache := map[string]map[string]interface{}{
+		"app": {"a": 1},
+	}
+	newCache := map[string]map[string]interface{}{
+		"app": {"a": 2},
+	}
+
+	c.diffAndFire(oldCache, newCache, "manual")
+
+	require.Len(t, events, 1)
+	assert.Equal(t, 2, events[0].NewValue)
+}
+
+func TestDiffAndFire_FiltersByConfigKey(t *testing.T) {
+	c := &ConfigClient{}
+
+	var events []*ConfigChangeEvent
+	c.listeners = []configChangeListener{
+		{configKey: "db", cb: func(evt *ConfigChangeEvent) {
+			events = append(events, evt)
+		}},
+	}
+
+	oldCache := map[string]map[string]interface{}{
+		"app": {"a": 1},
+		"db":  {"host": "old"},
+	}
+	newCache := map[string]map[string]interface{}{
+		"app": {"a": 2},
+		"db":  {"host": "new"},
+	}
+
+	c.diffAndFire(oldCache, newCache, "manual")
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "db", events[0].ConfigKey)
+}
+
+func TestDiffAndFire_FiltersByItemKey(t *testing.T) {
+	c := &ConfigClient{}
+
+	var events []*ConfigChangeEvent
+	c.listeners = []configChangeListener{
+		{configKey: "app", itemKey: "a", cb: func(evt *ConfigChangeEvent) {
+			events = append(events, evt)
+		}},
+	}
+
+	oldCache := map[string]map[string]interface{}{
+		"app": {"a": 1, "b": 2},
+	}
+	newCache := map[string]map[string]interface{}{
+		"app": {"a": 10, "b": 20},
+	}
+
+	c.diffAndFire(oldCache, newCache, "manual")
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "a", events[0].ItemKey)
+}
+
+func TestDiffAndFire_NoListeners(t *testing.T) {
+	c := &ConfigClient{}
+
+	// Should not panic
+	c.diffAndFire(
+		map[string]map[string]interface{}{"app": {"a": 1}},
+		map[string]map[string]interface{}{"app": {"a": 2}},
+		"manual",
+	)
+}
+
+// ---------- GetInt type coercion ----------
+
+func TestGetInt_NativeInt(t *testing.T) {
+	c := &ConfigClient{
+		configCache: map[string]map[string]interface{}{
+			"app": {"n": int(42)},
+		},
+		connected: true,
+	}
+	val, err := c.GetInt("app", "n")
+	assert.NoError(t, err)
+	assert.Equal(t, 42, val)
+}
+
+func TestGetInt_Int64(t *testing.T) {
+	c := &ConfigClient{
+		configCache: map[string]map[string]interface{}{
+			"app": {"n": int64(99)},
+		},
+		connected: true,
+	}
+	val, err := c.GetInt("app", "n")
+	assert.NoError(t, err)
+	assert.Equal(t, 99, val)
+}
+
+// ---------- deepMerge ----------
+
+func TestDeepMerge_RecursiveMerge(t *testing.T) {
+	base := map[string]interface{}{
+		"db": map[string]interface{}{
+			"host": "localhost",
+			"port": 5432,
+		},
+		"name": "app",
+	}
+	override := map[string]interface{}{
+		"db": map[string]interface{}{
+			"host": "prod-server",
+			"ssl":  true,
+		},
+		"version": "2.0",
+	}
+	result := deepMerge(base, override)
+	db := result["db"].(map[string]interface{})
+	assert.Equal(t, "prod-server", db["host"])
+	assert.Equal(t, 5432, db["port"])
+	assert.Equal(t, true, db["ssl"])
+	assert.Equal(t, "app", result["name"])
+	assert.Equal(t, "2.0", result["version"])
+}
+
+func TestDeepMerge_OverrideNonMapWithMap(t *testing.T) {
+	base := map[string]interface{}{
+		"db": "string-value",
+	}
+	override := map[string]interface{}{
+		"db": map[string]interface{}{"host": "localhost"},
+	}
+	result := deepMerge(base, override)
+	assert.Equal(t, map[string]interface{}{"host": "localhost"}, result["db"])
+}
+
+func TestDeepMerge_OverrideMapWithNonMap(t *testing.T) {
+	base := map[string]interface{}{
+		"db": map[string]interface{}{"host": "localhost"},
+	}
+	override := map[string]interface{}{
+		"db": "string-value",
+	}
+	result := deepMerge(base, override)
+	assert.Equal(t, "string-value", result["db"])
+}
+
+// ---------- Refresh edge cases ----------
+
+func TestRefresh_NoEnvironment(t *testing.T) {
+	c := &ConfigClient{
+		connected: true,
+		client:    &Client{environment: ""},
+	}
+	err := c.Refresh(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "No environment set")
+}
+
+// ---------- diffAndFire edge cases ----------
+
+func TestDiffAndFire_NewConfig(t *testing.T) {
+	c := &ConfigClient{}
+
+	var events []*ConfigChangeEvent
+	c.listeners = []configChangeListener{
+		{cb: func(evt *ConfigChangeEvent) {
+			events = append(events, evt)
+		}},
+	}
+
+	oldCache := map[string]map[string]interface{}{}
+	newCache := map[string]map[string]interface{}{
+		"app": {"a": 1},
+	}
+
+	c.diffAndFire(oldCache, newCache, "manual")
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, "a", events[0].ItemKey)
+	assert.Nil(t, events[0].OldValue)
+	assert.Equal(t, 1, events[0].NewValue)
+}
+
+func TestDiffAndFire_RemovedConfig(t *testing.T) {
+	c := &ConfigClient{}
+
+	var events []*ConfigChangeEvent
+	c.listeners = []configChangeListener{
+		{cb: func(evt *ConfigChangeEvent) {
+			events = append(events, evt)
+		}},
+	}
+
+	oldCache := map[string]map[string]interface{}{
+		"app": {"a": 1},
+	}
+	newCache := map[string]map[string]interface{}{}
+
+	c.diffAndFire(oldCache, newCache, "manual")
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, 1, events[0].OldValue)
 	assert.Nil(t, events[0].NewValue)
 }

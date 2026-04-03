@@ -104,16 +104,6 @@ func (c *Config) SetValue(ctx context.Context, key string, value interface{}, en
 	return c.SetValues(ctx, existing, environment)
 }
 
-// Connect creates a live, reactive ConfigRuntime for this config in the given
-// environment. The runtime maintains a WebSocket connection for real-time updates
-// and supports OnChange listeners. Call Close on the returned runtime when done.
-//
-// For simple prescriptive access, use ConfigClient.GetValue after calling
-// Client.Connect instead.
-func (c *Config) Connect(ctx context.Context, environment string) (*ConfigRuntime, error) {
-	return c.client.connect(ctx, c, environment)
-}
-
 // update is the internal implementation shared by Update, SetValues, and SetValue.
 func (c *Config) update(ctx context.Context, params UpdateConfigParams) error {
 	name := c.Name

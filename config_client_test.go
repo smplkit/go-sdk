@@ -1096,20 +1096,31 @@ func (t *methodAwareRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 }
 
 func TestConfigClient_FetchChain_Error(t *testing.T) {
-	// fetchChain is called inside Connect. If GetByID fails during chain walk,
-	// the error should propagate.
+	// fetchChain is called inside client.Connect(). If GetByID fails during
+	// chain walk, the error should propagate.
 	childID := testUUID1
 	parentID := testUUID0
 
+	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
-		if r.URL.Path == "/api/v1/configs/"+childID {
+		if r.URL.Path == "/api/v1/configs" {
+			// List returns the child config which has a parent
+			callCount++
+			resp := fmt.Sprintf(`{"data":[{"id":"%s","type":"config","attributes":{"name":"child","key":"child","parent":"%s","items":{"y":{"value":2,"type":"NUMBER"}},"environments":{}}}]}`, childID, parentID)
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(singleConfigRespWithParent(childID, "child", `{"y":{"value":2,"type":"NUMBER"}}`, `{}`, parentID)))
+			_, _ = w.Write([]byte(resp))
+		} else if r.URL.Path == "/api/v1/configs/"+childID {
+			resp := fmt.Sprintf(`{"data":{"id":"%s","type":"config","attributes":{"name":"child","key":"child","parent":"%s","items":{"y":{"value":2,"type":"NUMBER"}},"environments":{}}}}`, childID, parentID)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(resp))
 		} else if r.URL.Path == "/api/v1/configs/"+parentID {
 			// Parent returns error.
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+		} else if r.URL.Path == "/api/v1/flags" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":[]}`))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
@@ -1119,10 +1130,8 @@ func TestConfigClient_FetchChain_Error(t *testing.T) {
 
 	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
-	child, err := client.Config().GetByID(context.Background(), childID)
-	require.NoError(t, err)
 
-	_, err = child.Connect(context.Background(), "")
+	err = client.Connect(context.Background())
 	require.Error(t, err)
 }
 

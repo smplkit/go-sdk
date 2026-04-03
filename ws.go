@@ -115,6 +115,11 @@ func (ws *sharedWebSocket) setStatus(s string) {
 	ws.statusMu.Unlock()
 }
 
+func defaultDialWS(wsURL string) (*websocket.Conn, error) {
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	return conn, err
+}
+
 // start launches the background WebSocket goroutine.
 func (ws *sharedWebSocket) start() {
 	go ws.run()

@@ -5,19 +5,45 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
+	"sync"
 
 	"github.com/google/uuid"
 
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
 )
 
-// ConfigClient provides CRUD operations for config resources.
+// ConfigChangeEvent describes a single value change detected on refresh.
+type ConfigChangeEvent struct {
+	// ConfigKey is the config key that changed (e.g. "user_service").
+	ConfigKey string
+	// ItemKey is the item key within the config that changed.
+	ItemKey string
+	// OldValue is the value before the change (nil if the key was new).
+	OldValue interface{}
+	// NewValue is the value after the change (nil if the key was removed).
+	NewValue interface{}
+	// Source is "websocket" for server-pushed changes or "manual" for Refresh calls.
+	Source string
+}
+
+type configChangeListener struct {
+	configKey string // "" matches all configs
+	itemKey   string // "" matches all items
+	cb        func(*ConfigChangeEvent)
+}
+
+// ConfigClient provides CRUD operations for config resources and
+// prescriptive value access after Client.Connect().
 // Obtain one via Client.Config().
 type ConfigClient struct {
 	client      *Client
 	generated   genconfig.ClientInterface
 	configCache map[string]map[string]interface{}
 	connected   bool
+
+	listenersMu sync.Mutex
+	listeners   []configChangeListener
 }
 
 // Get retrieves a single config using functional options. Exactly one of
@@ -303,22 +329,201 @@ func (c *ConfigClient) GetValue(configKey string, itemKey ...string) (interface{
 	return val, nil
 }
 
-// connect builds a ConfigRuntime for cfg in the given environment.
-func (c *ConfigClient) connect(ctx context.Context, cfg *Config, environment string) (*ConfigRuntime, error) {
-	chain, err := c.fetchChain(ctx, cfg.ID)
+// GetString returns the resolved string value for (configKey, itemKey),
+// or defaultVal if absent or not a string.
+//
+// Requires Client.Connect() to have been called.
+func (c *ConfigClient) GetString(configKey, itemKey string, defaultVal ...string) (string, error) {
+	val, err := c.GetValue(configKey, itemKey)
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+	if s, ok := val.(string); ok {
+		return s, nil
+	}
+	if len(defaultVal) > 0 {
+		return defaultVal[0], nil
+	}
+	return "", nil
+}
+
+// GetInt returns the resolved int value for (configKey, itemKey),
+// or defaultVal if absent or not a number.
+// JSON numbers are float64; this converts float64 and int64 to int automatically.
+//
+// Requires Client.Connect() to have been called.
+func (c *ConfigClient) GetInt(configKey, itemKey string, defaultVal ...int) (int, error) {
+	val, err := c.GetValue(configKey, itemKey)
+	if err != nil {
+		return 0, err
+	}
+	switch n := val.(type) {
+	case int:
+		return n, nil
+	case float64:
+		return int(n), nil
+	case int64:
+		return int(n), nil
+	}
+	if len(defaultVal) > 0 {
+		return defaultVal[0], nil
+	}
+	return 0, nil
+}
+
+// GetBool returns the resolved bool value for (configKey, itemKey),
+// or defaultVal if absent or not a bool.
+//
+// Requires Client.Connect() to have been called.
+func (c *ConfigClient) GetBool(configKey, itemKey string, defaultVal ...bool) (bool, error) {
+	val, err := c.GetValue(configKey, itemKey)
+	if err != nil {
+		return false, err
+	}
+	if b, ok := val.(bool); ok {
+		return b, nil
+	}
+	if len(defaultVal) > 0 {
+		return defaultVal[0], nil
+	}
+	return false, nil
+}
+
+// Refresh re-fetches all configs, re-resolves values, and updates the cache.
+// Fires OnChange listeners for any values that differ from the previous cache.
+//
+// Requires Client.Connect() to have been called.
+func (c *ConfigClient) Refresh(ctx context.Context) error {
+	if !c.connected {
+		return ErrNotConnected
+	}
+	environment := c.client.environment
+	if environment == "" {
+		return &SmplError{Message: "No environment set."}
 	}
 
-	cache := resolveChain(chain, environment)
-	rootID := cfg.ID
+	configs, err := c.List(ctx)
+	if err != nil {
+		return err
+	}
 
-	rt := newConfigRuntime(cfg.ID, environment, cache, func() ([]chainEntry, error) {
-		return c.fetchChain(context.Background(), rootID)
-	}, c.client.apiKey, c.client.baseURL, nil)
+	newCache := make(map[string]map[string]interface{})
+	for _, cfg := range configs {
+		chain, fetchErr := c.fetchChain(ctx, cfg.ID)
+		if fetchErr != nil {
+			return fetchErr
+		}
+		newCache[cfg.Key] = resolveChain(chain, environment)
+	}
+	oldCache := c.configCache
+	c.configCache = newCache
+	c.diffAndFire(oldCache, newCache, "manual")
+	return nil
+}
 
-	go rt.wsLoop()
-	return rt, nil
+// OnChange registers a listener that fires when a config value changes (on Refresh).
+//
+// If configKey is provided, the listener fires only for changes to that config.
+// If both configKey and itemKey are provided, only changes to that specific item fire.
+func (c *ConfigClient) OnChange(cb func(*ConfigChangeEvent), opts ...ChangeListenerOption) {
+	var cfg changeListenerConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	c.listenersMu.Lock()
+	c.listeners = append(c.listeners, configChangeListener{
+		configKey: cfg.configKey,
+		itemKey:   cfg.itemKey,
+		cb:        cb,
+	})
+	c.listenersMu.Unlock()
+}
+
+// ChangeListenerOption configures an OnChange listener.
+type ChangeListenerOption func(*changeListenerConfig)
+
+type changeListenerConfig struct {
+	configKey string
+	itemKey   string
+}
+
+// WithConfigKey restricts the listener to changes in the given config.
+func WithConfigKey(key string) ChangeListenerOption {
+	return func(c *changeListenerConfig) {
+		c.configKey = key
+	}
+}
+
+// WithItemKey restricts the listener to changes of the given item key.
+func WithItemKey(key string) ChangeListenerOption {
+	return func(c *changeListenerConfig) {
+		c.itemKey = key
+	}
+}
+
+// diffAndFire compares old and new caches and fires change listeners.
+func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]interface{}, source string) { //nolint:unparam // "websocket" source will be used when real-time config push is wired up
+	c.listenersMu.Lock()
+	listeners := make([]configChangeListener, len(c.listeners))
+	copy(listeners, c.listeners)
+	c.listenersMu.Unlock()
+
+	if len(listeners) == 0 {
+		return
+	}
+
+	allConfigKeys := make(map[string]struct{})
+	for k := range oldCache {
+		allConfigKeys[k] = struct{}{}
+	}
+	for k := range newCache {
+		allConfigKeys[k] = struct{}{}
+	}
+
+	for cfgKey := range allConfigKeys {
+		oldItems := oldCache[cfgKey]
+		newItems := newCache[cfgKey]
+		if oldItems == nil {
+			oldItems = map[string]interface{}{}
+		}
+		if newItems == nil {
+			newItems = map[string]interface{}{}
+		}
+
+		allItemKeys := make(map[string]struct{})
+		for k := range oldItems {
+			allItemKeys[k] = struct{}{}
+		}
+		for k := range newItems {
+			allItemKeys[k] = struct{}{}
+		}
+
+		for iKey := range allItemKeys {
+			oldVal := oldItems[iKey]
+			newVal := newItems[iKey]
+			if !reflect.DeepEqual(oldVal, newVal) {
+				evt := &ConfigChangeEvent{
+					ConfigKey: cfgKey,
+					ItemKey:   iKey,
+					OldValue:  oldVal,
+					NewValue:  newVal,
+					Source:    source,
+				}
+				for _, l := range listeners {
+					if l.configKey != "" && l.configKey != cfgKey {
+						continue
+					}
+					if l.itemKey != "" && l.itemKey != iKey {
+						continue
+					}
+					func() {
+						defer func() { recover() }() //nolint:errcheck
+						l.cb(evt)
+					}()
+				}
+			}
+		}
+	}
 }
 
 // resourceToConfig converts a generated ConfigResource to the SDK Config type.
