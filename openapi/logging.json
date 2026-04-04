@@ -1615,10 +1615,10 @@
   },
   "tags": [
     {
-      "name": "Loggers"
+      "name": "Log Groups"
     },
     {
-      "name": "Log Groups"
+      "name": "Loggers"
     }
   ]
 }
