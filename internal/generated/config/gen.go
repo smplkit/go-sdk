@@ -46,6 +46,21 @@ func (e ConfigItemDefinitionType) Valid() bool {
 	}
 }
 
+// Defines values for ConfigResourceType.
+const (
+	ConfigResourceTypeConfig ConfigResourceType = "config"
+)
+
+// Valid indicates whether the value is a known member of the ConfigResourceType enum.
+func (e ConfigResourceType) Valid() bool {
+	switch e {
+	case ConfigResourceTypeConfig:
+		return true
+	default:
+		return false
+	}
+}
+
 // Config defines model for Config.
 type Config struct {
 	CreatedAt    *time.Time                       `json:"created_at,omitempty"`
@@ -80,10 +95,13 @@ type ConfigListResponse struct {
 
 // ConfigResource defines model for ConfigResource.
 type ConfigResource struct {
-	Attributes Config  `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes Config             `json:"attributes"`
+	Id         *string            `json:"id,omitempty"`
+	Type       ConfigResourceType `json:"type"`
 }
+
+// ConfigResourceType defines model for ConfigResource.Type.
+type ConfigResourceType string
 
 // ConfigResponse defines model for ConfigResponse.
 type ConfigResponse struct {
