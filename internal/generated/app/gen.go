@@ -280,11 +280,11 @@ type ContextBatchResponse struct {
 type ContextBulkItem struct {
 	Attributes *map[string]interface{} `json:"attributes,omitempty"`
 
-	// Id Composite logical ID: type:key (e.g., 'user:123')
-	Id string `json:"id"`
+	// Key Entity identifier: 'user-123', 'acme-corp'
+	Key string `json:"key"`
 
-	// Name Human-readable display name; defaults to key
-	Name *string `json:"name,omitempty"`
+	// Type Context type key: 'user', 'account', 'device'
+	Type string `json:"type"`
 }
 
 // ContextBulkRegister defines model for ContextBulkRegister.
