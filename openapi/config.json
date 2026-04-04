@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "smplkit Config API",
     "description": "Configuration management API for smplkit.",
@@ -68,8 +68,14 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Filter[Key]"
             }
           },
@@ -78,8 +84,14 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Filter[Parent]"
             }
           }
@@ -257,9 +269,15 @@
       "Config": {
         "properties": {
           "key": {
-            "type": "string",
-            "maxLength": 64,
-            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Key"
           },
           "name": {
@@ -268,43 +286,79 @@
             "title": "Name"
           },
           "description": {
-            "type": "string",
-            "maxLength": 1000,
-            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Description"
           },
           "parent": {
-            "type": "string",
-            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Parent"
           },
           "items": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ConfigItemDefinition"
-            },
-            "type": "object",
-            "nullable": true,
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ConfigItemDefinition"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Items"
           },
           "environments": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/EnvironmentOverride"
-            },
-            "type": "object",
-            "nullable": true,
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/EnvironmentOverride"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Environments"
           },
           "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Created At",
             "readOnly": true
           },
           "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Updated At",
             "readOnly": true
           }
@@ -352,20 +406,32 @@
             "title": "Value"
           },
           "type": {
-            "type": "string",
-            "enum": [
-              "STRING",
-              "NUMBER",
-              "BOOLEAN",
-              "JSON"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "STRING",
+                  "NUMBER",
+                  "BOOLEAN",
+                  "JSON"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "nullable": true,
             "title": "Type"
           },
           "description": {
-            "type": "string",
-            "maxLength": 1000,
-            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Description"
           }
         },
@@ -408,8 +474,14 @@
       "ConfigResource": {
         "properties": {
           "id": {
-            "type": "string",
-            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Id"
           },
           "type": {
@@ -470,11 +542,17 @@
       "EnvironmentOverride": {
         "properties": {
           "values": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ConfigItemOverride"
-            },
-            "type": "object",
-            "nullable": true,
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ConfigItemOverride"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Values"
           }
         },
@@ -498,8 +576,14 @@
       "Resource_Config_": {
         "properties": {
           "id": {
-            "type": "string",
-            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Id"
           },
           "type": {
@@ -569,5 +653,10 @@
         "scheme": "bearer"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Configs"
+    }
+  ]
 }
