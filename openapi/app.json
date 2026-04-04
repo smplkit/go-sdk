@@ -4765,28 +4765,28 @@
       "name": "Auth"
     },
     {
-      "name": "Environments"
-    },
-    {
-      "name": "Invitations"
-    },
-    {
       "name": "Context Types"
     },
     {
       "name": "Contexts"
     },
     {
-      "name": "Services"
+      "name": "Environments"
     },
     {
-      "name": "Users"
+      "name": "Invitations"
     },
     {
       "name": "Plans"
     },
     {
       "name": "Products"
+    },
+    {
+      "name": "Services"
+    },
+    {
+      "name": "Users"
     }
   ]
 }
