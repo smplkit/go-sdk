@@ -1354,7 +1354,8 @@ func TestClient_Connect_WithService(t *testing.T) {
 		contexts := body["contexts"].([]interface{})
 		require.Len(t, contexts, 1)
 		ctx0 := contexts[0].(map[string]interface{})
-		assert.Equal(t, "service:my-svc", ctx0["id"])
+		assert.Equal(t, "service", ctx0["type"])
+		assert.Equal(t, "my-svc", ctx0["key"])
 		serviceRegistered = true
 		w.WriteHeader(http.StatusOK)
 	})

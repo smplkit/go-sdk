@@ -2,7 +2,6 @@ package smplkit
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -204,7 +203,8 @@ func (c *Client) registerServiceContext(ctx context.Context) {
 	reqBody := genapp.ContextBulkRegister{
 		Contexts: []genapp.ContextBulkItem{
 			{
-				Id:         fmt.Sprintf("service:%s", c.service),
+				Type:       "service",
+				Key:        c.service,
 				Attributes: &attrs,
 			},
 		},
