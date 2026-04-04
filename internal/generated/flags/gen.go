@@ -22,6 +22,21 @@ const (
 	HTTPBearerScopes = "HTTPBearer.Scopes"
 )
 
+// Defines values for FlagResourceType.
+const (
+	FlagResourceTypeFlag FlagResourceType = "flag"
+)
+
+// Valid indicates whether the value is a known member of the FlagResourceType enum.
+func (e FlagResourceType) Valid() bool {
+	switch e {
+	case FlagResourceTypeFlag:
+		return true
+	default:
+		return false
+	}
+}
+
 // Flag defines model for Flag.
 type Flag struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
@@ -59,10 +74,13 @@ type FlagListResponse struct {
 
 // FlagResource defines model for FlagResource.
 type FlagResource struct {
-	Attributes Flag    `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       string  `json:"type"`
+	Attributes Flag             `json:"attributes"`
+	Id         *string          `json:"id,omitempty"`
+	Type       FlagResourceType `json:"type"`
 }
+
+// FlagResourceType defines model for FlagResource.Type.
+type FlagResourceType string
 
 // FlagResponse defines model for FlagResponse.
 type FlagResponse struct {
