@@ -648,5 +648,10 @@
         "scheme": "bearer"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Flags"
+    }
+  ]
 }
