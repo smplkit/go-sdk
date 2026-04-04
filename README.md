@@ -1,5 +1,7 @@
 # smplkit Go SDK
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/smplkit/go-sdk.svg)](https://pkg.go.dev/github.com/smplkit/go-sdk) [![Build](https://github.com/smplkit/go-sdk/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/smplkit/go-sdk/actions) [![License](https://img.shields.io/github/license/smplkit/go-sdk)](LICENSE) [![Docs](https://img.shields.io/badge/docs-docs.smplkit.com-blue)](https://docs.smplkit.com)
+
 The official Go SDK for [smplkit](https://www.smplkit.com) — simple application infrastructure that just works.
 
 ## Installation
