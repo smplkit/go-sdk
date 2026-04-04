@@ -1,15 +1,14 @@
 package smplkit
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"sync"
 
+	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
 	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
 )
@@ -24,11 +23,12 @@ const appBaseURL = "https://app.smplkit.com"
 //	err = client.Connect(ctx)
 //	cfgs, err := client.Config().List(ctx)
 type Client struct {
-	apiKey      string
-	environment string
-	service     string
-	baseURL     string
-	httpClient  *http.Client
+	apiKey       string
+	environment  string
+	service      string
+	baseURL      string
+	httpClient   *http.Client
+	appGenerated genapp.ClientInterface
 
 	config *ConfigClient
 	flags  *FlagsClient
@@ -123,15 +123,31 @@ func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client
 		flagsHeaderEditor,
 	)
 
+	// Build the generated app client for context operations.
+	appHeaderEditor := genapp.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	appURL := appBaseURL
+	if cfg.baseURL != "" && cfg.baseURL != defaultConfig().baseURL {
+		appURL = cfg.baseURL
+	}
+	genAppClient, _ := genapp.NewClient(appURL,
+		genapp.WithHTTPClient(httpClient),
+		appHeaderEditor,
+	)
+
 	c := &Client{
-		apiKey:      resolved,
-		environment: resolvedEnv,
-		service:     resolvedService,
-		baseURL:     cfg.baseURL,
-		httpClient:  httpClient,
+		apiKey:       resolved,
+		environment:  resolvedEnv,
+		service:      resolvedService,
+		baseURL:      cfg.baseURL,
+		httpClient:   httpClient,
+		appGenerated: genAppClient,
 	}
 	c.config = &ConfigClient{client: c, generated: genConfigClient}
-	c.flags = &FlagsClient{client: c, generated: genFlagsClient}
+	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	c.flags.runtime = newFlagsRuntime(c.flags)
 	return c, nil
 }
@@ -184,31 +200,16 @@ func (c *Client) Connect(ctx context.Context) error {
 // registerServiceContext sends a service context registration to the app service.
 // Errors are logged but not returned (fire-and-forget).
 func (c *Client) registerServiceContext(ctx context.Context) {
-	payload := map[string]interface{}{
-		"contexts": []map[string]interface{}{
+	attrs := map[string]interface{}{"name": c.service}
+	reqBody := genapp.ContextBulkRegister{
+		Contexts: []genapp.ContextBulkItem{
 			{
-				"type":       "service",
-				"key":        c.service,
-				"attributes": map[string]interface{}{"name": c.service},
+				Id:         fmt.Sprintf("service:%s", c.service),
+				Attributes: &attrs,
 			},
 		},
 	}
-	// json.Marshal cannot fail here — the payload contains only string values.
-	body, _ := json.Marshal(payload)
-
-	appURL := appBaseURL
-	if c.baseURL != "" && c.baseURL != defaultConfig().baseURL {
-		appURL = c.baseURL
-	}
-	url := fmt.Sprintf("%s/api/v1/contexts/bulk", appURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.appGenerated.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		log.Printf("smplkit: failed to register service context: %v", err)
 		return

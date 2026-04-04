@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
 	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
 )
@@ -45,15 +46,26 @@ func newTestFullClient(t *testing.T, server *httptest.Server, service string) *C
 		flagsHeaderEditor,
 	)
 
+	appHeaderEditor := genapp.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genAppClient, _ := genapp.NewClient(server.URL,
+		genapp.WithHTTPClient(httpClient),
+		appHeaderEditor,
+	)
+
 	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     service,
-		baseURL:     server.URL,
-		httpClient:  httpClient,
+		apiKey:       "sk_test",
+		environment:  "test",
+		service:      service,
+		baseURL:      server.URL,
+		httpClient:   httpClient,
+		appGenerated: genAppClient,
 	}
 	c.config = &ConfigClient{client: c, generated: genConfigClient}
-	c.flags = &FlagsClient{client: c, generated: genFlagsClient}
+	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	c.flags.runtime = newFlagsRuntime(c.flags)
 	return c
 }
@@ -114,23 +126,31 @@ func TestRegisterServiceContext_HTTPDoError(t *testing.T) {
 	serverURL := server.URL
 	server.Close() // Close immediately so connections fail.
 
+	httpClient := &http.Client{}
+	genAppClient, _ := genapp.NewClient(serverURL, genapp.WithHTTPClient(httpClient))
+
 	c := &Client{
-		apiKey:     "sk_test",
-		service:    "my-svc",
-		baseURL:    serverURL,
-		httpClient: &http.Client{},
+		apiKey:       "sk_test",
+		service:      "my-svc",
+		baseURL:      serverURL,
+		httpClient:   httpClient,
+		appGenerated: genAppClient,
 	}
 	// Should not panic — errors are logged and swallowed.
 	c.registerServiceContext(context.Background())
 }
 
 func TestRegisterServiceContext_InvalidURL(t *testing.T) {
-	// Use a baseURL with a control character to trigger http.NewRequestWithContext error.
+	// Use an unreachable address to trigger an HTTP error.
+	httpClient := &http.Client{}
+	genAppClient, _ := genapp.NewClient("http://localhost:1", genapp.WithHTTPClient(httpClient))
+
 	c := &Client{
-		apiKey:     "sk_test",
-		service:    "my-svc",
-		baseURL:    "http://invalid\x7f.example.com",
-		httpClient: &http.Client{},
+		apiKey:       "sk_test",
+		service:      "my-svc",
+		baseURL:      "http://localhost:1",
+		httpClient:   httpClient,
+		appGenerated: genAppClient,
 	}
 	// Should not panic — errors are silently swallowed.
 	c.registerServiceContext(context.Background())

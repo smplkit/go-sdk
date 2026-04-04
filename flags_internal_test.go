@@ -14,32 +14,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
 )
 
-// --- appServiceBaseURL ---
-
-func TestAppServiceBaseURL(t *testing.T) {
-	assert.Equal(t, "https://app.smplkit.com", appServiceBaseURL("https://config.smplkit.com"))
-	assert.Equal(t, "https://app.smplkit.com", appServiceBaseURL(""))
-	// When baseURL is overridden (e.g. for tests), return it directly
-	assert.Equal(t, "http://localhost:8000", appServiceBaseURL("http://localhost:8000"))
-}
-
-func TestDoJSONApp_RoutesToAppBaseURL(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/context_types", r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"ct-1","attributes":{"key":"user","name":"User","attributes":{}}}}`))
-	}))
-
-	body, resp, err := fc.doJSONApp(context.Background(), "GET", "/api/v1/context_types", nil)
-	require.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
-	assert.Contains(t, string(body), "ct-1")
-}
-
-// --- doJSONApp / doJSONWithBase ---
+// --- Test helpers ---
 
 func newTestFlagsClient(t *testing.T, handler http.HandlerFunc) (*FlagsClient, *httptest.Server) {
 	t.Helper()
@@ -69,57 +48,26 @@ func newTestFlagsClient(t *testing.T, handler http.HandlerFunc) (*FlagsClient, *
 		flagsHeaderEditor,
 	)
 
+	// Build a generated app client pointed at the test server.
+	appHeaderEditor := genapp.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genAppClient, _ := genapp.NewClient(server.URL,
+		genapp.WithHTTPClient(httpClient),
+		appHeaderEditor,
+	)
+
 	c := &Client{
-		apiKey:     "sk_test",
-		baseURL:    server.URL,
-		httpClient: httpClient,
+		apiKey:       "sk_test",
+		baseURL:      server.URL,
+		httpClient:   httpClient,
+		appGenerated: genAppClient,
 	}
-	fc := &FlagsClient{client: c, generated: genFlagsClient}
+	fc := &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	fc.runtime = newFlagsRuntime(fc)
 	return fc, server
-}
-
-func TestDoJSONWithBase_GET(t *testing.T) {
-	fc, server := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/api/v1/test", r.URL.Path)
-		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Accept"))
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true}`))
-	}))
-
-	body, resp, err := fc.doJSONWithBase(context.Background(), "GET", server.URL+"/api/v1/test", nil)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Contains(t, string(body), "ok")
-}
-
-func TestDoJSONWithBase_POST(t *testing.T) {
-	fc, server := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-		b, _ := io.ReadAll(r.Body)
-		var payload map[string]interface{}
-		_ = json.Unmarshal(b, &payload)
-		assert.Equal(t, "hello", payload["key"])
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"created":true}`))
-	}))
-
-	body, resp, err := fc.doJSONWithBase(context.Background(), "POST", server.URL+"/api/v1/test", map[string]interface{}{"key": "hello"})
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Contains(t, string(body), "created")
-}
-
-func TestDoJSONApp_UsesAppBaseURL(t *testing.T) {
-	// When baseURL is the production config URL, app URL is production app URL
-	url := appServiceBaseURL("https://config.smplkit.com")
-	assert.Equal(t, "https://app.smplkit.com", url)
-
-	// When baseURL is overridden (e.g. test), returns the override
-	url = appServiceBaseURL("http://localhost:9999")
-	assert.Equal(t, "http://localhost:9999", url)
 }
 
 // --- Context type management ---
@@ -150,30 +98,6 @@ func TestParseContextType_InvalidJSON(t *testing.T) {
 func TestParseContextTypeRaw_InvalidJSON(t *testing.T) {
 	_, err := parseContextTypeRaw(json.RawMessage(`{invalid}`))
 	assert.Error(t, err)
-}
-
-func TestListContextTypes_ParseMultiple(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[
-			{"id":"ct-1","attributes":{"key":"user","name":"User","attributes":{}}},
-			{"id":"ct-2","attributes":{"key":"account","name":"Account","attributes":{}}}
-		]}`))
-	}))
-
-	body, resp, err := fc.doJSONWithBase(context.Background(), "GET", fc.client.baseURL+"/api/v1/context_types", nil)
-	require.NoError(t, err)
-	require.Equal(t, 200, resp.StatusCode)
-
-	var result struct {
-		Data []json.RawMessage `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(body, &result))
-	assert.Len(t, result.Data, 2)
-
-	ct1, err := parseContextTypeRaw(result.Data[0])
-	require.NoError(t, err)
-	assert.Equal(t, "user", ct1.Key)
 }
 
 // --- resourceToFlag ---
@@ -397,19 +321,22 @@ func TestFlushContexts_SendsBatch(t *testing.T) {
 	var mu sync.Mutex
 
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		mu.Lock()
-		_ = json.Unmarshal(b, &receivedPayload)
-		mu.Unlock()
+		if r.URL.Path == "/api/v1/contexts/bulk" {
+			b, _ := io.ReadAll(r.Body)
+			mu.Lock()
+			_ = json.Unmarshal(b, &receivedPayload)
+			mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	batch := []map[string]interface{}{
 		{"type": "user", "key": "u1"},
 	}
-	// Need to route through test server — call doJSONWithBase directly
-	_, _, _ = fc.doJSONWithBase(context.Background(), "POST", fc.client.baseURL+"/api/v1/contexts/bulk",
-		map[string]interface{}{"contexts": batch})
+	fc.flushContexts(context.Background(), batch)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -1461,16 +1388,17 @@ func TestFlagsClient_CreateContextType_FullMethod(t *testing.T) {
 }
 
 func TestFlagsClient_UpdateContextType_FullMethod(t *testing.T) {
+	testUUID := "5a0c6be1-0000-0000-0000-000000000001"
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" && r.URL.Path == "/api/v1/context_types/ct-1" {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/context_types/"+testUUID {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"ct-1","attributes":{"key":"user","name":"User","attributes":{"plan":"string"}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + testUUID + `","attributes":{"key":"user","name":"User","attributes":{"plan":"string"}}}}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	ct, err := fc.UpdateContextType(context.Background(), "ct-1", map[string]interface{}{"plan": "string"})
+	ct, err := fc.UpdateContextType(context.Background(), testUUID, map[string]interface{}{"plan": "string"})
 	require.NoError(t, err)
 	assert.Equal(t, "string", ct.Attributes["plan"])
 }
@@ -1495,22 +1423,23 @@ func TestFlagsClient_ListContextTypes_FullMethod(t *testing.T) {
 }
 
 func TestFlagsClient_DeleteContextType_FullMethod(t *testing.T) {
+	testUUID := "5a0c6be1-0000-0000-0000-000000000001"
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "DELETE" && r.URL.Path == "/api/v1/context_types/ct-1" {
+		if r.Method == "DELETE" && r.URL.Path == "/api/v1/context_types/"+testUUID {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	err := fc.DeleteContextType(context.Background(), "ct-1")
+	err := fc.DeleteContextType(context.Background(), testUUID)
 	assert.NoError(t, err)
 }
 
 func TestFlagsClient_ListContexts_FullMethod(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && r.URL.Path == "/api/v1/contexts" {
-			assert.Contains(t, r.URL.RawQuery, "filter[context_type]=user")
+			assert.Contains(t, r.URL.RawQuery, "filter%5Bcontext_type_id%5D=user")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"data":[{"id":"ctx-1","type":"context","attributes":{"key":"u1"}}]}`))
 			return
@@ -1530,6 +1459,7 @@ func TestFlagsClient_FlushContexts_FullMethod(t *testing.T) {
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &receivedPayload)
 			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -1541,6 +1471,8 @@ func TestFlagsClient_FlushContexts_FullMethod(t *testing.T) {
 	require.NotNil(t, receivedPayload)
 	contexts := receivedPayload["contexts"].([]interface{})
 	assert.Len(t, contexts, 1)
+	item := contexts[0].(map[string]interface{})
+	assert.Equal(t, "user:u1", item["id"])
 }
 
 // --- fetchAllFlags / fetchFlagsList ---
@@ -1737,21 +1669,6 @@ func TestFlag_AddRule_MissingEnvironment(t *testing.T) {
 	assert.Contains(t, err.Error(), "environment")
 }
 
-// --- doJSONWithBase error paths ---
-
-func TestDoJSONWithBase_NetworkError(t *testing.T) {
-	httpClient := &http.Client{Transport: &failingTransport{}}
-	c := &Client{
-		apiKey:     "sk_test",
-		baseURL:    "http://localhost:1",
-		httpClient: httpClient,
-	}
-	fc := &FlagsClient{client: c}
-
-	_, _, err := fc.doJSONWithBase(context.Background(), "GET", "http://localhost:1/api/v1/test", nil)
-	assert.Error(t, err)
-}
-
 type failingTransport struct{}
 
 func (t *failingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -1832,6 +1749,7 @@ func TestFlagsClient_FlushContexts_Lifecycle(t *testing.T) {
 		if r.Method == "POST" && r.URL.Path == "/api/v1/contexts/bulk" {
 			received = true
 			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -1839,11 +1757,9 @@ func TestFlagsClient_FlushContexts_Lifecycle(t *testing.T) {
 	}))
 
 	fc.Register(context.Background(), Context{Type: "user", Key: "u1"})
-	// Use the direct doJSONWithBase to route through test server
 	batch := fc.runtime.contextBuffer.drain()
 	if len(batch) > 0 {
-		_, _, _ = fc.doJSONWithBase(context.Background(), "POST", fc.client.baseURL+"/api/v1/contexts/bulk",
-			map[string]interface{}{"contexts": batch})
+		fc.flushContexts(context.Background(), batch)
 	}
 	assert.True(t, received)
 }
@@ -2643,12 +2559,23 @@ func newFlagsClientWithTransport(t *testing.T, transport http.RoundTripper) *Fla
 		flagsHeaderEditor,
 	)
 
+	appHeaderEditor := genapp.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genAppClient, _ := genapp.NewClient("http://localhost:1",
+		genapp.WithHTTPClient(httpClient),
+		appHeaderEditor,
+	)
+
 	c := &Client{
-		apiKey:     "sk_test",
-		baseURL:    "http://localhost:1",
-		httpClient: httpClient,
+		apiKey:       "sk_test",
+		baseURL:      "http://localhost:1",
+		httpClient:   httpClient,
+		appGenerated: genAppClient,
 	}
-	fc := &FlagsClient{client: c, generated: genFlagsClient}
+	fc := &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	fc.runtime = newFlagsRuntime(fc)
 	return fc
 }
@@ -2735,32 +2662,7 @@ func TestFlagsClient_FetchFlagsList_ReadBodyError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- doJSONWithBase error paths ---
-
-func TestDoJSONWithBase_MarshalError(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	// channels cannot be marshaled to JSON
-	_, _, err := fc.doJSONWithBase(context.Background(), "POST", "http://localhost:1/test", map[string]interface{}{
-		"bad": make(chan int),
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "marshal")
-}
-
-func TestDoJSONWithBase_InvalidURL(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	// Invalid method triggers NewRequestWithContext error
-	_, _, err := fc.doJSONWithBase(context.Background(), "INVALID METHOD WITH SPACE", "http://localhost:1/test", nil)
-	assert.Error(t, err)
-}
-
-func TestDoJSONWithBase_ReadBodyError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, _, err := fc.doJSONWithBase(context.Background(), "GET", "http://localhost:1/test", nil)
-	assert.Error(t, err)
-}
-
-// --- Context management doJSONApp error paths ---
+// --- Context management error paths (via generated app client) ---
 
 func TestFlagsClient_CreateContextType_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
@@ -2770,8 +2672,15 @@ func TestFlagsClient_CreateContextType_NetworkError(t *testing.T) {
 
 func TestFlagsClient_UpdateContextType_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.UpdateContextType(context.Background(), "ct-1", map[string]interface{}{})
+	_, err := fc.UpdateContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001", map[string]interface{}{})
 	assert.Error(t, err)
+}
+
+func TestFlagsClient_UpdateContextType_InvalidUUID(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	_, err := fc.UpdateContextType(context.Background(), "not-a-uuid", map[string]interface{}{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid context type ID")
 }
 
 func TestFlagsClient_ListContextTypes_NetworkError(t *testing.T) {
@@ -2780,21 +2689,17 @@ func TestFlagsClient_ListContextTypes_NetworkError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestFlagsClient_ListContextTypes_InvalidItem(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		// Valid outer JSON array, but item is a string not an object — parseContextTypeRaw will fail
-		_, _ = w.Write([]byte(`{"data":["not an object"]}`))
-	}))
-
-	_, err := fc.ListContextTypes(context.Background())
+func TestFlagsClient_DeleteContextType_NetworkError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &failingTransport{})
+	err := fc.DeleteContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001")
 	assert.Error(t, err)
 }
 
-func TestFlagsClient_DeleteContextType_NetworkError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	err := fc.DeleteContextType(context.Background(), "ct-1")
+func TestFlagsClient_DeleteContextType_InvalidUUID(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	err := fc.DeleteContextType(context.Background(), "not-a-uuid")
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid context type ID")
 }
 
 func TestFlagsClient_ListContexts_NetworkError(t *testing.T) {

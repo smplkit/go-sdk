@@ -1,23 +1,23 @@
 package smplkit
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 
 	"github.com/google/uuid"
 
+	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
 )
 
 // FlagsClient provides management and runtime operations for flag resources.
 // Obtain one via Client.Flags().
 type FlagsClient struct {
-	client    *Client
-	generated genflags.ClientInterface
+	client       *Client
+	generated    genflags.ClientInterface
+	appGenerated genapp.ClientInterface
 
 	runtime *FlagsRuntime
 }
@@ -192,22 +192,27 @@ func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag, params UpdateF
 	return resourceToFlag(result.Data, c), nil
 }
 
-// Context type management — direct HTTP calls (no generated client for these endpoints).
+// Context type management — via generated app client.
 
 // CreateContextType creates a new context type.
 func (c *FlagsClient) CreateContextType(ctx context.Context, key string, name string) (*ContextType, error) {
-	payload := map[string]interface{}{
-		"data": map[string]interface{}{
-			"type": "context_type",
-			"attributes": map[string]interface{}{
-				"key":  key,
-				"name": name,
-			},
+	reqBody := genapp.ContextTypeResponse{
+		Data: genapp.ContextTypeResource{
+			Type:       "context_type",
+			Attributes: genapp.ContextType{Key: key, Name: name},
 		},
 	}
-	body, resp, err := c.doJSONApp(ctx, "POST", "/api/v1/context_types", payload)
+	resp, err := c.appGenerated.CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
-		return nil, err
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -217,17 +222,27 @@ func (c *FlagsClient) CreateContextType(ctx context.Context, key string, name st
 
 // UpdateContextType updates a context type's attributes.
 func (c *FlagsClient) UpdateContextType(ctx context.Context, ctID string, attributes map[string]interface{}) (*ContextType, error) {
-	payload := map[string]interface{}{
-		"data": map[string]interface{}{
-			"type": "context_type",
-			"attributes": map[string]interface{}{
-				"attributes": attributes,
-			},
+	uid, err := uuid.Parse(ctID)
+	if err != nil {
+		return nil, fmt.Errorf("smplkit: invalid context type ID %q: %w", ctID, err)
+	}
+	reqBody := genapp.ContextTypeResponse{
+		Data: genapp.ContextTypeResource{
+			Type:       "context_type",
+			Attributes: genapp.ContextType{Attributes: &attributes},
 		},
 	}
-	body, resp, err := c.doJSONApp(ctx, "PUT", "/api/v1/context_types/"+ctID, payload)
+	resp, err := c.appGenerated.UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, uid, reqBody)
 	if err != nil {
-		return nil, err
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -237,26 +252,38 @@ func (c *FlagsClient) UpdateContextType(ctx context.Context, ctID string, attrib
 
 // ListContextTypes lists all context types.
 func (c *FlagsClient) ListContextTypes(ctx context.Context) ([]*ContextType, error) {
-	body, resp, err := c.doJSONApp(ctx, "GET", "/api/v1/context_types", nil)
+	resp, err := c.appGenerated.ListContextTypes(ctx)
 	if err != nil {
-		return nil, err
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
 	}
 
-	var result struct {
-		Data []json.RawMessage `json:"data"`
-	}
+	var result genapp.ContextTypeListResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 
 	types := make([]*ContextType, 0, len(result.Data))
-	for _, raw := range result.Data {
-		ct, err := parseContextTypeRaw(raw)
-		if err != nil {
-			return nil, err
+	for _, r := range result.Data {
+		ct := &ContextType{
+			Key:  r.Attributes.Key,
+			Name: r.Attributes.Name,
+		}
+		if r.Id != nil {
+			ct.ID = *r.Id
+		}
+		if r.Attributes.Attributes != nil {
+			ct.Attributes = *r.Attributes.Attributes
 		}
 		types = append(types, ct)
 	}
@@ -265,18 +292,41 @@ func (c *FlagsClient) ListContextTypes(ctx context.Context) ([]*ContextType, err
 
 // DeleteContextType deletes a context type by its UUID.
 func (c *FlagsClient) DeleteContextType(ctx context.Context, ctID string) error {
-	body, resp, err := c.doJSONApp(ctx, "DELETE", "/api/v1/context_types/"+ctID, nil)
+	uid, err := uuid.Parse(ctID)
 	if err != nil {
-		return err
+		return fmt.Errorf("smplkit: invalid context type ID %q: %w", ctID, err)
+	}
+	resp, err := c.appGenerated.DeleteContextType(ctx, uid)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
 	}
 	return checkStatus(resp.StatusCode, body)
 }
 
 // ListContexts lists context instances filtered by context type key.
 func (c *FlagsClient) ListContexts(ctx context.Context, contextTypeKey string) ([]map[string]interface{}, error) {
-	body, resp, err := c.doJSONApp(ctx, "GET", "/api/v1/contexts?filter[context_type]="+contextTypeKey, nil)
+	params := &genapp.ListContextsParams{
+		FilterContextTypeId: &contextTypeKey,
+	}
+	resp, err := c.appGenerated.ListContexts(ctx, params)
 	if err != nil {
-		return nil, err
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -289,62 +339,6 @@ func (c *FlagsClient) ListContexts(ctx context.Context, contextTypeKey string) (
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 	return result.Data, nil
-}
-
-// --- Helpers ---
-
-// doJSONApp performs a JSON HTTP request against the app base URL.
-// Used for context-related endpoints that are served by the app service.
-func (c *FlagsClient) doJSONApp(ctx context.Context, method, path string, payload interface{}) ([]byte, *http.Response, error) {
-	baseURL := appServiceBaseURL(c.client.baseURL)
-	return c.doJSONWithBase(ctx, method, baseURL+path, payload)
-}
-
-// doJSONWithBase performs a JSON HTTP request against the given full URL.
-func (c *FlagsClient) doJSONWithBase(ctx context.Context, method, u string, payload interface{}) ([]byte, *http.Response, error) {
-
-	var bodyReader io.Reader
-	if payload != nil {
-		b, err := json.Marshal(payload)
-		if err != nil {
-			return nil, nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
-		}
-		bodyReader = bytes.NewReader(b)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
-	if err != nil {
-		return nil, nil, classifyError(err)
-	}
-	req.Header.Set("Accept", "application/vnd.api+json")
-	req.Header.Set("User-Agent", userAgent)
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := c.client.httpClient.Do(req)
-	if err != nil {
-		return nil, nil, classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	return body, resp, nil
-}
-
-// appServiceBaseURL derives the app service URL from the config base URL.
-// When configBaseURL is overridden (e.g. in tests), we use it directly;
-// otherwise we return the production app URL.
-func appServiceBaseURL(configBaseURL string) string {
-	if configBaseURL != "" && configBaseURL != "https://config.smplkit.com" {
-		return configBaseURL
-	}
-	return "https://app.smplkit.com"
 }
 
 // resourceToFlag converts a generated FlagResource to the SDK Flag type.
@@ -666,9 +660,20 @@ func (c *FlagsClient) flushContexts(ctx context.Context, batch []map[string]inte
 	if len(batch) == 0 {
 		return
 	}
-	payload := map[string]interface{}{
-		"contexts": batch,
+	items := make([]genapp.ContextBulkItem, 0, len(batch))
+	for _, entry := range batch {
+		t, _ := entry["type"].(string)
+		k, _ := entry["key"].(string)
+		item := genapp.ContextBulkItem{Id: fmt.Sprintf("%s:%s", t, k)}
+		if attrs, ok := entry["attributes"].(map[string]interface{}); ok {
+			item.Attributes = &attrs
+		}
+		items = append(items, item)
 	}
+	reqBody := genapp.ContextBulkRegister{Contexts: items}
 	// Fire-and-forget — errors are silently ignored.
-	_, _, _ = c.doJSONApp(ctx, "POST", "/api/v1/contexts/bulk", payload)
+	resp, err := c.appGenerated.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	if err == nil && resp != nil {
+		resp.Body.Close()
+	}
 }
