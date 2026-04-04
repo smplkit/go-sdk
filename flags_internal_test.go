@@ -2027,7 +2027,7 @@ func TestFlagsClient_UpdateContextType_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	_, err := fc.UpdateContextType(context.Background(), "ct-1", map[string]interface{}{})
+	_, err := fc.UpdateContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001", map[string]interface{}{})
 	assert.Error(t, err)
 }
 
@@ -2057,7 +2057,7 @@ func TestFlagsClient_DeleteContextType_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	err := fc.DeleteContextType(context.Background(), "ct-1")
+	err := fc.DeleteContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001")
 	assert.Error(t, err)
 }
 
@@ -2704,6 +2704,38 @@ func TestFlagsClient_DeleteContextType_InvalidUUID(t *testing.T) {
 
 func TestFlagsClient_ListContexts_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
+	_, err := fc.ListContexts(context.Background(), "user")
+	assert.Error(t, err)
+}
+
+// --- Context management io.ReadAll error paths ---
+
+func TestFlagsClient_CreateContextType_ReadBodyError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
+	_, err := fc.CreateContextType(context.Background(), "user", "User")
+	assert.Error(t, err)
+}
+
+func TestFlagsClient_UpdateContextType_ReadBodyError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
+	_, err := fc.UpdateContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001", map[string]interface{}{})
+	assert.Error(t, err)
+}
+
+func TestFlagsClient_ListContextTypes_ReadBodyError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
+	_, err := fc.ListContextTypes(context.Background())
+	assert.Error(t, err)
+}
+
+func TestFlagsClient_DeleteContextType_ReadBodyError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
+	err := fc.DeleteContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001")
+	assert.Error(t, err)
+}
+
+func TestFlagsClient_ListContexts_ReadBodyError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
 	_, err := fc.ListContexts(context.Background(), "user")
 	assert.Error(t, err)
 }
