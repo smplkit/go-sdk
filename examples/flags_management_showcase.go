@@ -45,7 +45,7 @@ func main() {
 	// ====================================================================
 	section("1. SDK Initialization")
 
-	client, err := smplkit.NewClient(apiKey)
+	client, err := smplkit.NewClient(apiKey, "production")
 	if err != nil {
 		fatal("failed to create client", err)
 	}

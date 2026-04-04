@@ -317,7 +317,7 @@ func (h *JsonFlagHandle) GetWithContext(ctx context.Context, contexts []Context)
 
 // FlagsRuntime holds the prescriptive runtime state for the flags namespace.
 // It is created internally; access it via FlagsClient methods like BoolFlag,
-// Connect, etc.
+// Disconnect, etc.
 type FlagsRuntime struct {
 	flagsClient *FlagsClient
 
@@ -359,8 +359,8 @@ func (rt *FlagsRuntime) SetContextProvider(fn func(ctx context.Context) []Contex
 	rt.providerMu.Unlock()
 }
 
-// Connect fetches flag definitions and registers on the shared WebSocket.
-func (rt *FlagsRuntime) Connect(ctx context.Context, environment string) error {
+// connect fetches flag definitions and registers on the shared WebSocket.
+func (rt *FlagsRuntime) connect(ctx context.Context, environment string) error {
 	rt.mu.Lock()
 	rt.environment = environment
 	rt.mu.Unlock()
@@ -386,8 +386,8 @@ func (rt *FlagsRuntime) Connect(ctx context.Context, environment string) error {
 	return nil
 }
 
-// Disconnect unregisters from WebSocket, flushes contexts, and clears state.
-func (rt *FlagsRuntime) Disconnect(ctx context.Context) {
+// disconnect unregisters from WebSocket, flushes contexts, and clears state.
+func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 	if rt.wsManager != nil {
 		rt.wsManager.off("flag_changed", rt.handleFlagChanged)
 		rt.wsManager.off("flag_deleted", rt.handleFlagDeleted)

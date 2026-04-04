@@ -49,7 +49,7 @@ func main() {
 	// ====================================================================
 	section("1. SDK Initialization & Flag Setup")
 
-	client, err := smplkit.NewClient(apiKey)
+	client, err := smplkit.NewClient(apiKey, "staging")
 	if err != nil {
 		fatal("failed to create client", err)
 	}
@@ -107,7 +107,7 @@ func main() {
 	// ====================================================================
 	section("4. Connect to Runtime")
 
-	err = flags.Connect(ctx, "staging")
+	err = client.Connect(ctx)
 	if err != nil {
 		fatal("failed to connect", err)
 	}

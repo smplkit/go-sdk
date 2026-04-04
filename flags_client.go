@@ -618,12 +618,12 @@ func (c *FlagsClient) SetContextProvider(fn func(ctx context.Context) []Context)
 // connectInternal fetches flag definitions and registers on the shared WebSocket.
 // Called by Client.Connect().
 func (c *FlagsClient) connectInternal(ctx context.Context, environment string) error {
-	return c.runtime.Connect(ctx, environment)
+	return c.runtime.connect(ctx, environment)
 }
 
 // Disconnect unregisters from WebSocket, flushes contexts, and clears state.
 func (c *FlagsClient) Disconnect(ctx context.Context) {
-	c.runtime.Disconnect(ctx)
+	c.runtime.disconnect(ctx)
 }
 
 // Refresh re-fetches all flag definitions and clears cache.
