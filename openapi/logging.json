@@ -1260,8 +1260,7 @@
                 "type": "null"
               }
             ],
-            "title": "Managed",
-            "readOnly": true
+            "title": "Managed"
           },
           "sources": {
             "anyOf": [
