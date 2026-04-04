@@ -1472,7 +1472,8 @@ func TestFlagsClient_FlushContexts_FullMethod(t *testing.T) {
 	contexts := receivedPayload["contexts"].([]interface{})
 	assert.Len(t, contexts, 1)
 	item := contexts[0].(map[string]interface{})
-	assert.Equal(t, "user:u1", item["id"])
+	assert.Equal(t, "user", item["type"])
+	assert.Equal(t, "u1", item["key"])
 }
 
 // --- fetchAllFlags / fetchFlagsList ---
@@ -2490,7 +2491,7 @@ func TestFlagsRuntime_Connect_FetchError(t *testing.T) {
 func flagResource(id, flagType, key, name, vType string, dflt interface{}, desc string, created time.Time) genflags.FlagResource {
 	return genflags.FlagResource{
 		Id:   &id,
-		Type: flagType,
+		Type: genflags.FlagResourceType(flagType),
 		Attributes: genflags.Flag{
 			Key:          key,
 			Name:         name,
@@ -2507,7 +2508,7 @@ func flagResource(id, flagType, key, name, vType string, dflt interface{}, desc 
 func flagResourceNoID(key, name, vType string, dflt interface{}, created time.Time) genflags.FlagResource {
 	return genflags.FlagResource{
 		Id:   nil,
-		Type: "flag",
+		Type: genflags.FlagResourceTypeFlag,
 		Attributes: genflags.Flag{
 			Key:       key,
 			Name:      name,

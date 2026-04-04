@@ -664,7 +664,7 @@ func (c *FlagsClient) flushContexts(ctx context.Context, batch []map[string]inte
 	for _, entry := range batch {
 		t, _ := entry["type"].(string)
 		k, _ := entry["key"].(string)
-		item := genapp.ContextBulkItem{Id: fmt.Sprintf("%s:%s", t, k)}
+		item := genapp.ContextBulkItem{Type: t, Key: k}
 		if attrs, ok := entry["attributes"].(map[string]interface{}); ok {
 			item.Attributes = &attrs
 		}
