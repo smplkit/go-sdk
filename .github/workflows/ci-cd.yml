@@ -55,6 +55,12 @@ jobs:
           name: coverage
           path: coverage.out
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
