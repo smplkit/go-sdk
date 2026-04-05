@@ -1,6 +1,23 @@
 package smplkit
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
+// ErrorSource identifies the source of a JSON:API error.
+type ErrorSource struct {
+	Pointer string `json:"pointer,omitempty"`
+}
+
+// ErrorDetail holds a single JSON:API error object.
+type ErrorDetail struct {
+	Status string      `json:"status,omitempty"`
+	Title  string      `json:"title,omitempty"`
+	Detail string      `json:"detail,omitempty"`
+	Source ErrorSource `json:"source,omitempty"`
+}
 
 // SmplError is the base error type for all smplkit SDK errors.
 // All specific error types embed SmplError, so errors.As(err, &SmplError{})
@@ -9,10 +26,29 @@ type SmplError struct {
 	Message      string
 	StatusCode   int
 	ResponseBody string
+	Errors       []ErrorDetail
 }
 
 // Error implements the error interface.
+// When Errors contains parsed JSON:API details, the output includes each error
+// serialized as JSON for debugging.
 func (e *SmplError) Error() string {
+	if len(e.Errors) > 0 {
+		var b strings.Builder
+		b.WriteString(e.Message)
+		if len(e.Errors) == 1 {
+			b.WriteString("\nError: ")
+			data, _ := json.Marshal(e.Errors[0])
+			b.Write(data)
+		} else {
+			b.WriteString("\nErrors:")
+			for i, ed := range e.Errors {
+				data, _ := json.Marshal(ed)
+				b.WriteString(fmt.Sprintf("\n  [%d] %s", i, string(data)))
+			}
+		}
+		return b.String()
+	}
 	if e.StatusCode != 0 {
 		return fmt.Sprintf("%s (status %d)", e.Message, e.StatusCode)
 	}

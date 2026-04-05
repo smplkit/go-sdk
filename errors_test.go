@@ -162,3 +162,127 @@ func TestSmplNotConnectedError_ErrorAndUnwrap(t *testing.T) {
 	require.True(t, errors.As(unwrapped, &base))
 	assert.Equal(t, "not connected", base.Error())
 }
+
+func TestCheckStatus_SingleError400(t *testing.T) {
+	body := []byte(`{
+		"errors": [{
+			"status": "400",
+			"title": "Validation Error",
+			"detail": "The 'name' field is required.",
+			"source": {"pointer": "/data/attributes/name"}
+		}]
+	}`)
+
+	err := smplkit.CheckStatusForTest(400, body)
+	require.Error(t, err)
+
+	// Should be SmplValidationError.
+	var valErr *smplkit.SmplValidationError
+	require.True(t, errors.As(err, &valErr), "expected SmplValidationError")
+
+	// Message derived from first error's Detail.
+	assert.Contains(t, valErr.Message, "The 'name' field is required.")
+
+	// Errors slice has 1 element.
+	require.Len(t, valErr.Errors, 1)
+	assert.Equal(t, "400", valErr.Errors[0].Status)
+	assert.Equal(t, "Validation Error", valErr.Errors[0].Title)
+	assert.Equal(t, "The 'name' field is required.", valErr.Errors[0].Detail)
+	assert.Equal(t, "/data/attributes/name", valErr.Errors[0].Source.Pointer)
+
+	// StatusCode is 400.
+	assert.Equal(t, 400, valErr.StatusCode)
+
+	// String representation includes JSON.
+	errStr := err.Error()
+	assert.Contains(t, errStr, `"status":"400"`)
+	assert.Contains(t, errStr, `"pointer":"/data/attributes/name"`)
+}
+
+func TestCheckStatus_MultiError400(t *testing.T) {
+	body := []byte(`{
+		"errors": [
+			{
+				"status": "400",
+				"title": "Validation Error",
+				"detail": "The 'name' field is required.",
+				"source": {"pointer": "/data/attributes/name"}
+			},
+			{
+				"status": "400",
+				"title": "Validation Error",
+				"detail": "The 'id' field is required.",
+				"source": {"pointer": "/data/id"}
+			}
+		]
+	}`)
+
+	err := smplkit.CheckStatusForTest(400, body)
+	require.Error(t, err)
+
+	var valErr *smplkit.SmplValidationError
+	require.True(t, errors.As(err, &valErr))
+
+	// Message has "(and 1 more error)".
+	assert.Contains(t, valErr.Message, "(and 1 more error)")
+
+	// Errors slice has 2 elements.
+	require.Len(t, valErr.Errors, 2)
+	assert.Equal(t, "The 'name' field is required.", valErr.Errors[0].Detail)
+	assert.Equal(t, "The 'id' field is required.", valErr.Errors[1].Detail)
+
+	// String representation includes both errors.
+	errStr := err.Error()
+	assert.Contains(t, errStr, "[0]")
+	assert.Contains(t, errStr, "[1]")
+}
+
+func TestCheckStatus_404Response(t *testing.T) {
+	body := []byte(`{
+		"errors": [{
+			"status": "404",
+			"title": "Not Found",
+			"detail": "Config with key 'nonexistent' not found."
+		}]
+	}`)
+
+	err := smplkit.CheckStatusForTest(404, body)
+	require.Error(t, err)
+
+	var notFound *smplkit.SmplNotFoundError
+	require.True(t, errors.As(err, &notFound), "expected SmplNotFoundError")
+	assert.Contains(t, notFound.Message, "Config with key 'nonexistent' not found.")
+}
+
+func TestCheckStatus_409Response(t *testing.T) {
+	body := []byte(`{
+		"errors": [{
+			"status": "409",
+			"title": "Conflict",
+			"detail": "A config with this key already exists."
+		}]
+	}`)
+
+	err := smplkit.CheckStatusForTest(409, body)
+	require.Error(t, err)
+
+	var conflict *smplkit.SmplConflictError
+	require.True(t, errors.As(err, &conflict), "expected SmplConflictError")
+	assert.Contains(t, conflict.Message, "A config with this key already exists.")
+}
+
+func TestCheckStatus_NonJSON502(t *testing.T) {
+	body := []byte(`<html>Bad Gateway</html>`)
+
+	err := smplkit.CheckStatusForTest(502, body)
+	require.Error(t, err)
+
+	var base *smplkit.SmplError
+	require.True(t, errors.As(err, &base))
+
+	// Falls back to HTTP status code message.
+	assert.Contains(t, base.Message, "HTTP 502")
+
+	// Errors slice is empty (non-JSON body).
+	assert.Empty(t, base.Errors)
+}
