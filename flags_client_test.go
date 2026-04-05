@@ -42,7 +42,7 @@ func sampleFlagJSON(id, key, name, flagType string) string {
 }
 
 func TestClient_FlagsReturnsSubClient(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test")
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
 	require.NoError(t, err)
 	flags := client.Flags()
 	require.NotNil(t, flags)
@@ -67,7 +67,7 @@ func TestFlagsClient_Get(t *testing.T) {
 	// Use a client that routes flags requests to our test server.
 	// Since the flags client uses a hardcoded URL, we test via the generated client interface.
 	// Instead, let's test the Get method by constructing the client properly.
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL), smplkit.WithService("test-service"))
 	require.NoError(t, err)
 
 	// The flags client uses https://flags.smplkit.com hardcoded.
@@ -77,7 +77,7 @@ func TestFlagsClient_Get(t *testing.T) {
 }
 
 func TestFlagsClient_InvalidUUID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test")
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
 	require.NoError(t, err)
 
 	_, err = client.Flags().Get(context.Background(), "not-a-uuid")
@@ -86,7 +86,7 @@ func TestFlagsClient_InvalidUUID(t *testing.T) {
 }
 
 func TestFlagsClient_Delete_InvalidUUID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test")
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
 	require.NoError(t, err)
 
 	err = client.Flags().Delete(context.Background(), "not-a-uuid")
@@ -167,7 +167,7 @@ func TestFlagsClient_NetworkError(t *testing.T) {
 		Transport: &failTransport{},
 	}
 
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithHTTPClient(httpClient))
+	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithHTTPClient(httpClient), smplkit.WithService("test-service"))
 	require.NoError(t, err)
 
 	_, err = client.Flags().Get(context.Background(), flagUUID0)

@@ -98,6 +98,7 @@ func connectClient(t *testing.T, server *httptest.Server) *smplkit.Client {
 	t.Helper()
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL(server.URL),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
@@ -184,6 +185,7 @@ func TestTypedAccessors_GetBool(t *testing.T) {
 func TestTypedAccessors_NotConnected(t *testing.T) {
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL("http://localhost:0"),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
@@ -241,6 +243,7 @@ func TestRefresh_UpdatesCache(t *testing.T) {
 
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL(server.URL),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 	require.NoError(t, client.Connect(context.Background()))
@@ -289,6 +292,7 @@ func TestRefresh_ListError(t *testing.T) {
 
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL(server.URL),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 	require.NoError(t, client.Connect(context.Background()))
@@ -333,6 +337,7 @@ func TestRefresh_FetchChainError(t *testing.T) {
 
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL(server.URL),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 	require.NoError(t, client.Connect(context.Background()))
@@ -344,6 +349,7 @@ func TestRefresh_FetchChainError(t *testing.T) {
 func TestRefresh_NotConnected(t *testing.T) {
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL("http://localhost:0"),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
@@ -395,6 +401,7 @@ func TestOnChange_FiresOnRefresh(t *testing.T) {
 
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL(server.URL),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 	require.NoError(t, client.Connect(context.Background()))
@@ -459,6 +466,7 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL(server.URL),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 	require.NoError(t, client.Connect(context.Background()))
@@ -481,6 +489,7 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 func TestSingletonAccessor(t *testing.T) {
 	client, err := smplkit.NewClient("sk_api_test", "production",
 		smplkit.WithBaseURL("http://localhost:0"),
+		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 

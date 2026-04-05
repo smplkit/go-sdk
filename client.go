@@ -49,11 +49,7 @@ type Client struct {
 // Use ClientOption functions to customize the base URL, timeout, HTTP client,
 // or service name.
 func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client, error) {
-	resolved, err := resolveAPIKey(apiKey)
-	if err != nil {
-		return nil, err
-	}
-
+	// 1. Resolve environment first.
 	resolvedEnv := environment
 	if resolvedEnv == "" {
 		resolvedEnv = os.Getenv("SMPLKIT_ENVIRONMENT")
@@ -66,6 +62,7 @@ func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client
 		}
 	}
 
+	// 2. Resolve service second.
 	cfg := defaultConfig()
 	for _, opt := range opts {
 		opt(&cfg)
@@ -74,6 +71,19 @@ func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client
 	resolvedService := cfg.service
 	if resolvedService == "" {
 		resolvedService = os.Getenv("SMPLKIT_SERVICE")
+	}
+	if resolvedService == "" {
+		return nil, &SmplError{
+			Message: "No service provided. Set one of:\n" +
+				"  1. Use WithService(\"my-service\")\n" +
+				"  2. Set the SMPLKIT_SERVICE environment variable",
+		}
+	}
+
+	// 3. Resolve API key last (receives the already-resolved environment).
+	resolved, err := resolveAPIKey(apiKey, resolvedEnv)
+	if err != nil {
+		return nil, err
 	}
 
 	var httpClient *http.Client
@@ -154,7 +164,7 @@ func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client
 // Environment returns the resolved environment name.
 func (c *Client) Environment() string { return c.environment }
 
-// Service returns the resolved service name, or empty string if not set.
+// Service returns the resolved service name.
 func (c *Client) Service() string { return c.service }
 
 // Config returns the sub-client for config management operations.
@@ -169,7 +179,7 @@ func (c *Client) Flags() *FlagsClient {
 
 // Connect connects to the smplkit platform: fetches initial flag and config
 // data, opens the shared WebSocket, and registers the service as a context
-// instance (if provided).
+// instance.
 //
 // This method is idempotent — calling it multiple times is safe.
 func (c *Client) Connect(ctx context.Context) error {
@@ -177,10 +187,8 @@ func (c *Client) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	// Register service context (fire-and-forget)
-	if c.service != "" {
-		c.registerServiceContext(ctx)
-	}
+	// Register service context (fire-and-forget).
+	c.registerServiceContext(ctx)
 
 	// Connect flags (fetch definitions, register WS listeners)
 	if err := c.flags.connectInternal(ctx, c.environment); err != nil {

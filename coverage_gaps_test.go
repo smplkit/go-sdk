@@ -86,7 +86,7 @@ func TestConnect_FlagsConnectInternalError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	c := newTestFullClient(t, server, "")
+	c := newTestFullClient(t, server, "test-service")
 	err := c.Connect(context.Background())
 	require.Error(t, err)
 	assert.False(t, c.connected)
@@ -112,7 +112,7 @@ func TestConnect_ConfigConnectInternalError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	c := newTestFullClient(t, server, "")
+	c := newTestFullClient(t, server, "test-service")
 	err := c.Connect(context.Background())
 	require.Error(t, err)
 	assert.False(t, c.connected)
@@ -180,7 +180,7 @@ func TestConfigClient_ConnectInternal_FetchChainError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	c := newTestFullClient(t, server, "")
+	c := newTestFullClient(t, server, "test-service")
 	err := c.config.connectInternal(context.Background(), "test")
 	require.Error(t, err)
 	assert.Greater(t, callCount, 0)
