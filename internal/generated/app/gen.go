@@ -175,6 +175,21 @@ func (e ServiceResourceType) Valid() bool {
 	}
 }
 
+// Defines values for ShowcaseAccountResourceType.
+const (
+	ShowcaseAccountResourceTypeShowcaseAccount ShowcaseAccountResourceType = "showcase_account"
+)
+
+// Valid indicates whether the value is a known member of the ShowcaseAccountResourceType enum.
+func (e ShowcaseAccountResourceType) Valid() bool {
+	switch e {
+	case ShowcaseAccountResourceTypeShowcaseAccount:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UserResourceType.
 const (
 	UserResourceTypeUser UserResourceType = "user"
@@ -192,8 +207,10 @@ func (e UserResourceType) Valid() bool {
 
 // Account defines model for Account.
 type Account struct {
+	AccountType       *string    `json:"account_type,omitempty"`
 	CreatedAt         *time.Time `json:"created_at,omitempty"`
 	DeletedAt         *time.Time `json:"deleted_at,omitempty"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
 	HasStripeCustomer *bool      `json:"has_stripe_customer,omitempty"`
 	Key               string     `json:"key"`
 	Name              string     `json:"name"`
@@ -531,6 +548,31 @@ type ServiceResourceType string
 // ServiceResponse defines model for ServiceResponse.
 type ServiceResponse struct {
 	Data ServiceResource `json:"data"`
+}
+
+// ShowcaseAccount defines model for ShowcaseAccount.
+type ShowcaseAccount struct {
+	AccountType *string    `json:"account_type,omitempty"`
+	ApiKey      *string    `json:"api_key,omitempty"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	Key         *string    `json:"key,omitempty"`
+	Name        *string    `json:"name,omitempty"`
+}
+
+// ShowcaseAccountResource defines model for ShowcaseAccountResource.
+type ShowcaseAccountResource struct {
+	Attributes ShowcaseAccount             `json:"attributes"`
+	Id         *string                     `json:"id,omitempty"`
+	Type       ShowcaseAccountResourceType `json:"type"`
+}
+
+// ShowcaseAccountResourceType defines model for ShowcaseAccountResource.Type.
+type ShowcaseAccountResourceType string
+
+// ShowcaseAccountResponse defines model for ShowcaseAccountResponse.
+type ShowcaseAccountResponse struct {
+	Data ShowcaseAccountResource `json:"data"`
 }
 
 // User defines model for User.
@@ -879,6 +921,9 @@ type ClientInterface interface {
 	UpdateServiceWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateShowcaseAccount request
+	CreateShowcaseAccount(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListUsers request
 	ListUsers(ctx context.Context, params *ListUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1517,6 +1562,18 @@ func (c *Client) UpdateServiceWithBody(ctx context.Context, id openapi_types.UUI
 
 func (c *Client) UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateServiceRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateShowcaseAccount(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateShowcaseAccountRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -3214,6 +3271,33 @@ func NewUpdateServiceRequestWithBody(server string, id openapi_types.UUID, conte
 	return req, nil
 }
 
+// NewCreateShowcaseAccountRequest generates requests for CreateShowcaseAccount
+func NewCreateShowcaseAccountRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/showcase_accounts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListUsersRequest generates requests for ListUsers
 func NewListUsersRequest(server string, params *ListUsersParams) (*http.Request, error) {
 	var err error
@@ -3630,6 +3714,9 @@ type ClientWithResponsesInterface interface {
 	UpdateServiceWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
 
 	UpdateServiceWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
+
+	// CreateShowcaseAccountWithResponse request
+	CreateShowcaseAccountWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*CreateShowcaseAccountResponse, error)
 
 	// ListUsersWithResponse request
 	ListUsersWithResponse(ctx context.Context, params *ListUsersParams, reqEditors ...RequestEditorFn) (*ListUsersResponse, error)
@@ -4662,6 +4749,32 @@ func (r UpdateServiceResponse) StatusCode() int {
 	return 0
 }
 
+type CreateShowcaseAccountResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *ShowcaseAccountResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateShowcaseAccountResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateShowcaseAccountResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListUsersResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -5270,6 +5383,15 @@ func (c *ClientWithResponses) UpdateServiceWithApplicationVndAPIPlusJSONBodyWith
 		return nil, err
 	}
 	return ParseUpdateServiceResponse(rsp)
+}
+
+// CreateShowcaseAccountWithResponse request returning *CreateShowcaseAccountResponse
+func (c *ClientWithResponses) CreateShowcaseAccountWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*CreateShowcaseAccountResponse, error) {
+	rsp, err := c.CreateShowcaseAccount(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateShowcaseAccountResponse(rsp)
 }
 
 // ListUsersWithResponse request returning *ListUsersResponse
@@ -7372,6 +7494,60 @@ func ParseUpdateServiceResponse(rsp *http.Response) (*UpdateServiceResponse, err
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateShowcaseAccountResponse parses an HTTP response from a CreateShowcaseAccountWithResponse call
+func ParseCreateShowcaseAccountResponse(rsp *http.Response) (*CreateShowcaseAccountResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateShowcaseAccountResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ShowcaseAccountResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorResponse

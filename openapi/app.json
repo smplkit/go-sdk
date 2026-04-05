@@ -2594,6 +2594,68 @@
         }
       }
     },
+    "/api/v1/showcase_accounts": {
+      "post": {
+        "tags": [
+          "Showcase"
+        ],
+        "summary": "Create Showcase Account",
+        "description": "Creates an ephemeral showcase account with a 60-second TTL for SDK demonstrations.",
+        "operationId": "create_showcase_account",
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShowcaseAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/invitations": {
       "post": {
         "tags": [
@@ -3427,6 +3489,19 @@
             "type": "boolean",
             "title": "Has Stripe Customer",
             "default": false,
+            "readOnly": true
+          },
+          "account_type": {
+            "type": "string",
+            "nullable": true,
+            "title": "Account Type",
+            "readOnly": true
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Expires At",
             "readOnly": true
           },
           "created_at": {
@@ -4659,6 +4734,107 @@
         ],
         "title": "ServiceListResponse"
       },
+      "ShowcaseAccount": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "",
+            "readOnly": true
+          },
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "default": "",
+            "readOnly": true
+          },
+          "account_type": {
+            "type": "string",
+            "title": "Account Type",
+            "default": "SHOWCASE",
+            "readOnly": true
+          },
+          "api_key": {
+            "type": "string",
+            "title": "Api Key",
+            "default": "",
+            "readOnly": true
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Expires At",
+            "readOnly": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Created At",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "title": "ShowcaseAccount",
+        "example": {
+          "account_type": "SHOWCASE",
+          "api_key": "sk_api_...",
+          "created_at": "2026-04-05T14:00:00Z",
+          "expires_at": "2026-04-05T14:01:00Z",
+          "key": "showcase-a1b2c3d4",
+          "name": "Showcase"
+        }
+      },
+      "ShowcaseAccountResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "showcase_account"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/ShowcaseAccount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "ShowcaseAccountResource",
+        "example": {
+          "attributes": {
+            "account_type": "SHOWCASE",
+            "api_key": "sk_api_...",
+            "created_at": "2026-04-05T14:00:00Z",
+            "expires_at": "2026-04-05T14:01:00Z",
+            "key": "showcase-a1b2c3d4",
+            "name": "Showcase"
+          },
+          "id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+          "type": "showcase_account"
+        }
+      },
+      "ShowcaseAccountResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ShowcaseAccountResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ShowcaseAccountResponse"
+      },
       "User": {
         "properties": {
           "email": {
@@ -4784,6 +4960,9 @@
     },
     {
       "name": "Services"
+    },
+    {
+      "name": "Showcase"
     },
     {
       "name": "Users"
