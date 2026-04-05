@@ -7,7 +7,9 @@ Runnable examples demonstrating the [smplkit Go SDK](https://github.com/smplkit/
 ## Prerequisites
 
 1. Go 1.24+
-2. A valid smplkit API key (create one in the [smplkit console](https://app.smplkit.com)).
+2. A valid smplkit API key, provided via one of:
+   - `SMPLKIT_API_KEY` environment variable
+   - `~/.smplkit` configuration file (see SDK docs)
 3. At least one config created in your smplkit account (every account comes with a `common` config by default).
 
 ## Config Showcase
@@ -16,7 +18,7 @@ Runnable examples demonstrating the [smplkit Go SDK](https://github.com/smplkit/
 
 An end-to-end walkthrough of the Smpl Config SDK covering:
 
-- **Client initialization** — `smplkit.NewClient(apiKey)`
+- **Client initialization** — `smplkit.NewClient("", "production", smplkit.WithService("showcase-service"))`
 - **Management-plane CRUD** — create, update, list, get by key, and delete configs
 - **Environment overrides** — `SetValues()` and `SetValue()` for per-environment configuration
 - **Multi-level inheritance** — child → parent → common hierarchy setup
@@ -27,7 +29,6 @@ An end-to-end walkthrough of the Smpl Config SDK covering:
 ### Running
 
 ```bash
-export SMPLKIT_API_KEY="sk_api_..."
 go run examples/config_showcase.go
 ```
 

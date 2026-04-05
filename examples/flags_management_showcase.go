@@ -14,8 +14,11 @@
 //   - Cleanup
 //
 // Prerequisites:
-//
-//	export SMPLKIT_API_KEY="sk_api_..."
+//   - go get github.com/smplkit/go-sdk
+//   - A valid smplkit API key, provided via one of:
+//       - SMPLKIT_API_KEY environment variable
+//       - ~/.smplkit configuration file (see SDK docs)
+//   - The smplkit flags service running and reachable
 //
 // Usage:
 //
@@ -25,7 +28,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	smplkit "github.com/smplkit/go-sdk"
 )
@@ -33,19 +35,28 @@ import (
 func main() {
 	ctx := context.Background()
 
-	apiKey := os.Getenv("SMPLKIT_API_KEY")
-	if apiKey == "" {
-		fmt.Fprintln(os.Stderr, "ERROR: Set the SMPLKIT_API_KEY environment variable before running.")
-		fmt.Fprintln(os.Stderr, `  export SMPLKIT_API_KEY="sk_api_..."`)
-		os.Exit(1)
-	}
-
 	// ====================================================================
 	// 1. SDK INITIALIZATION
 	// ====================================================================
 	section("1. SDK Initialization")
 
-	client, err := smplkit.NewClient(apiKey, "production")
+	// The SmplClient constructor resolves three required parameters:
+	//
+	//   apiKey       — passed as "" here; resolved automatically from the
+	//                  SMPLKIT_API_KEY environment variable or the
+	//                  ~/.smplkit configuration file.
+	//
+	//   environment  — the target environment. Falls back to
+	//                  SMPLKIT_ENVIRONMENT if empty.
+	//
+	//   service      — identifies this SDK instance. Can also be resolved
+	//                  from SMPLKIT_SERVICE if not passed via WithService().
+	//
+	// To pass the API key explicitly, pass it as the first arg:
+	//
+	//   client, err := smplkit.NewClient("sk_api_...", "production", smplkit.WithService("showcase-service"))
+	//
+	client, err := smplkit.NewClient("", "production", smplkit.WithService("showcase-service"))
 	if err != nil {
 		fatal("failed to create client", err)
 	}
