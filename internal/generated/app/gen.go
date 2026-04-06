@@ -349,11 +349,11 @@ type ContextTypeResponse struct {
 
 // Environment defines model for Environment.
 type Environment struct {
-	Color     *string    `json:"color,omitempty"`
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-	Key       *string    `json:"key,omitempty"`
-	Name      string     `json:"name"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	Classification *string    `json:"classification,omitempty"`
+	Color          *string    `json:"color,omitempty"`
+	CreatedAt      *time.Time `json:"created_at,omitempty"`
+	Name           string     `json:"name"`
+	UpdatedAt      *time.Time `json:"updated_at,omitempty"`
 }
 
 // EnvironmentListResponse defines model for EnvironmentListResponse.
@@ -829,15 +829,15 @@ type ClientInterface interface {
 	CreateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteEnvironment request
-	DeleteEnvironment(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteEnvironment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEnvironment request
-	GetEnvironment(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetEnvironment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateEnvironmentWithBody request with any body
-	UpdateEnvironmentWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateEnvironmentWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListInvitations request
 	ListInvitations(ctx context.Context, params *ListInvitationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1300,7 +1300,7 @@ func (c *Client) CreateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteEnvironment(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteEnvironment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteEnvironmentRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1312,7 +1312,7 @@ func (c *Client) DeleteEnvironment(ctx context.Context, id openapi_types.UUID, r
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetEnvironment(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetEnvironment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetEnvironmentRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1324,7 +1324,7 @@ func (c *Client) GetEnvironment(ctx context.Context, id openapi_types.UUID, reqE
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateEnvironmentWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateEnvironmentWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateEnvironmentRequestWithBody(c.Server, id, contentType, body)
 	if err != nil {
 		return nil, err
@@ -1336,7 +1336,7 @@ func (c *Client) UpdateEnvironmentWithBody(ctx context.Context, id openapi_types
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateEnvironmentRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
 	if err != nil {
 		return nil, err
@@ -2641,12 +2641,12 @@ func NewCreateEnvironmentRequestWithBody(server string, contentType string, body
 }
 
 // NewDeleteEnvironmentRequest generates requests for DeleteEnvironment
-func NewDeleteEnvironmentRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteEnvironmentRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2675,12 +2675,12 @@ func NewDeleteEnvironmentRequest(server string, id openapi_types.UUID) (*http.Re
 }
 
 // NewGetEnvironmentRequest generates requests for GetEnvironment
-func NewGetEnvironmentRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetEnvironmentRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2709,7 +2709,7 @@ func NewGetEnvironmentRequest(server string, id openapi_types.UUID) (*http.Reque
 }
 
 // NewUpdateEnvironmentRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateEnvironment builder with application/vnd.api+json body
-func NewUpdateEnvironmentRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+func NewUpdateEnvironmentRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -2720,12 +2720,12 @@ func NewUpdateEnvironmentRequestWithApplicationVndAPIPlusJSONBody(server string,
 }
 
 // NewUpdateEnvironmentRequestWithBody generates requests for UpdateEnvironment with any type of body
-func NewUpdateEnvironmentRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateEnvironmentRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -3580,15 +3580,15 @@ type ClientWithResponsesInterface interface {
 	CreateEnvironmentWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error)
 
 	// DeleteEnvironmentWithResponse request
-	DeleteEnvironmentWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteEnvironmentResponse, error)
+	DeleteEnvironmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteEnvironmentResponse, error)
 
 	// GetEnvironmentWithResponse request
-	GetEnvironmentWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetEnvironmentResponse, error)
+	GetEnvironmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetEnvironmentResponse, error)
 
 	// UpdateEnvironmentWithBodyWithResponse request with any body
-	UpdateEnvironmentWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error)
+	UpdateEnvironmentWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error)
 
-	UpdateEnvironmentWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error)
+	UpdateEnvironmentWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error)
 
 	// ListInvitationsWithResponse request
 	ListInvitationsWithResponse(ctx context.Context, params *ListInvitationsParams, reqEditors ...RequestEditorFn) (*ListInvitationsResponse, error)
@@ -5107,7 +5107,7 @@ func (c *ClientWithResponses) CreateEnvironmentWithApplicationVndAPIPlusJSONBody
 }
 
 // DeleteEnvironmentWithResponse request returning *DeleteEnvironmentResponse
-func (c *ClientWithResponses) DeleteEnvironmentWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteEnvironmentResponse, error) {
+func (c *ClientWithResponses) DeleteEnvironmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteEnvironmentResponse, error) {
 	rsp, err := c.DeleteEnvironment(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5116,7 +5116,7 @@ func (c *ClientWithResponses) DeleteEnvironmentWithResponse(ctx context.Context,
 }
 
 // GetEnvironmentWithResponse request returning *GetEnvironmentResponse
-func (c *ClientWithResponses) GetEnvironmentWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetEnvironmentResponse, error) {
+func (c *ClientWithResponses) GetEnvironmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetEnvironmentResponse, error) {
 	rsp, err := c.GetEnvironment(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5125,7 +5125,7 @@ func (c *ClientWithResponses) GetEnvironmentWithResponse(ctx context.Context, id
 }
 
 // UpdateEnvironmentWithBodyWithResponse request with arbitrary body returning *UpdateEnvironmentResponse
-func (c *ClientWithResponses) UpdateEnvironmentWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error) {
+func (c *ClientWithResponses) UpdateEnvironmentWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error) {
 	rsp, err := c.UpdateEnvironmentWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5133,7 +5133,7 @@ func (c *ClientWithResponses) UpdateEnvironmentWithBodyWithResponse(ctx context.
 	return ParseUpdateEnvironmentResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateEnvironmentWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error) {
+func (c *ClientWithResponses) UpdateEnvironmentWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error) {
 	rsp, err := c.UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
