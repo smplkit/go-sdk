@@ -2377,7 +2377,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -2453,7 +2452,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -2539,7 +2537,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -4534,11 +4531,10 @@
         "example": {
           "attributes": {
             "created_at": "2026-03-20T11:02:16.616Z",
-            "key": "user_service",
             "name": "User Service",
             "updated_at": "2026-03-20T11:02:16.616Z"
           },
-          "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+          "id": "user_service",
           "type": "service"
         }
       },
@@ -4612,13 +4608,6 @@
             "maxLength": 255,
             "title": "Name"
           },
-          "key": {
-            "type": "string",
-            "maxLength": 64,
-            "nullable": true,
-            "title": "Key",
-            "x-immutable": true
-          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -4641,7 +4630,6 @@
         "title": "Service",
         "example": {
           "created_at": "2026-03-20T11:02:16.616Z",
-          "key": "user_service",
           "name": "User Service",
           "updated_at": "2026-03-20T11:02:16.616Z"
         }
