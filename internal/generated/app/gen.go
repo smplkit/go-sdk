@@ -509,7 +509,6 @@ type RegisterRequest struct {
 // Service defines model for Service.
 type Service struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
-	Key       *string    `json:"key,omitempty"`
 	Name      string     `json:"name"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
@@ -871,15 +870,15 @@ type ClientInterface interface {
 	CreateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteService request
-	DeleteService(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteService(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetService request
-	GetService(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetService(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateServiceWithBody request with any body
-	UpdateServiceWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateServiceWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListUsers request
 	ListUsers(ctx context.Context, params *ListUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1480,7 +1479,7 @@ func (c *Client) CreateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteService(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteService(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteServiceRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1492,7 +1491,7 @@ func (c *Client) DeleteService(ctx context.Context, id openapi_types.UUID, reqEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetService(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetService(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetServiceRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1504,7 +1503,7 @@ func (c *Client) GetService(ctx context.Context, id openapi_types.UUID, reqEdito
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateServiceWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateServiceWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateServiceRequestWithBody(c.Server, id, contentType, body)
 	if err != nil {
 		return nil, err
@@ -1516,7 +1515,7 @@ func (c *Client) UpdateServiceWithBody(ctx context.Context, id openapi_types.UUI
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateServiceRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
 	if err != nil {
 		return nil, err
@@ -3101,12 +3100,12 @@ func NewCreateServiceRequestWithBody(server string, contentType string, body io.
 }
 
 // NewDeleteServiceRequest generates requests for DeleteService
-func NewDeleteServiceRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteServiceRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -3135,12 +3134,12 @@ func NewDeleteServiceRequest(server string, id openapi_types.UUID) (*http.Reques
 }
 
 // NewGetServiceRequest generates requests for GetService
-func NewGetServiceRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetServiceRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -3169,7 +3168,7 @@ func NewGetServiceRequest(server string, id openapi_types.UUID) (*http.Request, 
 }
 
 // NewUpdateServiceRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateService builder with application/vnd.api+json body
-func NewUpdateServiceRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, body UpdateServiceApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+func NewUpdateServiceRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -3180,12 +3179,12 @@ func NewUpdateServiceRequestWithApplicationVndAPIPlusJSONBody(server string, id 
 }
 
 // NewUpdateServiceRequestWithBody generates requests for UpdateService with any type of body
-func NewUpdateServiceRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateServiceRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -3622,15 +3621,15 @@ type ClientWithResponsesInterface interface {
 	CreateServiceWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateServiceResponse, error)
 
 	// DeleteServiceWithResponse request
-	DeleteServiceWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteServiceResponse, error)
+	DeleteServiceWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteServiceResponse, error)
 
 	// GetServiceWithResponse request
-	GetServiceWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetServiceResponse, error)
+	GetServiceWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetServiceResponse, error)
 
 	// UpdateServiceWithBodyWithResponse request with any body
-	UpdateServiceWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
+	UpdateServiceWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
 
-	UpdateServiceWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
+	UpdateServiceWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
 
 	// ListUsersWithResponse request
 	ListUsersWithResponse(ctx context.Context, params *ListUsersParams, reqEditors ...RequestEditorFn) (*ListUsersResponse, error)
@@ -5239,7 +5238,7 @@ func (c *ClientWithResponses) CreateServiceWithApplicationVndAPIPlusJSONBodyWith
 }
 
 // DeleteServiceWithResponse request returning *DeleteServiceResponse
-func (c *ClientWithResponses) DeleteServiceWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteServiceResponse, error) {
+func (c *ClientWithResponses) DeleteServiceWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteServiceResponse, error) {
 	rsp, err := c.DeleteService(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5248,7 +5247,7 @@ func (c *ClientWithResponses) DeleteServiceWithResponse(ctx context.Context, id 
 }
 
 // GetServiceWithResponse request returning *GetServiceResponse
-func (c *ClientWithResponses) GetServiceWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetServiceResponse, error) {
+func (c *ClientWithResponses) GetServiceWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetServiceResponse, error) {
 	rsp, err := c.GetService(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5257,7 +5256,7 @@ func (c *ClientWithResponses) GetServiceWithResponse(ctx context.Context, id ope
 }
 
 // UpdateServiceWithBodyWithResponse request with arbitrary body returning *UpdateServiceResponse
-func (c *ClientWithResponses) UpdateServiceWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error) {
+func (c *ClientWithResponses) UpdateServiceWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error) {
 	rsp, err := c.UpdateServiceWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5265,7 +5264,7 @@ func (c *ClientWithResponses) UpdateServiceWithBodyWithResponse(ctx context.Cont
 	return ParseUpdateServiceResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateServiceWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error) {
+func (c *ClientWithResponses) UpdateServiceWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error) {
 	rsp, err := c.UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
