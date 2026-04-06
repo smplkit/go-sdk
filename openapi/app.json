@@ -2895,29 +2895,30 @@
       }
     },
     "/api/v1/invitations/accept": {
-      "get": {
+      "post": {
         "tags": [
           "Invitations"
         ],
         "summary": "Accept Invitation",
         "operationId": "accept_invitation",
-        "parameters": [
-          {
-            "name": "token",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Token"
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationAcceptRequest"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationResponse"
+                }
               }
             }
           },
@@ -2961,7 +2962,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/users": {
@@ -4148,6 +4154,20 @@
           "status": "PENDING",
           "updated_at": "2026-03-20T11:02:16.616Z"
         }
+      },
+      "InvitationAcceptRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "InvitationAcceptRequest"
       },
       "InvitationBulkCreateRequest": {
         "properties": {

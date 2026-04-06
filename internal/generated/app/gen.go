@@ -397,6 +397,11 @@ type Invitation struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
+// InvitationAcceptRequest defines model for InvitationAcceptRequest.
+type InvitationAcceptRequest struct {
+	Token string `json:"token"`
+}
+
 // InvitationBulkCreateRequest defines model for InvitationBulkCreateRequest.
 type InvitationBulkCreateRequest struct {
 	Invitations []InvitationCreateItem `json:"invitations"`
@@ -601,11 +606,6 @@ type ListInvitationsParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
 }
 
-// AcceptInvitationParams defines parameters for AcceptInvitation.
-type AcceptInvitationParams struct {
-	Token string `form:"token" json:"token"`
-}
-
 // ListServicesParams defines parameters for ListServices.
 type ListServicesParams struct {
 	FilterKey *string `form:"filter[key],omitempty" json:"filter[key],omitempty"`
@@ -648,6 +648,9 @@ type UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentResponse
 
 // CreateInvitationsApplicationVndAPIPlusJSONRequestBody defines body for CreateInvitations for application/vnd.api+json ContentType.
 type CreateInvitationsApplicationVndAPIPlusJSONRequestBody = InvitationBulkCreateRequest
+
+// AcceptInvitationApplicationVndAPIPlusJSONRequestBody defines body for AcceptInvitation for application/vnd.api+json ContentType.
+type AcceptInvitationApplicationVndAPIPlusJSONRequestBody = InvitationAcceptRequest
 
 // CreateServiceApplicationVndAPIPlusJSONRequestBody defines body for CreateService for application/vnd.api+json ContentType.
 type CreateServiceApplicationVndAPIPlusJSONRequestBody = ServiceResponse
@@ -843,8 +846,10 @@ type ClientInterface interface {
 
 	CreateInvitationsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateInvitationsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AcceptInvitation request
-	AcceptInvitation(ctx context.Context, params *AcceptInvitationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// AcceptInvitationWithBody request with any body
+	AcceptInvitationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AcceptInvitationWithApplicationVndAPIPlusJSONBody(ctx context.Context, body AcceptInvitationApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ResendInvitation request
 	ResendInvitation(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1380,8 +1385,20 @@ func (c *Client) CreateInvitationsWithApplicationVndAPIPlusJSONBody(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) AcceptInvitation(ctx context.Context, params *AcceptInvitationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAcceptInvitationRequest(c.Server, params)
+func (c *Client) AcceptInvitationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAcceptInvitationRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AcceptInvitationWithApplicationVndAPIPlusJSONBody(ctx context.Context, body AcceptInvitationApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAcceptInvitationRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2840,8 +2857,19 @@ func NewCreateInvitationsRequestWithBody(server string, contentType string, body
 	return req, nil
 }
 
-// NewAcceptInvitationRequest generates requests for AcceptInvitation
-func NewAcceptInvitationRequest(server string, params *AcceptInvitationParams) (*http.Request, error) {
+// NewAcceptInvitationRequestWithApplicationVndAPIPlusJSONBody calls the generic AcceptInvitation builder with application/vnd.api+json body
+func NewAcceptInvitationRequestWithApplicationVndAPIPlusJSONBody(server string, body AcceptInvitationApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAcceptInvitationRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewAcceptInvitationRequestWithBody generates requests for AcceptInvitation with any type of body
+func NewAcceptInvitationRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -2859,28 +2887,12 @@ func NewAcceptInvitationRequest(server string, params *AcceptInvitationParams) (
 		return nil, err
 	}
 
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "token", params.Token, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-			return nil, err
-		} else {
-			for k, v := range parsed {
-				for _, v2 := range v {
-					queryValues.Add(k, v2)
-				}
-			}
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	req, err := http.NewRequest("POST", queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -3594,8 +3606,10 @@ type ClientWithResponsesInterface interface {
 
 	CreateInvitationsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateInvitationsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInvitationsResponse, error)
 
-	// AcceptInvitationWithResponse request
-	AcceptInvitationWithResponse(ctx context.Context, params *AcceptInvitationParams, reqEditors ...RequestEditorFn) (*AcceptInvitationResponse, error)
+	// AcceptInvitationWithBodyWithResponse request with any body
+	AcceptInvitationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AcceptInvitationResponse, error)
+
+	AcceptInvitationWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body AcceptInvitationApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*AcceptInvitationResponse, error)
 
 	// ResendInvitationWithResponse request
 	ResendInvitationWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*ResendInvitationResponse, error)
@@ -4403,7 +4417,7 @@ func (r CreateInvitationsResponse) StatusCode() int {
 type AcceptInvitationResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON200 *InvitationResponse
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -5163,9 +5177,17 @@ func (c *ClientWithResponses) CreateInvitationsWithApplicationVndAPIPlusJSONBody
 	return ParseCreateInvitationsResponse(rsp)
 }
 
-// AcceptInvitationWithResponse request returning *AcceptInvitationResponse
-func (c *ClientWithResponses) AcceptInvitationWithResponse(ctx context.Context, params *AcceptInvitationParams, reqEditors ...RequestEditorFn) (*AcceptInvitationResponse, error) {
-	rsp, err := c.AcceptInvitation(ctx, params, reqEditors...)
+// AcceptInvitationWithBodyWithResponse request with arbitrary body returning *AcceptInvitationResponse
+func (c *ClientWithResponses) AcceptInvitationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AcceptInvitationResponse, error) {
+	rsp, err := c.AcceptInvitationWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAcceptInvitationResponse(rsp)
+}
+
+func (c *ClientWithResponses) AcceptInvitationWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body AcceptInvitationApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*AcceptInvitationResponse, error) {
+	rsp, err := c.AcceptInvitationWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6885,7 +6907,7 @@ func ParseAcceptInvitationResponse(rsp *http.Response) (*AcceptInvitationRespons
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
+		var dest InvitationResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
