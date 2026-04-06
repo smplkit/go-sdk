@@ -3429,6 +3429,13 @@
             "default": false,
             "readOnly": true
           },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Expires At",
+            "readOnly": true
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
