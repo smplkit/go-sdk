@@ -264,9 +264,6 @@ type Context struct {
 	ContextType string     `json:"context_type"`
 	CreatedAt   *time.Time `json:"created_at,omitempty"`
 
-	// Key Entity identifier: user-123, acme-corp
-	Key string `json:"key"`
-
 	// Name Human-readable display name
 	Name      *string    `json:"name,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
@@ -814,10 +811,10 @@ type ClientInterface interface {
 	BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteContext request
-	DeleteContext(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetContext request
-	GetContext(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListEnvironments request
 	ListEnvironments(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1239,7 +1236,7 @@ func (c *Client) BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx conte
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteContext(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteContextRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1251,7 +1248,7 @@ func (c *Client) DeleteContext(ctx context.Context, id openapi_types.UUID, reqEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetContext(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetContextRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -2483,12 +2480,12 @@ func NewBulkRegisterContextsRequestWithBody(server string, contentType string, b
 }
 
 // NewDeleteContextRequest generates requests for DeleteContext
-func NewDeleteContextRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteContextRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2517,12 +2514,12 @@ func NewDeleteContextRequest(server string, id openapi_types.UUID) (*http.Reques
 }
 
 // NewGetContextRequest generates requests for GetContext
-func NewGetContextRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetContextRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -3565,10 +3562,10 @@ type ClientWithResponsesInterface interface {
 	BulkRegisterContextsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterContextsResponse, error)
 
 	// DeleteContextWithResponse request
-	DeleteContextWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteContextResponse, error)
+	DeleteContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteContextResponse, error)
 
 	// GetContextWithResponse request
-	GetContextWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetContextResponse, error)
+	GetContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextResponse, error)
 
 	// ListEnvironmentsWithResponse request
 	ListEnvironmentsWithResponse(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error)
@@ -5062,7 +5059,7 @@ func (c *ClientWithResponses) BulkRegisterContextsWithApplicationVndAPIPlusJSONB
 }
 
 // DeleteContextWithResponse request returning *DeleteContextResponse
-func (c *ClientWithResponses) DeleteContextWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteContextResponse, error) {
+func (c *ClientWithResponses) DeleteContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteContextResponse, error) {
 	rsp, err := c.DeleteContext(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5071,7 +5068,7 @@ func (c *ClientWithResponses) DeleteContextWithResponse(ctx context.Context, id 
 }
 
 // GetContextWithResponse request returning *GetContextResponse
-func (c *ClientWithResponses) GetContextWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetContextResponse, error) {
+func (c *ClientWithResponses) GetContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextResponse, error) {
 	rsp, err := c.GetContext(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
