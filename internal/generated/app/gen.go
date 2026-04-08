@@ -619,6 +619,7 @@ type ListServicesParams struct {
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	FilterAccount *string `form:"filter[account],omitempty" json:"filter[account],omitempty"`
+	FilterEmail   *string `form:"filter[email],omitempty" json:"filter[email],omitempty"`
 }
 
 // UpdateAccountApplicationVndAPIPlusJSONRequestBody defines body for UpdateAccount for application/vnd.api+json ContentType.
@@ -3367,6 +3368,22 @@ func NewListUsersRequest(server string, params *ListUsersParams) (*http.Request,
 		if params.FilterAccount != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[account]", *params.FilterAccount, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FilterEmail != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[email]", *params.FilterEmail, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
