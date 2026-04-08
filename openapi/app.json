@@ -3589,6 +3589,13 @@
             "nullable": true,
             "title": "Deleted At",
             "readOnly": true
+          },
+          "product_subscriptions": {
+            "additionalProperties": true,
+            "type": "object",
+            "nullable": true,
+            "title": "Product Subscriptions",
+            "readOnly": true
           }
         },
         "type": "object",
