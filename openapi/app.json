@@ -3124,6 +3124,16 @@
               "nullable": true,
               "title": "Filter[Account]"
             }
+          },
+          {
+            "name": "filter[email]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "Filter[Email]"
+            }
           }
         ],
         "responses": {
