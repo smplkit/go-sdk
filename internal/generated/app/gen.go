@@ -192,12 +192,13 @@ func (e UserResourceType) Valid() bool {
 
 // Account defines model for Account.
 type Account struct {
-	CreatedAt         *time.Time `json:"created_at,omitempty"`
-	DeletedAt         *time.Time `json:"deleted_at,omitempty"`
-	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
-	HasStripeCustomer *bool      `json:"has_stripe_customer,omitempty"`
-	Key               string     `json:"key"`
-	Name              string     `json:"name"`
+	CreatedAt            *time.Time              `json:"created_at,omitempty"`
+	DeletedAt            *time.Time              `json:"deleted_at,omitempty"`
+	ExpiresAt            *time.Time              `json:"expires_at,omitempty"`
+	HasStripeCustomer    *bool                   `json:"has_stripe_customer,omitempty"`
+	Key                  string                  `json:"key"`
+	Name                 string                  `json:"name"`
+	ProductSubscriptions *map[string]interface{} `json:"product_subscriptions,omitempty"`
 }
 
 // AccountResource defines model for AccountResource.
