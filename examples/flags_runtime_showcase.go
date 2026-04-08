@@ -5,12 +5,12 @@
 //
 // Demonstrates the full runtime surface:
 //   - Client initialization and flag creation (via demo helpers)
-//   - Typed flag handles: BoolFlag, StringFlag, NumberFlag
-//   - Connect / Disconnect lifecycle
+//   - Typed flag handles: BooleanFlag, StringFlag, NumberFlag
 //   - Context providers
 //   - Explicit context evaluation
 //   - Resolution caching and cache stats
 //   - Real-time updates via WebSocket and change listeners
+//   - OnChangeKey listener
 //   - Manual refresh
 //   - Context registration
 //   - Tier 1 stateless Evaluate
@@ -25,7 +25,7 @@
 //
 // Usage:
 //
-//	go run examples/flags_runtime_showcase.go examples/flags_demo_setup.go
+//	go run examples/flags_runtime_showcase.go examples/flags_runtime_setup.go
 package main
 
 import (
@@ -44,7 +44,7 @@ func main() {
 	// ====================================================================
 	section("1. SDK Initialization & Flag Setup")
 
-	// The SmplClient constructor resolves three required parameters:
+	// The SmplClient constructor takes three required positional parameters:
 	//
 	//   apiKey       — passed as "" here; resolved automatically from the
 	//                  SMPLKIT_API_KEY environment variable or the
@@ -53,14 +53,14 @@ func main() {
 	//   environment  — the target environment. Falls back to
 	//                  SMPLKIT_ENVIRONMENT if empty.
 	//
-	//   service      — identifies this SDK instance. Can also be resolved
-	//                  from SMPLKIT_SERVICE if not passed via WithService().
+	//   service      — identifies this SDK instance. Falls back to
+	//                  SMPLKIT_SERVICE if empty.
 	//
 	// To pass the API key explicitly, pass it as the first arg:
 	//
-	//   client, err := smplkit.NewClient("sk_api_...", "staging", smplkit.WithService("showcase-service"))
+	//   client, err := smplkit.NewClient("sk_api_...", "staging", "showcase-service")
 	//
-	client, err := smplkit.NewClient("", "staging", smplkit.WithService("showcase-service"))
+	client, err := smplkit.NewClient("", "staging", "showcase-service")
 	if err != nil {
 		fatal("failed to create client", err)
 	}
@@ -79,8 +79,8 @@ func main() {
 	// ====================================================================
 	section("2. Typed Flag Handles")
 
-	checkoutHandle := flags.BoolFlag("checkout-v2", false)
-	step("BoolFlag handle: checkout-v2 (default=false)")
+	checkoutHandle := flags.BooleanFlag("checkout-v2", false)
+	step("BooleanFlag handle: checkout-v2 (default=false)")
 
 	bannerHandle := flags.StringFlag("banner-color", "red")
 	step("StringFlag handle: banner-color (default=\"red\")")
@@ -88,10 +88,10 @@ func main() {
 	retryHandle := flags.NumberFlag("max-retries", 3)
 	step("NumberFlag handle: max-retries (default=3)")
 
-	// Before connecting, handles return defaults.
-	step(fmt.Sprintf("checkout-v2 before connect: %v (expect false)", checkoutHandle.Get(ctx)))
-	step(fmt.Sprintf("banner-color before connect: %q (expect \"red\")", bannerHandle.Get(ctx)))
-	step(fmt.Sprintf("max-retries before connect: %.0f (expect 3)", retryHandle.Get(ctx)))
+	// Before context is set, handles return defaults.
+	step(fmt.Sprintf("checkout-v2 initial: %v (expect false)", checkoutHandle.Get(ctx)))
+	step(fmt.Sprintf("banner-color initial: %q (expect \"red\")", bannerHandle.Get(ctx)))
+	step(fmt.Sprintf("max-retries initial: %.0f (expect 3)", retryHandle.Get(ctx)))
 
 	// ====================================================================
 	// 3. CONTEXT PROVIDER
@@ -114,20 +114,9 @@ func main() {
 	step("Context provider registered (enterprise user at Acme)")
 
 	// ====================================================================
-	// 4. CONNECT TO RUNTIME
+	// 4. EVALUATE FLAGS (provider context)
 	// ====================================================================
-	section("4. Connect to Runtime")
-
-	err = client.Connect(ctx)
-	if err != nil {
-		fatal("failed to connect", err)
-	}
-	step(fmt.Sprintf("Connected to 'staging' environment — status: %s", flags.ConnectionStatus()))
-
-	// ====================================================================
-	// 5. EVALUATE FLAGS (provider context)
-	// ====================================================================
-	section("5. Evaluate Flags (via provider)")
+	section("4. Evaluate Flags (via provider)")
 
 	checkoutVal := checkoutHandle.Get(ctx)
 	step(fmt.Sprintf("checkout-v2 = %v (expect true — enterprise + us region)", checkoutVal))
@@ -139,9 +128,9 @@ func main() {
 	step(fmt.Sprintf("max-retries = %.0f (expect 5 — employee_count > 100)", retryVal))
 
 	// ====================================================================
-	// 6. EXPLICIT CONTEXT OVERRIDE
+	// 5. EXPLICIT CONTEXT OVERRIDE
 	// ====================================================================
-	section("6. Explicit Context Override")
+	section("5. Explicit Context Override")
 
 	// Override with a non-enterprise user — should get defaults/fallbacks.
 	basicUser := smplkit.NewContext("user", "user-99", map[string]interface{}{
@@ -164,9 +153,9 @@ func main() {
 	step(fmt.Sprintf("max-retries (5 employees) = %.0f (expect fallback — count <= 100)", retryExplicit))
 
 	// ====================================================================
-	// 7. RESOLUTION CACHE
+	// 6. RESOLUTION CACHE
 	// ====================================================================
-	section("7. Resolution Cache Stats")
+	section("6. Resolution Cache Stats")
 
 	statsBefore := flags.Stats()
 	step(fmt.Sprintf("Cache hits: %d, misses: %d", statsBefore.CacheHits, statsBefore.CacheMisses))
@@ -183,9 +172,9 @@ func main() {
 	step(fmt.Sprintf("New cache hits: %d (expect 150)", statsAfter.CacheHits-statsBefore.CacheHits))
 
 	// ====================================================================
-	// 8. CHANGE LISTENERS
+	// 7. CHANGE LISTENERS
 	// ====================================================================
-	section("8. Change Listeners")
+	section("7. Change Listeners")
 
 	globalChanges := 0
 	flags.OnChange(func(evt *smplkit.FlagChangeEvent) {
@@ -197,21 +186,28 @@ func main() {
 	checkoutChanges := 0
 	checkoutHandle.OnChange(func(evt *smplkit.FlagChangeEvent) {
 		checkoutChanges++
-		fmt.Printf("    [checkout-v2 CHANGE] source=%s\n", evt.Source)
+		fmt.Printf("    [checkout-v2 CHANGE via handle] source=%s\n", evt.Source)
 	})
-	step("Flag-specific listener registered for checkout-v2")
+	step("Flag-specific listener registered for checkout-v2 (via handle)")
+
+	keyChanges := 0
+	flags.OnChangeKey("checkout-v2", func(evt *smplkit.FlagChangeEvent) {
+		keyChanges++
+		fmt.Printf("    [checkout-v2 CHANGE via key] source=%s\n", evt.Source)
+	})
+	step("Key-specific listener registered for checkout-v2 (via OnChangeKey)")
 
 	// Trigger via manual refresh.
 	err = flags.Refresh(ctx)
 	if err != nil {
 		fatal("refresh failed", err)
 	}
-	step(fmt.Sprintf("After Refresh: global changes=%d, checkout-specific=%d", globalChanges, checkoutChanges))
+	step(fmt.Sprintf("After Refresh: global=%d, handle=%d, key=%d", globalChanges, checkoutChanges, keyChanges))
 
 	// ====================================================================
-	// 9. CONTEXT REGISTRATION
+	// 8. CONTEXT REGISTRATION
 	// ====================================================================
-	section("9. Context Registration")
+	section("8. Context Registration")
 
 	flags.Register(ctx,
 		smplkit.NewContext("device", "device-abc", map[string]interface{}{
@@ -226,9 +222,9 @@ func main() {
 	step("Flushed pending contexts to server")
 
 	// ====================================================================
-	// 10. TIER 1 — STATELESS EVALUATE
+	// 9. TIER 1 — STATELESS EVALUATE
 	// ====================================================================
-	section("10. Tier 1 — Stateless Evaluate")
+	section("9. Tier 1 — Stateless Evaluate")
 
 	tier1Contexts := []smplkit.Context{
 		smplkit.NewContext("user", "user-77", map[string]interface{}{
@@ -246,9 +242,9 @@ func main() {
 	step(fmt.Sprintf("Evaluate('checkout-v2', 'production', ...) = %v (expect false — production disabled)", result2))
 
 	// ====================================================================
-	// 11. WEBSOCKET STATUS
+	// 10. WEBSOCKET STATUS
 	// ====================================================================
-	section("11. WebSocket Status")
+	section("10. WebSocket Status")
 
 	step(fmt.Sprintf("Connection status: %s", flags.ConnectionStatus()))
 
@@ -256,14 +252,14 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// ====================================================================
-	// 12. DISCONNECT
+	// 11. DISCONNECT
 	// ====================================================================
-	section("12. Disconnect")
+	section("11. Disconnect")
 
 	flags.Disconnect(ctx)
 	step(fmt.Sprintf("Disconnected — status: %s", flags.ConnectionStatus()))
 
-	// After disconnect, handles return defaults again.
+	// After disconnecting, handles return defaults again.
 	step(fmt.Sprintf("checkout-v2 after disconnect: %v (expect false)", checkoutHandle.Get(ctx)))
 	step(fmt.Sprintf("banner-color after disconnect: %q (expect \"red\")", bannerHandle.Get(ctx)))
 
@@ -275,13 +271,12 @@ func main() {
 	fmt.Println()
 	fmt.Println("Features exercised:")
 	fmt.Println("  [x] Client initialization")
-	fmt.Println("  [x] Typed flag handles (Bool, String, Number)")
+	fmt.Println("  [x] Typed flag handles (Boolean, String, Number)")
 	fmt.Println("  [x] Context provider")
-	fmt.Println("  [x] Connect to runtime environment")
 	fmt.Println("  [x] Evaluate flags via provider context")
 	fmt.Println("  [x] Explicit context override")
 	fmt.Println("  [x] Resolution cache (hits/misses)")
-	fmt.Println("  [x] Change listeners (global + flag-specific)")
+	fmt.Println("  [x] Change listeners (global + handle + OnChangeKey)")
 	fmt.Println("  [x] Manual refresh")
 	fmt.Println("  [x] Context registration and flush")
 	fmt.Println("  [x] Tier 1 stateless Evaluate")

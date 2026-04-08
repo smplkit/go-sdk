@@ -7,7 +7,7 @@ import (
 
 // Config represents a configuration resource from the smplkit platform.
 type Config struct {
-	// ID is the unique identifier (UUID) of the config.
+	// ID is the unique identifier (UUID) of the config. Empty for unsaved configs.
 	ID string
 	// Key is the human-readable config key (e.g. "user_service").
 	Key string
@@ -32,157 +32,73 @@ type Config struct {
 	client *ConfigClient
 }
 
-// Update replaces this config's attributes on the server. Any nil field in
-// params falls back to the config's current value. Updates the config's fields
-// in place on success.
-//
-// Returns SmplNotFoundError if the config no longer exists.
-func (c *Config) Update(ctx context.Context, params UpdateConfigParams) error {
-	return c.update(ctx, params)
+// ConfigOption configures an unsaved Config returned by ConfigClient.New.
+type ConfigOption func(*Config)
+
+// WithConfigName sets the display name for a config.
+func WithConfigName(name string) ConfigOption {
+	return func(c *Config) { c.Name = name }
 }
 
-// SetValues replaces the base or environment-specific values for this config.
-// Pass an empty string for environment to replace base values.
-// Pass an environment name (e.g. "production") to replace that environment's values.
-//
-// Returns SmplNotFoundError if the config no longer exists.
-func (c *Config) SetValues(ctx context.Context, values map[string]interface{}, environment string) error {
-	var newItems map[string]interface{}
-	var newEnvs map[string]map[string]interface{}
-
-	if environment == "" {
-		newItems = values
-		newEnvs = c.Environments
-	} else {
-		newItems = c.Items
-		envEntry := make(map[string]interface{})
-		if existing, ok := c.Environments[environment]; ok {
-			for k, v := range existing {
-				envEntry[k] = v
-			}
-		}
-		envEntry["values"] = values
-		newEnvs = make(map[string]map[string]interface{})
-		for k, v := range c.Environments {
-			newEnvs[k] = v
-		}
-		newEnvs[environment] = envEntry
-	}
-
-	return c.update(ctx, UpdateConfigParams{
-		Items:        newItems,
-		Environments: newEnvs,
-	})
+// WithConfigDescription sets the description for a config.
+func WithConfigDescription(desc string) ConfigOption {
+	return func(c *Config) { c.Description = &desc }
 }
 
-// SetValue sets a single key within base or environment-specific values.
-// Pass an empty string for environment to set a base value.
-// This merges the key into existing values rather than replacing all values.
-//
-// Returns SmplNotFoundError if the config no longer exists.
-func (c *Config) SetValue(ctx context.Context, key string, value interface{}, environment string) error {
-	if environment == "" {
-		merged := make(map[string]interface{})
-		for k, v := range c.Items {
-			merged[k] = v
-		}
-		merged[key] = value
-		return c.SetValues(ctx, merged, "")
-	}
-
-	existing := make(map[string]interface{})
-	if envEntry, ok := c.Environments[environment]; ok {
-		if vals, ok := envEntry["values"]; ok {
-			if valsMap, ok := vals.(map[string]interface{}); ok {
-				for k, v := range valsMap {
-					existing[k] = v
-				}
-			}
-		}
-	}
-	existing[key] = value
-	return c.SetValues(ctx, existing, environment)
+// WithConfigParent sets the parent config UUID for inheritance.
+func WithConfigParent(parentID string) ConfigOption {
+	return func(c *Config) { c.Parent = &parentID }
 }
 
-// update is the internal implementation shared by Update, SetValues, and SetValue.
-func (c *Config) update(ctx context.Context, params UpdateConfigParams) error {
-	name := c.Name
-	if params.Name != nil {
-		name = *params.Name
+// Save creates (POST) the config if ID is empty, or updates (PUT) if ID is set.
+// Applies the server response back to the Config instance.
+func (c *Config) Save(ctx context.Context) error {
+	if c.ID == "" {
+		return c.client.createConfig(ctx, c)
 	}
-	desc := c.Description
-	if params.Description != nil {
-		desc = params.Description
-	}
-	items := c.Items
-	if params.Items != nil {
-		items = params.Items
-	}
-	envs := c.Environments
-	if params.Environments != nil {
-		envs = params.Environments
-	}
-
-	updated, err := c.client.updateByID(ctx, c.ID, name, c.Key, desc, c.Parent, items, envs)
-	if err != nil {
-		return err
-	}
-	c.Name = updated.Name
-	c.Description = updated.Description
-	c.Items = updated.Items
-	c.Environments = updated.Environments
-	c.UpdatedAt = updated.UpdatedAt
-	return nil
+	return c.client.updateConfig(ctx, c)
 }
 
-// UpdateConfigParams holds the optional fields for updating a config.
-// Any nil field falls back to the config's current value.
-type UpdateConfigParams struct {
-	// Name overrides the config's display name.
-	Name *string
-	// Description overrides the config's description.
-	Description *string
-	// Items replaces the config's base values entirely (raw values, not wrapped).
-	Items map[string]interface{}
-	// Environments replaces the config's environments map entirely.
-	Environments map[string]map[string]interface{}
+func (c *Config) apply(other *Config) {
+	c.ID = other.ID
+	c.Key = other.Key
+	c.Name = other.Name
+	c.Description = other.Description
+	c.Parent = other.Parent
+	c.Items = other.Items
+	c.Environments = other.Environments
+	c.CreatedAt = other.CreatedAt
+	c.UpdatedAt = other.UpdatedAt
 }
 
-// CreateConfigParams holds the parameters for creating a new config.
-type CreateConfigParams struct {
-	// Name is the display name (required).
-	Name string
-	// Key is the human-readable key. Auto-generated by the server if nil.
-	Key *string
-	// Description is an optional description.
-	Description *string
-	// Parent is the parent config UUID.
-	Parent *string
-	// Items holds the initial base values (raw values, not wrapped).
-	Items map[string]interface{}
-	// Environments holds the initial environment-specific overrides.
-	Environments map[string]map[string]interface{}
+// LiveConfig is a handle returned by Subscribe that always reflects the latest
+// cached resolved values for a config key.
+type LiveConfig struct {
+	client *ConfigClient
+	key    string
 }
 
-// GetOption configures a Get request. Use WithKey or WithID to specify
-// the lookup strategy.
-type GetOption func(*getConfig)
-
-type getConfig struct {
-	key *string
-	id  *string
-}
-
-// WithKey returns a GetOption that looks up a config by its human-readable key.
-func WithKey(key string) GetOption {
-	return func(g *getConfig) {
-		g.key = &key
+// Value returns the latest resolved values for this config.
+func (lc *LiveConfig) Value() map[string]interface{} {
+	if lc.client.configCache == nil {
+		return nil
 	}
+	resolved, ok := lc.client.configCache[lc.key]
+	if !ok {
+		return nil
+	}
+	// Return a copy.
+	cp := make(map[string]interface{}, len(resolved))
+	for k, v := range resolved {
+		cp[k] = v
+	}
+	return cp
 }
 
-// WithID returns a GetOption that looks up a config by its UUID.
-func WithID(id string) GetOption {
-	return func(g *getConfig) {
-		g.id = &id
-	}
+// ValueInto unmarshals the latest resolved values into the target struct.
+// The target must be a pointer to a struct. Dot-notation keys are unflattened
+// into nested maps before unmarshaling.
+func (lc *LiveConfig) ValueInto(target interface{}) error {
+	resolved := lc.Value()
+	return unmarshalResolved(resolved, target)
 }

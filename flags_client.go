@@ -22,49 +22,83 @@ type FlagsClient struct {
 	runtime *FlagsRuntime
 }
 
-// Get retrieves a flag by its UUID.
-func (c *FlagsClient) Get(ctx context.Context, flagID string) (*Flag, error) {
-	uid, err := uuid.Parse(flagID)
-	if err != nil {
-		return nil, fmt.Errorf("smplkit: invalid flag ID %q: %w", flagID, err)
-	}
+// --- Factory methods (Active Record pattern) ---
 
-	resp, err := c.generated.GetFlag(ctx, uid)
-	if err != nil {
-		return nil, classifyError(err)
+// NewBooleanFlag creates an unsaved boolean flag. Call Save(ctx) to persist.
+// If name is not provided via WithFlagName, it is auto-generated from the key.
+// Boolean values are auto-generated if not provided via WithFlagValues.
+func (c *FlagsClient) NewBooleanFlag(key string, defaultValue bool, opts ...FlagOption) *Flag {
+	f := &Flag{
+		Key:          key,
+		Name:         keyToDisplayName(key),
+		Type:         string(FlagTypeBoolean),
+		Default:      defaultValue,
+		Values:       []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}},
+		Environments: map[string]interface{}{},
+		client:       c,
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
+	for _, opt := range opts {
+		opt(f)
 	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	var result genflags.FlagResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	return resourceToFlag(result.Data, c), nil
+	return f
 }
 
-// Create creates a new flag resource.
-func (c *FlagsClient) Create(ctx context.Context, params CreateFlagParams) (*Flag, error) {
-	values := params.Values
-	if values == nil && params.Type == FlagTypeBoolean {
-		values = []FlagValue{
-			{Name: "True", Value: true},
-			{Name: "False", Value: false},
-		}
+// NewStringFlag creates an unsaved string flag. Call Save(ctx) to persist.
+func (c *FlagsClient) NewStringFlag(key string, defaultValue string, opts ...FlagOption) *Flag {
+	f := &Flag{
+		Key:          key,
+		Name:         keyToDisplayName(key),
+		Type:         string(FlagTypeString),
+		Default:      defaultValue,
+		Environments: map[string]interface{}{},
+		client:       c,
 	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
+}
 
-	reqBody := buildFlagRequest("", params.Key, params.Name, string(params.Type), params.Default, values, params.Description, nil)
+// NewNumberFlag creates an unsaved numeric flag. Call Save(ctx) to persist.
+func (c *FlagsClient) NewNumberFlag(key string, defaultValue float64, opts ...FlagOption) *Flag {
+	f := &Flag{
+		Key:          key,
+		Name:         keyToDisplayName(key),
+		Type:         string(FlagTypeNumeric),
+		Default:      defaultValue,
+		Environments: map[string]interface{}{},
+		client:       c,
+	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
+}
 
-	resp, err := c.generated.CreateFlag(ctx, reqBody)
+// NewJsonFlag creates an unsaved JSON flag. Call Save(ctx) to persist.
+func (c *FlagsClient) NewJsonFlag(key string, defaultValue map[string]interface{}, opts ...FlagOption) *Flag {
+	f := &Flag{
+		Key:          key,
+		Name:         keyToDisplayName(key),
+		Type:         string(FlagTypeJSON),
+		Default:      defaultValue,
+		Environments: map[string]interface{}{},
+		client:       c,
+	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
+}
+
+// --- Management CRUD ---
+
+// Get retrieves a flag by its key.
+// Uses the list endpoint with a filter[key] query parameter.
+// Returns SmplNotFoundError if no match.
+func (c *FlagsClient) Get(ctx context.Context, key string) (*Flag, error) {
+	params := &genflags.ListFlagsParams{FilterKey: &key}
+	resp, err := c.generated.ListFlags(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -80,11 +114,20 @@ func (c *FlagsClient) Create(ctx context.Context, params CreateFlagParams) (*Fla
 		return nil, err
 	}
 
-	var result genflags.FlagResponse
+	var result genflags.FlagListResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
-	return resourceToFlag(result.Data, c), nil
+
+	if len(result.Data) == 0 {
+		return nil, &SmplNotFoundError{
+			SmplError: SmplError{
+				Message:    fmt.Sprintf("flag with key %q not found", key),
+				StatusCode: 404,
+			},
+		}
+	}
+	return resourceToFlag(result.Data[0], c), nil
 }
 
 // List returns all flags for the account.
@@ -117,8 +160,18 @@ func (c *FlagsClient) List(ctx context.Context) ([]*Flag, error) {
 	return flags, nil
 }
 
-// Delete removes a flag by its UUID. Returns nil on success.
-func (c *FlagsClient) Delete(ctx context.Context, flagID string) error {
+// Delete removes a flag by its key. Fetches by key first to get UUID, then
+// deletes by UUID. Returns SmplNotFoundError if not found.
+func (c *FlagsClient) Delete(ctx context.Context, key string) error {
+	flag, err := c.Get(ctx, key)
+	if err != nil {
+		return err
+	}
+	return c.deleteByID(ctx, flag.ID)
+}
+
+// deleteByID removes a flag by its UUID.
+func (c *FlagsClient) deleteByID(ctx context.Context, flagID string) error {
 	uid, err := uuid.Parse(flagID)
 	if err != nil {
 		return fmt.Errorf("smplkit: invalid flag ID %q: %w", flagID, err)
@@ -139,60 +192,68 @@ func (c *FlagsClient) Delete(ctx context.Context, flagID string) error {
 	return checkStatus(resp.StatusCode, body)
 }
 
-// updateFlag sends a PUT request to update the flag.
-func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag, params UpdateFlagParams) (*Flag, error) {
-	uid, err := uuid.Parse(flag.ID)
+// createFlag sends a POST to create the flag, then applies the response.
+func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
+	reqBody := buildFlagRequest("", flag.Key, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
+
+	resp, err := c.generated.CreateFlag(ctx, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("smplkit: invalid flag ID %q: %w", flag.ID, err)
-	}
-
-	name := flag.Name
-	if params.Name != nil {
-		name = *params.Name
-	}
-	desc := flag.Description
-	if params.Description != nil {
-		desc = params.Description
-	}
-	dflt := flag.Default
-	if params.Default != nil {
-		dflt = params.Default
-	}
-	values := flag.Values
-	if params.Values != nil {
-		values = params.Values
-	}
-	envs := flag.Environments
-	if params.Environments != nil {
-		envs = params.Environments
-	}
-
-	reqBody := buildFlagRequest(flag.ID, flag.Key, name, flag.Type, dflt, values, desc, envs)
-
-	resp, err := c.generated.UpdateFlag(ctx, uid, reqBody)
-	if err != nil {
-		return nil, classifyError(err)
+		return classifyError(err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
+		return &SmplConnectionError{
 			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
+		return err
 	}
 
 	var result genflags.FlagResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+		return fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
-	return resourceToFlag(result.Data, c), nil
+	flag.apply(resourceToFlag(result.Data, c))
+	return nil
 }
 
-// Context type management — via generated app client.
+// updateFlag sends a PUT to update the flag, then applies the response.
+func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
+	uid, err := uuid.Parse(flag.ID)
+	if err != nil {
+		return fmt.Errorf("smplkit: invalid flag ID %q: %w", flag.ID, err)
+	}
+
+	reqBody := buildFlagRequest(flag.ID, flag.Key, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
+
+	resp, err := c.generated.UpdateFlag(ctx, uid, reqBody)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+
+	var result genflags.FlagResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+	flag.apply(resourceToFlag(result.Data, c))
+	return nil
+}
+
+// --- Context type management — via generated app client ---
 
 // CreateContextType creates a new context type.
 func (c *FlagsClient) CreateContextType(ctx context.Context, key string, name string) (*ContextType, error) {
@@ -340,6 +401,8 @@ func (c *FlagsClient) ListContexts(ctx context.Context, contextTypeKey string) (
 	}
 	return result.Data, nil
 }
+
+// --- Internal helpers ---
 
 // resourceToFlag converts a generated FlagResource to the SDK Flag type.
 func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
@@ -584,9 +647,9 @@ func (c *FlagsClient) fetchFlagsList(ctx context.Context) ([]map[string]interfac
 // --- Runtime pass-throughs ---
 // These delegate to the embedded FlagsRuntime so users access them via client.Flags().
 
-// BoolFlag returns a typed handle for a boolean flag.
-func (c *FlagsClient) BoolFlag(key string, defaultValue bool) *BoolFlagHandle {
-	return c.runtime.BoolFlag(key, defaultValue)
+// BooleanFlag returns a typed handle for a boolean flag.
+func (c *FlagsClient) BooleanFlag(key string, defaultValue bool) *BooleanFlagHandle {
+	return c.runtime.BooleanFlag(key, defaultValue)
 }
 
 // StringFlag returns a typed handle for a string flag.
@@ -609,12 +672,6 @@ func (c *FlagsClient) SetContextProvider(fn func(ctx context.Context) []Context)
 	c.runtime.SetContextProvider(fn)
 }
 
-// connectInternal fetches flag definitions and registers on the shared WebSocket.
-// Called by Client.Connect().
-func (c *FlagsClient) connectInternal(ctx context.Context, environment string) error {
-	return c.runtime.connect(ctx, environment)
-}
-
 // Disconnect unregisters from WebSocket, flushes contexts, and clears state.
 func (c *FlagsClient) Disconnect(ctx context.Context) {
 	c.runtime.disconnect(ctx)
@@ -635,9 +692,15 @@ func (c *FlagsClient) Stats() FlagStats {
 	return c.runtime.Stats()
 }
 
-// OnChange registers a global change listener.
+// OnChange registers a global change listener that fires for any flag change.
 func (c *FlagsClient) OnChange(cb func(*FlagChangeEvent)) {
 	c.runtime.OnChange(cb)
+}
+
+// OnChangeKey registers a key-scoped change listener that fires only when the
+// specified flag key changes.
+func (c *FlagsClient) OnChangeKey(key string, cb func(*FlagChangeEvent)) {
+	c.runtime.OnChangeKey(key, cb)
 }
 
 // Register explicitly registers context(s) for background batch registration.

@@ -6,30 +6,72 @@ Runnable examples demonstrating the [smplkit Go SDK](https://github.com/smplkit/
 
 ## Prerequisites
 
-1. Go 1.24+
+1. Go 1.21+
 2. A valid smplkit API key, provided via one of:
    - `SMPLKIT_API_KEY` environment variable
    - `~/.smplkit` configuration file (see SDK docs)
 3. At least one config created in your smplkit account (every account comes with a `common` config by default).
 
-## Config Showcase
+## Flags Showcases
 
-**File:** [`config_showcase.go`](config_showcase.go)
+### Management Showcase
 
-An end-to-end walkthrough of the Smpl Config SDK covering:
-
-- **Client initialization** — `smplkit.NewClient("", "production", smplkit.WithService("showcase-service"))`
-- **Management-plane CRUD** — create, update, list, get by key, and delete configs
-- **Environment overrides** — `SetValues()` and `SetValue()` for per-environment configuration
-- **Multi-level inheritance** — child → parent → common hierarchy setup
-- **Runtime value resolution** — `Connect()`, `Get()`, typed accessors (`GetString`, `GetInt`, `GetBool`)
-- **Real-time updates** — WebSocket-driven cache invalidation with change listeners
-- **Manual refresh and cache diagnostics** — `Refresh()`, `Stats()`
-
-### Running
+Demonstrates flag CRUD via the active record pattern: `NewBooleanFlag` / `NewStringFlag` / `NewNumberFlag` / `NewJsonFlag` → mutate → `Save()`, `AddRule()` → `Save()`, `SetEnvironmentEnabled`, `SetEnvironmentDefault`, `ClearRules`, `Get(key)`, `List()`, `Delete(key)`, `Rule` builder.
 
 ```bash
-go run examples/config_showcase.go
+go run examples/flags_management_showcase.go examples/helpers.go
 ```
 
-The script creates temporary configs, exercises all SDK features, then cleans up after itself.
+### Runtime Showcase
+
+Demonstrates typed flag handles (`BooleanFlag`, `StringFlag`, `NumberFlag`, `JsonFlag`), `SetContextProvider`, `Get(ctx)`, context override, `OnChange` / `OnChangeKey`, `Stats()`, `Register()`, `FlushContexts()`.
+
+```bash
+go run examples/flags_runtime_showcase.go examples/flags_runtime_setup.go examples/helpers.go
+```
+
+## Config Showcases
+
+### Management Showcase
+
+Demonstrates config CRUD via the active record pattern: `New(key)` → set items/environments → `Save()`, `Get(key)`, `List()`, `Delete(key)`.
+
+```bash
+go run examples/config_management_showcase.go examples/helpers.go
+```
+
+### Runtime Showcase
+
+Demonstrates `Resolve(ctx, key)`, `ResolveInto(ctx, key, &target)`, `Subscribe(ctx, key)`, `OnChange` with `WithConfigKey` / `WithItemKey`, `Refresh()`.
+
+```bash
+go run examples/config_runtime_showcase.go examples/config_runtime_setup.go examples/helpers.go
+```
+
+## Logging Showcases
+
+### Management Showcase
+
+Demonstrates logger and log group CRUD: `New(key)` → `SetLevel` → `Save()`, `Get(key)`, `List()`, `Delete(key)`, `NewGroup` → `SetLevel` / `SetEnvironmentLevel` → `Save()`, `GetGroup`, `ListGroups`, `DeleteGroup`, group assignment.
+
+```bash
+go run examples/logging_management_showcase.go examples/helpers.go
+```
+
+### Runtime Showcase
+
+Demonstrates `RegisterLogger`, `Start(ctx)`, `OnChange` / `OnChangeKey`, level resolution behavior.
+
+```bash
+go run examples/logging_runtime_showcase.go examples/logging_runtime_setup.go examples/helpers.go
+```
+
+## Client Initialization
+
+All examples use:
+
+```go
+client, err := smplkit.NewClient("", "production", "showcase-service")
+```
+
+The three required parameters — API key, environment, and service — are resolved from environment variables if empty strings are passed.

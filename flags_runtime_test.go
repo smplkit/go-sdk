@@ -344,12 +344,12 @@ func TestHashContext_Different(t *testing.T) {
 
 // --- Typed flag handles tests ---
 
-func TestBoolFlagHandle_Default(t *testing.T) {
+func TestBooleanFlagHandle_Default(t *testing.T) {
 	rt := newFlagsRuntime(nil)
 	rt.mu.Lock()
-	rt.connected = true
+	rt.initOnce.Do(func() {})
 	rt.mu.Unlock()
-	handle := rt.BoolFlag("feature-x", false)
+	handle := rt.BooleanFlag("feature-x", false)
 	// Connected but flag not in store — should return default.
 	assert.Equal(t, false, handle.Get(context.Background()))
 }
@@ -357,7 +357,7 @@ func TestBoolFlagHandle_Default(t *testing.T) {
 func TestStringFlagHandle_Default(t *testing.T) {
 	rt := newFlagsRuntime(nil)
 	rt.mu.Lock()
-	rt.connected = true
+	rt.initOnce.Do(func() {})
 	rt.mu.Unlock()
 	handle := rt.StringFlag("theme", "light")
 	assert.Equal(t, "light", handle.Get(context.Background()))
@@ -366,7 +366,7 @@ func TestStringFlagHandle_Default(t *testing.T) {
 func TestNumberFlagHandle_Default(t *testing.T) {
 	rt := newFlagsRuntime(nil)
 	rt.mu.Lock()
-	rt.connected = true
+	rt.initOnce.Do(func() {})
 	rt.mu.Unlock()
 	handle := rt.NumberFlag("max-items", 10.0)
 	assert.Equal(t, 10.0, handle.Get(context.Background()))
@@ -375,7 +375,7 @@ func TestNumberFlagHandle_Default(t *testing.T) {
 func TestJsonFlagHandle_Default(t *testing.T) {
 	rt := newFlagsRuntime(nil)
 	rt.mu.Lock()
-	rt.connected = true
+	rt.initOnce.Do(func() {})
 	rt.mu.Unlock()
 	dflt := map[string]interface{}{"color": "blue"}
 	handle := rt.JsonFlag("settings", dflt)
@@ -384,7 +384,7 @@ func TestJsonFlagHandle_Default(t *testing.T) {
 
 func TestFlagHandle_OnChange(t *testing.T) {
 	rt := newFlagsRuntime(nil)
-	handle := rt.BoolFlag("feature", true)
+	handle := rt.BooleanFlag("feature", true)
 
 	var called bool
 	handle.OnChange(func(e *FlagChangeEvent) {
@@ -397,17 +397,18 @@ func TestFlagHandle_OnChange(t *testing.T) {
 
 // --- FlagsRuntime evaluation tests ---
 
-func TestFlagsRuntime_EvaluateHandle_NotConnected(t *testing.T) {
+func TestFlagsRuntime_EvaluateHandle_InitFailure_ReturnsDefault(t *testing.T) {
+	// When FlagsRuntime has no flagsClient (nil), ensureInit will fail.
+	// evaluateHandle should return the default value instead of panicking.
 	rt := newFlagsRuntime(nil)
-	assert.PanicsWithValue(t, ErrNotConnected, func() {
-		rt.evaluateHandle(context.Background(), "key", "default", nil)
-	})
+	result := rt.evaluateHandle(context.Background(), "key", "default-val", nil)
+	assert.Equal(t, "default-val", result)
 }
 
 func TestFlagsRuntime_EvaluateHandle_Connected_WithStore(t *testing.T) {
 	rt := newFlagsRuntime(nil)
 	rt.mu.Lock()
-	rt.connected = true
+	rt.initOnce.Do(func() {})
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"feature-x": {
@@ -439,7 +440,7 @@ func TestFlagsRuntime_EvaluateHandle_Connected_WithStore(t *testing.T) {
 func TestFlagsRuntime_EvaluateHandle_CacheHit(t *testing.T) {
 	rt := newFlagsRuntime(nil)
 	rt.mu.Lock()
-	rt.connected = true
+	rt.initOnce.Do(func() {})
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"key": {"default": "value", "environments": map[string]interface{}{}},
@@ -459,7 +460,7 @@ func TestFlagsRuntime_EvaluateHandle_CacheHit(t *testing.T) {
 func TestFlagsRuntime_EvaluateHandle_WithProvider(t *testing.T) {
 	rt := newFlagsRuntime(nil)
 	rt.mu.Lock()
-	rt.connected = true
+	rt.initOnce.Do(func() {})
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"feature": {
@@ -494,7 +495,7 @@ func TestFlagsRuntime_EvaluateHandle_WithProvider(t *testing.T) {
 func TestFlagsRuntime_EvaluateHandle_FlagMissing(t *testing.T) {
 	rt := newFlagsRuntime(nil)
 	rt.mu.Lock()
-	rt.connected = true
+	rt.initOnce.Do(func() {})
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{}
 	rt.mu.Unlock()

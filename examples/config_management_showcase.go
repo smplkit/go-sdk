@@ -8,7 +8,7 @@
 //   - Update the common config with base values and environment overrides
 //   - Create configs (user_service, auth_module as child)
 //   - List all configs
-//   - Get config by ID
+//   - Get config by key
 //   - Update a config (description + production value)
 //   - Cleanup
 //
@@ -49,13 +49,13 @@ func main() {
 	//                  SMPLKIT_ENVIRONMENT if empty.
 	//
 	//   service      — identifies this SDK instance. Can also be resolved
-	//                  from SMPLKIT_SERVICE if not passed via WithService().
+	//                  from SMPLKIT_SERVICE if not passed as a positional arg.
 	//
 	// To pass the API key explicitly, pass it as the first arg:
 	//
-	//   client, err := smplkit.NewClient("sk_api_...", "production", smplkit.WithService("showcase-service"))
+	//   client, err := smplkit.NewClient("sk_api_...", "production", "showcase-service")
 	//
-	client, err := smplkit.NewClient("", "production", smplkit.WithService("showcase-service"))
+	client, err := smplkit.NewClient("", "production", "showcase-service")
 	if err != nil {
 		fatal("failed to create client", err)
 	}
@@ -64,9 +64,7 @@ func main() {
 
 	// Pre-flight: delete any configs left over from a previous run.
 	for _, key := range []string{"auth_module", "user_service"} {
-		if cfg, err := client.Config().GetByKey(ctx, key); err == nil {
-			_ = client.Config().Delete(ctx, cfg.ID)
-		}
+		_ = client.Config().Delete(ctx, key)
 	}
 
 	// ====================================================================
@@ -74,22 +72,21 @@ func main() {
 	// ====================================================================
 	section("2a. Update the Common Config")
 
-	common, err := client.Config().GetByKey(ctx, "common")
+	common, err := client.Config().Get(ctx, "common")
 	if err != nil {
 		fatal("failed to fetch common config", err)
 	}
 	step(fmt.Sprintf("Fetched common config: id=%s, key=%q", common.ID, common.Key))
 
-	err = common.Update(ctx, smplkit.UpdateConfigParams{
-		Description: strPtr("Organization-wide shared configuration"),
-		Items: map[string]interface{}{
-			"app_name":                     "Acme SaaS Platform",
-			"support_email":                "support@acme.dev",
-			"max_retries":                  3,
-			"request_timeout_ms":           5000,
-			"pagination_default_page_size": 25,
-		},
-	})
+	common.Description = strPtr("Organization-wide shared configuration")
+	common.Items = map[string]interface{}{
+		"app_name":                     "Acme SaaS Platform",
+		"support_email":                "support@acme.dev",
+		"max_retries":                  3,
+		"request_timeout_ms":           5000,
+		"pagination_default_page_size": 25,
+	}
+	err = common.Save(ctx)
 	if err != nil {
 		fatal("failed to update common config", err)
 	}
@@ -100,21 +97,20 @@ func main() {
 	// ====================================================================
 	section("2b. Environment Overrides")
 
-	err = common.SetValues(ctx, map[string]interface{}{
-		"max_retries":        5,
-		"request_timeout_ms": 10000,
-	}, "production")
+	common.Environments = map[string]map[string]interface{}{
+		"production": {
+			"max_retries":        5,
+			"request_timeout_ms": 10000,
+		},
+		"staging": {
+			"max_retries": 2,
+		},
+	}
+	err = common.Save(ctx)
 	if err != nil {
-		fatal("failed to set common production overrides", err)
+		fatal("failed to set common environment overrides", err)
 	}
 	step("Common config production overrides set")
-
-	err = common.SetValues(ctx, map[string]interface{}{
-		"max_retries": 2,
-	}, "staging")
-	if err != nil {
-		fatal("failed to set common staging overrides", err)
-	}
 	step("Common config staging overrides set")
 
 	// ====================================================================
@@ -122,11 +118,10 @@ func main() {
 	// ====================================================================
 	section("3a. Create User Service Config")
 
-	userService, err := client.Config().Create(ctx, smplkit.CreateConfigParams{
-		Name:        "User Service",
-		Key:         strPtr("user_service"),
-		Description: strPtr("Configuration for the user microservice."),
-		Items: map[string]interface{}{
+	userService := client.Config().New("user_service",
+		smplkit.WithName("User Service"),
+		smplkit.WithDescription("Configuration for the user microservice."),
+		smplkit.WithItems(map[string]interface{}{
 			"database": map[string]interface{}{
 				"host":      "localhost",
 				"port":      5432,
@@ -136,61 +131,51 @@ func main() {
 			"cache_ttl_seconds":            300,
 			"enable_signup":                true,
 			"pagination_default_page_size": 50,
-		},
-	})
+		}),
+		smplkit.WithEnvironments(map[string]map[string]interface{}{
+			"production": {
+				"database": map[string]interface{}{
+					"host":      "prod-users-rds.internal.acme.dev",
+					"name":      "users_prod",
+					"pool_size": 20,
+				},
+				"cache_ttl_seconds": 600,
+				"enable_signup":     false,
+			},
+		}),
+	)
+	err = userService.Save(ctx)
 	if err != nil {
 		fatal("failed to create user_service config", err)
 	}
 	step(fmt.Sprintf("Created user_service config: id=%s", userService.ID))
-
-	err = userService.SetValues(ctx, map[string]interface{}{
-		"database": map[string]interface{}{
-			"host":      "prod-users-rds.internal.acme.dev",
-			"name":      "users_prod",
-			"pool_size": 20,
-		},
-		"cache_ttl_seconds": 600,
-	}, "production")
-	if err != nil {
-		fatal("failed to set user_service production overrides", err)
-	}
-	step("User service production overrides set")
-
-	err = userService.SetValue(ctx, "enable_signup", false, "production")
-	if err != nil {
-		fatal("failed to set enable_signup in production", err)
-	}
-	step("Disabled signup in production")
 
 	// ====================================================================
 	// 3b. CREATE AUTH MODULE CONFIG (child of user_service)
 	// ====================================================================
 	section("3b. Create Auth Module Config (child of User Service)")
 
-	authModule, err := client.Config().Create(ctx, smplkit.CreateConfigParams{
-		Name:        "Auth Module",
-		Key:         strPtr("auth_module"),
-		Description: strPtr("Authentication module within the user service."),
-		Parent:      &userService.ID,
-		Items: map[string]interface{}{
+	authModule := client.Config().New("auth_module",
+		smplkit.WithName("Auth Module"),
+		smplkit.WithDescription("Authentication module within the user service."),
+		smplkit.WithParent(userService.ID),
+		smplkit.WithItems(map[string]interface{}{
 			"session_ttl_minutes": 60,
 			"mfa_enabled":        false,
-		},
-	})
+		}),
+		smplkit.WithEnvironments(map[string]map[string]interface{}{
+			"production": {
+				"session_ttl_minutes": 30,
+				"mfa_enabled":        true,
+			},
+		}),
+	)
+	err = authModule.Save(ctx)
 	if err != nil {
-		_ = client.Config().Delete(ctx, userService.ID)
+		_ = client.Config().Delete(ctx, "user_service")
 		fatal("failed to create auth_module config", err)
 	}
 	step(fmt.Sprintf("Created auth_module config: id=%s (parent=%s)", authModule.ID, userService.ID))
-
-	err = authModule.SetValues(ctx, map[string]interface{}{
-		"session_ttl_minutes": 30,
-		"mfa_enabled":         true,
-	}, "production")
-	if err != nil {
-		fatal("failed to set auth_module production overrides", err)
-	}
-	step("Auth module production overrides set")
 
 	// ====================================================================
 	// 4a. LIST ALL CONFIGS
@@ -211,15 +196,15 @@ func main() {
 	}
 
 	// ====================================================================
-	// 4b. GET CONFIG BY ID
+	// 4b. GET CONFIG BY KEY
 	// ====================================================================
-	section("4b. Get Config by ID")
+	section("4b. Get Config by Key")
 
-	fetched, err := client.Config().Get(ctx, smplkit.WithID(userService.ID))
+	fetched, err := client.Config().Get(ctx, "user_service")
 	if err != nil {
-		fatal("failed to get user_service by ID", err)
+		fatal("failed to get user_service by key", err)
 	}
-	step(fmt.Sprintf("Get(id=%s): key=%q name=%q", fetched.ID, fetched.Key, fetched.Name))
+	step(fmt.Sprintf("Get(key=%q): id=%s name=%q", fetched.Key, fetched.ID, fetched.Name))
 	if fetched.Description != nil {
 		step(fmt.Sprintf("  description=%q", *fetched.Description))
 	}
@@ -229,18 +214,19 @@ func main() {
 	// ====================================================================
 	section("5. Update a Config (user_service)")
 
-	err = userService.Update(ctx, smplkit.UpdateConfigParams{
-		Description: strPtr("Configuration for the user microservice (updated)."),
-	})
+	userService.Description = strPtr("Configuration for the user microservice (updated).")
+	if userService.Environments == nil {
+		userService.Environments = map[string]map[string]interface{}{}
+	}
+	if userService.Environments["production"] == nil {
+		userService.Environments["production"] = map[string]interface{}{}
+	}
+	userService.Environments["production"]["cache_ttl_seconds"] = 900
+	err = userService.Save(ctx)
 	if err != nil {
-		fatal("failed to update user_service description", err)
+		fatal("failed to update user_service", err)
 	}
 	step("Updated user_service description")
-
-	err = userService.SetValue(ctx, "cache_ttl_seconds", 900, "production")
-	if err != nil {
-		fatal("failed to update cache_ttl_seconds in production", err)
-	}
 	step("Updated cache_ttl_seconds to 900 in production")
 
 	// ====================================================================
@@ -248,23 +234,22 @@ func main() {
 	// ====================================================================
 	section("6. Cleanup")
 
-	if err := client.Config().Delete(ctx, authModule.ID); err != nil {
+	if err := client.Config().Delete(ctx, "auth_module"); err != nil {
 		fmt.Printf("  Warning: failed to delete auth_module: %v\n", err)
 	} else {
 		step(fmt.Sprintf("Deleted auth_module (%s)", authModule.ID))
 	}
 
-	if err := client.Config().Delete(ctx, userService.ID); err != nil {
+	if err := client.Config().Delete(ctx, "user_service"); err != nil {
 		fmt.Printf("  Warning: failed to delete user_service: %v\n", err)
 	} else {
 		step(fmt.Sprintf("Deleted user_service (%s)", userService.ID))
 	}
 
-	err = common.Update(ctx, smplkit.UpdateConfigParams{
-		Description:  strPtr(""),
-		Items:        map[string]interface{}{},
-		Environments: map[string]map[string]interface{}{},
-	})
+	common.Description = strPtr("")
+	common.Items = map[string]interface{}{}
+	common.Environments = map[string]map[string]interface{}{}
+	err = common.Save(ctx)
 	if err != nil {
 		fmt.Printf("  Warning: failed to reset common config: %v\n", err)
 	} else {
@@ -284,7 +269,7 @@ func main() {
 	fmt.Println("  [x] Create config (user_service)")
 	fmt.Println("  [x] Create child config (auth_module)")
 	fmt.Println("  [x] List all configs")
-	fmt.Println("  [x] Get config by ID")
+	fmt.Println("  [x] Get config by key")
 	fmt.Println("  [x] Update config (description + production value)")
 	fmt.Println("  [x] Delete configs")
 	fmt.Println("  [x] Reset common config")

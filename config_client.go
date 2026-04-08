@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -34,73 +35,44 @@ type configChangeListener struct {
 }
 
 // ConfigClient provides CRUD operations for config resources and
-// prescriptive value access after Client.Connect().
+// prescriptive value access via lazy initialization.
 // Obtain one via Client.Config().
 type ConfigClient struct {
 	client      *Client
 	generated   genconfig.ClientInterface
 	configCache map[string]map[string]interface{}
-	connected   bool
+
+	initOnce sync.Once
+	initErr  error
 
 	listenersMu sync.Mutex
 	listeners   []configChangeListener
 }
 
-// Get retrieves a single config using functional options. Exactly one of
-// WithKey or WithID must be provided.
-//
-//	cfg, err := client.Config().Get(ctx, smplkit.WithKey("my-service"))
-//	cfg, err := client.Config().Get(ctx, smplkit.WithID("uuid-here"))
-func (c *ConfigClient) Get(ctx context.Context, opts ...GetOption) (*Config, error) {
-	var gc getConfig
+// --- Factory method (Active Record pattern) ---
+
+// New creates an unsaved Config with the given key. Call Save(ctx) to persist.
+// If name is not provided via WithConfigName, it is auto-generated from the key.
+func (c *ConfigClient) New(key string, opts ...ConfigOption) *Config {
+	cfg := &Config{
+		Key:          key,
+		Name:         keyToDisplayName(key),
+		Items:        map[string]interface{}{},
+		Environments: map[string]map[string]interface{}{},
+		client:       c,
+	}
 	for _, opt := range opts {
-		opt(&gc)
+		opt(cfg)
 	}
-
-	if (gc.key == nil) == (gc.id == nil) {
-		return nil, fmt.Errorf("smplkit: exactly one of WithKey or WithID must be provided")
-	}
-
-	if gc.id != nil {
-		return c.GetByID(ctx, *gc.id)
-	}
-	return c.GetByKey(ctx, *gc.key)
+	return cfg
 }
 
-// GetByID retrieves a config by its UUID.
-func (c *ConfigClient) GetByID(ctx context.Context, id string) (*Config, error) {
-	uid, err := uuid.Parse(id)
-	if err != nil {
-		return nil, fmt.Errorf("smplkit: invalid config ID %q: %w", id, err)
-	}
+// --- Management CRUD ---
 
-	resp, err := c.generated.GetConfig(ctx, uid)
-	if err != nil {
-		return nil, classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	var result genconfig.ConfigResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	return resourceToConfig(result.Data, c), nil
-}
-
-// GetByKey retrieves a config by its human-readable key.
-// Uses the list endpoint with a filter[key] query parameter and returns the
-// first match, or SmplNotFoundError if none match.
-func (c *ConfigClient) GetByKey(ctx context.Context, key string) (*Config, error) {
+// Get retrieves a config by its key.
+// Uses the list endpoint with a filter[key] query parameter.
+// Returns SmplNotFoundError if no match.
+func (c *ConfigClient) Get(ctx context.Context, key string) (*Config, error) {
 	params := &genconfig.ListConfigsParams{FilterKey: &key}
 	resp, err := c.generated.ListConfigs(ctx, params)
 	if err != nil {
@@ -134,16 +106,14 @@ func (c *ConfigClient) GetByKey(ctx context.Context, key string) (*Config, error
 	return resourceToConfig(result.Data[0], c), nil
 }
 
-// Create creates a new config resource.
-func (c *ConfigClient) Create(ctx context.Context, params CreateConfigParams) (*Config, error) {
-	reqBody := buildConfigRequest("", params.Name, params.Key, params.Description, params.Parent, params.Items, params.Environments)
-
-	// Pre-validate marshaling to give a clear error message.
-	if _, err := json.Marshal(reqBody); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
+// getByID retrieves a config by its UUID (internal use for chain walking).
+func (c *ConfigClient) getByID(ctx context.Context, id string) (*Config, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("smplkit: invalid config ID %q: %w", id, err)
 	}
 
-	resp, err := c.generated.CreateConfig(ctx, reqBody)
+	resp, err := c.generated.GetConfig(ctx, uid)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -196,8 +166,18 @@ func (c *ConfigClient) List(ctx context.Context) ([]*Config, error) {
 	return configs, nil
 }
 
-// Delete removes a config by its UUID. Returns nil on success (HTTP 204).
-func (c *ConfigClient) Delete(ctx context.Context, id string) error {
+// Delete removes a config by its key. Fetches by key first to get UUID,
+// then deletes by UUID. Returns SmplNotFoundError if not found.
+func (c *ConfigClient) Delete(ctx context.Context, key string) error {
+	cfg, err := c.Get(ctx, key)
+	if err != nil {
+		return err
+	}
+	return c.deleteByID(ctx, cfg.ID)
+}
+
+// deleteByID removes a config by its UUID.
+func (c *ConfigClient) deleteByID(ctx context.Context, id string) error {
 	uid, err := uuid.Parse(id)
 	if err != nil {
 		return fmt.Errorf("smplkit: invalid config ID %q: %w", id, err)
@@ -218,184 +198,143 @@ func (c *ConfigClient) Delete(ctx context.Context, id string) error {
 	return checkStatus(resp.StatusCode, body)
 }
 
-// updateByID sends a PUT request to replace the config identified by id.
-func (c *ConfigClient) updateByID(ctx context.Context, id, name, key string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) (*Config, error) {
-	uid, err := uuid.Parse(id)
+// createConfig sends a POST to create the config, then applies the response.
+func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
+	reqBody := buildConfigRequest("", cfg.Name, &cfg.Key, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+
+	resp, err := c.generated.CreateConfig(ctx, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("smplkit: invalid config ID %q: %w", id, err)
-	}
-
-	reqBody := buildConfigRequest(id, name, &key, desc, parent, items, envs)
-
-	if _, err := json.Marshal(reqBody); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to marshal request body: %w", err)
-	}
-
-	resp, err := c.generated.UpdateConfig(ctx, uid, reqBody)
-	if err != nil {
-		return nil, classifyError(err)
+		return classifyError(err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
+		return &SmplConnectionError{
 			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
+		return err
 	}
 
 	var result genconfig.ConfigResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+		return fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
-	return resourceToConfig(result.Data, c), nil
-}
-
-// fetchChain fetches the full ancestor chain starting from rootID.
-// Returns [rootID's config, its parent, grandparent, ...] in child→root order.
-// Always makes live HTTP calls so callers always get fresh data.
-func (c *ConfigClient) fetchChain(ctx context.Context, rootID string) ([]chainEntry, error) {
-	var chain []chainEntry
-	currentID := rootID
-	for currentID != "" {
-		node, err := c.GetByID(ctx, currentID)
-		if err != nil {
-			return nil, err
-		}
-		chain = append(chain, chainEntry{
-			ID:           node.ID,
-			Values:       node.Items,
-			Environments: node.Environments,
-		})
-		if node.Parent == nil {
-			break
-		}
-		currentID = *node.Parent
-	}
-	return chain, nil
-}
-
-// connectInternal fetches all configs, resolves values for the environment,
-// and caches them. Called by Client.Connect().
-func (c *ConfigClient) connectInternal(ctx context.Context, environment string) error {
-	configs, err := c.List(ctx)
-	if err != nil {
-		return err
-	}
-
-	cache := make(map[string]map[string]interface{})
-	for _, cfg := range configs {
-		chain, fetchErr := c.fetchChain(ctx, cfg.ID)
-		if fetchErr != nil {
-			return fetchErr
-		}
-		cache[cfg.Key] = resolveChain(chain, environment)
-	}
-	c.configCache = cache
-	c.connected = true
+	cfg.apply(resourceToConfig(result.Data, c))
 	return nil
 }
 
-// GetValue reads a resolved config value (prescriptive access).
-//
-// Requires Client.Connect() to have been called.
-//
-// With one argument (configKey), returns a copy of all resolved values as map[string]interface{}.
-// With two arguments (configKey, itemKey), returns the specific item value.
-// Returns defaultVal (or nil) if the key is missing.
-func (c *ConfigClient) GetValue(configKey string, itemKey ...string) (interface{}, error) {
-	if !c.connected {
-		return nil, ErrNotConnected
+// updateConfig sends a PUT to update the config, then applies the response.
+func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
+	uid, err := uuid.Parse(cfg.ID)
+	if err != nil {
+		return fmt.Errorf("smplkit: invalid config ID %q: %w", cfg.ID, err)
 	}
-	resolved, ok := c.configCache[configKey]
-	if !ok {
-		return nil, nil
+
+	reqBody := buildConfigRequest(cfg.ID, cfg.Name, &cfg.Key, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+
+	resp, err := c.generated.UpdateConfig(ctx, uid, reqBody)
+	if err != nil {
+		return classifyError(err)
 	}
-	if len(itemKey) == 0 {
-		// Return a copy
-		cp := make(map[string]interface{}, len(resolved))
-		for k, v := range resolved {
-			cp[k] = v
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
-		return cp, nil
 	}
-	val, ok := resolved[itemKey[0]]
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+
+	var result genconfig.ConfigResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+	cfg.apply(resourceToConfig(result.Data, c))
+	return nil
+}
+
+// --- Runtime: Resolve / Subscribe ---
+
+// Resolve returns the resolved config values for the given key.
+// Triggers lazy initialization on first call.
+func (c *ConfigClient) Resolve(ctx context.Context, key string) (map[string]interface{}, error) {
+	if err := c.ensureInit(ctx); err != nil {
+		return nil, err
+	}
+	resolved, ok := c.configCache[key]
 	if !ok {
 		return nil, nil
 	}
-	return val, nil
+	// Return a copy.
+	cp := make(map[string]interface{}, len(resolved))
+	for k, v := range resolved {
+		cp[k] = v
+	}
+	return cp, nil
 }
 
-// GetString returns the resolved string value for (configKey, itemKey),
-// or defaultVal if absent or not a string.
-//
-// Requires Client.Connect() to have been called.
-func (c *ConfigClient) GetString(configKey, itemKey string, defaultVal ...string) (string, error) {
-	val, err := c.GetValue(configKey, itemKey)
+// ResolveInto resolves the config and unmarshals it into the target struct.
+// The target must be a pointer to a struct. Dot-notation keys are unflattened
+// into nested maps before unmarshaling via JSON round-trip.
+func (c *ConfigClient) ResolveInto(ctx context.Context, key string, target interface{}) error {
+	resolved, err := c.Resolve(ctx, key)
 	if err != nil {
-		return "", err
+		return err
 	}
-	if s, ok := val.(string); ok {
-		return s, nil
-	}
-	if len(defaultVal) > 0 {
-		return defaultVal[0], nil
-	}
-	return "", nil
+	return unmarshalResolved(resolved, target)
 }
 
-// GetInt returns the resolved int value for (configKey, itemKey),
-// or defaultVal if absent or not a number.
-// JSON numbers are float64; this converts float64 and int64 to int automatically.
-//
-// Requires Client.Connect() to have been called.
-func (c *ConfigClient) GetInt(configKey, itemKey string, defaultVal ...int) (int, error) {
-	val, err := c.GetValue(configKey, itemKey)
-	if err != nil {
-		return 0, err
+// Subscribe returns a LiveConfig whose Value() always reflects the latest
+// cached resolved values for the given key.
+// Triggers lazy initialization on first call.
+func (c *ConfigClient) Subscribe(ctx context.Context, key string) (*LiveConfig, error) {
+	if err := c.ensureInit(ctx); err != nil {
+		return nil, err
 	}
-	switch n := val.(type) {
-	case int:
-		return n, nil
-	case float64:
-		return int(n), nil
-	case int64:
-		return int(n), nil
-	}
-	if len(defaultVal) > 0 {
-		return defaultVal[0], nil
-	}
-	return 0, nil
+	return &LiveConfig{client: c, key: key}, nil
 }
 
-// GetBool returns the resolved bool value for (configKey, itemKey),
-// or defaultVal if absent or not a bool.
-//
-// Requires Client.Connect() to have been called.
-func (c *ConfigClient) GetBool(configKey, itemKey string, defaultVal ...bool) (bool, error) {
-	val, err := c.GetValue(configKey, itemKey)
-	if err != nil {
-		return false, err
-	}
-	if b, ok := val.(bool); ok {
-		return b, nil
-	}
-	if len(defaultVal) > 0 {
-		return defaultVal[0], nil
-	}
-	return false, nil
+// --- Runtime: Lazy Init ---
+
+// ensureInit performs lazy initialization on first prescriptive access.
+// Fetches all configs, resolves values for the environment, and caches them.
+func (c *ConfigClient) ensureInit(ctx context.Context) error {
+	c.initOnce.Do(func() {
+		environment := c.client.environment
+		configs, err := c.List(ctx)
+		if err != nil {
+			c.initErr = err
+			return
+		}
+
+		cache := make(map[string]map[string]interface{})
+		for _, cfg := range configs {
+			chain, fetchErr := c.fetchChain(ctx, cfg.ID)
+			if fetchErr != nil {
+				c.initErr = fetchErr
+				return
+			}
+			cache[cfg.Key] = resolveChain(chain, environment)
+		}
+		c.configCache = cache
+	})
+	return c.initErr
 }
+
+// --- Runtime: Refresh & OnChange ---
 
 // Refresh re-fetches all configs, re-resolves values, and updates the cache.
 // Fires OnChange listeners for any values that differ from the previous cache.
-//
-// Requires Client.Connect() to have been called.
+// Triggers lazy initialization on first call.
 func (c *ConfigClient) Refresh(ctx context.Context) error {
-	if !c.connected {
-		return ErrNotConnected
+	if err := c.ensureInit(ctx); err != nil {
+		return err
 	}
 	environment := c.client.environment
 	if environment == "" {
@@ -422,9 +361,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 }
 
 // OnChange registers a listener that fires when a config value changes (on Refresh).
-//
-// If configKey is provided, the listener fires only for changes to that config.
-// If both configKey and itemKey are provided, only changes to that specific item fire.
+// Use WithConfigKey and/or WithItemKey to scope the listener.
 func (c *ConfigClient) OnChange(cb func(*ConfigChangeEvent), opts ...ChangeListenerOption) {
 	var cfg changeListenerConfig
 	for _, opt := range opts {
@@ -460,6 +397,84 @@ func WithItemKey(key string) ChangeListenerOption {
 		c.itemKey = key
 	}
 }
+
+// --- Prescriptive access (legacy, delegates to Resolve) ---
+
+// GetValue reads a resolved config value (prescriptive access).
+// Triggers lazy initialization on first call.
+func (c *ConfigClient) GetValue(ctx context.Context, configKey string, itemKey ...string) (interface{}, error) {
+	if err := c.ensureInit(ctx); err != nil {
+		return nil, err
+	}
+	resolved, ok := c.configCache[configKey]
+	if !ok {
+		return nil, nil
+	}
+	if len(itemKey) == 0 {
+		cp := make(map[string]interface{}, len(resolved))
+		for k, v := range resolved {
+			cp[k] = v
+		}
+		return cp, nil
+	}
+	val, ok := resolved[itemKey[0]]
+	if !ok {
+		return nil, nil
+	}
+	return val, nil
+}
+
+// GetString returns the resolved string value for (configKey, itemKey).
+func (c *ConfigClient) GetString(ctx context.Context, configKey, itemKey string, defaultVal ...string) (string, error) {
+	val, err := c.GetValue(ctx, configKey, itemKey)
+	if err != nil {
+		return "", err
+	}
+	if s, ok := val.(string); ok {
+		return s, nil
+	}
+	if len(defaultVal) > 0 {
+		return defaultVal[0], nil
+	}
+	return "", nil
+}
+
+// GetInt returns the resolved int value for (configKey, itemKey).
+func (c *ConfigClient) GetInt(ctx context.Context, configKey, itemKey string, defaultVal ...int) (int, error) {
+	val, err := c.GetValue(ctx, configKey, itemKey)
+	if err != nil {
+		return 0, err
+	}
+	switch n := val.(type) {
+	case int:
+		return n, nil
+	case float64:
+		return int(n), nil
+	case int64:
+		return int(n), nil
+	}
+	if len(defaultVal) > 0 {
+		return defaultVal[0], nil
+	}
+	return 0, nil
+}
+
+// GetBool returns the resolved bool value for (configKey, itemKey).
+func (c *ConfigClient) GetBool(ctx context.Context, configKey, itemKey string, defaultVal ...bool) (bool, error) {
+	val, err := c.GetValue(ctx, configKey, itemKey)
+	if err != nil {
+		return false, err
+	}
+	if b, ok := val.(bool); ok {
+		return b, nil
+	}
+	if len(defaultVal) > 0 {
+		return defaultVal[0], nil
+	}
+	return false, nil
+}
+
+// --- Internal helpers ---
 
 // diffAndFire compares old and new caches and fires change listeners.
 func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]interface{}, source string) { //nolint:unparam // "websocket" source will be used when real-time config push is wired up
@@ -526,9 +541,29 @@ func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]inte
 	}
 }
 
+// fetchChain fetches the full ancestor chain starting from rootID.
+func (c *ConfigClient) fetchChain(ctx context.Context, rootID string) ([]chainEntry, error) {
+	var chain []chainEntry
+	currentID := rootID
+	for currentID != "" {
+		node, err := c.getByID(ctx, currentID)
+		if err != nil {
+			return nil, err
+		}
+		chain = append(chain, chainEntry{
+			ID:           node.ID,
+			Values:       node.Items,
+			Environments: node.Environments,
+		})
+		if node.Parent == nil {
+			break
+		}
+		currentID = *node.Parent
+	}
+	return chain, nil
+}
+
 // resourceToConfig converts a generated ConfigResource to the SDK Config type.
-// It extracts raw values from typed items (each item has {value, type, description})
-// and extracts raw values from environment overrides (each override has {value}).
 func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 	attrs := r.Attributes
 	id := ""
@@ -554,10 +589,6 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 }
 
 // buildConfigRequest constructs a ResponseConfig for create or update.
-// Pass empty id for create (omitted in JSON).
-// The items parameter contains raw values which are wrapped into typed item format
-// ({key: {"value": raw, "type": "JSON"}}) for the API. Environment override values
-// within envs[env]["values"] are wrapped as {key: {"value": raw}}.
 func buildConfigRequest(id, name string, key, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
 	var idPtr *string
 	if id != "" {
@@ -580,9 +611,53 @@ func buildConfigRequest(id, name string, key, desc, parent *string, items map[st
 	}
 }
 
-// derefMap converts *map[string]ConfigItemDefinition to a wire-format map
-// consumed by extractItemValues: {key: {"value": raw}}.
-// extractItemValues only needs the "value" key, so type/description are omitted.
+// unmarshalResolved unflattens dot-notation keys and unmarshals into target.
+func unmarshalResolved(resolved map[string]interface{}, target interface{}) error {
+	if resolved == nil {
+		return nil
+	}
+	nested := unflattenDotNotation(resolved)
+	data, err := json.Marshal(nested)
+	if err != nil {
+		return fmt.Errorf("smplkit: failed to marshal resolved config: %w", err)
+	}
+	return json.Unmarshal(data, target)
+}
+
+// unflattenDotNotation converts flat dot-notation keys into nested maps.
+// e.g. {"database.host": "localhost", "database.port": 5432} →
+// {"database": {"host": "localhost", "port": 5432}}
+func unflattenDotNotation(flat map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for key, value := range flat {
+		parts := strings.Split(key, ".")
+		current := result
+		for i, part := range parts {
+			if i == len(parts)-1 {
+				current[part] = value
+			} else {
+				if next, ok := current[part]; ok {
+					if nextMap, ok := next.(map[string]interface{}); ok {
+						current = nextMap
+					} else {
+						// Conflict: overwrite non-map with map.
+						newMap := make(map[string]interface{})
+						current[part] = newMap
+						current = newMap
+					}
+				} else {
+					newMap := make(map[string]interface{})
+					current[part] = newMap
+					current = newMap
+				}
+			}
+		}
+	}
+	return result
+}
+
+// --- Value wrapping/unwrapping helpers ---
+
 func derefMap(m *map[string]genconfig.ConfigItemDefinition) map[string]interface{} {
 	if m == nil {
 		return nil
@@ -594,8 +669,6 @@ func derefMap(m *map[string]genconfig.ConfigItemDefinition) map[string]interface
 	return result
 }
 
-// refMap converts the output of wrapItemValues ({key: {"value": raw, "type": "JSON"}})
-// to *map[string]ConfigItemDefinition. Called only with wrapItemValues output.
 func refMap(m map[string]interface{}) *map[string]genconfig.ConfigItemDefinition {
 	if m == nil {
 		return nil
@@ -609,8 +682,6 @@ func refMap(m map[string]interface{}) *map[string]genconfig.ConfigItemDefinition
 	return &result
 }
 
-// derefEnvs converts *map[string]EnvironmentOverride to the wire-format map
-// used by extractEnvOverrides: {envName: {"values": {key: {"value": raw}}}}.
 func derefEnvs(envs *map[string]genconfig.EnvironmentOverride) map[string]map[string]interface{} {
 	if envs == nil {
 		return nil
@@ -630,9 +701,6 @@ func derefEnvs(envs *map[string]genconfig.EnvironmentOverride) map[string]map[st
 	return result
 }
 
-// refEnvs converts the output of wrapEnvOverrides back to *map[string]EnvironmentOverride.
-// Called only with wrapEnvOverrides output, so "values" is always a map[string]interface{}
-// whose entries are always {"value": raw} maps.
 func refEnvs(envs map[string]map[string]interface{}) *map[string]genconfig.EnvironmentOverride {
 	if envs == nil {
 		return nil
@@ -654,9 +722,6 @@ func refEnvs(envs map[string]map[string]interface{}) *map[string]genconfig.Envir
 	return &result
 }
 
-// extractItemValues extracts raw values from typed items.
-// Each item is expected to be {"value": raw, "type": "STRING"|..., "description": "..."}.
-// Returns a map of key -> raw value.
 func extractItemValues(items map[string]interface{}) map[string]interface{} {
 	if items == nil {
 		return nil
@@ -669,16 +734,11 @@ func extractItemValues(items map[string]interface{}) map[string]interface{} {
 				continue
 			}
 		}
-		// Fallback: use the value as-is (backward compatibility).
 		result[k] = v
 	}
 	return result
 }
 
-// extractEnvOverrides extracts raw values from environment overrides.
-// Each environment entry has a "values" key containing wrapped overrides:
-// {"values": {key: {"value": raw}}}. Extracts the raw values so the SDK
-// stores {"values": {key: raw}}.
 func extractEnvOverrides(envs map[string]map[string]interface{}) map[string]map[string]interface{} {
 	if envs == nil {
 		return nil
@@ -710,8 +770,6 @@ func extractEnvOverrides(envs map[string]map[string]interface{}) map[string]map[
 	return result
 }
 
-// wrapItemValues wraps raw values into typed item format for the API.
-// Each value becomes {"value": raw, "type": "JSON"}.
 func wrapItemValues(items map[string]interface{}) map[string]interface{} {
 	if items == nil {
 		return nil
@@ -726,8 +784,6 @@ func wrapItemValues(items map[string]interface{}) map[string]interface{} {
 	return result
 }
 
-// wrapEnvOverrides wraps environment override values into the API format.
-// Each value within envEntry["values"] becomes {"value": raw}.
 func wrapEnvOverrides(envs map[string]map[string]interface{}) map[string]map[string]interface{} {
 	if envs == nil {
 		return nil

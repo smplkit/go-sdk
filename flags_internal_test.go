@@ -777,7 +777,7 @@ func TestFlagsRuntime_FireChangeListenersAll(t *testing.T) {
 
 func TestFlagsRuntime_HandleSpecificListener_Panic(t *testing.T) {
 	rt := newFlagsRuntime(nil)
-	handle := rt.BoolFlag("feature", true)
+	handle := rt.BooleanFlag("feature", true)
 
 	handle.OnChange(func(e *FlagChangeEvent) {
 		panic("flag listener panic")
@@ -791,8 +791,8 @@ func TestFlagsRuntime_HandleSpecificListener_Panic(t *testing.T) {
 
 func TestFlagsRuntime_EvaluateHandle_NilEvaluationResult(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"feature": {
@@ -827,37 +827,29 @@ func TestContextRegistrationBuffer_Eviction(t *testing.T) {
 
 func TestFlagsClient_BoolFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
-	fc.runtime.mu.Unlock()
-	handle := fc.BoolFlag("feature", false)
+	fc.runtime.initOnce.Do(func() {})
+	handle := fc.BooleanFlag("feature", false)
 	assert.NotNil(t, handle)
 	assert.Equal(t, false, handle.Get(context.Background()))
 }
 
 func TestFlagsClient_StringFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
-	fc.runtime.mu.Unlock()
+	fc.runtime.initOnce.Do(func() {})
 	handle := fc.StringFlag("theme", "light")
 	assert.Equal(t, "light", handle.Get(context.Background()))
 }
 
 func TestFlagsClient_NumberFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
-	fc.runtime.mu.Unlock()
+	fc.runtime.initOnce.Do(func() {})
 	handle := fc.NumberFlag("max-retries", 3.0)
 	assert.Equal(t, 3.0, handle.Get(context.Background()))
 }
 
 func TestFlagsClient_JsonFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
-	fc.runtime.mu.Unlock()
+	fc.runtime.initOnce.Do(func() {})
 	dflt := map[string]interface{}{"color": "blue"}
 	handle := fc.JsonFlag("settings", dflt)
 	assert.Equal(t, dflt, handle.Get(context.Background()))
@@ -912,8 +904,8 @@ func TestFlagsClient_Evaluate_ConnectedWithStore(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
 	// Set up connected state with a flag in the store
+	fc.runtime.initOnce.Do(func() {})
 	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
 	fc.runtime.environment = "production"
 	fc.runtime.flagStore = map[string]map[string]interface{}{
 		"feature": {
@@ -927,51 +919,43 @@ func TestFlagsClient_Evaluate_ConnectedWithStore(t *testing.T) {
 	assert.Equal(t, "flag-default", result)
 }
 
-// --- Typed flag handle GetWithContext ---
+// --- Typed flag handle Get with variadic contexts ---
 
-func TestBoolFlagHandle_GetWithContext(t *testing.T) {
+func TestBooleanFlagHandle_Get_NoContexts(t *testing.T) {
 	rt := newFlagsRuntime(nil)
-	rt.mu.Lock()
-	rt.connected = true
-	rt.mu.Unlock()
-	handle := rt.BoolFlag("feature", false)
-	assert.Equal(t, false, handle.GetWithContext(context.Background(), nil))
+	rt.initOnce.Do(func() {})
+	handle := rt.BooleanFlag("feature", false)
+	assert.Equal(t, false, handle.Get(context.Background()))
 }
 
-func TestStringFlagHandle_GetWithContext(t *testing.T) {
+func TestStringFlagHandle_Get_NoContexts(t *testing.T) {
 	rt := newFlagsRuntime(nil)
-	rt.mu.Lock()
-	rt.connected = true
-	rt.mu.Unlock()
+	rt.initOnce.Do(func() {})
 	handle := rt.StringFlag("theme", "light")
-	assert.Equal(t, "light", handle.GetWithContext(context.Background(), nil))
+	assert.Equal(t, "light", handle.Get(context.Background()))
 }
 
-func TestNumberFlagHandle_GetWithContext(t *testing.T) {
+func TestNumberFlagHandle_Get_NoContexts(t *testing.T) {
 	rt := newFlagsRuntime(nil)
-	rt.mu.Lock()
-	rt.connected = true
-	rt.mu.Unlock()
+	rt.initOnce.Do(func() {})
 	handle := rt.NumberFlag("retries", 5.0)
-	assert.Equal(t, 5.0, handle.GetWithContext(context.Background(), nil))
+	assert.Equal(t, 5.0, handle.Get(context.Background()))
 }
 
-func TestJsonFlagHandle_GetWithContext(t *testing.T) {
+func TestJsonFlagHandle_Get_NoContexts(t *testing.T) {
 	rt := newFlagsRuntime(nil)
-	rt.mu.Lock()
-	rt.connected = true
-	rt.mu.Unlock()
+	rt.initOnce.Do(func() {})
 	dflt := map[string]interface{}{"a": "b"}
 	handle := rt.JsonFlag("config", dflt)
-	assert.Equal(t, dflt, handle.GetWithContext(context.Background(), nil))
+	assert.Equal(t, dflt, handle.Get(context.Background()))
 }
 
 // --- NumberFlagHandle type coercion ---
 
 func TestNumberFlagHandle_GetInt(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"retries": {
@@ -986,13 +970,11 @@ func TestNumberFlagHandle_GetInt(t *testing.T) {
 	assert.Equal(t, 3.0, result)
 }
 
-func TestNumberFlagHandle_GetWithContext_Int(t *testing.T) {
+func TestNumberFlagHandle_Get_NoContexts_Int(t *testing.T) {
 	rt := newFlagsRuntime(nil)
-	rt.mu.Lock()
-	rt.connected = true
-	rt.mu.Unlock()
+	rt.initOnce.Do(func() {})
 	handle := rt.NumberFlag("retries", 5.0)
-	assert.Equal(t, 5.0, handle.GetWithContext(context.Background(), nil))
+	assert.Equal(t, 5.0, handle.Get(context.Background()))
 }
 
 // --- EvaluateFlag edge cases ---
@@ -1178,16 +1160,16 @@ const testFlagUUID = "660e8400-e29b-41d4-a716-446655440000"
 
 func TestFlagsClient_Get_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/v1/flags/"+testFlagUUID {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/flags" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+			_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flag, err := fc.Get(context.Background(), testFlagUUID)
+	flag, err := fc.Get(context.Background(), "feature-x")
 	require.NoError(t, err)
 	assert.Equal(t, testFlagUUID, flag.ID)
 	assert.Equal(t, "feature-x", flag.Key)
@@ -1198,19 +1180,14 @@ func TestFlagsClient_Get_Success(t *testing.T) {
 
 func TestFlagsClient_Get_NotFound(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
 
-	_, err := fc.Get(context.Background(), testFlagUUID)
+	_, err := fc.Get(context.Background(), "nonexistent-key")
 	assert.Error(t, err)
-}
-
-func TestFlagsClient_Get_InvalidUUID(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	_, err := fc.Get(context.Background(), "not-a-uuid")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid flag ID")
+	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestFlagsClient_Create_Success(t *testing.T) {
@@ -1231,12 +1208,8 @@ func TestFlagsClient_Create_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flag, err := fc.Create(context.Background(), CreateFlagParams{
-		Key:     "feature-x",
-		Name:    "Feature X",
-		Type:    FlagTypeBoolean,
-		Default: true,
-	})
+	flag := fc.NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
+	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "feature-x", flag.Key)
 }
@@ -1248,13 +1221,11 @@ func TestFlagsClient_Create_NonBooleanNoAutoValues(t *testing.T) {
 		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "color", "Color", "STRING")))
 	}))
 
-	flag, err := fc.Create(context.Background(), CreateFlagParams{
-		Key:     "color",
-		Name:    "Color",
-		Type:    FlagTypeString,
-		Default: "red",
-		Values:  []FlagValue{{Name: "Red", Value: "red"}, {Name: "Blue", Value: "blue"}},
-	})
+	flag := fc.NewStringFlag("color", "red",
+		WithFlagName("Color"),
+		WithFlagValues([]FlagValue{{Name: "Red", Value: "red"}, {Name: "Blue", Value: "blue"}}),
+	)
+	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.NotNil(t, flag)
 }
@@ -1278,6 +1249,12 @@ func TestFlagsClient_List_Success(t *testing.T) {
 
 func TestFlagsClient_Delete_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/flags" {
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+			return
+		}
 		if r.Method == "DELETE" && r.URL.Path == "/api/v1/flags/"+testFlagUUID {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -1285,15 +1262,19 @@ func TestFlagsClient_Delete_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	err := fc.Delete(context.Background(), testFlagUUID)
+	err := fc.Delete(context.Background(), "feature-x")
 	assert.NoError(t, err)
 }
 
-func TestFlagsClient_Delete_InvalidUUID(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	err := fc.Delete(context.Background(), "invalid")
+func TestFlagsClient_Delete_NotFound(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	err := fc.Delete(context.Background(), "nonexistent-key")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid flag ID")
+	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestFlagsClient_UpdateFlag_Success(t *testing.T) {
@@ -1318,16 +1299,16 @@ func TestFlagsClient_UpdateFlag_Success(t *testing.T) {
 		client:       fc,
 	}
 
-	newName := "Updated Name"
-	updated, err := fc.updateFlag(context.Background(), flag, UpdateFlagParams{Name: &newName})
+	flag.Name = "Updated Name"
+	err := fc.updateFlag(context.Background(), flag)
 	require.NoError(t, err)
-	assert.Equal(t, "Updated Name", updated.Name)
+	assert.Equal(t, "Updated Name", flag.Name)
 }
 
 func TestFlagsClient_UpdateFlag_InvalidUUID(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	flag := &Flag{ID: "invalid", client: fc}
-	_, err := fc.updateFlag(context.Background(), flag, UpdateFlagParams{})
+	flag := &Flag{ID: "invalid", Key: "x", Type: "BOOLEAN", Default: true, Values: []FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid flag ID")
 }
@@ -1350,19 +1331,17 @@ func TestFlagsClient_UpdateFlag_WithAllParams(t *testing.T) {
 		client:       fc,
 	}
 
-	newName := "New Name"
 	newDesc := "New Description"
-	_, err := fc.updateFlag(context.Background(), flag, UpdateFlagParams{
-		Name:        &newName,
-		Description: &newDesc,
-		Default:     false,
-		Values:      []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}},
-		Environments: map[string]interface{}{
-			"production": map[string]interface{}{
-				"enabled": true,
-			},
+	flag.Name = "New Name"
+	flag.Description = &newDesc
+	flag.Default = false
+	flag.Values = []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}}
+	flag.Environments = map[string]interface{}{
+		"production": map[string]interface{}{
+			"enabled": true,
 		},
-	})
+	}
+	err := fc.updateFlag(context.Background(), flag)
 	require.NoError(t, err)
 }
 
@@ -1505,19 +1484,19 @@ func TestFlagsClient_FetchFlagsList(t *testing.T) {
 
 // --- FlagsRuntime Connect / Disconnect / Refresh ---
 
-func TestFlagsRuntime_Connect(t *testing.T) {
+func TestFlagsRuntime_LazyInit(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
 	}))
+	fc.client.environment = "production"
 
-	err := fc.connectInternal(context.Background(), "production")
+	err := fc.runtime.ensureInit(context.Background())
 	require.NoError(t, err)
 
-	// Should be connected with flag in store
+	// Should have flag in store
 	fc.runtime.mu.RLock()
-	assert.True(t, fc.runtime.connected)
 	assert.Equal(t, "production", fc.runtime.environment)
 	_, ok := fc.runtime.flagStore["feature-x"]
 	assert.True(t, ok)
@@ -1534,12 +1513,12 @@ func TestFlagsRuntime_Disconnect(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
+	fc.client.environment = "staging"
 
-	_ = fc.connectInternal(context.Background(), "staging")
+	_ = fc.runtime.ensureInit(context.Background())
 	fc.Disconnect(context.Background())
 
 	fc.runtime.mu.RLock()
-	assert.False(t, fc.runtime.connected)
 	assert.Equal(t, "", fc.runtime.environment)
 	fc.runtime.mu.RUnlock()
 
@@ -1556,8 +1535,8 @@ func TestFlagsRuntime_Refresh(t *testing.T) {
 	}))
 
 	// Manually set connected
+	fc.runtime.initOnce.Do(func() {})
 	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
 	fc.runtime.environment = "production"
 	fc.runtime.mu.Unlock()
 
@@ -1621,19 +1600,13 @@ func TestFlag_Update(t *testing.T) {
 		client:       fc,
 	}
 
-	err := flag.Update(context.Background(), UpdateFlagParams{})
+	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "Updated", flag.Name)
 }
 
 func TestFlag_AddRule_Success(t *testing.T) {
-	callCount := 0
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
-	}))
+	fc, _ := newTestFlagsClient(t, nil)
 
 	flag := &Flag{
 		ID:           testFlagUUID,
@@ -1652,17 +1625,19 @@ func TestFlag_AddRule_Success(t *testing.T) {
 		Serve(true).
 		Build()
 
-	err := flag.AddRule(context.Background(), rule)
+	err := flag.AddRule(rule)
 	require.NoError(t, err)
-	// Should have called Get (to refresh) then updateFlag
-	assert.True(t, callCount >= 2)
+	// AddRule is a local mutation — verify the environment was created with the rule
+	envData := flag.Environments["production"].(map[string]interface{})
+	rules := envData["rules"].([]interface{})
+	assert.Len(t, rules, 1)
 }
 
 func TestFlag_AddRule_MissingEnvironment(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	flag := &Flag{ID: testFlagUUID, client: fc}
 
-	err := flag.AddRule(context.Background(), map[string]interface{}{
+	err := flag.AddRule(map[string]interface{}{
 		"logic": map[string]interface{}{},
 		"value": true,
 	})
@@ -1765,12 +1740,12 @@ func TestFlagsClient_FlushContexts_Lifecycle(t *testing.T) {
 	assert.True(t, received)
 }
 
-// --- BoolFlagHandle type mismatch ---
+// --- BooleanFlagHandle type mismatch ---
 
-func TestBoolFlagHandle_Get_TypeMismatch(t *testing.T) {
+func TestBooleanFlagHandle_Get_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"feature": {
@@ -1780,15 +1755,15 @@ func TestBoolFlagHandle_Get_TypeMismatch(t *testing.T) {
 	}
 	rt.mu.Unlock()
 
-	handle := rt.BoolFlag("feature", false)
+	handle := rt.BooleanFlag("feature", false)
 	result := handle.Get(context.Background())
 	assert.Equal(t, false, result) // falls back to default
 }
 
 func TestStringFlagHandle_Get_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"theme": {
@@ -1805,8 +1780,8 @@ func TestStringFlagHandle_Get_TypeMismatch(t *testing.T) {
 
 func TestNumberFlagHandle_Get_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"retries": {
@@ -1823,8 +1798,8 @@ func TestNumberFlagHandle_Get_TypeMismatch(t *testing.T) {
 
 func TestJsonFlagHandle_Get_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"config": {
@@ -1844,8 +1819,8 @@ func TestJsonFlagHandle_Get_TypeMismatch(t *testing.T) {
 
 func TestNumberFlagHandle_Get_IntValue(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"count": {
@@ -1862,8 +1837,8 @@ func TestNumberFlagHandle_Get_IntValue(t *testing.T) {
 
 func TestNumberFlagHandle_Get_Int64Value(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"count": {
@@ -1878,42 +1853,6 @@ func TestNumberFlagHandle_Get_Int64Value(t *testing.T) {
 	assert.Equal(t, 99.0, result)
 }
 
-func TestNumberFlagHandle_GetWithContext_IntValue(t *testing.T) {
-	rt := newFlagsRuntime(nil)
-	rt.mu.Lock()
-	rt.connected = true
-	rt.environment = "production"
-	rt.flagStore = map[string]map[string]interface{}{
-		"count": {
-			"default":      int(42),
-			"environments": map[string]interface{}{},
-		},
-	}
-	rt.mu.Unlock()
-
-	handle := rt.NumberFlag("count", 0.0)
-	result := handle.GetWithContext(context.Background(), nil)
-	assert.Equal(t, 42.0, result)
-}
-
-func TestNumberFlagHandle_GetWithContext_Int64Value(t *testing.T) {
-	rt := newFlagsRuntime(nil)
-	rt.mu.Lock()
-	rt.connected = true
-	rt.environment = "production"
-	rt.flagStore = map[string]map[string]interface{}{
-		"count": {
-			"default":      int64(99),
-			"environments": map[string]interface{}{},
-		},
-	}
-	rt.mu.Unlock()
-
-	handle := rt.NumberFlag("count", 0.0)
-	result := handle.GetWithContext(context.Background(), nil)
-	assert.Equal(t, 99.0, result)
-}
-
 // --- Error path tests for full coverage ---
 
 func TestFlagsClient_Get_ServerError(t *testing.T) {
@@ -1922,7 +1861,7 @@ func TestFlagsClient_Get_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"internal error"}]}`))
 	}))
 
-	_, err := fc.Get(context.Background(), testFlagUUID)
+	_, err := fc.Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -1932,7 +1871,7 @@ func TestFlagsClient_Get_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	_, err := fc.Get(context.Background(), testFlagUUID)
+	_, err := fc.Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -1942,9 +1881,8 @@ func TestFlagsClient_Create_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	_, err := fc.Create(context.Background(), CreateFlagParams{
-		Key: "x", Name: "X", Type: FlagTypeBoolean, Default: true,
-	})
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
@@ -1954,9 +1892,8 @@ func TestFlagsClient_Create_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	_, err := fc.Create(context.Background(), CreateFlagParams{
-		Key: "x", Name: "X", Type: FlagTypeBoolean, Default: true,
-	})
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
@@ -1986,7 +1923,7 @@ func TestFlagsClient_Delete_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	err := fc.Delete(context.Background(), testFlagUUID)
+	err := fc.Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -1997,7 +1934,7 @@ func TestFlagsClient_UpdateFlag_ServerError(t *testing.T) {
 	}))
 
 	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: []FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	_, err := fc.updateFlag(context.Background(), flag, UpdateFlagParams{})
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2008,7 +1945,7 @@ func TestFlagsClient_UpdateFlag_InvalidJSON(t *testing.T) {
 	}))
 
 	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: []FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	_, err := fc.updateFlag(context.Background(), flag, UpdateFlagParams{})
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2112,12 +2049,12 @@ func TestFlagsClient_FetchAllFlags_Error(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- GetWithContext type coercion and mismatch ---
+// --- Get with contexts type coercion and mismatch ---
 
-func TestBoolFlagHandle_GetWithContext_TypeMismatch(t *testing.T) {
+func TestBooleanFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"feature": {
@@ -2127,15 +2064,15 @@ func TestBoolFlagHandle_GetWithContext_TypeMismatch(t *testing.T) {
 	}
 	rt.mu.Unlock()
 
-	handle := rt.BoolFlag("feature", true)
-	result := handle.GetWithContext(context.Background(), nil)
+	handle := rt.BooleanFlag("feature", true)
+	result := handle.Get(context.Background())
 	assert.Equal(t, true, result)
 }
 
-func TestStringFlagHandle_GetWithContext_TypeMismatch(t *testing.T) {
+func TestStringFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"theme": {
@@ -2146,14 +2083,14 @@ func TestStringFlagHandle_GetWithContext_TypeMismatch(t *testing.T) {
 	rt.mu.Unlock()
 
 	handle := rt.StringFlag("theme", "dark")
-	result := handle.GetWithContext(context.Background(), nil)
+	result := handle.Get(context.Background())
 	assert.Equal(t, "dark", result)
 }
 
-func TestNumberFlagHandle_GetWithContext_TypeMismatch(t *testing.T) {
+func TestNumberFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"retries": {
@@ -2164,14 +2101,14 @@ func TestNumberFlagHandle_GetWithContext_TypeMismatch(t *testing.T) {
 	rt.mu.Unlock()
 
 	handle := rt.NumberFlag("retries", 7.0)
-	result := handle.GetWithContext(context.Background(), nil)
+	result := handle.Get(context.Background())
 	assert.Equal(t, 7.0, result)
 }
 
-func TestJsonFlagHandle_GetWithContext_TypeMismatch(t *testing.T) {
+func TestJsonFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil)
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"config": {
@@ -2183,7 +2120,7 @@ func TestJsonFlagHandle_GetWithContext_TypeMismatch(t *testing.T) {
 
 	dflt := map[string]interface{}{"x": "y"}
 	handle := rt.JsonFlag("config", dflt)
-	result := handle.GetWithContext(context.Background(), nil)
+	result := handle.Get(context.Background())
 	assert.Equal(t, dflt, result)
 }
 
@@ -2217,8 +2154,8 @@ func TestEvaluateFlag_JSONLogicError(t *testing.T) {
 
 func TestFlagsRuntime_Evaluate_Connected(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
+	fc.runtime.initOnce.Do(func() {})
 	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
 	fc.runtime.flagStore = map[string]map[string]interface{}{
 		"feature": {
 			"default":      "val",
@@ -2242,9 +2179,7 @@ func TestFlagsRuntime_Refresh_Error(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
 	}))
 
-	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
-	fc.runtime.mu.Unlock()
+	fc.runtime.initOnce.Do(func() {})
 
 	err := fc.Refresh(context.Background())
 	assert.Error(t, err)
@@ -2259,33 +2194,27 @@ func TestFlag_Update_Error(t *testing.T) {
 	}))
 
 	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: []FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	err := flag.Update(context.Background(), UpdateFlagParams{})
+	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
 // --- Flag.AddRule error paths ---
 
-func TestFlag_AddRule_GetError(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
-	}))
+func TestFlag_AddRule_MissingEnvironmentKey(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
 
 	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: []FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	rule := NewRule("test").Environment("prod").Serve(true).Build()
-	err := flag.AddRule(context.Background(), rule)
+	// Rule without environment key should fail.
+	rule := map[string]interface{}{
+		"logic": map[string]interface{}{},
+		"value": true,
+	}
+	err := flag.AddRule(rule)
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "environment")
 }
 
 func TestFlag_AddRule_NewEnvironment(t *testing.T) {
-	callCount := 0
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
-	}))
-
 	flag := &Flag{
 		ID:           testFlagUUID,
 		Key:          "feature-x",
@@ -2294,7 +2223,6 @@ func TestFlag_AddRule_NewEnvironment(t *testing.T) {
 		Default:      true,
 		Values:       []FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{}, // No "staging" env
-		client:       fc,
 	}
 
 	rule := NewRule("test").
@@ -2303,19 +2231,16 @@ func TestFlag_AddRule_NewEnvironment(t *testing.T) {
 		Serve(true).
 		Build()
 
-	err := flag.AddRule(context.Background(), rule)
+	err := flag.AddRule(rule)
 	require.NoError(t, err)
+	// Verify the staging environment was created
+	envData := flag.Environments["staging"].(map[string]interface{})
+	assert.Equal(t, true, envData["enabled"])
+	rules := envData["rules"].([]interface{})
+	assert.Len(t, rules, 1)
 }
 
 func TestFlag_AddRule_ExistingEnvironment(t *testing.T) {
-	callCount := 0
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
-	}))
-
 	flag := &Flag{
 		ID:   testFlagUUID,
 		Key:  "feature-x",
@@ -2328,7 +2253,6 @@ func TestFlag_AddRule_ExistingEnvironment(t *testing.T) {
 			},
 		},
 		Values: []FlagValue{{Name: "True", Value: true}},
-		client: fc,
 	}
 
 	rule := NewRule("test").
@@ -2336,8 +2260,12 @@ func TestFlag_AddRule_ExistingEnvironment(t *testing.T) {
 		Serve(true).
 		Build()
 
-	err := flag.AddRule(context.Background(), rule)
+	err := flag.AddRule(rule)
 	require.NoError(t, err)
+	// Verify rule was added to existing environment
+	envData := flag.Environments["production"].(map[string]interface{})
+	rules := envData["rules"].([]interface{})
+	assert.Len(t, rules, 1)
 }
 
 // --- FlagsRuntime handleFlagChanged fetch error ---
@@ -2360,8 +2288,8 @@ func TestFlagsRuntime_EvaluateHandle_ProviderFlushThreshold(t *testing.T) {
 	}))
 
 	rt := fc.runtime
+	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
-	rt.connected = true
 	rt.environment = "production"
 	rt.flagStore = map[string]map[string]interface{}{
 		"feature": {
@@ -2395,8 +2323,8 @@ func TestFlagsRuntime_Disconnect_NoWSManager(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	fc.runtime.initOnce.Do(func() {})
 	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
 	fc.runtime.environment = "test"
 	fc.runtime.mu.Unlock()
 
@@ -2404,7 +2332,7 @@ func TestFlagsRuntime_Disconnect_NoWSManager(t *testing.T) {
 	fc.Disconnect(context.Background())
 
 	fc.runtime.mu.RLock()
-	assert.False(t, fc.runtime.connected)
+	assert.Equal(t, "", fc.runtime.environment)
 	fc.runtime.mu.RUnlock()
 }
 
@@ -2474,15 +2402,16 @@ func TestSharedWebSocket_Run_ClosedDuringBackoff(t *testing.T) {
 	assert.Equal(t, "disconnected", ws.connectionStatus())
 }
 
-// --- FlagsRuntime Connect error ---
+// --- FlagsRuntime ensureInit error ---
 
-func TestFlagsRuntime_Connect_FetchError(t *testing.T) {
+func TestFlagsRuntime_EnsureInit_FetchError(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
 	}))
+	fc.client.environment = "production"
 
-	err := fc.connectInternal(context.Background(), "production")
+	err := fc.runtime.ensureInit(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2585,15 +2514,14 @@ func newFlagsClientWithTransport(t *testing.T, transport http.RoundTripper) *Fla
 
 func TestFlagsClient_Get_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Get(context.Background(), testFlagUUID)
+	_, err := fc.Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Create_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Create(context.Background(), CreateFlagParams{
-		Key: "x", Name: "X", Type: FlagTypeBoolean, Default: true,
-	})
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2605,14 +2533,14 @@ func TestFlagsClient_List_NetworkError(t *testing.T) {
 
 func TestFlagsClient_Delete_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	err := fc.Delete(context.Background(), testFlagUUID)
+	err := fc.Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_UpdateFlag_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
 	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: []FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	_, err := fc.updateFlag(context.Background(), flag, UpdateFlagParams{})
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2626,15 +2554,14 @@ func TestFlagsClient_FetchFlagsList_NetworkError(t *testing.T) {
 
 func TestFlagsClient_Get_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Get(context.Background(), testFlagUUID)
+	_, err := fc.Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Create_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Create(context.Background(), CreateFlagParams{
-		Key: "x", Name: "X", Type: FlagTypeBoolean, Default: true,
-	})
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2646,14 +2573,14 @@ func TestFlagsClient_List_ReadBodyError(t *testing.T) {
 
 func TestFlagsClient_Delete_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	err := fc.Delete(context.Background(), testFlagUUID)
+	err := fc.Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_UpdateFlag_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
 	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: []FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	_, err := fc.updateFlag(context.Background(), flag, UpdateFlagParams{})
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2743,18 +2670,9 @@ func TestFlagsClient_ListContexts_ReadBodyError(t *testing.T) {
 
 // --- Flag.AddRule error path: updateFlag fails after successful Get ---
 
-func TestFlag_AddRule_UpdateError(t *testing.T) {
-	callCount := 0
+func TestFlag_AddRule_ThenSave_UpdateError(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		if callCount == 1 {
-			// First call: Get succeeds
-			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
-			return
-		}
-		// Second call: Update fails
+		// Update fails
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"update failed"}]}`))
 	}))
@@ -2776,42 +2694,18 @@ func TestFlag_AddRule_UpdateError(t *testing.T) {
 		Serve(true).
 		Build()
 
-	err := flag.AddRule(context.Background(), rule)
+	// AddRule is local — should succeed
+	err := flag.AddRule(rule)
+	require.NoError(t, err)
+
+	// Save should fail with server error
+	err = flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
 // --- Flag.AddRule existing env with rules (else branch) ---
 
 func TestFlag_AddRule_ExistingEnvWithRules(t *testing.T) {
-	callCount := 0
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		// Return a flag with an existing production env containing rules
-		_, _ = w.Write([]byte(`{
-			"data": {
-				"id": "` + testFlagUUID + `",
-				"type": "flag",
-				"attributes": {
-					"name": "Feature X",
-					"key": "feature-x",
-					"type": "BOOLEAN",
-					"default": true,
-					"values": [{"name": "True", "value": true}],
-					"environments": {
-						"production": {
-							"enabled": true,
-							"rules": [{"logic": {}, "value": false}]
-						}
-					},
-					"created_at": "2024-01-01T00:00:00Z",
-					"updated_at": "2024-06-15T12:00:00Z"
-				}
-			}
-		}`))
-	}))
-
 	flag := &Flag{
 		ID:   testFlagUUID,
 		Key:  "feature-x",
@@ -2824,7 +2718,6 @@ func TestFlag_AddRule_ExistingEnvWithRules(t *testing.T) {
 			},
 		},
 		Values: []FlagValue{{Name: "True", Value: true}},
-		client: fc,
 	}
 
 	rule := NewRule("new rule").
@@ -2833,8 +2726,12 @@ func TestFlag_AddRule_ExistingEnvWithRules(t *testing.T) {
 		Serve(true).
 		Build()
 
-	err := flag.AddRule(context.Background(), rule)
+	err := flag.AddRule(rule)
 	require.NoError(t, err)
+	// Verify rule was appended to existing rules
+	envData := flag.Environments["production"].(map[string]interface{})
+	rules := envData["rules"].([]interface{})
+	assert.Len(t, rules, 2)
 }
 
 // --- FlagsRuntime Evaluate fetch error path ---
@@ -2914,9 +2811,10 @@ func TestFlagsRuntime_ServiceContextAutoInjection(t *testing.T) {
 
 	// Set service on the client
 	fc.client.service = "my-service"
+	fc.client.environment = "production"
 
-	// Connect and set up a flag with a rule that checks service.key
-	err := fc.connectInternal(context.Background(), "production")
+	// Init and set up a flag with a rule that checks service.key
+	err := fc.runtime.ensureInit(context.Background())
 	require.NoError(t, err)
 
 	fc.runtime.mu.Lock()
@@ -2943,7 +2841,7 @@ func TestFlagsRuntime_ServiceContextAutoInjection(t *testing.T) {
 	fc.runtime.mu.Unlock()
 
 	// Evaluate without providing service context — should be auto-injected
-	handle := fc.BoolFlag("feature", false)
+	handle := fc.BooleanFlag("feature", false)
 	result := handle.Get(context.Background())
 	assert.Equal(t, true, result, "service context should be auto-injected and match the rule")
 
@@ -2955,8 +2853,8 @@ func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	fc.client.service = "auto-service"
 
+	fc.runtime.initOnce.Do(func() {})
 	fc.runtime.mu.Lock()
-	fc.runtime.connected = true
 	fc.runtime.environment = "production"
 	fc.runtime.flagStore = map[string]map[string]interface{}{
 		"feature": {
@@ -2983,10 +2881,8 @@ func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
 	fc.runtime.mu.Unlock()
 
 	// Provide explicit service context — should NOT be overridden by auto-injection
-	handle := fc.BoolFlag("feature", false)
-	result := handle.GetWithContext(context.Background(), []Context{
-		{Type: "service", Key: "custom-service"},
-	})
+	handle := fc.BooleanFlag("feature", false)
+	result := handle.Get(context.Background(), Context{Type: "service", Key: "custom-service"})
 	assert.Equal(t, true, result, "customer-provided service context should take precedence")
 
 	fc.client.stopWS()

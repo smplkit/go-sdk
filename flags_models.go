@@ -8,7 +8,7 @@ import (
 
 // Flag represents a flag resource from the smplkit platform.
 type Flag struct {
-	// ID is the unique identifier (UUID) of the flag.
+	// ID is the unique identifier (UUID) of the flag. Empty for unsaved flags.
 	ID string
 	// Key is the human-readable flag key.
 	Key string
@@ -39,31 +39,41 @@ type FlagValue struct {
 	Value interface{}
 }
 
-// Update replaces this flag's attributes on the server. Only non-nil fields
-// in params are changed.
-func (f *Flag) Update(ctx context.Context, params UpdateFlagParams) error {
-	updated, err := f.client.updateFlag(ctx, f, params)
-	if err != nil {
-		return err
-	}
-	f.apply(updated)
-	return nil
+// FlagOption configures an unsaved Flag returned by factory methods.
+type FlagOption func(*Flag)
+
+// WithFlagName sets the display name for a flag.
+func WithFlagName(name string) FlagOption {
+	return func(f *Flag) { f.Name = name }
 }
 
-// AddRule adds a rule to a specific environment. The built rule must include
-// an "environment" key (use Rule.Environment("env_key") before Build).
-func (f *Flag) AddRule(ctx context.Context, builtRule map[string]interface{}) error {
+// WithFlagDescription sets the description for a flag.
+func WithFlagDescription(desc string) FlagOption {
+	return func(f *Flag) { f.Description = &desc }
+}
+
+// WithFlagValues sets the closed value set for a flag.
+func WithFlagValues(values []FlagValue) FlagOption {
+	return func(f *Flag) { f.Values = values }
+}
+
+// Save creates (POST) the flag if ID is empty, or updates (PUT) if ID is set.
+// Applies the server response back to the Flag instance.
+func (f *Flag) Save(ctx context.Context) error {
+	if f.ID == "" {
+		return f.client.createFlag(ctx, f)
+	}
+	return f.client.updateFlag(ctx, f)
+}
+
+// AddRule appends a rule to the specified environment. The builtRule must
+// include an "environment" key (use NewRule(...).Environment("env").Build()).
+// This is a local mutation — call Save(ctx) to persist.
+func (f *Flag) AddRule(builtRule map[string]interface{}) error {
 	envKey, ok := builtRule["environment"].(string)
 	if !ok || envKey == "" {
 		return fmt.Errorf("smplkit: built rule must include 'environment' key; use NewRule(...).Environment(\"env_key\").When(...).Serve(...).Build()")
 	}
-
-	// Re-fetch current state to avoid stale data.
-	current, err := f.client.Get(ctx, f.ID)
-	if err != nil {
-		return err
-	}
-	f.apply(current)
 
 	envs := copyEnvMap(f.Environments)
 	envData, ok := envs[envKey].(map[string]interface{})
@@ -83,15 +93,50 @@ func (f *Flag) AddRule(ctx context.Context, builtRule map[string]interface{}) er
 	rules = append(rules, ruleCopy)
 	envData["rules"] = rules
 	envs[envKey] = envData
-
-	updated, err := f.client.updateFlag(ctx, f, UpdateFlagParams{
-		Environments: envs,
-	})
-	if err != nil {
-		return err
-	}
-	f.apply(updated)
+	f.Environments = envs
 	return nil
+}
+
+// SetEnvironmentEnabled sets the enabled flag for an environment.
+// This is a local mutation — call Save(ctx) to persist.
+func (f *Flag) SetEnvironmentEnabled(envKey string, enabled bool) {
+	envs := copyEnvMap(f.Environments)
+	envData, ok := envs[envKey].(map[string]interface{})
+	if !ok {
+		envData = map[string]interface{}{"rules": []interface{}{}}
+	} else {
+		envData = copyMap(envData)
+	}
+	envData["enabled"] = enabled
+	envs[envKey] = envData
+	f.Environments = envs
+}
+
+// SetEnvironmentDefault sets the environment-specific default value.
+// This is a local mutation — call Save(ctx) to persist.
+func (f *Flag) SetEnvironmentDefault(envKey string, defaultVal interface{}) {
+	envs := copyEnvMap(f.Environments)
+	envData, ok := envs[envKey].(map[string]interface{})
+	if !ok {
+		envData = map[string]interface{}{"rules": []interface{}{}}
+	} else {
+		envData = copyMap(envData)
+	}
+	envData["default"] = defaultVal
+	envs[envKey] = envData
+	f.Environments = envs
+}
+
+// ClearRules removes all rules for the specified environment.
+// This is a local mutation — call Save(ctx) to persist.
+func (f *Flag) ClearRules(envKey string) {
+	envs := copyEnvMap(f.Environments)
+	if envData, ok := envs[envKey].(map[string]interface{}); ok {
+		envData = copyMap(envData)
+		envData["rules"] = []interface{}{}
+		envs[envKey] = envData
+		f.Environments = envs
+	}
 }
 
 func (f *Flag) apply(other *Flag) {
@@ -105,36 +150,6 @@ func (f *Flag) apply(other *Flag) {
 	f.Environments = other.Environments
 	f.CreatedAt = other.CreatedAt
 	f.UpdatedAt = other.UpdatedAt
-}
-
-// UpdateFlagParams holds the optional fields for updating a flag.
-type UpdateFlagParams struct {
-	// Name overrides the flag's display name.
-	Name *string
-	// Description overrides the flag's description.
-	Description *string
-	// Default overrides the flag's default value.
-	Default interface{}
-	// Values overrides the flag's value set.
-	Values []FlagValue
-	// Environments replaces the flag's environments map.
-	Environments map[string]interface{}
-}
-
-// CreateFlagParams holds the parameters for creating a new flag.
-type CreateFlagParams struct {
-	// Key is the human-readable flag key (required).
-	Key string
-	// Name is the display name (required).
-	Name string
-	// Type is the value type (required).
-	Type FlagType
-	// Default is the default value (required).
-	Default interface{}
-	// Description is an optional description.
-	Description *string
-	// Values is the closed set of possible values. Auto-generated for boolean flags.
-	Values []FlagValue
 }
 
 // ContextType represents a context type resource from the management API.

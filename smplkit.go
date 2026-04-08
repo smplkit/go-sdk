@@ -5,8 +5,8 @@
 //
 // Quick start:
 //
-//	client, err := smplkit.NewClient("sk_api_...")
-//	cfg, err := client.Config().GetByKey(ctx, "my-service")
+//	client, err := smplkit.NewClient("sk_api_...", "production", "my-service")
+//	cfg, err := client.Config().Get(ctx, "my-service")
 //	if err != nil {
 //	    var notFound *smplkit.SmplNotFoundError
 //	    if errors.As(err, &notFound) {

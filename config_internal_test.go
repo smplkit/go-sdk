@@ -266,9 +266,10 @@ func TestGetInt_NativeInt(t *testing.T) {
 		configCache: map[string]map[string]interface{}{
 			"app": {"n": int(42)},
 		},
-		connected: true,
 	}
-	val, err := c.GetInt("app", "n")
+	// Mark as already initialized by running initOnce with no-op.
+	c.initOnce.Do(func() {})
+	val, err := c.GetInt(context.Background(), "app", "n")
 	assert.NoError(t, err)
 	assert.Equal(t, 42, val)
 }
@@ -278,9 +279,9 @@ func TestGetInt_Int64(t *testing.T) {
 		configCache: map[string]map[string]interface{}{
 			"app": {"n": int64(99)},
 		},
-		connected: true,
 	}
-	val, err := c.GetInt("app", "n")
+	c.initOnce.Do(func() {})
+	val, err := c.GetInt(context.Background(), "app", "n")
 	assert.NoError(t, err)
 	assert.Equal(t, 99, val)
 }
@@ -337,9 +338,10 @@ func TestDeepMerge_OverrideMapWithNonMap(t *testing.T) {
 
 func TestRefresh_NoEnvironment(t *testing.T) {
 	c := &ConfigClient{
-		connected: true,
-		client:    &Client{environment: ""},
+		client: &Client{environment: ""},
 	}
+	// Mark as already initialized.
+	c.initOnce.Do(func() {})
 	err := c.Refresh(context.Background())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "No environment set")

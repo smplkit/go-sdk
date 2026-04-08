@@ -158,9 +158,9 @@ func (b *contextRegistrationBuffer) pendingCount() int {
 
 // --- Typed Flag Handles ---
 
-// BoolFlag returns a typed handle for a boolean flag.
-func (rt *FlagsRuntime) BoolFlag(key string, defaultValue bool) *BoolFlagHandle {
-	h := &BoolFlagHandle{flagHandle: flagHandle{runtime: rt, key: key, defaultVal: defaultValue}}
+// BooleanFlag returns a typed handle for a boolean flag.
+func (rt *FlagsRuntime) BooleanFlag(key string, defaultValue bool) *BooleanFlagHandle {
+	h := &BooleanFlagHandle{flagHandle: flagHandle{runtime: rt, key: key, defaultVal: defaultValue}}
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
@@ -210,23 +210,13 @@ func (h *flagHandle) OnChange(cb func(*FlagChangeEvent)) {
 	h.listenersMu.Unlock()
 }
 
-// BoolFlagHandle is a typed handle for a boolean flag.
-type BoolFlagHandle struct {
+// BooleanFlagHandle is a typed handle for a boolean flag.
+type BooleanFlagHandle struct {
 	flagHandle
 }
 
-// Get evaluates the flag and returns a typed boolean value. Pass nil for ctx
-// to use context.Background().
-func (h *BoolFlagHandle) Get(ctx context.Context, contexts ...Context) bool {
-	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
-	if b, ok := value.(bool); ok {
-		return b
-	}
-	return h.defaultVal.(bool)
-}
-
-// GetWithContext evaluates the flag with explicit context override.
-func (h *BoolFlagHandle) GetWithContext(ctx context.Context, contexts []Context) bool {
+// Get evaluates the flag and returns a typed boolean value.
+func (h *BooleanFlagHandle) Get(ctx context.Context, contexts ...Context) bool {
 	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
 	if b, ok := value.(bool); ok {
 		return b
@@ -241,15 +231,6 @@ type StringFlagHandle struct {
 
 // Get evaluates the flag and returns a typed string value.
 func (h *StringFlagHandle) Get(ctx context.Context, contexts ...Context) string {
-	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
-	if s, ok := value.(string); ok {
-		return s
-	}
-	return h.defaultVal.(string)
-}
-
-// GetWithContext evaluates the flag with explicit context override.
-func (h *StringFlagHandle) GetWithContext(ctx context.Context, contexts []Context) string {
 	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
 	if s, ok := value.(string); ok {
 		return s
@@ -276,20 +257,6 @@ func (h *NumberFlagHandle) Get(ctx context.Context, contexts ...Context) float64
 	return h.defaultVal.(float64)
 }
 
-// GetWithContext evaluates the flag with explicit context override.
-func (h *NumberFlagHandle) GetWithContext(ctx context.Context, contexts []Context) float64 {
-	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
-	switch n := value.(type) {
-	case float64:
-		return n
-	case int:
-		return float64(n)
-	case int64:
-		return float64(n)
-	}
-	return h.defaultVal.(float64)
-}
-
 // JsonFlagHandle is a typed handle for a JSON flag.
 type JsonFlagHandle struct {
 	flagHandle
@@ -304,19 +271,10 @@ func (h *JsonFlagHandle) Get(ctx context.Context, contexts ...Context) map[strin
 	return h.defaultVal.(map[string]interface{})
 }
 
-// GetWithContext evaluates the flag with explicit context override.
-func (h *JsonFlagHandle) GetWithContext(ctx context.Context, contexts []Context) map[string]interface{} {
-	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
-	if m, ok := value.(map[string]interface{}); ok {
-		return m
-	}
-	return h.defaultVal.(map[string]interface{})
-}
-
 // --- FlagsRuntime ---
 
 // FlagsRuntime holds the prescriptive runtime state for the flags namespace.
-// It is created internally; access it via FlagsClient methods like BoolFlag,
+// It is created internally; access it via FlagsClient methods like BooleanFlag,
 // Disconnect, etc.
 type FlagsRuntime struct {
 	flagsClient *FlagsClient
@@ -324,7 +282,9 @@ type FlagsRuntime struct {
 	mu          sync.RWMutex
 	environment string
 	flagStore   map[string]map[string]interface{}
-	connected   bool
+
+	initOnce sync.Once
+	initErr  error
 
 	cache         *resolutionCache
 	contextBuffer *contextRegistrationBuffer
@@ -337,6 +297,7 @@ type FlagsRuntime struct {
 
 	listenersMu     sync.Mutex
 	globalListeners []func(*FlagChangeEvent)
+	keyListeners    map[string][]func(*FlagChangeEvent)
 
 	wsManager *sharedWebSocket
 }
@@ -348,6 +309,7 @@ func newFlagsRuntime(fc *FlagsClient) *FlagsRuntime {
 		cache:         newResolutionCache(defaultCacheMaxSize),
 		contextBuffer: newContextRegistrationBuffer(),
 		handles:       make(map[string]*flagHandle),
+		keyListeners:  make(map[string][]func(*FlagChangeEvent)),
 	}
 }
 
@@ -359,31 +321,41 @@ func (rt *FlagsRuntime) SetContextProvider(fn func(ctx context.Context) []Contex
 	rt.providerMu.Unlock()
 }
 
-// connect fetches flag definitions and registers on the shared WebSocket.
-func (rt *FlagsRuntime) connect(ctx context.Context, environment string) error {
-	rt.mu.Lock()
-	rt.environment = environment
-	rt.mu.Unlock()
+// ensureInit performs lazy initialization on first runtime use.
+// It fetches flag definitions and registers on the shared WebSocket.
+func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
+	rt.initOnce.Do(func() {
+		if rt.flagsClient == nil || rt.flagsClient.client == nil {
+			rt.initErr = &SmplConnectionError{SmplError: SmplError{Message: "flags client not initialized"}}
+			return
+		}
 
-	store, err := rt.flagsClient.fetchAllFlags(ctx)
-	if err != nil {
-		return err
-	}
+		rt.mu.Lock()
+		rt.environment = rt.flagsClient.client.environment
+		rt.mu.Unlock()
 
-	rt.mu.Lock()
-	rt.flagStore = store
-	rt.connected = true
-	rt.mu.Unlock()
+		// Register service context (fire-and-forget).
+		rt.flagsClient.client.registerServiceContext(ctx)
 
-	rt.cache.clear()
+		store, err := rt.flagsClient.fetchAllFlags(ctx)
+		if err != nil {
+			rt.initErr = err
+			return
+		}
 
-	// Register on the shared WebSocket.
-	ws := rt.flagsClient.client.ensureWS()
-	rt.wsManager = ws
-	ws.on("flag_changed", rt.handleFlagChanged)
-	ws.on("flag_deleted", rt.handleFlagDeleted)
+		rt.mu.Lock()
+		rt.flagStore = store
+		rt.mu.Unlock()
 
-	return nil
+		rt.cache.clear()
+
+		// Register on the shared WebSocket.
+		ws := rt.flagsClient.client.ensureWS()
+		rt.wsManager = ws
+		ws.on("flag_changed", rt.handleFlagChanged)
+		ws.on("flag_deleted", rt.handleFlagDeleted)
+	})
+	return rt.initErr
 }
 
 // disconnect unregisters from WebSocket, flushes contexts, and clears state.
@@ -399,11 +371,14 @@ func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 
 	rt.mu.Lock()
 	rt.flagStore = make(map[string]map[string]interface{})
-	rt.connected = false
 	rt.environment = ""
 	rt.mu.Unlock()
 
 	rt.cache.clear()
+
+	// Reset initOnce so re-initialization is possible after disconnect.
+	rt.initOnce = sync.Once{}
+	rt.initErr = nil
 }
 
 // Refresh re-fetches all flag definitions and clears cache.
@@ -443,6 +418,14 @@ func (rt *FlagsRuntime) OnChange(cb func(*FlagChangeEvent)) {
 	rt.listenersMu.Unlock()
 }
 
+// OnChangeKey registers a key-scoped change listener that fires only when the
+// specified flag key changes.
+func (rt *FlagsRuntime) OnChangeKey(key string, cb func(*FlagChangeEvent)) {
+	rt.listenersMu.Lock()
+	rt.keyListeners[key] = append(rt.keyListeners[key], cb)
+	rt.listenersMu.Unlock()
+}
+
 // Register explicitly registers context(s) for background batch registration.
 func (rt *FlagsRuntime) Register(ctx context.Context, contexts ...Context) {
 	rt.contextBuffer.observe(contexts)
@@ -466,15 +449,14 @@ func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment st
 	}
 
 	rt.mu.RLock()
-	connected := rt.connected
 	flagDef, ok := rt.flagStore[key]
 	rt.mu.RUnlock()
 
-	if connected && ok {
+	if ok {
 		return evaluateFlag(flagDef, environment, evalDict)
 	}
 
-	// Not connected or flag not in store — fetch.
+	// Flag not in store — fetch.
 	flags, err := rt.flagsClient.fetchFlagsList(ctx)
 	if err != nil {
 		return nil
@@ -490,14 +472,14 @@ func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment st
 // --- Internal evaluation ---
 
 func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultVal interface{}, explicitContexts []Context) interface{} {
+	if err := rt.ensureInit(ctx); err != nil {
+		log.Printf("smplkit: flags lazy init failed: %v", err)
+		return defaultVal
+	}
+
 	rt.mu.RLock()
-	connected := rt.connected
 	environment := rt.environment
 	rt.mu.RUnlock()
-
-	if !connected {
-		panic(ErrNotConnected)
-	}
 
 	var evalDict map[string]interface{}
 	if len(explicitContexts) > 0 {
@@ -661,6 +643,8 @@ func (rt *FlagsRuntime) fireChangeListeners(flagKey string, source string) {
 	rt.listenersMu.Lock()
 	globals := make([]func(*FlagChangeEvent), len(rt.globalListeners))
 	copy(globals, rt.globalListeners)
+	keyListeners := make([]func(*FlagChangeEvent), len(rt.keyListeners[flagKey]))
+	copy(keyListeners, rt.keyListeners[flagKey])
 	rt.listenersMu.Unlock()
 
 	for _, cb := range globals {
@@ -668,6 +652,17 @@ func (rt *FlagsRuntime) fireChangeListeners(flagKey string, source string) {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("smplkit: exception in global flags on_change listener: %v", r)
+				}
+			}()
+			cb(event)
+		}()
+	}
+
+	for _, cb := range keyListeners {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("smplkit: exception in key-scoped flags on_change listener: %v", r)
 				}
 			}()
 			cb(event)

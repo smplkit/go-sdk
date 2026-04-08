@@ -76,110 +76,44 @@ func newTestClient(t *testing.T, handler http.HandlerFunc) *smplkit.Client {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL), smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 	return client
 }
 
-func TestConfigClient_GetByID(t *testing.T) {
-	configID := testUUID0
-
+func TestConfigClient_Get(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/api/v1/configs/"+configID, r.URL.Path)
+		assert.Equal(t, "/api/v1/configs", r.URL.Path)
+		assert.Equal(t, "my-service", r.URL.Query().Get("filter[key]"))
 		assert.Equal(t, "Bearer sk_test_key", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Accept"))
 		assert.Contains(t, r.Header.Get("User-Agent"), "smplkit-go-sdk")
 
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleConfigJSON(configID, "my-service", "My Service")))
+		_, _ = w.Write([]byte(sampleListJSON(testUUID0, "my-service", "My Service")))
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "my-service")
 	require.NoError(t, err)
-	assert.Equal(t, configID, cfg.ID)
+	assert.Equal(t, testUUID0, cfg.ID)
 	assert.Equal(t, "my-service", cfg.Key)
 	assert.Equal(t, "My Service", cfg.Name)
-	require.NotNil(t, cfg.Description)
-	assert.Equal(t, "A test config", *cfg.Description)
-	assert.Nil(t, cfg.Parent)
-	assert.Equal(t, "info", cfg.Items["log_level"])
-	require.NotNil(t, cfg.CreatedAt)
-	assert.Equal(t, 2024, cfg.CreatedAt.Year())
-	require.NotNil(t, cfg.UpdatedAt)
 }
 
-func TestConfigClient_GetByKey(t *testing.T) {
-	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/api/v1/configs", r.URL.Path)
-		assert.Equal(t, "my-service", r.URL.Query().Get("filter[key]"))
-
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleListJSON("abc-123", "my-service", "My Service")))
-	})
-
-	cfg, err := client.Config().GetByKey(context.Background(), "my-service")
-	require.NoError(t, err)
-	assert.Equal(t, "abc-123", cfg.ID)
-	assert.Equal(t, "my-service", cfg.Key)
-}
-
-func TestConfigClient_GetByKey_NotFound(t *testing.T) {
+func TestConfigClient_Get_NotFound(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": []}`))
 	})
 
-	_, err := client.Config().GetByKey(context.Background(), "nonexistent")
+	_, err := client.Config().Get(context.Background(), "nonexistent")
 	require.Error(t, err)
 
 	var notFound *smplkit.SmplNotFoundError
 	require.True(t, errors.As(err, &notFound))
-}
-
-func TestConfigClient_Get_WithKey(t *testing.T) {
-	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "my-key", r.URL.Query().Get("filter[key]"))
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleListJSON("id-1", "my-key", "Test")))
-	})
-
-	cfg, err := client.Config().Get(context.Background(), smplkit.WithKey("my-key"))
-	require.NoError(t, err)
-	assert.Equal(t, "my-key", cfg.Key)
-}
-
-func TestConfigClient_Get_WithID(t *testing.T) {
-	uid := testUUID1
-	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/configs/"+uid, r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleConfigJSON(uid, "test", "Test")))
-	})
-
-	cfg, err := client.Config().Get(context.Background(), smplkit.WithID(uid))
-	require.NoError(t, err)
-	assert.Equal(t, uid, cfg.ID)
-}
-
-func TestConfigClient_Get_NeitherKeyNorID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
-	require.NoError(t, err)
-	_, err = client.Config().Get(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exactly one")
-}
-
-func TestConfigClient_Get_BothKeyAndID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
-	require.NoError(t, err)
-	_, err = client.Config().Get(context.Background(), smplkit.WithKey("k"), smplkit.WithID(testUUID1))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exactly one")
 }
 
 func TestConfigClient_List(t *testing.T) {
@@ -214,7 +148,7 @@ func TestConfigClient_List_Empty(t *testing.T) {
 	assert.Empty(t, configs)
 }
 
-func TestConfigClient_Create(t *testing.T) {
+func TestConfigClient_New_Save(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "/api/v1/configs", r.URL.Path)
@@ -233,20 +167,18 @@ func TestConfigClient_Create(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON("new-id", "new-config", "New Config")))
 	})
 
-	key := "new-config"
-	desc := "A new config"
-	cfg, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{
-		Name:        "New Config",
-		Key:         &key,
-		Description: &desc,
-		Items:       map[string]interface{}{"enabled": true},
-	})
+	cfg := client.Config().New("new-config",
+		smplkit.WithConfigName("New Config"),
+		smplkit.WithConfigDescription("A new config"),
+	)
+	cfg.Items = map[string]interface{}{"enabled": true}
+	err := cfg.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "new-id", cfg.ID)
 	assert.Equal(t, "New Config", cfg.Name)
 }
 
-func TestConfigClient_Create_WithEnvironments(t *testing.T) {
+func TestConfigClient_New_Save_WithEnvironments(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
@@ -259,109 +191,107 @@ func TestConfigClient_Create_WithEnvironments(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON("new-id", "new-config", "New Config")))
 	})
 
-	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{
-		Name: "New Config",
-		Environments: map[string]map[string]interface{}{
-			"production": {"values": map[string]interface{}{"debug": false}},
-		},
-	})
+	cfg := client.Config().New("new-config", smplkit.WithConfigName("New Config"))
+	cfg.Environments = map[string]map[string]interface{}{
+		"production": {"values": map[string]interface{}{"debug": false}},
+	}
+	err := cfg.Save(context.Background())
 	require.NoError(t, err)
 }
 
 func TestConfigClient_Delete(t *testing.T) {
 	configID := testUUID2
 
-	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		// Get-by-key to resolve the UUID.
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "my-config", r.URL.Query().Get("filter[key]"))
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleListJSON(configID, "my-config", "My Config")))
+	})
+	mux.HandleFunc("/api/v1/configs/"+configID, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "DELETE", r.Method)
-		assert.Equal(t, "/api/v1/configs/"+configID, r.URL.Path)
 		assert.Equal(t, "Bearer sk_test_key", r.Header.Get("Authorization"))
-
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	err := client.Config().Delete(context.Background(), configID)
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
+
+	err = client.Config().Delete(context.Background(), "my-config")
 	require.NoError(t, err)
 }
 
-func TestConfigClient_Update(t *testing.T) {
+func TestConfigClient_Save_Update(t *testing.T) {
 	configID := testUUID0
-	desc := "Updated description"
 
+	// Use a single server that handles both GET (list) and PUT (update).
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "PUT", r.Method)
-		assert.Equal(t, "/api/v1/configs/"+configID, r.URL.Path)
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		data := body["data"].(map[string]interface{})
-		attrs := data["attributes"].(map[string]interface{})
-		assert.Equal(t, "Updated Name", attrs["name"])
-
-		w.WriteHeader(http.StatusOK)
-		updated := sampleConfigJSON(configID, "my-service", "Updated Name")
-		_, _ = w.Write([]byte(updated))
-	})
-
-	// Use GetByID to get a properly initialized Config (with back-reference set),
-	// then call Update on it.
-	var gotConfig *smplkit.Config
-	fetchClient := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "my-service", "My Service")))
+			_, _ = w.Write([]byte(sampleListJSON(configID, "my-service", "My Service")))
 		} else {
 			assert.Equal(t, "PUT", r.Method)
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+			var body map[string]interface{}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			data := body["data"].(map[string]interface{})
+			attrs := data["attributes"].(map[string]interface{})
+			assert.Equal(t, "Updated Name", attrs["name"])
+
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "my-service", "Updated Name")))
 		}
 	})
-	var fetchErr error
-	gotConfig, fetchErr = fetchClient.Config().GetByID(context.Background(), configID)
-	require.NoError(t, fetchErr)
 
-	newName := "Updated Name"
-	err := gotConfig.Update(context.Background(), smplkit.UpdateConfigParams{
-		Name:        &newName,
-		Description: &desc,
-	})
+	cfg, err := client.Config().Get(context.Background(), "my-service")
 	require.NoError(t, err)
-	assert.Equal(t, "Updated Name", gotConfig.Name)
-	_ = client // suppress unused warning (client was built for the PUT assertion)
+
+	cfg.Name = "Updated Name"
+	desc := "Updated description"
+	cfg.Description = &desc
+	err = cfg.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Name", cfg.Name)
 }
 
-func TestConfigClient_Update_NotFound(t *testing.T) {
+func TestConfigClient_Save_NotFound(t *testing.T) {
 	configID := testUUID3
 
-	fetchAndUpdateClient := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "test", "Test")))
+			_, _ = w.Write([]byte(sampleListJSON(configID, "test", "Test")))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 		}
 	})
 
-	cfg, err := fetchAndUpdateClient.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "test")
 	require.NoError(t, err)
 
-	err = cfg.Update(context.Background(), smplkit.UpdateConfigParams{})
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
 	var notFound *smplkit.SmplNotFoundError
 	require.True(t, errors.As(err, &notFound))
 }
 
-func TestConfig_SetValues_Base(t *testing.T) {
+func TestConfig_MutateItems_Save(t *testing.T) {
 	configID := testUUID0
 
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
+			_, _ = w.Write([]byte(sampleListJSON(configID, "svc", "Svc")))
 		} else {
 			assert.Equal(t, "PUT", r.Method)
 			var body map[string]interface{}
@@ -376,21 +306,22 @@ func TestConfig_SetValues_Base(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	err = cfg.SetValues(context.Background(), map[string]interface{}{"log_level": "debug"}, "")
+	cfg.Items["log_level"] = "debug"
+	err = cfg.Save(context.Background())
 	require.NoError(t, err)
 }
 
-func TestConfig_SetValues_Environment(t *testing.T) {
+func TestConfig_MutateEnvironment_Save(t *testing.T) {
 	configID := testUUID0
 
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
+			_, _ = w.Write([]byte(sampleListJSON(configID, "svc", "Svc")))
 		} else {
 			assert.Equal(t, "PUT", r.Method)
 			var body map[string]interface{}
@@ -407,31 +338,31 @@ func TestConfig_SetValues_Environment(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	err = cfg.SetValues(context.Background(), map[string]interface{}{"log_level": "warn"}, "production")
+	cfg.Environments["production"] = map[string]interface{}{
+		"values": map[string]interface{}{"log_level": "warn"},
+	}
+	err = cfg.Save(context.Background())
 	require.NoError(t, err)
 }
 
-func TestConfig_SetValue(t *testing.T) {
+func TestConfig_MutateAddItem_Save(t *testing.T) {
 	configID := testUUID0
 
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
+			_, _ = w.Write([]byte(sampleListJSON(configID, "svc", "Svc")))
 		} else {
 			assert.Equal(t, "PUT", r.Method)
 			var body map[string]interface{}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			attrs := body["data"].(map[string]interface{})["attributes"].(map[string]interface{})
 			items := attrs["items"].(map[string]interface{})
-			// Should still have the original log_level from sampleConfigJSON.
-			logItem := items["log_level"].(map[string]interface{})
-			assert.Equal(t, "info", logItem["value"])
-			// And the new key.
+			// The new key should be present.
 			debugItem := items["debug"].(map[string]interface{})
 			assert.Equal(t, true, debugItem["value"])
 
@@ -440,10 +371,11 @@ func TestConfig_SetValue(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	err = cfg.SetValue(context.Background(), "debug", true, "")
+	cfg.Items["debug"] = true
+	err = cfg.Save(context.Background())
 	require.NoError(t, err)
 }
 
@@ -453,7 +385,7 @@ func TestConfigClient_404_NotFoundError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	})
 
-	_, err := client.Config().GetByID(context.Background(), testUUID3)
+	_, err := client.Config().Get(context.Background(), "nonexistent")
 	require.Error(t, err)
 
 	var notFound *smplkit.SmplNotFoundError
@@ -466,12 +398,23 @@ func TestConfigClient_404_NotFoundError(t *testing.T) {
 }
 
 func TestConfigClient_409_ConflictError(t *testing.T) {
-	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleListJSON(testUUID4, "has-children", "Has Children")))
+	})
+	mux.HandleFunc("/api/v1/configs/"+testUUID4, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"has children"}]}`))
 	})
 
-	err := client.Config().Delete(context.Background(), testUUID4)
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
+
+	err = client.Config().Delete(context.Background(), "has-children")
 	require.Error(t, err)
 
 	var conflict *smplkit.SmplConflictError
@@ -485,9 +428,8 @@ func TestConfigClient_422_ValidationError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"name is required"}]}`))
 	})
 
-	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{
-		Name: "",
-	})
+	cfg := client.Config().New("bad-config", smplkit.WithConfigName(""))
+	err := cfg.Save(context.Background())
 	require.Error(t, err)
 
 	var validation *smplkit.SmplValidationError
@@ -502,9 +444,8 @@ func TestConfigClient_NetworkError_ConnectionError(t *testing.T) {
 	addr := listener.Addr().String()
 	listener.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://"+addr),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
@@ -523,7 +464,7 @@ func TestConfigClient_ContextTimeout_TimeoutError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL), smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -571,7 +512,8 @@ func TestConfigClient_ContentType(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON("id", "key", "Name")))
 	})
 
-	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
+	cfg := client.Config().New("key", smplkit.WithConfigName("Test"))
+	err := cfg.Save(context.Background())
 	require.NoError(t, err)
 }
 
@@ -582,7 +524,7 @@ func TestConfigClient_ContextCanceled_TimeoutError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL), smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -613,10 +555,9 @@ func TestConfigClient_GenericError_FallsBackToConnectionError(t *testing.T) {
 	// Use a custom RoundTripper that returns a generic (non-net, non-context) error.
 	transport := &errorRoundTripper{err: fmt.Errorf("some unknown error")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
@@ -638,14 +579,26 @@ func (t *errorRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
 }
 
 func TestConfigClient_ParsesEnvironments(t *testing.T) {
-	configID := testUUID5
-
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleConfigJSON(configID, "env-test", "Env Test")))
+		// Return a list response with environment data.
+		_, _ = w.Write([]byte(`{"data": [{
+			"id": "` + testUUID5 + `",
+			"type": "config",
+			"attributes": {
+				"name": "Env Test",
+				"key": "env-test",
+				"description": "A test config",
+				"parent": null,
+				"items": {"log_level": {"value": "info", "type": "STRING"}},
+				"environments": {"production": {"values": {"log_level": {"value": "warn"}}}},
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-06-15T12:00:00Z"
+			}
+		}]}`))
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "env-test")
 	require.NoError(t, err)
 	require.Contains(t, cfg.Environments, "production")
 	prodEnv := cfg.Environments["production"]
@@ -654,62 +607,50 @@ func TestConfigClient_ParsesEnvironments(t *testing.T) {
 	assert.Equal(t, "warn", vals["log_level"])
 }
 
-func TestConfigClient_GetByID_MalformedJSON(t *testing.T) {
-	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{invalid json}`))
-	})
-
-	_, err := client.Config().GetByID(context.Background(), testUUID6)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to parse response")
-}
-
-func TestConfigClient_GetByKey_MalformedJSON(t *testing.T) {
+func TestConfigClient_Get_MalformedJSON(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{not valid}`))
 	})
 
-	_, err := client.Config().GetByKey(context.Background(), "some-key")
+	_, err := client.Config().Get(context.Background(), "some-key")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
 }
 
-func TestConfigClient_GetByKey_NetworkError(t *testing.T) {
+func TestConfigClient_Get_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("some network error")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().GetByKey(context.Background(), "some-key")
+	_, err = client.Config().Get(context.Background(), "some-key")
 	require.Error(t, err)
 }
 
-func TestConfigClient_Create_UnmarshalableValues(t *testing.T) {
+func TestConfigClient_New_Save_UnmarshalableValues(t *testing.T) {
 	// Channels cannot be JSON-marshaled — exercises the marshal error path.
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	_, err = client.Config().Create(context.Background(), smplkit.CreateConfigParams{
-		Name:  "Test",
-		Items: map[string]interface{}{"ch": make(chan int)},
-	})
+	cfg := client.Config().New("test", smplkit.WithConfigName("Test"))
+	cfg.Items = map[string]interface{}{"ch": make(chan int)}
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to marshal request body")
+	assert.Contains(t, err.Error(), "unsupported type")
 }
 
-func TestConfigClient_Create_MalformedJSON(t *testing.T) {
+func TestConfigClient_New_Save_MalformedJSON(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{not valid}`))
 	})
 
-	_, err := client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
+	cfg := client.Config().New("test", smplkit.WithConfigName("Test"))
+	err := cfg.Save(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
 }
@@ -728,10 +669,9 @@ func TestConfigClient_List_MalformedJSON(t *testing.T) {
 func TestConfigClient_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
@@ -745,9 +685,8 @@ func TestConfigClient_ReadBodyError(t *testing.T) {
 
 func TestConfigClient_InvalidURL_RequestCreateError(t *testing.T) {
 	// A URL containing a null byte causes request creation to fail.
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://bad\x00host"),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
@@ -758,10 +697,9 @@ func TestConfigClient_InvalidURL_RequestCreateError(t *testing.T) {
 func TestClassifyError_NetErrorTimeout(t *testing.T) {
 	transport := &timeoutNetErrorRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
@@ -802,129 +740,91 @@ func (e *mockTimeoutNetError) Temporary() bool { return true }
 
 // --- Additional tests for 100% coverage ---
 
-func TestConfigClient_GetByID_InvalidUUID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
-	require.NoError(t, err)
-	_, err = client.Config().GetByID(context.Background(), "not-a-uuid")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid config ID")
-}
-
-func TestConfigClient_GetByID_NetworkError(t *testing.T) {
-	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
-	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
-		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
-	)
-	require.NoError(t, err)
-
-	_, err = client.Config().GetByID(context.Background(), testUUID0)
-	require.Error(t, err)
-	var connErr *smplkit.SmplConnectionError
-	require.True(t, errors.As(err, &connErr))
-}
-
-func TestConfigClient_GetByID_ReadBodyError(t *testing.T) {
+func TestConfigClient_Get_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().GetByID(context.Background(), testUUID0)
+	_, err = client.Config().Get(context.Background(), "some-key")
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
 	assert.Contains(t, connErr.Error(), "failed to read response body")
 }
 
-func TestConfigClient_GetByKey_ReadBodyError(t *testing.T) {
-	transport := &brokenBodyRoundTripper{}
-	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
-		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
-	)
-	require.NoError(t, err)
-
-	_, err = client.Config().GetByKey(context.Background(), "some-key")
-	require.Error(t, err)
-	var connErr *smplkit.SmplConnectionError
-	require.True(t, errors.As(err, &connErr))
-	assert.Contains(t, connErr.Error(), "failed to read response body")
-}
-
-func TestConfigClient_GetByKey_HTTPError(t *testing.T) {
+func TestConfigClient_Get_HTTPError(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"error":"server error"}`))
 	})
 
-	_, err := client.Config().GetByKey(context.Background(), "some-key")
+	_, err := client.Config().Get(context.Background(), "some-key")
 	require.Error(t, err)
 	var smplErr *smplkit.SmplError
 	require.True(t, errors.As(err, &smplErr))
 	assert.Equal(t, 500, smplErr.StatusCode)
 }
 
-func TestConfigClient_Create_NetworkError(t *testing.T) {
+func TestConfigClient_New_Save_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
+	cfg := client.Config().New("test", smplkit.WithConfigName("Test"))
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
 }
 
-func TestConfigClient_Create_ReadBodyError(t *testing.T) {
+func TestConfigClient_New_Save_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().Create(context.Background(), smplkit.CreateConfigParams{Name: "Test"})
+	cfg := client.Config().New("test", smplkit.WithConfigName("Test"))
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
 	assert.Contains(t, connErr.Error(), "failed to read response body")
 }
 
-func TestConfigClient_Delete_InvalidUUID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
-	require.NoError(t, err)
-	err = client.Config().Delete(context.Background(), "not-a-uuid")
+func TestConfigClient_Delete_NotFound(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+
+	err := client.Config().Delete(context.Background(), "nonexistent")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid config ID")
+	var notFound *smplkit.SmplNotFoundError
+	require.True(t, errors.As(err, &notFound))
 }
 
 func TestConfigClient_Delete_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
-	err = client.Config().Delete(context.Background(), testUUID0)
+	err = client.Config().Delete(context.Background(), "some-key")
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -933,23 +833,21 @@ func TestConfigClient_Delete_NetworkError(t *testing.T) {
 func TestConfigClient_Delete_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
-	err = client.Config().Delete(context.Background(), testUUID0)
+	err = client.Config().Delete(context.Background(), "some-key")
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
 	assert.Contains(t, connErr.Error(), "failed to read response body")
 }
 
-func TestConfigClient_UpdateByID_InvalidUUID(t *testing.T) {
-	// updateByID is exercised through Config.Update. We need a Config with an
-	// invalid ID to trigger the uuid.Parse error path.
+func TestConfigClient_Save_InvalidUUID(t *testing.T) {
+	// We need a Config with a non-empty but invalid ID to trigger the uuid.Parse error path.
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Return a list response with a non-UUID ID.
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -957,88 +855,79 @@ func TestConfigClient_UpdateByID_InvalidUUID(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[{"id":"not-a-uuid","type":"config","attributes":{"name":"Test","key":"test","items":{},"environments":{}}}]}`))
 	})
 
-	// Use GetByKey to get a Config (GetByKey uses list endpoint, doesn't validate UUID).
-	cfg, err := client.Config().GetByKey(context.Background(), "test")
+	cfg, err := client.Config().Get(context.Background(), "test")
 	require.NoError(t, err)
 
-	err = cfg.Update(context.Background(), smplkit.UpdateConfigParams{})
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid config ID")
 }
 
-func TestConfigClient_UpdateByID_MarshalError(t *testing.T) {
+func TestConfigClient_Save_MarshalError(t *testing.T) {
 	configID := testUUID0
 
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
-		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleListJSON(configID, "svc", "Svc")))
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
 	// Set items with an unmarshalable type (channel).
-	err = cfg.Update(context.Background(), smplkit.UpdateConfigParams{
-		Items: map[string]interface{}{"ch": make(chan int)},
-	})
+	cfg.Items = map[string]interface{}{"ch": make(chan int)}
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to marshal request body")
+	assert.Contains(t, err.Error(), "unsupported type")
 }
 
-func TestConfigClient_UpdateByID_NetworkError(t *testing.T) {
+func TestConfigClient_Save_NetworkError(t *testing.T) {
 	configID := testUUID0
-	var callCount int
 
-	// First call succeeds (GET to fetch config), second (PUT) uses error transport.
+	// First call succeeds (GET list to fetch config), second (PUT) triggers network error.
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleListJSON(configID, "svc", "Svc")))
+	})
 	mux.HandleFunc("/api/v1/configs/"+configID, func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		if r.Method == "GET" {
-			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
-		} else {
-			// Close connection without response to trigger network error.
-			hj, ok := w.(http.Hijacker)
-			if !ok {
-				return
-			}
-			conn, _, _ := hj.Hijack()
-			conn.Close()
+		// Close connection without response to trigger network error.
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			return
 		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
 	})
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL), smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	err = cfg.Update(context.Background(), smplkit.UpdateConfigParams{})
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
 }
 
-func TestConfigClient_UpdateByID_ReadBodyError(t *testing.T) {
+func TestConfigClient_Save_ReadBodyError(t *testing.T) {
 	configID := testUUID0
 
-	// Use a transport that returns a proper response for GET but a broken body for PUT.
-	var callCount int
+	// Use a transport that returns a proper list response for GET but a broken body for PUT.
 	transport := &methodAwareRoundTripper{
 		getHandler: func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: 200,
-				Body:       io.NopCloser(strings.NewReader(sampleConfigJSON(configID, "svc", "Svc"))),
+				Body:       io.NopCloser(strings.NewReader(sampleListJSON(configID, "svc", "Svc"))),
 				Header:     http.Header{"Content-Type": {"application/vnd.api+json"}},
 			}, nil
 		},
 		putHandler: func(req *http.Request) (*http.Response, error) {
-			callCount++
 			return &http.Response{
 				StatusCode: 200,
 				Body:       io.NopCloser(&errReader{err: fmt.Errorf("simulated read error")}),
@@ -1047,31 +936,30 @@ func TestConfigClient_UpdateByID_ReadBodyError(t *testing.T) {
 		},
 	}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test",
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
 		smplkit.WithBaseURL("http://example.com"),
 		smplkit.WithHTTPClient(httpClient),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	err = cfg.Update(context.Background(), smplkit.UpdateConfigParams{})
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
 	assert.Contains(t, connErr.Error(), "failed to read response body")
 }
 
-func TestConfigClient_UpdateByID_MalformedResponse(t *testing.T) {
+func TestConfigClient_Save_MalformedResponse(t *testing.T) {
 	configID := testUUID0
 
 	updateServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
+			_, _ = w.Write([]byte(sampleListJSON(configID, "svc", "Svc")))
 		} else if r.Method == "PUT" {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{invalid`))
@@ -1079,12 +967,12 @@ func TestConfigClient_UpdateByID_MalformedResponse(t *testing.T) {
 	}))
 	defer updateServer.Close()
 
-	updateClient, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(updateServer.URL), smplkit.WithService("test-service"))
+	updateClient, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(updateServer.URL))
 	require.NoError(t, err)
-	cfg, err := updateClient.Config().GetByID(context.Background(), configID)
+	cfg, err := updateClient.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	err = cfg.Update(context.Background(), smplkit.UpdateConfigParams{})
+	err = cfg.Save(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
 }
@@ -1109,54 +997,26 @@ func (t *methodAwareRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func TestConfigClient_FetchChain_Error(t *testing.T) {
-	// fetchChain is called inside client.Connect(). If GetByID fails during
-	// chain walk, the error should propagate.
-	childID := testUUID1
-	parentID := testUUID0
-
-	callCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		if r.URL.Path == "/api/v1/configs" {
-			// List returns the child config which has a parent
-			callCount++
-			resp := fmt.Sprintf(`{"data":[{"id":"%s","type":"config","attributes":{"name":"child","key":"child","parent":"%s","items":{"y":{"value":2,"type":"NUMBER"}},"environments":{}}}]}`, childID, parentID)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(resp))
-		} else if r.URL.Path == "/api/v1/configs/"+childID {
-			resp := fmt.Sprintf(`{"data":{"id":"%s","type":"config","attributes":{"name":"child","key":"child","parent":"%s","items":{"y":{"value":2,"type":"NUMBER"}},"environments":{}}}}`, childID, parentID)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(resp))
-		} else if r.URL.Path == "/api/v1/configs/"+parentID {
-			// Parent returns error.
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
-		} else if r.URL.Path == "/api/v1/flags" {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":[]}`))
-		} else {
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
-		}
-	}))
-	defer server.Close()
-
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL), smplkit.WithService("test-service"))
-	require.NoError(t, err)
-
-	err = client.Connect(context.Background())
-	require.Error(t, err)
-}
-
-func TestConfig_SetValue_WithEnvironment(t *testing.T) {
+func TestConfig_MutateEnvItem_Save(t *testing.T) {
 	configID := testUUID0
 
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleConfigJSON(configID, "svc", "Svc")))
+			// Return list response with environment data.
+			_, _ = w.Write([]byte(`{"data": [{
+				"id": "` + configID + `",
+				"type": "config",
+				"attributes": {
+					"name": "Svc",
+					"key": "svc",
+					"items": {"log_level": {"value": "info", "type": "STRING"}},
+					"environments": {"production": {"values": {"log_level": {"value": "warn"}}}},
+					"created_at": "2024-01-01T00:00:00Z",
+					"updated_at": "2024-06-15T12:00:00Z"
+				}
+			}]}`))
 		} else {
 			assert.Equal(t, "PUT", r.Method)
 			var body map[string]interface{}
@@ -1165,11 +1025,10 @@ func TestConfig_SetValue_WithEnvironment(t *testing.T) {
 			envs := attrs["environments"].(map[string]interface{})
 			prodEnv := envs["production"].(map[string]interface{})
 			vals := prodEnv["values"].(map[string]interface{})
-			// The production env in sampleConfigJSON has {"log_level": "warn"}.
-			// SetValue should merge "debug":true into those existing values.
-			// Values are wrapped as {"value": raw} for the API.
+			// The existing log_level should be preserved.
 			logOverride := vals["log_level"].(map[string]interface{})
 			assert.Equal(t, "warn", logOverride["value"])
+			// And the new key should be present.
 			debugOverride := vals["debug"].(map[string]interface{})
 			assert.Equal(t, true, debugOverride["value"])
 
@@ -1178,14 +1037,18 @@ func TestConfig_SetValue_WithEnvironment(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	err = cfg.SetValue(context.Background(), "debug", true, "production")
+	// Mutate environment values directly.
+	if vals, ok := cfg.Environments["production"]["values"].(map[string]interface{}); ok {
+		vals["debug"] = true
+	}
+	err = cfg.Save(context.Background())
 	require.NoError(t, err)
 }
 
-func TestConfig_SetValue_WithEnvironment_NoExistingEnv(t *testing.T) {
+func TestConfig_MutateNewEnv_Save(t *testing.T) {
 	configID := testUUID0
 
 	// Server returns a config with no environments.
@@ -1193,22 +1056,25 @@ func TestConfig_SetValue_WithEnvironment_NoExistingEnv(t *testing.T) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{}}}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{}}}]}`))
 		} else {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"debug":{"value":true}}}}}}}`))
 		}
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	// SetValue for a non-existing environment should create the env entry.
-	err = cfg.SetValue(context.Background(), "debug", true, "staging")
+	// Add a new environment.
+	cfg.Environments["staging"] = map[string]interface{}{
+		"values": map[string]interface{}{"debug": true},
+	}
+	err = cfg.Save(context.Background())
 	require.NoError(t, err)
 }
 
-func TestConfig_SetValue_WithEnvironment_ExistingEnvKeys(t *testing.T) {
+func TestConfig_MutateExistingEnvMerge_Save(t *testing.T) {
 	configID := testUUID0
 
 	// Server returns a config with an environment that has existing override keys.
@@ -1216,53 +1082,32 @@ func TestConfig_SetValue_WithEnvironment_ExistingEnvKeys(t *testing.T) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"other":{"value":"data"}}}}}}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"other":{"value":"data"}}}}}}]}`))
 		} else {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"other":{"value":"data"},"debug":{"value":true}}}}}}}`))
 		}
 	})
 
-	cfg, err := client.Config().GetByID(context.Background(), configID)
+	cfg, err := client.Config().Get(context.Background(), "svc")
 	require.NoError(t, err)
 
-	err = cfg.SetValue(context.Background(), "debug", true, "staging")
-	require.NoError(t, err)
-}
-
-func TestConfig_SetValue_WithEnvironment_NonMapOverride(t *testing.T) {
-	configID := testUUID0
-
-	// Server returns a config with an environment whose override value is not a wrapped map (edge case).
-	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":null}}}}}`))
-		} else {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","key":"svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"debug":{"value":true}}}}}}}`))
-		}
-	})
-
-	cfg, err := client.Config().GetByID(context.Background(), configID)
-	require.NoError(t, err)
-
-	err = cfg.SetValue(context.Background(), "debug", true, "staging")
+	// Add a new key to the existing environment values.
+	if vals, ok := cfg.Environments["staging"]["values"].(map[string]interface{}); ok {
+		vals["debug"] = true
+	}
+	err = cfg.Save(context.Background())
 	require.NoError(t, err)
 }
 
 // --- Connect + GetValue tests ---
 
 func TestConfigClient_GetValue_NotConnected(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	_, err = client.Config().GetValue("my-config")
+	_, err = client.Config().GetValue(context.Background(), "my-config")
 	require.Error(t, err)
-
-	var notConnErr *smplkit.SmplNotConnectedError
-	require.True(t, errors.As(err, &notConnErr))
 }
 
 func TestClient_Connect_And_GetValue(t *testing.T) {
@@ -1323,14 +1168,13 @@ func TestClient_Connect_And_GetValue(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL), smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
-	err = client.Connect(context.Background())
-	require.NoError(t, err)
+	ctx := context.Background()
 
 	// GetValue with configKey only — returns all resolved values
-	allVals, err := client.Config().GetValue("db")
+	allVals, err := client.Config().GetValue(ctx, "db")
 	require.NoError(t, err)
 	require.NotNil(t, allVals)
 	m := allVals.(map[string]interface{})
@@ -1338,65 +1182,19 @@ func TestClient_Connect_And_GetValue(t *testing.T) {
 	assert.Equal(t, float64(5432), m["port"])
 
 	// GetValue with configKey + itemKey
-	host, err := client.Config().GetValue("db", "host")
+	host, err := client.Config().GetValue(ctx, "db", "host")
 	require.NoError(t, err)
 	assert.Equal(t, "testdb", host)
 
 	// GetValue for missing config
-	missing, err := client.Config().GetValue("nonexistent")
+	missing, err := client.Config().GetValue(ctx, "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, missing)
 
 	// GetValue for missing item key
-	missingItem, err := client.Config().GetValue("db", "nonexistent")
+	missingItem, err := client.Config().GetValue(ctx, "db", "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, missingItem)
-
-	// Connect is idempotent
-	err = client.Connect(context.Background())
-	require.NoError(t, err)
 }
 
-func TestClient_Connect_WithService(t *testing.T) {
-	var serviceRegistered bool
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/contexts/bulk", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		contexts := body["contexts"].([]interface{})
-		require.Len(t, contexts, 1)
-		ctx0 := contexts[0].(map[string]interface{})
-		assert.Equal(t, "service", ctx0["type"])
-		assert.Equal(t, "my-svc", ctx0["key"])
-		serviceRegistered = true
-		w.WriteHeader(http.StatusOK)
-	})
-	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	client, err := smplkit.NewClient("sk_test_key", "test",
-		smplkit.WithBaseURL(server.URL),
-		smplkit.WithService("my-svc"),
-	)
-	require.NoError(t, err)
-
-	err = client.Connect(context.Background())
-	require.NoError(t, err)
-	assert.True(t, serviceRegistered, "service context should have been registered")
-}

@@ -79,7 +79,7 @@ func startTestServer(t *testing.T, configs []map[string]interface{}) *httptest.S
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"data": cfg}) //nolint:errcheck
 	})
-	// Flags endpoints needed by client.Connect()
+	// Flags endpoints needed by lazy init
 	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}}) //nolint:errcheck
@@ -93,17 +93,12 @@ func startTestServer(t *testing.T, configs []map[string]interface{}) *httptest.S
 	return server
 }
 
-// connectClient creates a client pointed at the test server and calls Connect.
+// connectClient creates a client pointed at the test server for lazy init testing.
 func connectClient(t *testing.T, server *httptest.Server) *smplkit.Client {
 	t.Helper()
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL(server.URL),
-		smplkit.WithService("test-service"),
 	)
-	require.NoError(t, err)
-
-	// We need to mock the flags connect. Use a separate handler.
-	err = client.Connect(context.Background())
 	require.NoError(t, err)
 	return client
 }
@@ -119,17 +114,19 @@ func TestTypedAccessors_GetString(t *testing.T) {
 	server := startTestServer(t, cfgs)
 	client := connectClient(t, server)
 
-	val, err := client.Config().GetString("app", "name")
+	ctx := context.Background()
+
+	val, err := client.Config().GetString(ctx, "app", "name")
 	assert.NoError(t, err)
 	assert.Equal(t, "Acme", val)
 
 	// Wrong type returns default
-	val, err = client.Config().GetString("app", "count", "fallback")
+	val, err = client.Config().GetString(ctx, "app", "count", "fallback")
 	assert.NoError(t, err)
 	assert.Equal(t, "fallback", val)
 
 	// Missing key returns empty string
-	val, err = client.Config().GetString("app", "missing")
+	val, err = client.Config().GetString(ctx, "app", "missing")
 	assert.NoError(t, err)
 	assert.Equal(t, "", val)
 }
@@ -143,17 +140,19 @@ func TestTypedAccessors_GetInt(t *testing.T) {
 	server := startTestServer(t, cfgs)
 	client := connectClient(t, server)
 
-	val, err := client.Config().GetInt("app", "port")
+	ctx := context.Background()
+
+	val, err := client.Config().GetInt(ctx, "app", "port")
 	assert.NoError(t, err)
 	assert.Equal(t, 8080, val)
 
 	// Wrong type returns default
-	val, err = client.Config().GetInt("app", "name", 99)
+	val, err = client.Config().GetInt(ctx, "app", "name", 99)
 	assert.NoError(t, err)
 	assert.Equal(t, 99, val)
 
 	// Missing key returns 0
-	val, err = client.Config().GetInt("app", "missing")
+	val, err = client.Config().GetInt(ctx, "app", "missing")
 	assert.NoError(t, err)
 	assert.Equal(t, 0, val)
 }
@@ -167,36 +166,39 @@ func TestTypedAccessors_GetBool(t *testing.T) {
 	server := startTestServer(t, cfgs)
 	client := connectClient(t, server)
 
-	val, err := client.Config().GetBool("app", "enabled")
+	ctx := context.Background()
+
+	val, err := client.Config().GetBool(ctx, "app", "enabled")
 	assert.NoError(t, err)
 	assert.True(t, val)
 
 	// Wrong type returns default
-	val, err = client.Config().GetBool("app", "name", false)
+	val, err = client.Config().GetBool(ctx, "app", "name", false)
 	assert.NoError(t, err)
 	assert.False(t, val)
 
 	// Missing key returns false
-	val, err = client.Config().GetBool("app", "missing")
+	val, err = client.Config().GetBool(ctx, "app", "missing")
 	assert.NoError(t, err)
 	assert.False(t, val)
 }
 
 func TestTypedAccessors_NotConnected(t *testing.T) {
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL("http://localhost:0"),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().GetString("app", "name")
-	assert.ErrorIs(t, err, smplkit.ErrNotConnected)
+	ctx := context.Background()
 
-	_, err = client.Config().GetInt("app", "port")
-	assert.ErrorIs(t, err, smplkit.ErrNotConnected)
+	_, err = client.Config().GetString(ctx, "app", "name")
+	assert.Error(t, err)
 
-	_, err = client.Config().GetBool("app", "flag")
-	assert.ErrorIs(t, err, smplkit.ErrNotConnected)
+	_, err = client.Config().GetInt(ctx, "app", "port")
+	assert.Error(t, err)
+
+	_, err = client.Config().GetBool(ctx, "app", "flag")
+	assert.Error(t, err)
 }
 
 // --- refresh ---
@@ -241,20 +243,20 @@ func TestRefresh_UpdatesCache(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL(server.URL),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
-	require.NoError(t, client.Connect(context.Background()))
 
-	val, _ := client.Config().GetInt("app", "retries")
+	ctx := context.Background()
+
+	val, _ := client.Config().GetInt(ctx, "app", "retries")
 	assert.Equal(t, 3, val)
 
 	refreshed = true
-	require.NoError(t, client.Config().Refresh(context.Background()))
+	require.NoError(t, client.Config().Refresh(ctx))
 
-	val, _ = client.Config().GetInt("app", "retries")
+	val, _ = client.Config().GetInt(ctx, "app", "retries")
 	assert.Equal(t, 7, val)
 }
 
@@ -290,15 +292,18 @@ func TestRefresh_ListError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL(server.URL),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
-	require.NoError(t, client.Connect(context.Background()))
+
+	ctx := context.Background()
+
+	// Trigger lazy init by reading a value
+	_, _ = client.Config().GetInt(ctx, "app", "a")
 
 	failList = true
-	err = client.Config().Refresh(context.Background())
+	err = client.Config().Refresh(ctx)
 	assert.Error(t, err)
 }
 
@@ -335,26 +340,28 @@ func TestRefresh_FetchChainError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL(server.URL),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
-	require.NoError(t, client.Connect(context.Background()))
 
-	err = client.Config().Refresh(context.Background())
+	ctx := context.Background()
+
+	// Trigger lazy init by reading a value
+	_, _ = client.Config().GetInt(ctx, "app", "a")
+
+	err = client.Config().Refresh(ctx)
 	assert.Error(t, err)
 }
 
 func TestRefresh_NotConnected(t *testing.T) {
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL("http://localhost:0"),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 
 	err = client.Config().Refresh(context.Background())
-	assert.ErrorIs(t, err, smplkit.ErrNotConnected)
+	assert.Error(t, err)
 }
 
 // --- onChange ---
@@ -399,12 +406,15 @@ func TestOnChange_FiresOnRefresh(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL(server.URL),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
-	require.NoError(t, client.Connect(context.Background()))
+
+	ctx := context.Background()
+
+	// Trigger lazy init
+	_, _ = client.Config().GetInt(ctx, "app", "retries")
 
 	var events []*smplkit.ConfigChangeEvent
 	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
@@ -412,7 +422,7 @@ func TestOnChange_FiresOnRefresh(t *testing.T) {
 	})
 
 	refreshed = true
-	require.NoError(t, client.Config().Refresh(context.Background()))
+	require.NoError(t, client.Config().Refresh(ctx))
 
 	require.Len(t, events, 1)
 	assert.Equal(t, "app", events[0].ConfigKey)
@@ -464,12 +474,15 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL(server.URL),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
-	require.NoError(t, client.Connect(context.Background()))
+
+	ctx := context.Background()
+
+	// Trigger lazy init
+	_, _ = client.Config().GetInt(ctx, "app", "retries")
 
 	var retriesEvents []*smplkit.ConfigChangeEvent
 	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
@@ -477,7 +490,7 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 	}, smplkit.WithConfigKey("app"), smplkit.WithItemKey("retries"))
 
 	refreshed = true
-	require.NoError(t, client.Config().Refresh(context.Background()))
+	require.NoError(t, client.Config().Refresh(ctx))
 
 	// Should only get the retries change, not timeout
 	require.Len(t, retriesEvents, 1)
@@ -487,9 +500,8 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 // --- singleton accessor identity ---
 
 func TestSingletonAccessor(t *testing.T) {
-	client, err := smplkit.NewClient("sk_api_test", "production",
+	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
 		smplkit.WithBaseURL("http://localhost:0"),
-		smplkit.WithService("test-service"),
 	)
 	require.NoError(t, err)
 

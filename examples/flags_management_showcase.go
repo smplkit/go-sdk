@@ -7,9 +7,9 @@
 //   - Client initialization
 //   - Flag CRUD: create (boolean, string, numeric), get, list, delete
 //   - Typed flag values and defaults
-//   - Environment configuration with rules
-//   - Flag.Update() for bulk environment/rule changes
-//   - Flag.AddRule() for appending a single rule
+//   - Environment configuration with convenience methods
+//   - Flag.Save() for persisting changes
+//   - Flag.AddRule() for appending a single rule (local mutation)
 //   - Context type management: create, update, list, delete
 //   - Cleanup
 //
@@ -22,7 +22,7 @@
 //
 // Usage:
 //
-//	go run examples/flags_management_showcase.go examples/flags_demo_setup.go
+//	go run examples/flags_management_showcase.go examples/flags_runtime_setup.go
 package main
 
 import (
@@ -40,7 +40,7 @@ func main() {
 	// ====================================================================
 	section("1. SDK Initialization")
 
-	// The SmplClient constructor resolves three required parameters:
+	// The SmplClient constructor takes three required positional parameters:
 	//
 	//   apiKey       — passed as "" here; resolved automatically from the
 	//                  SMPLKIT_API_KEY environment variable or the
@@ -49,14 +49,14 @@ func main() {
 	//   environment  — the target environment. Falls back to
 	//                  SMPLKIT_ENVIRONMENT if empty.
 	//
-	//   service      — identifies this SDK instance. Can also be resolved
-	//                  from SMPLKIT_SERVICE if not passed via WithService().
+	//   service      — identifies this SDK instance. Falls back to
+	//                  SMPLKIT_SERVICE if empty.
 	//
 	// To pass the API key explicitly, pass it as the first arg:
 	//
-	//   client, err := smplkit.NewClient("sk_api_...", "production", smplkit.WithService("showcase-service"))
+	//   client, err := smplkit.NewClient("sk_api_...", "production", "showcase-service")
 	//
-	client, err := smplkit.NewClient("", "production", smplkit.WithService("showcase-service"))
+	client, err := smplkit.NewClient("", "production", "showcase-service")
 	if err != nil {
 		fatal("failed to create client", err)
 	}
@@ -87,12 +87,12 @@ func main() {
 	// ====================================================================
 	section("3. Get & List Flags")
 
-	// Get by ID.
-	fetched, err := flags.Get(ctx, checkoutFlag.ID)
+	// Get by key.
+	fetched, err := flags.Get(ctx, "checkout-v2")
 	if err != nil {
 		fatal("failed to get flag", err)
 	}
-	step(fmt.Sprintf("Get(id=%s): key=%q name=%q", fetched.ID, fetched.Key, fetched.Name))
+	step(fmt.Sprintf("Get(key=%q): name=%q type=%s", fetched.Key, fetched.Name, fetched.Type))
 
 	// List all.
 	allFlags, err := flags.List(ctx)
@@ -109,59 +109,37 @@ func main() {
 	}
 
 	// ====================================================================
-	// 4. UPDATE A FLAG — add a new environment rule
+	// 4. UPDATE A FLAG — add a new rule via local mutation + Save
 	// ====================================================================
 	section("4. Update a Flag (checkout-v2)")
 
-	err = checkoutFlag.Update(ctx, smplkit.UpdateFlagParams{
-		Environments: map[string]interface{}{
-			"staging": map[string]interface{}{
-				"enabled": true,
-				"rules": []interface{}{
-					smplkit.NewRule("Enable for enterprise users in US region").
-						When("user.plan", "==", "enterprise").
-						When("account.region", "==", "us").
-						Serve(true).
-						Build(),
-					smplkit.NewRule("Enable for beta testers").
-						When("user.beta_tester", "==", true).
-						Serve(true).
-						Build(),
-					smplkit.NewRule("Enable for technology companies").
-						When("account.industry", "==", "technology").
-						Serve(true).
-						Build(),
-				},
-			},
-			"production": map[string]interface{}{
-				"enabled": false,
-				"default": false,
-				"rules":   []interface{}{},
-			},
-		},
-	})
-	if err != nil {
+	checkoutFlag.AddRule(smplkit.NewRule("Enable for technology companies").
+		Environment("staging").
+		When("account.industry", "==", "technology").
+		Serve(true).
+		Build())
+	if err := checkoutFlag.Save(ctx); err != nil {
 		fatal("failed to update checkout-v2", err)
 	}
 	step("Added 'technology companies' rule to checkout-v2 staging")
 
 	// ====================================================================
-	// 5. ADD RULE — append a single rule to an existing environment
+	// 5. ADD RULE — append a single rule (local mutation) then Save
 	// ====================================================================
 	section("5. AddRule (banner-color)")
 
-	err = bannerFlag.AddRule(ctx, smplkit.NewRule("Red for healthcare").
+	bannerFlag.AddRule(smplkit.NewRule("Red for healthcare").
 		Environment("staging").
 		When("account.industry", "==", "healthcare").
 		Serve("red").
 		Build())
-	if err != nil {
-		fatal("failed to add rule to banner-color", err)
+	if err := bannerFlag.Save(ctx); err != nil {
+		fatal("failed to save banner-color after adding rule", err)
 	}
 	step("Appended 'healthcare' rule to banner-color staging")
 
 	// Verify: re-fetch and count rules.
-	bannerRefreshed, err := flags.Get(ctx, bannerFlag.ID)
+	bannerRefreshed, err := flags.Get(ctx, "banner-color")
 	if err != nil {
 		fatal("failed to re-fetch banner-color", err)
 	}
@@ -218,12 +196,12 @@ func main() {
 	fmt.Println("Features exercised:")
 	fmt.Println("  [x] Client initialization")
 	fmt.Println("  [x] Flags sub-client")
-	fmt.Println("  [x] Create flags (boolean, string, numeric)")
-	fmt.Println("  [x] Get flag by ID")
+	fmt.Println("  [x] Create flags (boolean, string, numeric) via factory + Save")
+	fmt.Println("  [x] Get flag by key")
 	fmt.Println("  [x] List all flags")
-	fmt.Println("  [x] Update flag (environments + rules)")
-	fmt.Println("  [x] AddRule (append single rule)")
+	fmt.Println("  [x] Update flag via local mutation + Save")
+	fmt.Println("  [x] AddRule (local mutation + Save)")
 	fmt.Println("  [x] Context type CRUD (create, list)")
-	fmt.Println("  [x] Delete flags")
+	fmt.Println("  [x] Delete flags by key")
 	fmt.Println("  [x] Delete context types")
 }

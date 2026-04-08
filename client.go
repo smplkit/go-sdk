@@ -10,16 +10,19 @@ import (
 	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
 	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
+	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
 )
 
-const appBaseURL = "https://app.smplkit.com"
+const (
+	appBaseURL     = "https://app.smplkit.com"
+	loggingBaseURL = "https://logging.smplkit.com"
+)
 
 // Client is the top-level entry point for the smplkit SDK.
 //
 // Create one with NewClient and access sub-clients via accessor methods:
 //
-//	client, err := smplkit.NewClient("sk_api_...", "production")
-//	err = client.Connect(ctx)
+//	client, err := smplkit.NewClient("sk_api_...", "production", "my-service")
 //	cfgs, err := client.Config().List(ctx)
 type Client struct {
 	apiKey       string
@@ -29,12 +32,12 @@ type Client struct {
 	httpClient   *http.Client
 	appGenerated genapp.ClientInterface
 
-	config *ConfigClient
-	flags  *FlagsClient
+	config  *ConfigClient
+	flags   *FlagsClient
+	logging *LoggingClient
 
-	wsMu      sync.Mutex
-	ws        *sharedWebSocket
-	connected bool
+	wsMu sync.Mutex
+	ws   *sharedWebSocket
 }
 
 // NewClient creates a new smplkit API client.
@@ -46,9 +49,11 @@ type Client struct {
 // The environment is required; pass an empty string to resolve from
 // SMPLKIT_ENVIRONMENT.
 //
-// Use ClientOption functions to customize the base URL, timeout, HTTP client,
-// or service name.
-func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client, error) {
+// The service is required; pass an empty string to resolve from
+// SMPLKIT_SERVICE.
+//
+// Use ClientOption functions to customize the base URL, timeout, or HTTP client.
+func NewClient(apiKey string, environment string, service string, opts ...ClientOption) (*Client, error) {
 	// 1. Resolve environment first.
 	resolvedEnv := environment
 	if resolvedEnv == "" {
@@ -63,21 +68,21 @@ func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client
 	}
 
 	// 2. Resolve service second.
-	cfg := defaultConfig()
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-
-	resolvedService := cfg.service
+	resolvedService := service
 	if resolvedService == "" {
 		resolvedService = os.Getenv("SMPLKIT_SERVICE")
 	}
 	if resolvedService == "" {
 		return nil, &SmplError{
 			Message: "No service provided. Set one of:\n" +
-				"  1. Use WithService(\"my-service\")\n" +
+				"  1. Pass service to NewClient\n" +
 				"  2. Set the SMPLKIT_SERVICE environment variable",
 		}
+	}
+
+	cfg := defaultConfig()
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
 	// 3. Resolve API key last (receives the already-resolved environment).
@@ -147,6 +152,21 @@ func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client
 		appHeaderEditor,
 	)
 
+	// Build the generated logging client.
+	loggingHeaderEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	logURL := loggingBaseURL
+	if cfg.baseURL != "" && cfg.baseURL != defaultConfig().baseURL {
+		logURL = cfg.baseURL
+	}
+	genLoggingClient, _ := genlogging.NewClient(logURL,
+		genlogging.WithHTTPClient(httpClient),
+		loggingHeaderEditor,
+	)
+
 	c := &Client{
 		apiKey:       resolved,
 		environment:  resolvedEnv,
@@ -158,6 +178,7 @@ func NewClient(apiKey string, environment string, opts ...ClientOption) (*Client
 	c.config = &ConfigClient{client: c, generated: genConfigClient}
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	c.flags.runtime = newFlagsRuntime(c.flags)
+	c.logging = newLoggingClient(c, genLoggingClient)
 	return c, nil
 }
 
@@ -177,30 +198,17 @@ func (c *Client) Flags() *FlagsClient {
 	return c.flags
 }
 
-// Connect connects to the smplkit platform: fetches initial flag and config
-// data, opens the shared WebSocket, and registers the service as a context
-// instance.
-//
-// This method is idempotent — calling it multiple times is safe.
-func (c *Client) Connect(ctx context.Context) error {
-	if c.connected {
-		return nil
+// Logging returns the sub-client for logging management and runtime operations.
+func (c *Client) Logging() *LoggingClient {
+	return c.logging
+}
+
+// Close stops the shared WebSocket and cleans up all product clients.
+func (c *Client) Close() error {
+	if c.logging != nil {
+		c.logging.close()
 	}
-
-	// Register service context (fire-and-forget).
-	c.registerServiceContext(ctx)
-
-	// Connect flags (fetch definitions, register WS listeners)
-	if err := c.flags.connectInternal(ctx, c.environment); err != nil {
-		return err
-	}
-
-	// Connect config (fetch all, resolve, cache)
-	if err := c.config.connectInternal(ctx, c.environment); err != nil {
-		return err
-	}
-
-	c.connected = true
+	c.stopWS()
 	return nil
 }
 
@@ -237,7 +245,7 @@ func (c *Client) ensureWS() *sharedWebSocket {
 }
 
 // stopWS stops the shared WebSocket if running.
-func (c *Client) stopWS() { //nolint:unused // lifecycle method for future Close() implementation
+func (c *Client) stopWS() {
 	c.wsMu.Lock()
 	ws := c.ws
 	c.wsMu.Unlock()

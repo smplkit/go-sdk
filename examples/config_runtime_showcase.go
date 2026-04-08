@@ -5,8 +5,8 @@
 //
 // Demonstrates the full runtime surface:
 //   - Client initialization and config creation (via demo helpers)
-//   - Connect / prescriptive access via GetValue
-//   - Typed accessors: GetString, GetInt, GetBool
+//   - Resolve / ResolveInto for prescriptive access
+//   - Subscribe for live config updates
 //   - Multi-level inheritance (common -> user_service -> auth_module)
 //   - Change listeners (global + key-specific)
 //   - Manual refresh after management-plane mutation
@@ -32,6 +32,18 @@ import (
 	smplkit "github.com/smplkit/go-sdk"
 )
 
+// UserServiceConfig is an example struct for ResolveInto demonstration.
+type UserServiceConfig struct {
+	Database                   map[string]interface{} `json:"database"`
+	CacheTTLSeconds            int                    `json:"cache_ttl_seconds"`
+	EnableSignup               bool                   `json:"enable_signup"`
+	PaginationDefaultPageSize  int                    `json:"pagination_default_page_size"`
+	AppName                    string                 `json:"app_name"`
+	SupportEmail               string                 `json:"support_email"`
+	MaxRetries                 int                    `json:"max_retries"`
+	RequestTimeoutMs           int                    `json:"request_timeout_ms"`
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -50,13 +62,13 @@ func main() {
 	//                  SMPLKIT_ENVIRONMENT if empty.
 	//
 	//   service      — identifies this SDK instance. Can also be resolved
-	//                  from SMPLKIT_SERVICE if not passed via WithService().
+	//                  from SMPLKIT_SERVICE if not passed as a positional arg.
 	//
 	// To pass the API key explicitly, pass it as the first arg:
 	//
-	//   client, err := smplkit.NewClient("sk_api_...", "production", smplkit.WithService("showcase-service"))
+	//   client, err := smplkit.NewClient("sk_api_...", "production", "showcase-service")
 	//
-	client, err := smplkit.NewClient("", "production", smplkit.WithService("showcase-service"))
+	client, err := smplkit.NewClient("", "production", "showcase-service")
 	if err != nil {
 		fatal("failed to create client", err)
 	}
@@ -69,68 +81,72 @@ func main() {
 	step("Demo configs created (common, user_service, auth_module)")
 
 	// ====================================================================
-	// 2. CONNECT AND READ RESOLVED VALUES
+	// 2. RESOLVE — READ RESOLVED VALUES AS A MAP
 	// ====================================================================
-	section("2. Connect and Read Resolved Values")
+	section("2. Resolve — Read Resolved Values as a Map")
 
-	err = client.Connect(ctx)
+	resolved, err := client.Config().Resolve(ctx, "user_service")
 	if err != nil {
-		fatal("failed to connect", err)
+		fatal("failed to resolve user_service", err)
 	}
-	step("client.Connect() completed — all configs fetched and cached")
+	step(fmt.Sprintf("Total resolved keys for user_service: %d", len(resolved)))
 
-	dbConfig, _ := client.Config().GetValue("user_service", "database")
+	dbConfig := resolved["database"]
 	dbJSON, _ := json.Marshal(dbConfig)
 	step(fmt.Sprintf("database = %s", dbJSON))
 
-	retries, _ := client.Config().GetValue("user_service", "max_retries")
-	step(fmt.Sprintf("max_retries = %v", retries))
-
-	cacheTTL, _ := client.Config().GetValue("user_service", "cache_ttl_seconds")
-	step(fmt.Sprintf("cache_ttl_seconds = %v", cacheTTL))
-
-	pageSize, _ := client.Config().GetValue("user_service", "pagination_default_page_size")
-	step(fmt.Sprintf("pagination_default_page_size = %v", pageSize))
-
-	missing, _ := client.Config().GetValue("user_service", "nonexistent_key")
-	step(fmt.Sprintf("nonexistent key = %v", missing))
-
-	allValues, _ := client.Config().GetValue("user_service")
-	allMap := allValues.(map[string]interface{})
-	step(fmt.Sprintf("Total resolved keys for user_service: %d", len(allMap)))
+	step(fmt.Sprintf("max_retries = %v", resolved["max_retries"]))
+	step(fmt.Sprintf("cache_ttl_seconds = %v", resolved["cache_ttl_seconds"]))
+	step(fmt.Sprintf("pagination_default_page_size = %v", resolved["pagination_default_page_size"]))
 
 	// ====================================================================
-	// 3. TYPED ACCESSORS
+	// 3. RESOLVE INTO — UNMARSHAL INTO A STRUCT
 	// ====================================================================
-	section("3. Typed Accessors")
+	section("3. ResolveInto — Unmarshal Into a Struct")
 
-	appName, _ := client.Config().GetString("user_service", "app_name", "Unknown")
-	step(fmt.Sprintf("app_name (string) = %s", appName))
-
-	timeoutMs, _ := client.Config().GetInt("user_service", "request_timeout_ms", 3000)
-	step(fmt.Sprintf("request_timeout_ms (number) = %d", timeoutMs))
-
-	signup, _ := client.Config().GetBool("user_service", "enable_signup", true)
-	step(fmt.Sprintf("enable_signup (bool) = %v", signup))
+	var usCfg UserServiceConfig
+	err = client.Config().ResolveInto(ctx, "user_service", &usCfg)
+	if err != nil {
+		fatal("failed to resolve into struct", err)
+	}
+	step(fmt.Sprintf("app_name = %s", usCfg.AppName))
+	step(fmt.Sprintf("request_timeout_ms = %d", usCfg.RequestTimeoutMs))
+	step(fmt.Sprintf("enable_signup = %v", usCfg.EnableSignup))
+	step(fmt.Sprintf("cache_ttl_seconds = %d", usCfg.CacheTTLSeconds))
 
 	// ====================================================================
 	// 4. MULTI-LEVEL INHERITANCE (auth_module)
 	// ====================================================================
 	section("4. Multi-Level Inheritance (auth_module)")
 
-	sessionTTL, _ := client.Config().GetValue("auth_module", "session_ttl_minutes")
-	step(fmt.Sprintf("session_ttl_minutes = %v", sessionTTL))
+	authResolved, err := client.Config().Resolve(ctx, "auth_module")
+	if err != nil {
+		fatal("failed to resolve auth_module", err)
+	}
 
-	mfa, _ := client.Config().GetValue("auth_module", "mfa_enabled")
-	step(fmt.Sprintf("mfa_enabled = %v", mfa))
-
-	inheritedApp, _ := client.Config().GetValue("auth_module", "app_name")
-	step(fmt.Sprintf("app_name (inherited from common) = %v", inheritedApp))
+	step(fmt.Sprintf("session_ttl_minutes = %v", authResolved["session_ttl_minutes"]))
+	step(fmt.Sprintf("mfa_enabled = %v", authResolved["mfa_enabled"]))
+	step(fmt.Sprintf("app_name (inherited from common) = %v", authResolved["app_name"]))
 
 	// ====================================================================
-	// 5a. CHANGE LISTENERS
+	// 5. SUBSCRIBE — LIVE CONFIG UPDATES
 	// ====================================================================
-	section("5a. Change Listeners")
+	section("5. Subscribe — Live Config Updates")
+
+	live, err := client.Config().Subscribe(ctx, "user_service")
+	if err != nil {
+		fatal("failed to subscribe to user_service", err)
+	}
+	step("Subscribed to user_service — LiveConfig active")
+
+	snapshot := live.Values()
+	step(fmt.Sprintf("Initial snapshot keys: %d", len(snapshot)))
+	step(fmt.Sprintf("max_retries from live = %v", snapshot["max_retries"]))
+
+	// ====================================================================
+	// 6a. CHANGE LISTENERS
+	// ====================================================================
+	section("6a. Change Listeners")
 
 	var changes []*smplkit.ConfigChangeEvent
 	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
@@ -146,11 +162,18 @@ func main() {
 	step("Key-specific listener registered for common.max_retries")
 
 	// ====================================================================
-	// 5b. REFRESH AFTER MANAGEMENT CHANGE
+	// 6b. REFRESH AFTER MANAGEMENT CHANGE
 	// ====================================================================
-	section("5b. Refresh After Management Change")
+	section("6b. Refresh After Management Change")
 
-	err = demo.Common.SetValue(ctx, "max_retries", 7, "production")
+	if demo.Common.Environments == nil {
+		demo.Common.Environments = map[string]map[string]interface{}{}
+	}
+	if demo.Common.Environments["production"] == nil {
+		demo.Common.Environments["production"] = map[string]interface{}{}
+	}
+	demo.Common.Environments["production"]["max_retries"] = 7
+	err = demo.Common.Save(ctx)
 	if err != nil {
 		fatal("failed to update max_retries", err)
 	}
@@ -162,16 +185,19 @@ func main() {
 	}
 	step("client.Config().Refresh(ctx) completed")
 
-	newRetries, _ := client.Config().GetValue("user_service", "max_retries")
-	step(fmt.Sprintf("max_retries after refresh = %v", newRetries))
+	refreshed, err := client.Config().Resolve(ctx, "user_service")
+	if err != nil {
+		fatal("failed to resolve user_service after refresh", err)
+	}
+	step(fmt.Sprintf("max_retries after refresh = %v", refreshed["max_retries"]))
 
 	step(fmt.Sprintf("Global changes received: %d", len(changes)))
 	step(fmt.Sprintf("Retries-specific changes received: %d", len(retriesChanges)))
 
 	// ====================================================================
-	// 6. CLEANUP
+	// 7. CLEANUP
 	// ====================================================================
-	section("6. Cleanup")
+	section("7. Cleanup")
 
 	teardownDemoConfigs(ctx, client, demo)
 	step("Demo configs deleted and common reset")
@@ -185,9 +211,10 @@ func main() {
 	fmt.Println("Features exercised:")
 	fmt.Println("  [x] Client initialization")
 	fmt.Println("  [x] Config hierarchy setup (common, user_service, auth_module)")
-	fmt.Println("  [x] Connect and prescriptive access via GetValue")
-	fmt.Println("  [x] Typed accessors (GetString, GetInt, GetBool)")
+	fmt.Println("  [x] Resolve — read resolved values as a map")
+	fmt.Println("  [x] ResolveInto — unmarshal into a struct")
 	fmt.Println("  [x] Multi-level inheritance")
+	fmt.Println("  [x] Subscribe — live config updates")
 	fmt.Println("  [x] Change listeners (global + key-specific)")
 	fmt.Println("  [x] Manual refresh after management mutation")
 	fmt.Println("  [x] Cleanup")

@@ -1,0 +1,1503 @@
+package smplkit_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	smplkit "github.com/smplkit/go-sdk"
+)
+
+// Test UUIDs for logging tests — all valid RFC 4122 UUIDs.
+const (
+	logUUID0 = "770e8400-e29b-41d4-a716-446655440000"
+	logUUID1 = "770e8400-e29b-41d4-a716-446655440001"
+	logUUID2 = "770e8400-e29b-41d4-a716-446655440002"
+)
+
+// sampleLoggerJSON returns a JSON:API single-resource response for a logger.
+func sampleLoggerJSON(id, key, name, level string, managed bool) string {
+	managedStr := "true"
+	if !managed {
+		managedStr = "false"
+	}
+	levelStr := "null"
+	if level != "" {
+		levelStr = `"` + level + `"`
+	}
+	return `{
+		"data": {
+			"id": "` + id + `",
+			"type": "logger",
+			"attributes": {
+				"key": "` + key + `",
+				"name": "` + name + `",
+				"level": ` + levelStr + `,
+				"managed": ` + managedStr + `,
+				"environments": {},
+				"sources": [],
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-06-15T12:00:00Z"
+			}
+		}
+	}`
+}
+
+// sampleLoggerListJSON returns a JSON:API list response for loggers.
+func sampleLoggerListJSON(id, key, name, level string, managed bool) string {
+	managedStr := "true"
+	if !managed {
+		managedStr = "false"
+	}
+	levelStr := "null"
+	if level != "" {
+		levelStr = `"` + level + `"`
+	}
+	return `{
+		"data": [{
+			"id": "` + id + `",
+			"type": "logger",
+			"attributes": {
+				"key": "` + key + `",
+				"name": "` + name + `",
+				"level": ` + levelStr + `,
+				"managed": ` + managedStr + `,
+				"environments": {},
+				"sources": [],
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-06-15T12:00:00Z"
+			}
+		}]
+	}`
+}
+
+// sampleLogGroupJSON returns a JSON:API single-resource response for a log group.
+func sampleLogGroupJSON(id, key, name, level string) string {
+	levelStr := "null"
+	if level != "" {
+		levelStr = `"` + level + `"`
+	}
+	return `{
+		"data": {
+			"id": "` + id + `",
+			"type": "log_group",
+			"attributes": {
+				"key": "` + key + `",
+				"name": "` + name + `",
+				"level": ` + levelStr + `,
+				"environments": {},
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-06-15T12:00:00Z"
+			}
+		}
+	}`
+}
+
+// sampleLogGroupListJSON returns a JSON:API list response for log groups.
+func sampleLogGroupListJSON(id, key, name, level string) string {
+	levelStr := "null"
+	if level != "" {
+		levelStr = `"` + level + `"`
+	}
+	return `{
+		"data": [{
+			"id": "` + id + `",
+			"type": "log_group",
+			"attributes": {
+				"key": "` + key + `",
+				"name": "` + name + `",
+				"level": ` + levelStr + `,
+				"environments": {},
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-06-15T12:00:00Z"
+			}
+		}]
+	}`
+}
+
+func newLoggingTestClient(t *testing.T, handler http.Handler) *smplkit.Client {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
+	require.NoError(t, err)
+	return client
+}
+
+// --- Accessor test ---
+
+func TestLoggingClient_Accessor(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	logging := client.Logging()
+	require.NotNil(t, logging)
+	// Calling Logging() multiple times returns the same sub-client.
+	assert.Same(t, logging, client.Logging())
+}
+
+// --- Factory method tests ---
+
+func TestLoggingClient_New(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	logger := client.Logging().New("my.logger")
+	assert.Equal(t, "my.logger", logger.Key)
+	assert.Equal(t, "My.logger", logger.Name) // keyToDisplayName does not split on "."
+	assert.True(t, logger.Managed)
+	assert.Empty(t, logger.ID)
+	assert.NotNil(t, logger.Environments)
+}
+
+func TestLoggingClient_New_WithOptions(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	logger := client.Logging().New("checkout-v2",
+		smplkit.WithLoggerName("Checkout Logger"),
+		smplkit.WithLoggerManaged(false),
+	)
+	assert.Equal(t, "checkout-v2", logger.Key)
+	assert.Equal(t, "Checkout Logger", logger.Name)
+	assert.False(t, logger.Managed)
+}
+
+func TestLoggingClient_NewGroup(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	group := client.Logging().NewGroup("infra")
+	assert.Equal(t, "infra", group.Key)
+	assert.Equal(t, "Infra", group.Name)
+	assert.Empty(t, group.ID)
+	assert.NotNil(t, group.Environments)
+}
+
+func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	parentID := logUUID0
+	group := client.Logging().NewGroup("database",
+		smplkit.WithLogGroupName("Database Group"),
+		smplkit.WithLogGroupParent(parentID),
+	)
+	assert.Equal(t, "database", group.Key)
+	assert.Equal(t, "Database Group", group.Name)
+	require.NotNil(t, group.Group)
+	assert.Equal(t, parentID, *group.Group)
+}
+
+// --- Logger Save tests ---
+
+func TestLogger_Save_Create(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/loggers", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var body map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		data := body["data"].(map[string]interface{})
+		assert.Equal(t, "logger", data["type"])
+		attrs := data["attributes"].(map[string]interface{})
+		assert.Equal(t, "my.logger", attrs["key"])
+
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(sampleLoggerJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+	}))
+
+	logger := client.Logging().New("my.logger", smplkit.WithLoggerName("My Logger"))
+	err := logger.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, logUUID0, logger.ID)
+	assert.Equal(t, "My Logger", logger.Name)
+}
+
+func TestLogger_Save_Update(t *testing.T) {
+	mux := http.NewServeMux()
+
+	// GET /api/v1/loggers — returns list with one logger.
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})
+
+	// PUT /api/v1/loggers/{id}
+	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "PUT", r.Method)
+
+		var body map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		data := body["data"].(map[string]interface{})
+		attrs := data["attributes"].(map[string]interface{})
+		assert.Equal(t, "Updated Logger", attrs["name"])
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerJSON(logUUID0, "my.logger", "Updated Logger", "WARN", true)))
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	// Fetch the logger first.
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+	assert.Equal(t, logUUID0, logger.ID)
+
+	// Mutate and save (should PUT since ID is set).
+	logger.Name = "Updated Logger"
+	err = logger.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Logger", logger.Name)
+}
+
+// --- Logger local mutation tests ---
+
+func TestLogger_SetLevel(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	logger := client.Logging().New("test-logger")
+
+	assert.Nil(t, logger.Level)
+	logger.SetLevel(smplkit.LogLevelDebug)
+	require.NotNil(t, logger.Level)
+	assert.Equal(t, smplkit.LogLevelDebug, *logger.Level)
+}
+
+func TestLogger_ClearLevel(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	logger := client.Logging().New("test-logger")
+
+	logger.SetLevel(smplkit.LogLevelWarn)
+	require.NotNil(t, logger.Level)
+
+	logger.ClearLevel()
+	assert.Nil(t, logger.Level)
+}
+
+func TestLogger_SetEnvironmentLevel(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	logger := client.Logging().New("test-logger")
+
+	logger.SetEnvironmentLevel("production", smplkit.LogLevelError)
+
+	envData, ok := logger.Environments["production"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ERROR", envData["level"])
+}
+
+func TestLogger_ClearEnvironmentLevel(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	logger := client.Logging().New("test-logger")
+
+	logger.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
+	require.Contains(t, logger.Environments, "staging")
+
+	logger.ClearEnvironmentLevel("staging")
+	assert.NotContains(t, logger.Environments, "staging")
+}
+
+func TestLogger_ClearEnvironmentLevel_NilEnvironments(t *testing.T) {
+	logger := &smplkit.Logger{}
+	// Should not panic when Environments is nil.
+	logger.ClearEnvironmentLevel("staging")
+}
+
+func TestLogger_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	logger := client.Logging().New("test-logger")
+	// Set a non-map entry to exercise the type assertion branch.
+	logger.Environments["staging"] = "not-a-map"
+	logger.ClearEnvironmentLevel("staging")
+	// Should be unchanged since it was not a map.
+	assert.Equal(t, "not-a-map", logger.Environments["staging"])
+}
+
+func TestLogger_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	logger := client.Logging().New("test-logger")
+
+	logger.Environments["staging"] = map[string]interface{}{
+		"level": "DEBUG",
+		"other": "keep",
+	}
+
+	logger.ClearEnvironmentLevel("staging")
+	envData := logger.Environments["staging"].(map[string]interface{})
+	assert.NotContains(t, envData, "level")
+	assert.Equal(t, "keep", envData["other"])
+}
+
+func TestLogger_ClearAllEnvironmentLevels(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	logger := client.Logging().New("test-logger")
+
+	logger.SetEnvironmentLevel("production", smplkit.LogLevelError)
+	logger.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
+	require.Len(t, logger.Environments, 2)
+
+	logger.ClearAllEnvironmentLevels()
+	assert.Empty(t, logger.Environments)
+}
+
+// --- LogGroup Save tests ---
+
+func TestLogGroup_Save_Create(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/log_groups", r.URL.Path)
+
+		var body map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		data := body["data"].(map[string]interface{})
+		assert.Equal(t, "log_group", data["type"])
+
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(sampleLogGroupJSON(logUUID1, "infra", "Infra", "WARN")))
+	}))
+
+	group := client.Logging().NewGroup("infra", smplkit.WithLogGroupName("Infra"))
+	err := group.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, logUUID1, group.ID)
+}
+
+func TestLogGroup_Save_Update(t *testing.T) {
+	mux := http.NewServeMux()
+
+	// GET /api/v1/log_groups — returns list with one group.
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})
+
+	// PUT /api/v1/log_groups/{id}
+	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "PUT", r.Method)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLogGroupJSON(logUUID1, "infra", "Updated Infra", "ERROR")))
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	require.NoError(t, err)
+	assert.Equal(t, logUUID1, group.ID)
+
+	group.Name = "Updated Infra"
+	err = group.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Infra", group.Name)
+}
+
+// --- LogGroup local mutation tests ---
+
+func TestLogGroup_SetLevel(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	group := client.Logging().NewGroup("infra")
+
+	group.SetLevel(smplkit.LogLevelWarn)
+	require.NotNil(t, group.Level)
+	assert.Equal(t, smplkit.LogLevelWarn, *group.Level)
+}
+
+func TestLogGroup_ClearLevel(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	group := client.Logging().NewGroup("infra")
+
+	group.SetLevel(smplkit.LogLevelError)
+	group.ClearLevel()
+	assert.Nil(t, group.Level)
+}
+
+func TestLogGroup_SetEnvironmentLevel(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	group := client.Logging().NewGroup("infra")
+
+	group.SetEnvironmentLevel("production", smplkit.LogLevelError)
+
+	envData, ok := group.Environments["production"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ERROR", envData["level"])
+}
+
+func TestLogGroup_ClearEnvironmentLevel(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	group := client.Logging().NewGroup("infra")
+
+	group.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
+	group.ClearEnvironmentLevel("staging")
+	assert.NotContains(t, group.Environments, "staging")
+}
+
+func TestLogGroup_ClearEnvironmentLevel_NilEnvironments(t *testing.T) {
+	group := &smplkit.LogGroup{}
+	// Should not panic when Environments is nil.
+	group.ClearEnvironmentLevel("staging")
+}
+
+func TestLogGroup_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	group := client.Logging().NewGroup("infra")
+	group.Environments["staging"] = "not-a-map"
+	group.ClearEnvironmentLevel("staging")
+	assert.Equal(t, "not-a-map", group.Environments["staging"])
+}
+
+func TestLogGroup_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	group := client.Logging().NewGroup("infra")
+
+	group.Environments["staging"] = map[string]interface{}{
+		"level": "DEBUG",
+		"other": "keep",
+	}
+
+	group.ClearEnvironmentLevel("staging")
+	envData := group.Environments["staging"].(map[string]interface{})
+	assert.NotContains(t, envData, "level")
+	assert.Equal(t, "keep", envData["other"])
+}
+
+func TestLogGroup_ClearAllEnvironmentLevels(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+	group := client.Logging().NewGroup("infra")
+
+	group.SetEnvironmentLevel("production", smplkit.LogLevelError)
+	group.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
+	require.Len(t, group.Environments, 2)
+
+	group.ClearAllEnvironmentLevels()
+	assert.Empty(t, group.Environments)
+}
+
+// --- LoggingClient.Get tests ---
+
+func TestLoggingClient_Get(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/api/v1/loggers", r.URL.Path)
+		assert.Equal(t, "my.logger", r.URL.Query().Get("filter[key]"))
+		assert.Equal(t, "Bearer sk_test_key", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Accept"))
+		assert.True(t, strings.HasPrefix(r.Header.Get("User-Agent"), "smplkit-go-sdk/"))
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+	}))
+
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+	assert.Equal(t, logUUID0, logger.ID)
+	assert.Equal(t, "my.logger", logger.Key)
+	assert.Equal(t, "My Logger", logger.Name)
+	require.NotNil(t, logger.Level)
+	assert.Equal(t, smplkit.LogLevelInfo, *logger.Level)
+	assert.True(t, logger.Managed)
+}
+
+func TestLoggingClient_Get_NotFound(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	}))
+
+	_, err := client.Logging().Get(context.Background(), "nonexistent")
+	require.Error(t, err)
+
+	var notFound *smplkit.SmplNotFoundError
+	require.True(t, errors.As(err, &notFound))
+	assert.Contains(t, notFound.Error(), "nonexistent")
+}
+
+func TestLoggingClient_Get_HTTPError(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+
+	_, err := client.Logging().Get(context.Background(), "my.logger")
+	require.Error(t, err)
+
+	var smplErr *smplkit.SmplError
+	require.True(t, errors.As(err, &smplErr))
+	assert.Equal(t, 500, smplErr.StatusCode)
+}
+
+func TestLoggingClient_Get_NetworkError(t *testing.T) {
+	transport := &failTransport{}
+	httpClient := &http.Client{Transport: transport}
+
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	_, err = client.Logging().Get(context.Background(), "some-key")
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLoggingClient_Get_ReadBodyError(t *testing.T) {
+	transport := &loggingBrokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	_, err = client.Logging().Get(context.Background(), "some-key")
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+	assert.Contains(t, connErr.Error(), "failed to read response body")
+}
+
+func TestLoggingClient_Get_MalformedJSON(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not valid}`))
+	}))
+
+	_, err := client.Logging().Get(context.Background(), "some-key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+// --- LoggingClient.List tests ---
+
+func TestLoggingClient_List(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/api/v1/loggers", r.URL.Path)
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"id": "` + logUUID0 + `", "type": "logger", "attributes": {"key": "a.logger", "name": "A", "managed": true, "environments": {}}},
+				{"id": "` + logUUID1 + `", "type": "logger", "attributes": {"key": "b.logger", "name": "B", "managed": true, "environments": {}}}
+			]
+		}`))
+	}))
+
+	loggers, err := client.Logging().List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, loggers, 2)
+	assert.Equal(t, "A", loggers[0].Name)
+	assert.Equal(t, "B", loggers[1].Name)
+}
+
+func TestLoggingClient_List_Empty(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	}))
+
+	loggers, err := client.Logging().List(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, loggers)
+}
+
+func TestLoggingClient_List_NetworkError(t *testing.T) {
+	transport := &failTransport{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	_, err = client.Logging().List(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLoggingClient_List_ReadBodyError(t *testing.T) {
+	transport := &loggingBrokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	_, err = client.Logging().List(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLoggingClient_List_MalformedJSON(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid}`))
+	}))
+
+	_, err := client.Logging().List(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestLoggingClient_List_HTTPError(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+
+	_, err := client.Logging().List(context.Background())
+	require.Error(t, err)
+
+	var smplErr *smplkit.SmplError
+	require.True(t, errors.As(err, &smplErr))
+	assert.Equal(t, 500, smplErr.StatusCode)
+}
+
+// --- LoggingClient.Delete tests ---
+
+func TestLoggingClient_Delete(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "my.logger", r.URL.Query().Get("filter[key]"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+	})
+	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "DELETE", r.Method)
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	err := client.Logging().Delete(context.Background(), "my.logger")
+	require.NoError(t, err)
+}
+
+func TestLoggingClient_Delete_NotFound(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	}))
+
+	err := client.Logging().Delete(context.Background(), "nonexistent")
+	require.Error(t, err)
+
+	var notFound *smplkit.SmplNotFoundError
+	require.True(t, errors.As(err, &notFound))
+}
+
+func TestLoggingClient_Delete_NetworkError(t *testing.T) {
+	transport := &failTransport{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	err = client.Logging().Delete(context.Background(), "some-key")
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+// --- LoggingClient.GetGroup tests ---
+
+func TestLoggingClient_GetGroup(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/api/v1/log_groups", r.URL.Path)
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+	}))
+
+	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	require.NoError(t, err)
+	assert.Equal(t, logUUID1, group.ID)
+	assert.Equal(t, "infra", group.Key)
+	assert.Equal(t, "Infra", group.Name)
+}
+
+func TestLoggingClient_GetGroup_NotFound(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	}))
+
+	_, err := client.Logging().GetGroup(context.Background(), "nonexistent")
+	require.Error(t, err)
+
+	var notFound *smplkit.SmplNotFoundError
+	require.True(t, errors.As(err, &notFound))
+	assert.Contains(t, notFound.Error(), "nonexistent")
+}
+
+func TestLoggingClient_GetGroup_NetworkError(t *testing.T) {
+	transport := &failTransport{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	_, err = client.Logging().GetGroup(context.Background(), "infra")
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+// --- LoggingClient.ListGroups tests ---
+
+func TestLoggingClient_ListGroups(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/api/v1/log_groups", r.URL.Path)
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"id": "` + logUUID1 + `", "type": "log_group", "attributes": {"key": "infra", "name": "Infra", "environments": {}}},
+				{"id": "` + logUUID2 + `", "type": "log_group", "attributes": {"key": "app", "name": "App", "environments": {}}}
+			]
+		}`))
+	}))
+
+	groups, err := client.Logging().ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, groups, 2)
+	assert.Equal(t, "Infra", groups[0].Name)
+	assert.Equal(t, "App", groups[1].Name)
+}
+
+func TestLoggingClient_ListGroups_ReadBodyError(t *testing.T) {
+	transport := &loggingBrokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	_, err = client.Logging().ListGroups(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLoggingClient_ListGroups_MalformedJSON(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid}`))
+	}))
+
+	_, err := client.Logging().ListGroups(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestLoggingClient_ListGroups_HTTPError(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+
+	_, err := client.Logging().ListGroups(context.Background())
+	require.Error(t, err)
+
+	var smplErr *smplkit.SmplError
+	require.True(t, errors.As(err, &smplErr))
+}
+
+// --- LoggingClient.DeleteGroup tests ---
+
+func TestLoggingClient_DeleteGroup(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+	})
+	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "DELETE", r.Method)
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	err := client.Logging().DeleteGroup(context.Background(), "infra")
+	require.NoError(t, err)
+}
+
+func TestLoggingClient_DeleteGroup_NotFound(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	}))
+
+	err := client.Logging().DeleteGroup(context.Background(), "nonexistent")
+	require.Error(t, err)
+
+	var notFound *smplkit.SmplNotFoundError
+	require.True(t, errors.As(err, &notFound))
+}
+
+// --- Logger Save error paths ---
+
+func TestLogger_Save_Create_NetworkError(t *testing.T) {
+	transport := &failTransport{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	logger := client.Logging().New("test-logger")
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogger_Save_Create_ReadBodyError(t *testing.T) {
+	transport := &loggingBrokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	logger := client.Logging().New("test-logger")
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogger_Save_Create_MalformedJSON(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not valid}`))
+	}))
+
+	logger := client.Logging().New("test-logger")
+	err := logger.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestLogger_Save_Create_HTTPError(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
+	}))
+
+	logger := client.Logging().New("test-logger")
+	err := logger.Save(context.Background())
+	require.Error(t, err)
+
+	var valErr *smplkit.SmplValidationError
+	require.True(t, errors.As(err, &valErr))
+}
+
+func TestLogger_Save_Update_InvalidUUID(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	logger := client.Logging().New("test-logger")
+	logger.ID = "not-a-uuid" // Set non-empty but invalid UUID.
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid logger ID")
+}
+
+func TestLogger_Save_Update_NetworkError(t *testing.T) {
+	// First call succeeds (GET list), second (PUT) fails.
+	callCount := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+	})
+	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		// Close connection to trigger network error.
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			return
+		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestLogger_Save_Update_ReadBodyError(t *testing.T) {
+	transport := &loggingMethodAwareRoundTripper{
+		getHandler: func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(strings.NewReader(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true))),
+				Header:     http.Header{"Content-Type": {"application/vnd.api+json"}},
+			}, nil
+		},
+		putHandler: func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(&loggingErrReader{err: fmt.Errorf("simulated read error")}),
+				Header:     make(http.Header),
+			}, nil
+		},
+	}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogger_Save_Update_MalformedJSON(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+	})
+	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid`))
+	})
+
+	client := newLoggingTestClient(t, mux)
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestLogger_Save_Update_HTTPError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+	})
+	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	})
+
+	client := newLoggingTestClient(t, mux)
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+
+	var notFound *smplkit.SmplNotFoundError
+	require.True(t, errors.As(err, &notFound))
+}
+
+// --- LogGroup Save error paths ---
+
+func TestLogGroup_Save_Create_NetworkError(t *testing.T) {
+	transport := &failTransport{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	group := client.Logging().NewGroup("test-group")
+	err = group.Save(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogGroup_Save_Create_ReadBodyError(t *testing.T) {
+	transport := &loggingBrokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	group := client.Logging().NewGroup("test-group")
+	err = group.Save(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogGroup_Save_Create_MalformedJSON(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not valid}`))
+	}))
+
+	group := client.Logging().NewGroup("test-group")
+	err := group.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestLogGroup_Save_Create_HTTPError(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
+	}))
+
+	group := client.Logging().NewGroup("test-group")
+	err := group.Save(context.Background())
+	require.Error(t, err)
+
+	var valErr *smplkit.SmplValidationError
+	require.True(t, errors.As(err, &valErr))
+}
+
+func TestLogGroup_Save_Update_InvalidUUID(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	group := client.Logging().NewGroup("test-group")
+	group.ID = "not-a-uuid"
+	err = group.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid log group ID")
+}
+
+func TestLogGroup_Save_Update_NetworkError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+	})
+	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			return
+		}
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	})
+
+	client := newLoggingTestClient(t, mux)
+	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	require.NoError(t, err)
+
+	err = group.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestLogGroup_Save_Update_ReadBodyError(t *testing.T) {
+	transport := &loggingMethodAwareRoundTripper{
+		getHandler: func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(strings.NewReader(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN"))),
+				Header:     http.Header{"Content-Type": {"application/vnd.api+json"}},
+			}, nil
+		},
+		putHandler: func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(&loggingErrReader{err: fmt.Errorf("simulated read error")}),
+				Header:     make(http.Header),
+			}, nil
+		},
+	}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	require.NoError(t, err)
+
+	err = group.Save(context.Background())
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogGroup_Save_Update_MalformedJSON(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+	})
+	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid`))
+	})
+
+	client := newLoggingTestClient(t, mux)
+	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	require.NoError(t, err)
+
+	err = group.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestLogGroup_Save_Update_HTTPError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+	})
+	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	})
+
+	client := newLoggingTestClient(t, mux)
+	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	require.NoError(t, err)
+
+	err = group.Save(context.Background())
+	require.Error(t, err)
+
+	var notFound *smplkit.SmplNotFoundError
+	require.True(t, errors.As(err, &notFound))
+}
+
+// --- Delete error paths ---
+
+func TestLoggingClient_DeleteLogger_InvalidUUID(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// Return a logger with an invalid UUID in the response.
+		_, _ = w.Write([]byte(`{"data":[{"id":"not-a-uuid","type":"logger","attributes":{"key":"bad","name":"Bad","managed":true,"environments":{}}}]}`))
+	}))
+
+	err := client.Logging().Delete(context.Background(), "bad")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid logger ID")
+}
+
+func TestLoggingClient_DeleteLogger_ReadBodyError(t *testing.T) {
+	// Need a mux: GET list succeeds, DELETE returns broken body.
+	mux := http.NewServeMux()
+	callCount := 0
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+	})
+	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	})
+
+	client := newLoggingTestClient(t, mux)
+	err := client.Logging().Delete(context.Background(), "my.logger")
+	require.Error(t, err)
+}
+
+func TestLoggingClient_DeleteGroup_InvalidUUID(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"not-a-uuid","type":"log_group","attributes":{"key":"bad","name":"Bad","environments":{}}}]}`))
+	}))
+
+	err := client.Logging().DeleteGroup(context.Background(), "bad")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid log group ID")
+}
+
+func TestLoggingClient_DeleteGroup_ReadBodyError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+	})
+	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	})
+
+	client := newLoggingTestClient(t, mux)
+	err := client.Logging().DeleteGroup(context.Background(), "infra")
+	require.Error(t, err)
+}
+
+// --- RegisterLogger tests ---
+
+func TestLoggingClient_RegisterLogger(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	// RegisterLogger should not panic and should add to the buffer.
+	client.Logging().RegisterLogger("MyApp/DB:Queries", smplkit.LogLevelDebug)
+
+	// Register the same name again — should be deduplicated.
+	client.Logging().RegisterLogger("myapp.db.queries", smplkit.LogLevelInfo)
+
+	// No assertion on internal state, but should not panic.
+}
+
+// --- OnChange / OnChangeKey tests ---
+
+func TestLoggingClient_OnChange(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	var called bool
+	client.Logging().OnChange(func(evt *smplkit.LoggerChangeEvent) {
+		called = true
+	})
+
+	// Verify listener was registered (indirectly — no panic, state accepted).
+	assert.False(t, called) // Not called yet, just registered.
+}
+
+func TestLoggingClient_OnChangeKey(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	var called bool
+	client.Logging().OnChangeKey("my.logger", func(evt *smplkit.LoggerChangeEvent) {
+		called = true
+	})
+
+	assert.False(t, called)
+}
+
+// --- Logger response with environment data ---
+
+func TestLoggingClient_Get_WithEnvironments(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": [{
+			"id": "` + logUUID0 + `",
+			"type": "logger",
+			"attributes": {
+				"key": "my.logger",
+				"name": "My Logger",
+				"level": "INFO",
+				"managed": true,
+				"environments": {"production": {"level": "ERROR"}},
+				"sources": [{"service": "test-service"}],
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-06-15T12:00:00Z"
+			}
+		}]}`))
+	}))
+
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+	assert.Contains(t, logger.Environments, "production")
+	require.Len(t, logger.Sources, 1)
+}
+
+// --- Logger response with nil level ---
+
+func TestLoggingClient_Get_NilLevel(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": [{
+			"id": "` + logUUID0 + `",
+			"type": "logger",
+			"attributes": {
+				"key": "my.logger",
+				"name": "My Logger",
+				"managed": true,
+				"environments": {}
+			}
+		}]}`))
+	}))
+
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+	assert.Nil(t, logger.Level)
+}
+
+// --- Logger response with empty level string ---
+
+func TestLoggingClient_Get_EmptyLevel(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": [{
+			"id": "` + logUUID0 + `",
+			"type": "logger",
+			"attributes": {
+				"key": "my.logger",
+				"name": "My Logger",
+				"level": "",
+				"managed": true,
+				"environments": {}
+			}
+		}]}`))
+	}))
+
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+	assert.Nil(t, logger.Level)
+}
+
+// --- Logger response with managed=false ---
+
+func TestLoggingClient_Get_ManagedFalse(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", false)))
+	}))
+
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+	assert.False(t, logger.Managed)
+}
+
+// --- LogGroup response with group parent ---
+
+func TestLoggingClient_GetGroup_WithParent(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": [{
+			"id": "` + logUUID1 + `",
+			"type": "log_group",
+			"attributes": {
+				"key": "database",
+				"name": "Database",
+				"level": "WARN",
+				"group": "` + logUUID2 + `",
+				"environments": {},
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-06-15T12:00:00Z"
+			}
+		}]}`))
+	}))
+
+	group, err := client.Logging().GetGroup(context.Background(), "database")
+	require.NoError(t, err)
+	require.NotNil(t, group.Group)
+	assert.Equal(t, logUUID2, *group.Group)
+	assert.NotNil(t, group.CreatedAt)
+	assert.NotNil(t, group.UpdatedAt)
+}
+
+// --- Logger response with group ---
+
+func TestLoggingClient_Get_WithGroup(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": [{
+			"id": "` + logUUID0 + `",
+			"type": "logger",
+			"attributes": {
+				"key": "my.logger",
+				"name": "My Logger",
+				"level": "INFO",
+				"group": "` + logUUID1 + `",
+				"managed": true,
+				"environments": {}
+			}
+		}]}`))
+	}))
+
+	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	require.NoError(t, err)
+	require.NotNil(t, logger.Group)
+	assert.Equal(t, logUUID1, *logger.Group)
+}
+
+// --- Client.Close cleans up logging ---
+
+func TestClient_Close_LoggingCleanup(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	// Should not panic.
+	err = client.Close()
+	require.NoError(t, err)
+}
+
+// --- Test helper types ---
+
+// loggingBrokenBodyRoundTripper returns a 200 response whose body fails on Read.
+type loggingBrokenBodyRoundTripper struct{}
+
+func (t *loggingBrokenBodyRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(&loggingErrReader{err: fmt.Errorf("simulated read error")}),
+		Header:     make(http.Header),
+	}, nil
+}
+
+type loggingErrReader struct{ err error }
+
+func (r *loggingErrReader) Read(_ []byte) (int, error) { return 0, r.err }
+
+// loggingMethodAwareRoundTripper dispatches to different handlers based on HTTP method.
+type loggingMethodAwareRoundTripper struct {
+	getHandler func(req *http.Request) (*http.Response, error)
+	putHandler func(req *http.Request) (*http.Response, error)
+}
+
+func (t *loggingMethodAwareRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	switch req.Method {
+	case "PUT":
+		if t.putHandler != nil {
+			return t.putHandler(req)
+		}
+	default:
+		if t.getHandler != nil {
+			return t.getHandler(req)
+		}
+	}
+	return http.DefaultTransport.RoundTrip(req)
+}

@@ -2,12 +2,9 @@ package smplkit_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,12 +15,11 @@ import (
 
 const (
 	flagUUID0 = "660e8400-e29b-41d4-a716-446655440000"
-	flagUUID1 = "660e8400-e29b-41d4-a716-446655440001"
 )
 
-func sampleFlagJSON(id, key, name, flagType string) string {
+func sampleFlagListJSON(id, key, name, flagType string) string {
 	return `{
-		"data": {
+		"data": [{
 			"id": "` + id + `",
 			"type": "flag",
 			"attributes": {
@@ -37,12 +33,12 @@ func sampleFlagJSON(id, key, name, flagType string) string {
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": "2024-06-15T12:00:00Z"
 			}
-		}
+		}]
 	}`
 }
 
 func TestClient_FlagsReturnsSubClient(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 	flags := client.Flags()
 	require.NotNil(t, flags)
@@ -52,10 +48,10 @@ func TestClient_FlagsReturnsSubClient(t *testing.T) {
 
 func TestFlagsClient_Get(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && strings.Contains(r.URL.Path, "/api/v1/flags/"+flagUUID0) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/flags" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagJSON(flagUUID0, "feature-x", "Feature X", "BOOLEAN")))
+			_, _ = w.Write([]byte(sampleFlagListJSON(flagUUID0, "feature-x", "Feature X", "BOOLEAN")))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -67,7 +63,7 @@ func TestFlagsClient_Get(t *testing.T) {
 	// Use a client that routes flags requests to our test server.
 	// Since the flags client uses a hardcoded URL, we test via the generated client interface.
 	// Instead, let's test the Get method by constructing the client properly.
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithBaseURL(server.URL), smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	// The flags client uses https://flags.smplkit.com hardcoded.
@@ -76,49 +72,32 @@ func TestFlagsClient_Get(t *testing.T) {
 	_ = client
 }
 
-func TestFlagsClient_InvalidUUID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
+func TestFlagsClient_Get_ByKey_Error(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	_, err = client.Flags().Get(context.Background(), "not-a-uuid")
+	// Get by key will fail because the real server is unreachable
+	_, err = client.Flags().Get(context.Background(), "some-key")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid flag ID")
 }
 
-func TestFlagsClient_Delete_InvalidUUID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithService("test-service"))
+func TestFlagsClient_Delete_ByKey_Error(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	err = client.Flags().Delete(context.Background(), "not-a-uuid")
+	// Delete by key will fail because the real server is unreachable
+	err = client.Flags().Delete(context.Background(), "some-key")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid flag ID")
 }
 
-func TestFlagsClient_Create_AutoBooleanValues(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" && r.URL.Path == "/api/v1/flags" {
-			body, _ := io.ReadAll(r.Body)
-			var req map[string]interface{}
-			_ = json.Unmarshal(body, &req)
+func TestFlagsClient_NewBooleanFlag_AutoValues(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
 
-			// Verify boolean values were auto-generated.
-			data := req["data"].(map[string]interface{})
-			attrs := data["attributes"].(map[string]interface{})
-			values := attrs["values"].([]interface{})
-			assert.Len(t, values, 2)
-
-			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(sampleFlagJSON(flagUUID0, "feature-x", "Feature X", "BOOLEAN")))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer server.Close()
-
-	// This test only works if the flags client uses the test server URL.
-	// Since it's hardcoded, we skip the actual HTTP call and verify the logic.
-	_ = server
+	// NewBooleanFlag auto-generates True/False values.
+	flag := client.Flags().NewBooleanFlag("feature-x", false)
+	assert.Equal(t, "feature-x", flag.Key)
+	assert.Len(t, flag.Values, 2)
 }
 
 // --- Flag model tests ---
@@ -135,7 +114,7 @@ func TestFlag_AddRule_RequiresEnvironment(t *testing.T) {
 		// Missing "environment" key.
 	}
 
-	err := flag.AddRule(context.Background(), rule)
+	err := flag.AddRule(rule)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "environment")
 }
@@ -167,10 +146,10 @@ func TestFlagsClient_NetworkError(t *testing.T) {
 		Transport: &failTransport{},
 	}
 
-	client, err := smplkit.NewClient("sk_test_key", "test", smplkit.WithHTTPClient(httpClient), smplkit.WithService("test-service"))
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	_, err = client.Flags().Get(context.Background(), flagUUID0)
+	_, err = client.Flags().Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -183,30 +162,32 @@ func (t *failTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return nil, errors.New("connection refused")
 }
 
-// --- CreateFlagParams / UpdateFlagParams tests ---
+// --- Factory method and Flag mutation tests ---
 
-func TestCreateFlagParams_Fields(t *testing.T) {
+func TestNewBooleanFlag_Fields(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
 	desc := "A feature flag"
-	params := smplkit.CreateFlagParams{
-		Key:         "feature-x",
-		Name:        "Feature X",
-		Type:        smplkit.FlagTypeBoolean,
-		Default:     true,
-		Description: &desc,
-		Values: []smplkit.FlagValue{
+	flag := client.Flags().NewBooleanFlag("feature-x", true,
+		smplkit.WithFlagName("Feature X"),
+		smplkit.WithFlagDescription(desc),
+		smplkit.WithFlagValues([]smplkit.FlagValue{
 			{Name: "True", Value: true},
 			{Name: "False", Value: false},
-		},
-	}
-	assert.Equal(t, "feature-x", params.Key)
-	assert.Equal(t, smplkit.FlagTypeBoolean, params.Type)
-	assert.Len(t, params.Values, 2)
+		}),
+	)
+	assert.Equal(t, "feature-x", flag.Key)
+	assert.Equal(t, "Feature X", flag.Name)
+	assert.Equal(t, true, flag.Default)
+	assert.Len(t, flag.Values, 2)
 }
 
-func TestUpdateFlagParams_Fields(t *testing.T) {
-	name := "Updated Name"
-	params := smplkit.UpdateFlagParams{
-		Name: &name,
+func TestFlag_MutateName(t *testing.T) {
+	flag := &smplkit.Flag{
+		Key:  "feature-x",
+		Name: "Old Name",
 	}
-	assert.Equal(t, "Updated Name", *params.Name)
+	flag.Name = "Updated Name"
+	assert.Equal(t, "Updated Name", flag.Name)
 }

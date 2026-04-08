@@ -70,9 +70,9 @@ func newTestFullClient(t *testing.T, server *httptest.Server, service string) *C
 	return c
 }
 
-// --- Client.Connect error paths ---
+// --- Lazy init error paths ---
 
-func TestConnect_FlagsConnectInternalError(t *testing.T) {
+func TestFlagsLazyInit_Error(t *testing.T) {
 	mux := http.NewServeMux()
 	// flags endpoint returns an error
 	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
@@ -87,19 +87,14 @@ func TestConnect_FlagsConnectInternalError(t *testing.T) {
 	defer server.Close()
 
 	c := newTestFullClient(t, server, "test-service")
-	err := c.Connect(context.Background())
-	require.Error(t, err)
-	assert.False(t, c.connected)
+	// Lazy init triggered by evaluateHandle should return default on error.
+	h := c.flags.runtime.BooleanFlag("test-flag", true)
+	result := h.Get(context.Background())
+	assert.True(t, result) // Returns default on init failure.
 }
 
-func TestConnect_ConfigConnectInternalError(t *testing.T) {
+func TestConfigLazyInit_Error(t *testing.T) {
 	mux := http.NewServeMux()
-	// flags endpoint succeeds
-	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
 	// configs endpoint fails
 	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -113,9 +108,8 @@ func TestConnect_ConfigConnectInternalError(t *testing.T) {
 	defer server.Close()
 
 	c := newTestFullClient(t, server, "test-service")
-	err := c.Connect(context.Background())
+	_, err := c.config.GetValue(context.Background(), "test-config")
 	require.Error(t, err)
-	assert.False(t, c.connected)
 }
 
 // --- registerServiceContext error path ---
@@ -156,9 +150,9 @@ func TestRegisterServiceContext_InvalidURL(t *testing.T) {
 	c.registerServiceContext(context.Background())
 }
 
-// --- ConfigClient.connectInternal fetchChain error ---
+// --- ConfigClient.ensureInit fetchChain error ---
 
-func TestConfigClient_ConnectInternal_FetchChainError(t *testing.T) {
+func TestConfigClient_EnsureInit_FetchChainError(t *testing.T) {
 	callCount := 0
 	mux := http.NewServeMux()
 	// List configs returns one config
@@ -181,7 +175,7 @@ func TestConfigClient_ConnectInternal_FetchChainError(t *testing.T) {
 	defer server.Close()
 
 	c := newTestFullClient(t, server, "test-service")
-	err := c.config.connectInternal(context.Background(), "test")
+	_, err := c.config.GetValue(context.Background(), "test")
 	require.Error(t, err)
 	assert.Greater(t, callCount, 0)
 }
@@ -195,7 +189,6 @@ func TestEvaluate_ServiceAutoInjection(t *testing.T) {
 	rt := fc.runtime
 
 	rt.mu.Lock()
-	rt.connected = true
 	rt.flagStore = map[string]map[string]interface{}{
 		"feature-x": {
 			"default": false,
@@ -227,7 +220,6 @@ func TestEvaluate_ServiceAutoInjection_AlreadyProvided(t *testing.T) {
 	rt := fc.runtime
 
 	rt.mu.Lock()
-	rt.connected = true
 	rt.flagStore = map[string]map[string]interface{}{
 		"feature-x": {
 			"default": false,
