@@ -45,4 +45,3 @@ func WithHTTPClient(c *http.Client) ClientOption {
 		cfg.httpClient = c
 	}
 }
-

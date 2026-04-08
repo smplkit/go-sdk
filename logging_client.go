@@ -686,7 +686,7 @@ func (c *LoggingClient) handleLoggerChanged(data map[string]interface{}) {
 	c.fireChangeListeners(loggerKey, "websocket")
 }
 
-func (c *LoggingClient) fireChangeListeners(loggerKey string, source string) {
+func (c *LoggingClient) fireChangeListeners(loggerKey string, source string) { //nolint:unparam // "refresh" source will be used when Refresh() is implemented
 	if loggerKey == "" {
 		return
 	}

@@ -1196,5 +1196,3 @@ func TestClient_Connect_And_GetValue(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, missingItem)
 }
-
-
