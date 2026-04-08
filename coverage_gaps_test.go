@@ -180,6 +180,32 @@ func TestConfigClient_EnsureInit_FetchChainError(t *testing.T) {
 	assert.Greater(t, callCount, 0)
 }
 
+// --- NewClient appHeaderEditor coverage ---
+
+func TestNewClient_AppHeaderEditorCoverage(t *testing.T) {
+	// Create a real client via NewClient (with custom base URL pointing to a test server),
+	// then exercise the app client to trigger the appHeaderEditor closure.
+	var appHeaderSeen bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") == "application/vnd.api+json" {
+			appHeaderSeen = true
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"contexts":[]}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c, err := NewClient("sk_test_key", "test", "test-service", WithBaseURL(server.URL))
+	require.NoError(t, err)
+
+	// Exercise registerServiceContext which goes through the appGenerated client,
+	// triggering the appHeaderEditor closure.
+	c.registerServiceContext(context.Background())
+	assert.True(t, appHeaderSeen)
+}
+
 // --- FlagsRuntime.Evaluate uncovered paths ---
 
 func TestEvaluate_ServiceAutoInjection(t *testing.T) {

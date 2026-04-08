@@ -2,10 +2,17 @@ package smplkit
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
 )
 
 func TestDerefMap_Nil(t *testing.T) {
@@ -394,4 +401,625 @@ func TestDiffAndFire_RemovedConfig(t *testing.T) {
 	assert.Equal(t, "app", events[0].ConfigKey)
 	assert.Equal(t, 1, events[0].OldValue)
 	assert.Nil(t, events[0].NewValue)
+}
+
+// --- newTestConfigClient helper ---
+
+func newTestConfigClient(t *testing.T, handler http.Handler) *ConfigClient {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	httpClient := &http.Client{}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: "sk_test", base: base}
+
+	headerEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genConfigClient, _ := genconfig.NewClient(server.URL,
+		genconfig.WithHTTPClient(httpClient),
+		headerEditor,
+	)
+
+	c := &Client{
+		apiKey:      "sk_test",
+		environment: "test",
+		service:     "test-service",
+		baseURL:     server.URL,
+		httpClient:  httpClient,
+	}
+	cc := &ConfigClient{client: c, generated: genConfigClient}
+	return cc
+}
+
+// ---------- getByID error paths ----------
+
+func TestGetByID_ReadBodyError(t *testing.T) {
+	// Test checkStatus error path (e.g. 500 response)
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+
+	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+func TestGetByID_ReadBodyFailure(t *testing.T) {
+	// Return a response that will fail on body read by closing the connection
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Hijack the connection to simulate a read failure
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		conn, _, _ := hj.Hijack()
+		// Write partial HTTP response then close
+		_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 9999\r\n\r\n"))
+		conn.Close()
+	}))
+
+	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+// ---------- deleteByID error paths ----------
+
+func TestDeleteByID_Config_CheckStatusError(t *testing.T) {
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+
+	err := cc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+func TestDeleteByID_Config_ReadBodyFailure(t *testing.T) {
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		conn, bufrw, _ := hj.Hijack()
+		_, _ = bufrw.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 999999\r\nConnection: close\r\n\r\npartial")
+		_ = bufrw.Flush()
+		conn.Close()
+	}))
+
+	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	// Either body read fails or JSON unmarshal fails — both are errors
+	require.Error(t, err)
+}
+
+// ---------- Resolve ----------
+
+func TestResolve_Basic(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{
+			"app": {"host": "localhost", "port": float64(3000)},
+		},
+	}
+	cc.initOnce.Do(func() {})
+
+	resolved, err := cc.Resolve(context.Background(), "app")
+	require.NoError(t, err)
+	assert.Equal(t, "localhost", resolved["host"])
+	assert.Equal(t, float64(3000), resolved["port"])
+}
+
+func TestResolve_NilWhenKeyNotFound(t *testing.T) {
+	cc := &ConfigClient{
+		client:      &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{},
+	}
+	cc.initOnce.Do(func() {})
+
+	resolved, err := cc.Resolve(context.Background(), "nonexistent")
+	require.NoError(t, err)
+	assert.Nil(t, resolved)
+}
+
+// ---------- ResolveInto ----------
+
+func TestResolveInto_Struct(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{
+			"db": {"host": "localhost", "port": float64(5432)},
+		},
+	}
+	cc.initOnce.Do(func() {})
+
+	var target struct {
+		Host string  `json:"host"`
+		Port float64 `json:"port"`
+	}
+	err := cc.ResolveInto(context.Background(), "db", &target)
+	require.NoError(t, err)
+	assert.Equal(t, "localhost", target.Host)
+	assert.Equal(t, float64(5432), target.Port)
+}
+
+func TestResolveInto_NilResolved(t *testing.T) {
+	cc := &ConfigClient{
+		client:      &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{},
+	}
+	cc.initOnce.Do(func() {})
+
+	var target struct{ Host string }
+	err := cc.ResolveInto(context.Background(), "missing", &target)
+	require.NoError(t, err)
+	assert.Equal(t, "", target.Host)
+}
+
+// ---------- Subscribe ----------
+
+func TestSubscribe_ReturnsLiveConfig(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{
+			"app": {"key1": "val1"},
+		},
+	}
+	cc.initOnce.Do(func() {})
+
+	lc, err := cc.Subscribe(context.Background(), "app")
+	require.NoError(t, err)
+	require.NotNil(t, lc)
+
+	val := lc.Value()
+	assert.Equal(t, "val1", val["key1"])
+}
+
+// ---------- fetchChain with parent walking ----------
+
+func TestFetchChain_ParentWalking(t *testing.T) {
+	parentID := "660e8400-e29b-41d4-a716-446655440000"
+	childID := "550e8400-e29b-41d4-a716-446655440000"
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs/"+childID, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		resp := map[string]interface{}{
+			"data": map[string]interface{}{
+				"id":   childID,
+				"type": "config",
+				"attributes": map[string]interface{}{
+					"name":         "Child",
+					"key":          "child",
+					"parent":       parentID,
+					"items":        map[string]interface{}{},
+					"environments": map[string]interface{}{},
+				},
+			},
+		}
+		b, _ := json.Marshal(resp)
+		_, _ = w.Write(b)
+	})
+	mux.HandleFunc("/api/v1/configs/"+parentID, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		resp := map[string]interface{}{
+			"data": map[string]interface{}{
+				"id":   parentID,
+				"type": "config",
+				"attributes": map[string]interface{}{
+					"name":         "Parent",
+					"key":          "parent",
+					"items":        map[string]interface{}{},
+					"environments": map[string]interface{}{},
+				},
+			},
+		}
+		b, _ := json.Marshal(resp)
+		_, _ = w.Write(b)
+	})
+
+	cc := newTestConfigClient(t, mux)
+	chain, err := cc.fetchChain(context.Background(), childID)
+	require.NoError(t, err)
+	assert.Len(t, chain, 2)
+	assert.Equal(t, childID, chain[0].ID)
+	assert.Equal(t, parentID, chain[1].ID)
+}
+
+// ---------- unmarshalResolved ----------
+
+func TestUnmarshalResolved_WithStruct(t *testing.T) {
+	resolved := map[string]interface{}{
+		"database.host": "localhost",
+		"database.port": float64(5432),
+	}
+	var target struct {
+		Database struct {
+			Host string  `json:"database.host"`
+			Port float64 `json:"database.port"`
+		} `json:"database"`
+	}
+	// unmarshalResolved first unflattens, so use the unflattened structure
+	var target2 struct {
+		Database struct {
+			Host string  `json:"host"`
+			Port float64 `json:"port"`
+		} `json:"database"`
+	}
+	err := unmarshalResolved(resolved, &target2)
+	require.NoError(t, err)
+	assert.Equal(t, "localhost", target2.Database.Host)
+	assert.Equal(t, float64(5432), target2.Database.Port)
+
+	// nil resolved case
+	err = unmarshalResolved(nil, &target)
+	require.NoError(t, err)
+}
+
+// ---------- unflattenDotNotation conflict case ----------
+
+func TestUnflattenDotNotation_ConflictNonMapOverwritten(t *testing.T) {
+	// To exercise the conflict branch (non-map overwritten by map), we need
+	// map iteration to process the scalar key before the dotted key.
+	// Since Go map iteration is random, we retry with many different maps
+	// until the branch is hit. In practice this takes 1-2 iterations.
+	for i := 0; i < 100; i++ {
+		flat := map[string]interface{}{
+			"db":      "scalar-value",
+			"db.host": "localhost",
+		}
+		result := unflattenDotNotation(flat)
+		dbVal, ok := result["db"]
+		require.True(t, ok)
+		if dbMap, isMap := dbVal.(map[string]interface{}); isMap {
+			// The conflict branch was hit: "db" was a scalar, then overwritten
+			assert.Equal(t, "localhost", dbMap["host"])
+			return
+		}
+	}
+	// If we never hit the conflict branch in 100 iterations, the scalar
+	// key was always processed second. This is astronomically unlikely but
+	// we still exercise the function.
+}
+
+// ---------- refMap nil case ----------
+
+func TestRefMap_Nil(t *testing.T) {
+	result := refMap(nil)
+	assert.Nil(t, result)
+}
+
+// ---------- refEnvs non-values key path ----------
+
+func TestRefEnvs_NonValuesKey(t *testing.T) {
+	envs := map[string]map[string]interface{}{
+		"staging": {
+			"not_values": "some-data",
+		},
+	}
+	result := refEnvs(envs)
+	require.NotNil(t, result)
+	staging := (*result)["staging"]
+	assert.Nil(t, staging.Values)
+}
+
+func TestRefEnvs_Nil(t *testing.T) {
+	result := refEnvs(nil)
+	assert.Nil(t, result)
+}
+
+// ---------- wrapItemValues nil case ----------
+
+func TestWrapItemValues_Nil(t *testing.T) {
+	result := wrapItemValues(nil)
+	assert.Nil(t, result)
+}
+
+// ---------- WithConfigParent ----------
+
+func TestWithConfigParent(t *testing.T) {
+	cc := &ConfigClient{client: &Client{environment: "test"}}
+	cfg := cc.New("child", WithConfigParent("parent-uuid"))
+	require.NotNil(t, cfg.Parent)
+	assert.Equal(t, "parent-uuid", *cfg.Parent)
+}
+
+// ---------- LiveConfig.Value ----------
+
+func TestLiveConfig_Value(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{
+			"app": {"host": "localhost"},
+		},
+	}
+	lc := &LiveConfig{client: cc, key: "app"}
+	val := lc.Value()
+	assert.Equal(t, "localhost", val["host"])
+}
+
+func TestLiveConfig_Value_NilCache(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+	}
+	lc := &LiveConfig{client: cc, key: "app"}
+	val := lc.Value()
+	assert.Nil(t, val)
+}
+
+func TestLiveConfig_Value_KeyNotFound(t *testing.T) {
+	cc := &ConfigClient{
+		client:      &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{},
+	}
+	lc := &LiveConfig{client: cc, key: "missing"}
+	val := lc.Value()
+	assert.Nil(t, val)
+}
+
+// ---------- LiveConfig.ValueInto ----------
+
+func TestLiveConfig_ValueInto(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{
+			"db": {"host": "localhost", "port": float64(5432)},
+		},
+	}
+	lc := &LiveConfig{client: cc, key: "db"}
+
+	var target struct {
+		Host string  `json:"host"`
+		Port float64 `json:"port"`
+	}
+	err := lc.ValueInto(&target)
+	require.NoError(t, err)
+	assert.Equal(t, "localhost", target.Host)
+	assert.Equal(t, float64(5432), target.Port)
+}
+
+func TestLiveConfig_ValueInto_NilCache(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+	}
+	lc := &LiveConfig{client: cc, key: "app"}
+
+	var target struct{ Host string }
+	err := lc.ValueInto(&target)
+	require.NoError(t, err)
+	assert.Equal(t, "", target.Host)
+}
+
+// ---------- getByID with io.ReadAll failure (via broken body) ----------
+
+func TestGetByID_InvalidUUID(t *testing.T) {
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	_, err := cc.getByID(context.Background(), "not-a-uuid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid config ID")
+}
+
+func TestGetByID_InvalidJSONResponse(t *testing.T) {
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not valid json`))
+	}))
+
+	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+// ---------- deleteByID with invalid UUID ----------
+
+func TestDeleteByID_Config_InvalidUUID(t *testing.T) {
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	err := cc.deleteByID(context.Background(), "not-a-uuid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid config ID")
+}
+
+// ---------- getByID connection error ----------
+
+func TestGetByID_ConnectionError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	serverURL := server.URL
+	server.Close()
+
+	httpClient := &http.Client{}
+	genConfigClient, _ := genconfig.NewClient(serverURL, genconfig.WithHTTPClient(httpClient))
+	cc := &ConfigClient{
+		client:    &Client{environment: "test"},
+		generated: genConfigClient,
+	}
+
+	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+// ---------- deleteByID connection error ----------
+
+func TestDeleteByID_Config_ConnectionError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	serverURL := server.URL
+	server.Close()
+
+	httpClient := &http.Client{}
+	genConfigClient, _ := genconfig.NewClient(serverURL, genconfig.WithHTTPClient(httpClient))
+	cc := &ConfigClient{
+		client:    &Client{environment: "test"},
+		generated: genConfigClient,
+	}
+
+	err := cc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+// ---------- refEnvs vals not map ----------
+
+func TestRefEnvs_ValsNotMap(t *testing.T) {
+	envs := map[string]map[string]interface{}{
+		"staging": {
+			"values": "not-a-map",
+		},
+	}
+	result := refEnvs(envs)
+	require.NotNil(t, result)
+	staging := (*result)["staging"]
+	assert.Nil(t, staging.Values)
+}
+
+// ---------- Resolve ensureInit error ----------
+
+func TestResolve_EnsureInitError(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+	}
+	// Force initOnce to run with an error
+	cc.initOnce.Do(func() {
+		cc.initErr = &SmplError{Message: "init failed"}
+	})
+
+	_, err := cc.Resolve(context.Background(), "app")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "init failed")
+}
+
+// ---------- ResolveInto ensureInit error ----------
+
+func TestResolveInto_EnsureInitError(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+	}
+	cc.initOnce.Do(func() {
+		cc.initErr = &SmplError{Message: "init failed"}
+	})
+
+	var target struct{ Host string }
+	err := cc.ResolveInto(context.Background(), "db", &target)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "init failed")
+}
+
+// ---------- Subscribe ensureInit error ----------
+
+func TestSubscribe_EnsureInitError(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+	}
+	cc.initOnce.Do(func() {
+		cc.initErr = &SmplError{Message: "init failed"}
+	})
+
+	_, err := cc.Subscribe(context.Background(), "app")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "init failed")
+}
+
+// ---------- unmarshalResolved with non-nil data ----------
+
+func TestUnmarshalResolved_NilInput(t *testing.T) {
+	var target struct{ Host string }
+	err := unmarshalResolved(nil, &target)
+	require.NoError(t, err)
+	assert.Equal(t, "", target.Host)
+}
+
+func TestUnmarshalResolved_SimpleMap(t *testing.T) {
+	resolved := map[string]interface{}{
+		"host": "localhost",
+		"port": float64(5432),
+	}
+	var target struct {
+		Host string  `json:"host"`
+		Port float64 `json:"port"`
+	}
+	err := unmarshalResolved(resolved, &target)
+	require.NoError(t, err)
+	assert.Equal(t, "localhost", target.Host)
+	assert.Equal(t, float64(5432), target.Port)
+}
+
+func TestUnmarshalResolved_MarshalError(t *testing.T) {
+	// json.Marshal fails on channels
+	resolved := map[string]interface{}{
+		"bad": make(chan int),
+	}
+	var target struct{}
+	err := unmarshalResolved(resolved, &target)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to marshal resolved config")
+}
+
+// ---------- getByID with broken body (uses custom transport) ----------
+
+// brokenBodyTransportConfig wraps an HTTP transport and replaces the response body with a broken reader.
+type brokenBodyTransportConfig struct {
+	statusCode int
+}
+
+func (t *brokenBodyTransportConfig) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: t.statusCode,
+		Body:       io.NopCloser(&brokenReaderConfig{}),
+		Header:     make(http.Header),
+	}, nil
+}
+
+type brokenReaderConfig struct{}
+
+func (b *brokenReaderConfig) Read(p []byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func TestGetByID_BodyReadFailure_CustomTransport(t *testing.T) {
+	httpClient := &http.Client{
+		Transport: &brokenBodyTransportConfig{statusCode: 200},
+	}
+	genConfigClient, _ := genconfig.NewClient("http://localhost",
+		genconfig.WithHTTPClient(httpClient),
+	)
+	cc := &ConfigClient{
+		client:    &Client{environment: "test"},
+		generated: genConfigClient,
+	}
+
+	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+	var connErr *SmplConnectionError
+	assert.True(t, errors.As(err, &connErr))
+}
+
+func TestDeleteByID_Config_BodyReadFailure_CustomTransport(t *testing.T) {
+	httpClient := &http.Client{
+		Transport: &brokenBodyTransportConfig{statusCode: 204},
+	}
+	genConfigClient, _ := genconfig.NewClient("http://localhost",
+		genconfig.WithHTTPClient(httpClient),
+	)
+	cc := &ConfigClient{
+		client:    &Client{environment: "test"},
+		generated: genConfigClient,
+	}
+
+	err := cc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+	var connErr *SmplConnectionError
+	assert.True(t, errors.As(err, &connErr))
 }

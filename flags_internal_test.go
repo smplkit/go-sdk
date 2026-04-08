@@ -2887,3 +2887,369 @@ func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
 
 	fc.client.stopWS()
 }
+
+// ---------- NewNumberFlag ----------
+
+func TestNewNumberFlag(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	flag := fc.NewNumberFlag("price_multiplier", 1.5)
+	assert.Equal(t, "price_multiplier", flag.Key)
+	assert.Equal(t, "Price Multiplier", flag.Name)
+	assert.Equal(t, string(FlagTypeNumeric), flag.Type)
+	assert.Equal(t, 1.5, flag.Default)
+	assert.NotNil(t, flag.client)
+}
+
+func TestNewNumberFlag_WithOptions(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	desc := "A number flag"
+	flag := fc.NewNumberFlag("rate", 0.5, WithFlagName("Rate"), WithFlagDescription(desc))
+	assert.Equal(t, "Rate", flag.Name)
+	require.NotNil(t, flag.Description)
+	assert.Equal(t, desc, *flag.Description)
+}
+
+// ---------- NewJsonFlag ----------
+
+func TestNewJsonFlag(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	defaultVal := map[string]interface{}{"theme": "dark"}
+	flag := fc.NewJsonFlag("ui_config", defaultVal)
+	assert.Equal(t, "ui_config", flag.Key)
+	assert.Equal(t, "Ui Config", flag.Name)
+	assert.Equal(t, string(FlagTypeJSON), flag.Type)
+	assert.Equal(t, defaultVal, flag.Default)
+	assert.NotNil(t, flag.client)
+}
+
+func TestNewJsonFlag_WithOptions(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	defaultVal := map[string]interface{}{"key": "val"}
+	flag := fc.NewJsonFlag("config", defaultVal, WithFlagName("JSON Config"))
+	assert.Equal(t, "JSON Config", flag.Name)
+}
+
+// ---------- FlagsClient.deleteByID error paths ----------
+
+func TestDeleteByID_Flags_CheckStatusError(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+
+	err := fc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+func TestDeleteByID_Flags_ConnectionError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	serverURL := server.URL
+	server.Close()
+
+	httpClient := &http.Client{}
+	genFlagsClient, _ := genflags.NewClient(serverURL, genflags.WithHTTPClient(httpClient))
+	fc := &FlagsClient{
+		client:    &Client{environment: "test"},
+		generated: genFlagsClient,
+	}
+
+	err := fc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+func TestDeleteByID_Flags_InvalidUUID(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	err := fc.deleteByID(context.Background(), "not-a-uuid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid flag ID")
+}
+
+func TestDeleteByID_Flags_BodyReadFailure(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
+	err := fc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+// ---------- FlagsClient.OnChangeKey ----------
+
+func TestFlagsClient_OnChangeKey(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+
+	var received *FlagChangeEvent
+	fc.OnChangeKey("my-flag", func(evt *FlagChangeEvent) {
+		received = evt
+	})
+
+	// Trigger via runtime
+	fc.runtime.mu.Lock()
+	fc.runtime.flagStore = map[string]map[string]interface{}{
+		"my-flag": {"default": true},
+	}
+	fc.runtime.mu.Unlock()
+
+	fc.runtime.fireChangeListeners("my-flag", "manual")
+
+	require.NotNil(t, received)
+	assert.Equal(t, "my-flag", received.Key)
+	assert.Equal(t, "manual", received.Source)
+}
+
+// ---------- SetEnvironmentEnabled ----------
+
+func TestSetEnvironmentEnabled(t *testing.T) {
+	f := &Flag{
+		Environments: map[string]interface{}{},
+	}
+
+	f.SetEnvironmentEnabled("staging", true)
+	envData := f.Environments["staging"].(map[string]interface{})
+	assert.True(t, envData["enabled"].(bool))
+
+	// Test with existing environment data
+	f.SetEnvironmentEnabled("staging", false)
+	envData = f.Environments["staging"].(map[string]interface{})
+	assert.False(t, envData["enabled"].(bool))
+}
+
+func TestSetEnvironmentEnabled_NewEnvironment(t *testing.T) {
+	f := &Flag{
+		Environments: map[string]interface{}{},
+	}
+
+	f.SetEnvironmentEnabled("production", true)
+	envData := f.Environments["production"].(map[string]interface{})
+	assert.True(t, envData["enabled"].(bool))
+	// Should have rules key
+	_, hasRules := envData["rules"]
+	assert.True(t, hasRules)
+}
+
+// ---------- SetEnvironmentDefault ----------
+
+func TestSetEnvironmentDefault(t *testing.T) {
+	f := &Flag{
+		Environments: map[string]interface{}{},
+	}
+
+	f.SetEnvironmentDefault("staging", "v2")
+	envData := f.Environments["staging"].(map[string]interface{})
+	assert.Equal(t, "v2", envData["default"])
+
+	// Test with existing environment data
+	f.SetEnvironmentDefault("staging", "v3")
+	envData = f.Environments["staging"].(map[string]interface{})
+	assert.Equal(t, "v3", envData["default"])
+}
+
+func TestSetEnvironmentDefault_NewEnvironment(t *testing.T) {
+	f := &Flag{
+		Environments: map[string]interface{}{},
+	}
+
+	f.SetEnvironmentDefault("production", 42)
+	envData := f.Environments["production"].(map[string]interface{})
+	assert.Equal(t, 42, envData["default"])
+}
+
+// ---------- ClearRules ----------
+
+func TestClearRules(t *testing.T) {
+	f := &Flag{
+		Environments: map[string]interface{}{
+			"staging": map[string]interface{}{
+				"enabled": true,
+				"rules": []interface{}{
+					map[string]interface{}{"logic": map[string]interface{}{"==": true}, "value": true},
+				},
+			},
+		},
+	}
+
+	f.ClearRules("staging")
+	envData := f.Environments["staging"].(map[string]interface{})
+	rules := envData["rules"].([]interface{})
+	assert.Empty(t, rules)
+}
+
+func TestClearRules_NonexistentEnvironment(t *testing.T) {
+	f := &Flag{
+		Environments: map[string]interface{}{},
+	}
+
+	// Should not panic on non-existent environment
+	f.ClearRules("nonexistent")
+	assert.Empty(t, f.Environments)
+}
+
+// ---------- FlagsRuntime.OnChangeKey ----------
+
+func TestFlagsRuntime_OnChangeKey(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	rt := fc.runtime
+
+	var received *FlagChangeEvent
+	rt.OnChangeKey("test-flag", func(evt *FlagChangeEvent) {
+		received = evt
+	})
+
+	rt.mu.Lock()
+	rt.flagStore = map[string]map[string]interface{}{
+		"test-flag": {"default": true},
+	}
+	rt.mu.Unlock()
+
+	rt.fireChangeListeners("test-flag", "websocket")
+
+	require.NotNil(t, received)
+	assert.Equal(t, "test-flag", received.Key)
+	assert.Equal(t, "websocket", received.Source)
+}
+
+// ---------- fireChangeListeners key listener path ----------
+
+func TestFireChangeListeners_KeyListeners(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	rt := fc.runtime
+
+	var globalReceived, keyReceived *FlagChangeEvent
+	rt.OnChange(func(evt *FlagChangeEvent) {
+		globalReceived = evt
+	})
+	rt.OnChangeKey("my-flag", func(evt *FlagChangeEvent) {
+		keyReceived = evt
+	})
+
+	rt.mu.Lock()
+	rt.flagStore = map[string]map[string]interface{}{
+		"my-flag": {"default": true},
+	}
+	rt.mu.Unlock()
+
+	rt.fireChangeListeners("my-flag", "manual")
+
+	require.NotNil(t, globalReceived)
+	require.NotNil(t, keyReceived)
+	assert.Equal(t, "my-flag", keyReceived.Key)
+}
+
+func TestFireChangeListeners_HandleListeners(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	rt := fc.runtime
+
+	// Create a handle and register a listener on it
+	handle := rt.BooleanFlag("my-flag", false)
+	var handleReceived *FlagChangeEvent
+	handle.OnChange(func(evt *FlagChangeEvent) {
+		handleReceived = evt
+	})
+
+	rt.mu.Lock()
+	rt.flagStore = map[string]map[string]interface{}{
+		"my-flag": {"default": true},
+	}
+	rt.mu.Unlock()
+
+	rt.fireChangeListeners("my-flag", "websocket")
+
+	require.NotNil(t, handleReceived)
+	assert.Equal(t, "my-flag", handleReceived.Key)
+}
+
+func TestFireChangeListeners_KeyListenerPanicRecovery(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	rt := fc.runtime
+
+	var secondCalled bool
+	rt.OnChangeKey("my-flag", func(evt *FlagChangeEvent) {
+		panic("bad key listener")
+	})
+	rt.OnChangeKey("my-flag", func(evt *FlagChangeEvent) {
+		secondCalled = true
+	})
+
+	rt.mu.Lock()
+	rt.flagStore = map[string]map[string]interface{}{
+		"my-flag": {"default": true},
+	}
+	rt.mu.Unlock()
+
+	rt.fireChangeListeners("my-flag", "manual")
+	assert.True(t, secondCalled)
+}
+
+func TestFireChangeListeners_HandleListenerPanicRecovery(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	rt := fc.runtime
+
+	handle := rt.BooleanFlag("my-flag", false)
+	var secondCalled bool
+	handle.OnChange(func(evt *FlagChangeEvent) {
+		panic("bad handle listener")
+	})
+	handle.OnChange(func(evt *FlagChangeEvent) {
+		secondCalled = true
+	})
+
+	rt.mu.Lock()
+	rt.flagStore = map[string]map[string]interface{}{
+		"my-flag": {"default": true},
+	}
+	rt.mu.Unlock()
+
+	rt.fireChangeListeners("my-flag", "websocket")
+	assert.True(t, secondCalled)
+}
+
+func TestFireChangeListeners_Flags_EmptyKey(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	rt := fc.runtime
+
+	var called bool
+	rt.OnChange(func(evt *FlagChangeEvent) {
+		called = true
+	})
+
+	rt.fireChangeListeners("", "manual")
+	assert.False(t, called)
+}
+
+// ---------- handleFlagChanged ----------
+
+func TestHandleFlagChanged(t *testing.T) {
+	flagsJSON := `{"data":[{"id":"550e8400-e29b-41d4-a716-446655440000","type":"flag","attributes":{"name":"My Flag","key":"my-flag","type":"BOOLEAN","default":true,"values":[],"environments":{}}}]}`
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(flagsJSON))
+	}))
+	rt := fc.runtime
+
+	var received *FlagChangeEvent
+	rt.OnChange(func(evt *FlagChangeEvent) {
+		received = evt
+	})
+
+	rt.handleFlagChanged(map[string]interface{}{"key": "my-flag"})
+
+	require.NotNil(t, received)
+	assert.Equal(t, "my-flag", received.Key)
+	assert.Equal(t, "websocket", received.Source)
+}
+
+func TestHandleFlagChanged_FetchError(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
+	}))
+	rt := fc.runtime
+
+	var called bool
+	rt.OnChange(func(evt *FlagChangeEvent) {
+		called = true
+	})
+
+	// Should not panic; error causes early return
+	rt.handleFlagChanged(map[string]interface{}{"key": "my-flag"})
+	assert.False(t, called)
+}

@@ -2,9 +2,13 @@ package smplkit
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1058,4 +1062,608 @@ func TestFetchAndCache_NilLevelAndGroup(t *testing.T) {
 	_, hasGroup = groupEntry["group"]
 	assert.False(t, hasLevel)
 	assert.False(t, hasGroup)
+}
+
+// --- newTestLoggingClient helper ---
+
+func newTestLoggingClient(t *testing.T, handler http.Handler) *LoggingClient {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	httpClient := &http.Client{}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: "sk_test", base: base}
+
+	headerEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genLoggingClient, _ := genlogging.NewClient(server.URL,
+		genlogging.WithHTTPClient(httpClient),
+		headerEditor,
+	)
+
+	c := &Client{
+		apiKey:      "sk_test",
+		environment: "test",
+		service:     "test-service",
+		baseURL:     server.URL,
+		httpClient:  httpClient,
+	}
+	lc := newLoggingClient(c, genLoggingClient)
+	return lc
+}
+
+// --- deleteLoggerByID error paths ---
+
+func TestDeleteLoggerByID_CheckStatusError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+
+	err := lc.deleteLoggerByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+func TestDeleteLoggerByID_ConnectionError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	serverURL := server.URL
+	server.Close()
+
+	httpClient := &http.Client{}
+	genLoggingClient, _ := genlogging.NewClient(serverURL, genlogging.WithHTTPClient(httpClient))
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	err := lc.deleteLoggerByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+func TestDeleteLoggerByID_InvalidUUID(t *testing.T) {
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, nil)
+	err := lc.deleteLoggerByID(context.Background(), "not-a-uuid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid logger ID")
+}
+
+// brokenBodyTransportLogging wraps an HTTP transport and returns a broken response body.
+type brokenBodyTransportLogging struct {
+	statusCode int
+}
+
+func (t *brokenBodyTransportLogging) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: t.statusCode,
+		Body:       io.NopCloser(&brokenReaderLogging{}),
+		Header:     make(http.Header),
+	}, nil
+}
+
+type brokenReaderLogging struct{}
+
+func (b *brokenReaderLogging) Read(p []byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func TestDeleteLoggerByID_BodyReadFailure(t *testing.T) {
+	httpClient := &http.Client{
+		Transport: &brokenBodyTransportLogging{statusCode: 204},
+	}
+	genLoggingClient, _ := genlogging.NewClient("http://localhost",
+		genlogging.WithHTTPClient(httpClient),
+	)
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	err := lc.deleteLoggerByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+// --- deleteGroupByID error paths ---
+
+func TestDeleteGroupByID_CheckStatusError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+
+	err := lc.deleteGroupByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+func TestDeleteGroupByID_ConnectionError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	serverURL := server.URL
+	server.Close()
+
+	httpClient := &http.Client{}
+	genLoggingClient, _ := genlogging.NewClient(serverURL, genlogging.WithHTTPClient(httpClient))
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	err := lc.deleteGroupByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+func TestDeleteGroupByID_InvalidUUID(t *testing.T) {
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, nil)
+	err := lc.deleteGroupByID(context.Background(), "not-a-uuid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid log group ID")
+}
+
+func TestDeleteGroupByID_BodyReadFailure(t *testing.T) {
+	httpClient := &http.Client{
+		Transport: &brokenBodyTransportLogging{statusCode: 204},
+	}
+	genLoggingClient, _ := genlogging.NewClient("http://localhost",
+		genlogging.WithHTTPClient(httpClient),
+	)
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	err := lc.deleteGroupByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	require.Error(t, err)
+}
+
+// --- resourceToLogger nil optional fields ---
+
+func TestResourceToLogger_NilOptionalFields(t *testing.T) {
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, nil)
+
+	r := genlogging.LoggerResource{
+		Attributes: genlogging.Logger{
+			Name: "Test Logger",
+			// Id, Key, Level, Managed, Sources, Environments all nil
+		},
+	}
+
+	logger := resourceToLogger(r, lc)
+	assert.Equal(t, "", logger.ID)
+	assert.Equal(t, "", logger.Key)
+	assert.Nil(t, logger.Level)
+	assert.True(t, logger.Managed) // default true when Managed is nil
+	assert.Nil(t, logger.Sources)
+	assert.NotNil(t, logger.Environments) // defaults to empty map when nil
+}
+
+func TestResourceToLogger_EmptyLevel(t *testing.T) {
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, nil)
+
+	emptyLevel := ""
+	r := genlogging.LoggerResource{
+		Attributes: genlogging.Logger{
+			Name:  "Test Logger",
+			Level: &emptyLevel,
+		},
+	}
+
+	logger := resourceToLogger(r, lc)
+	assert.Nil(t, logger.Level) // empty string level treated as nil
+}
+
+func TestResourceToLogger_ManagedFalse(t *testing.T) {
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, nil)
+
+	managedFalse := false
+	r := genlogging.LoggerResource{
+		Attributes: genlogging.Logger{
+			Name:    "Test Logger",
+			Managed: &managedFalse,
+		},
+	}
+
+	logger := resourceToLogger(r, lc)
+	assert.False(t, logger.Managed)
+}
+
+// --- resourceToLogGroup nil optional fields ---
+
+func TestResourceToLogGroup_NilOptionalFields(t *testing.T) {
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, nil)
+
+	r := genlogging.LogGroupResource{
+		Attributes: genlogging.LogGroup{
+			Name: "Test Group",
+			// Id, Key, Level, Environments all nil
+		},
+	}
+
+	group := resourceToLogGroup(r, lc)
+	assert.Equal(t, "", group.ID)
+	assert.Equal(t, "", group.Key)
+	assert.Nil(t, group.Level)
+	assert.NotNil(t, group.Environments) // defaults to empty map when nil
+}
+
+func TestResourceToLogGroup_EmptyLevel(t *testing.T) {
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, nil)
+
+	emptyLevel := ""
+	r := genlogging.LogGroupResource{
+		Attributes: genlogging.LogGroup{
+			Name:  "Test Group",
+			Level: &emptyLevel,
+		},
+	}
+
+	group := resourceToLogGroup(r, lc)
+	assert.Nil(t, group.Level) // empty string level treated as nil
+}
+
+// --- flushBuffer ---
+
+func TestFlushBuffer_Empty(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Should not make any requests when buffer is empty
+	lc.flushBuffer(context.Background())
+}
+
+func TestFlushBuffer_WithEntries(t *testing.T) {
+	var receivedBody map[string]interface{}
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			b := make([]byte, 4096)
+			n, _ := r.Body.Read(b)
+			_ = json.Unmarshal(b[:n], &receivedBody)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":2}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	lc.buffer.add("app.logger", "INFO", "my-service")
+	lc.buffer.add("db.logger", "DEBUG", "")
+
+	lc.flushBuffer(context.Background())
+
+	require.NotNil(t, receivedBody)
+	loggers := receivedBody["loggers"].([]interface{})
+	assert.Len(t, loggers, 2)
+}
+
+func TestFlushBuffer_WithService(t *testing.T) {
+	var receivedBody map[string]interface{}
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			b := make([]byte, 4096)
+			n, _ := r.Body.Read(b)
+			_ = json.Unmarshal(b[:n], &receivedBody)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	lc.buffer.add("app.logger", "INFO", "my-service")
+	lc.flushBuffer(context.Background())
+
+	require.NotNil(t, receivedBody)
+	loggers := receivedBody["loggers"].([]interface{})
+	first := loggers[0].(map[string]interface{})
+	assert.Equal(t, "my-service", first["service"])
+}
+
+// --- periodicFlush ---
+
+func TestPeriodicFlush_Stops(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	done := make(chan struct{})
+
+	// Start and immediately stop
+	go lc.periodicFlush(done)
+	time.Sleep(10 * time.Millisecond)
+	close(done)
+
+	// Give goroutine time to exit
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestPeriodicFlush_TickerFires(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that waits for 5s ticker")
+	}
+
+	var flushCount atomic.Int32
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		flushCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":1}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	lc := newTestLoggingClient(t, mux)
+
+	// Add loggers to the buffer so the flush has something to send
+	lc.buffer.add("ticker.logger", "INFO", "my-service")
+
+	done := make(chan struct{})
+	go lc.periodicFlush(done)
+
+	// Wait for the 5-second ticker to fire at least once
+	time.Sleep(6 * time.Second)
+	close(done)
+
+	assert.GreaterOrEqual(t, flushCount.Load(), int32(1), "periodic flush ticker should have fired at least once")
+}
+
+// --- handleLoggerChanged ---
+
+func TestHandleLoggerChanged(t *testing.T) {
+	loggerID := "770e8400-e29b-41d4-a716-446655440000"
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"` + loggerID + `","type":"logger","attributes":{"key":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+
+	lc := newTestLoggingClient(t, mux)
+
+	var received *LoggerChangeEvent
+	lc.OnChange(func(evt *LoggerChangeEvent) {
+		received = evt
+	})
+
+	lc.handleLoggerChanged(map[string]interface{}{"key": "my.logger"})
+
+	require.NotNil(t, received)
+	assert.Equal(t, "my.logger", received.Key)
+	assert.Equal(t, "websocket", received.Source)
+}
+
+func TestHandleLoggerChanged_FetchError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
+	}))
+
+	var called bool
+	lc.OnChange(func(evt *LoggerChangeEvent) {
+		called = true
+	})
+
+	// Should not panic; error causes early return
+	lc.handleLoggerChanged(map[string]interface{}{"key": "my.logger"})
+	assert.False(t, called)
+}
+
+// --- Logger.SetEnvironmentLevel with nil Environments ---
+
+func TestLoggerSetEnvironmentLevel_NilEnvironments(t *testing.T) {
+	l := &Logger{
+		Environments: nil,
+	}
+
+	l.SetEnvironmentLevel("production", LogLevelError)
+
+	require.NotNil(t, l.Environments)
+	envData := l.Environments["production"].(map[string]interface{})
+	assert.Equal(t, "ERROR", envData["level"])
+}
+
+// --- LogGroup.SetEnvironmentLevel with nil Environments ---
+
+func TestLogGroupSetEnvironmentLevel_NilEnvironments(t *testing.T) {
+	g := &LogGroup{
+		Environments: nil,
+	}
+
+	g.SetEnvironmentLevel("production", LogLevelWarn)
+
+	require.NotNil(t, g.Environments)
+	envData := g.Environments["production"].(map[string]interface{})
+	assert.Equal(t, "WARN", envData["level"])
+}
+
+// --- Start ---
+
+func TestStart_Basic(t *testing.T) {
+	loggerID := "770e8400-e29b-41d4-a716-446655440000"
+	var bulkCalled atomic.Int32
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			bulkCalled.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":0}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"` + loggerID + `","type":"logger","attributes":{"key":"my.logger","name":"My Logger","level":"INFO","managed":true,"environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		bulkCalled.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":0}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/api/ws/v1/events", func(w http.ResponseWriter, r *http.Request) {
+		// Return 200 OK; the real WS upgrade won't happen but Start handles this
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	httpClient := &http.Client{}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: "sk_test", base: base}
+
+	headerEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genLoggingClient, _ := genlogging.NewClient(server.URL,
+		genlogging.WithHTTPClient(httpClient),
+		headerEditor,
+	)
+
+	c := &Client{
+		apiKey:      "sk_test",
+		environment: "test",
+		service:     "test-service",
+		baseURL:     server.URL,
+		httpClient:  httpClient,
+	}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	err := lc.Start(context.Background())
+	require.NoError(t, err)
+	assert.True(t, lc.started)
+
+	// Clean up
+	lc.close()
+	c.stopWS()
+}
+
+func TestStart_FetchError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":0}`))
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"fail"}]}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":0}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	httpClient := &http.Client{}
+	genLoggingClient, _ := genlogging.NewClient(server.URL, genlogging.WithHTTPClient(httpClient))
+
+	c := &Client{
+		apiKey:      "sk_test",
+		environment: "test",
+		service:     "test-service",
+		baseURL:     server.URL,
+		httpClient:  httpClient,
+	}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	err := lc.Start(context.Background())
+	require.Error(t, err)
+	assert.False(t, lc.started)
+}
+
+func TestStart_Idempotent(t *testing.T) {
+	loggerID := "770e8400-e29b-41d4-a716-446655440000"
+	var callCount atomic.Int32
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":0}`))
+			return
+		}
+		callCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"` + loggerID + `","type":"logger","attributes":{"key":"my.logger","name":"My Logger","managed":true,"environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":0}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	httpClient := &http.Client{}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: "sk_test", base: base}
+
+	headerEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genLoggingClient, _ := genlogging.NewClient(server.URL,
+		genlogging.WithHTTPClient(httpClient),
+		headerEditor,
+	)
+
+	c := &Client{
+		apiKey:      "sk_test",
+		environment: "test",
+		service:     "test-service",
+		baseURL:     server.URL,
+		httpClient:  httpClient,
+	}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	err := lc.Start(context.Background())
+	require.NoError(t, err)
+
+	// Second call should be no-op
+	err = lc.Start(context.Background())
+	require.NoError(t, err)
+
+	// List loggers should have been called only once (during first Start)
+	assert.Equal(t, int32(1), callCount.Load())
+
+	lc.close()
+	c.stopWS()
 }
