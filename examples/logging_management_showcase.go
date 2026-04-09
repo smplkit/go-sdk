@@ -92,13 +92,16 @@ func main() {
 	}
 	fmt.Printf("  Created: key=%s, level=%s\n", workerLogger.Key, *workerLogger.Level)
 
-	step("Creating logger: showcase.db (unmanaged)")
+	step("Creating logger: showcase.db (unmanaged — level inherited from group/platform)")
 	dbLogger := logging.New("showcase.db", smplkit.WithLoggerName("Database"), smplkit.WithLoggerManaged(false))
-	dbLogger.SetLevel(smplkit.LogLevelError)
 	if err := dbLogger.Save(ctx); err != nil {
 		fatal("Failed to create DB logger", err)
 	}
-	fmt.Printf("  Created: key=%s, level=%s, managed=%v\n", dbLogger.Key, *dbLogger.Level, dbLogger.Managed)
+	levelStr := "<inherit>"
+	if dbLogger.Level != nil {
+		levelStr = string(*dbLogger.Level)
+	}
+	fmt.Printf("  Created: key=%s, level=%s, managed=%v\n", dbLogger.Key, levelStr, dbLogger.Managed)
 
 	// ── Section 4: List and Get ──────────────────────────────────────
 	section("4. List and Get")
