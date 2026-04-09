@@ -41,7 +41,7 @@ func (e FlagResourceType) Valid() bool {
 type Flag struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
-	// Default Default value; must reference a value in the values array
+	// Default Default value; must reference a value in the values array (constrained) or match the flag type (unconstrained)
 	Default      interface{}                 `json:"default"`
 	Description  *string                     `json:"description,omitempty"`
 	Environments *map[string]FlagEnvironment `json:"environments,omitempty"`
@@ -56,8 +56,8 @@ type Flag struct {
 	Type      string     `json:"type"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 
-	// Values Closed set of possible values
-	Values []FlagValue `json:"values"`
+	// Values Ordered set of allowed values (constrained), or null (unconstrained)
+	Values *[]FlagValue `json:"values,omitempty"`
 }
 
 // FlagEnvironment defines model for FlagEnvironment.
