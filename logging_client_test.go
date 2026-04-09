@@ -1454,6 +1454,347 @@ func TestLoggingClient_Get_WithGroup(t *testing.T) {
 	assert.Equal(t, logUUID1, *logger.Group)
 }
 
+// --- Adapter integration tests ---
+
+// testAdapter is a mock LoggingAdapter for testing.
+type testAdapter struct {
+	name          string
+	discovered    []smplkit.TestDiscoveredLogger
+	appliedLevels []testAppliedLevel
+	hookInstalled bool
+	hookCallback  func(string, string)
+	hookUninstall bool
+}
+
+type testAppliedLevel struct {
+	loggerName string
+	level      string
+}
+
+func (a *testAdapter) Name() string { return a.name }
+
+func (a *testAdapter) Discover() []smplkit.TestDiscoveredLogger {
+	return a.discovered
+}
+
+func (a *testAdapter) ApplyLevel(loggerName string, level string) {
+	a.appliedLevels = append(a.appliedLevels, testAppliedLevel{loggerName, level})
+}
+
+func (a *testAdapter) InstallHook(onNewLogger func(name string, level string)) {
+	a.hookInstalled = true
+	a.hookCallback = onNewLogger
+}
+
+func (a *testAdapter) UninstallHook() {
+	a.hookUninstall = true
+	a.hookCallback = nil
+}
+
+func TestStartWithNoAdaptersWarns(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	// Start with no adapters — should succeed with warning.
+	err := client.Logging().Start(context.Background())
+	require.NoError(t, err)
+
+	// Management methods still work.
+	loggers, err := client.Logging().List(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, loggers)
+}
+
+func TestRegisterAdapterBeforeStart(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if r.Method == "POST" {
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	adapter := &testAdapter{
+		name: "test",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "com.acme.app", Level: "INFO"},
+		},
+	}
+
+	client.Logging().RegisterAdapter(adapter)
+	err := client.Logging().Start(context.Background())
+	require.NoError(t, err)
+
+	// Verify Discover was called (adapter should have been queried).
+	assert.True(t, adapter.hookInstalled, "InstallHook should have been called")
+}
+
+func TestRegisterAdapterAfterStartPanics(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	err := client.Logging().Start(context.Background())
+	require.NoError(t, err)
+
+	adapter := &testAdapter{name: "test"}
+	assert.Panics(t, func() {
+		client.Logging().RegisterAdapter(adapter)
+	})
+}
+
+func TestMultipleAdapters(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	adapter1 := &testAdapter{
+		name: "adapter1",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "com.acme.slog", Level: "INFO"},
+		},
+	}
+	adapter2 := &testAdapter{
+		name: "adapter2",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "com.acme.zap", Level: "DEBUG"},
+		},
+	}
+
+	client.Logging().RegisterAdapter(adapter1)
+	client.Logging().RegisterAdapter(adapter2)
+	err := client.Logging().Start(context.Background())
+	require.NoError(t, err)
+
+	// Both adapters should have hooks installed.
+	assert.True(t, adapter1.hookInstalled)
+	assert.True(t, adapter2.hookInstalled)
+}
+
+func TestStartWithAdapterDiscoverSkipsEmptyNames(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	// Adapter discovers a logger with empty name (e.g., root handler).
+	adapter := &testAdapter{
+		name: "test",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "", Level: "INFO"},
+			{Name: "com.acme.app", Level: "DEBUG"},
+		},
+	}
+
+	client.Logging().RegisterAdapter(adapter)
+	err := client.Logging().Start(context.Background())
+	require.NoError(t, err)
+}
+
+func TestOnNewLoggerAfterStart(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	adapter := &testAdapter{
+		name:       "test",
+		discovered: []smplkit.TestDiscoveredLogger{},
+	}
+
+	client.Logging().RegisterAdapter(adapter)
+	err := client.Logging().Start(context.Background())
+	require.NoError(t, err)
+
+	// Simulate a new logger being created in the framework after Start.
+	require.NotNil(t, adapter.hookCallback)
+	adapter.hookCallback("com.acme.new", "INFO")
+
+	// The adapter should have had ApplyLevel called.
+	require.NotEmpty(t, adapter.appliedLevels)
+	assert.Equal(t, "com.acme.new", adapter.appliedLevels[0].loggerName)
+	assert.Equal(t, "INFO", adapter.appliedLevels[0].level) // resolves to INFO (fallback)
+}
+
+func TestOnNewLoggerEmptyNameIgnored(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	adapter := &testAdapter{
+		name:       "test",
+		discovered: []smplkit.TestDiscoveredLogger{},
+	}
+
+	client.Logging().RegisterAdapter(adapter)
+	err := client.Logging().Start(context.Background())
+	require.NoError(t, err)
+
+	// Simulate a new logger with empty name — should be ignored.
+	require.NotNil(t, adapter.hookCallback)
+	adapter.hookCallback("", "INFO")
+
+	// No ApplyLevel calls should have been made.
+	assert.Empty(t, adapter.appliedLevels)
+}
+
+func TestApplyLevelsDelegatesToAdapters(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": [{
+			"id": "` + logUUID0 + `",
+			"type": "logger",
+			"attributes": {
+				"key": "com.acme.app",
+				"name": "App",
+				"level": "WARN",
+				"managed": true,
+				"environments": {}
+			}
+		}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	client := newLoggingTestClient(t, mux)
+
+	adapter := &testAdapter{
+		name: "test",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "com.acme.app", Level: "INFO"},
+		},
+	}
+
+	client.Logging().RegisterAdapter(adapter)
+	err := client.Logging().Start(context.Background())
+	require.NoError(t, err)
+
+	// After Start, applyLevels should have resolved com.acme.app to WARN
+	// (from the server response) and called ApplyLevel.
+	require.NotEmpty(t, adapter.appliedLevels)
+	found := false
+	for _, al := range adapter.appliedLevels {
+		if al.loggerName == "com.acme.app" && al.level == "WARN" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "expected ApplyLevel(com.acme.app, WARN) to be called, got %v", adapter.appliedLevels)
+}
+
+func TestCloseCallsUninstallHook(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	adapter := &testAdapter{name: "test"}
+	client.Logging().RegisterAdapter(adapter)
+
+	err = client.Close()
+	require.NoError(t, err)
+
+	assert.True(t, adapter.hookUninstall, "UninstallHook should have been called on Close()")
+}
+
 // --- Client.Close cleans up logging ---
 
 func TestClient_Close_LoggingCleanup(t *testing.T) {

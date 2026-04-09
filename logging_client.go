@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
+	"github.com/smplkit/go-sdk/logging/adapters"
 )
 
 // LoggingClient provides management and runtime operations for logging resources.
@@ -36,6 +37,9 @@ type LoggingClient struct {
 	flushDone chan struct{}
 
 	wsManager *sharedWebSocket
+
+	// Pluggable adapters
+	adapters []adapters.LoggingAdapter
 }
 
 // newLoggingClient creates a new LoggingClient.
@@ -52,6 +56,9 @@ func newLoggingClient(c *Client, gen genlogging.ClientInterface) *LoggingClient 
 
 // close cleans up the logging client resources.
 func (c *LoggingClient) close() {
+	for _, adapter := range c.adapters {
+		adapter.UninstallHook()
+	}
 	if c.flushDone != nil {
 		close(c.flushDone)
 		c.flushDone = nil
@@ -230,13 +237,45 @@ func (c *LoggingClient) DeleteGroup(ctx context.Context, key string) error {
 
 // --- Runtime ---
 
+// RegisterAdapter registers a logging adapter. Must be called before Start().
+// Go does not support auto-loading — at least one adapter must be registered
+// for runtime features to function.
+func (c *LoggingClient) RegisterAdapter(adapter adapters.LoggingAdapter) {
+	if c.started {
+		panic("smplkit: cannot register adapters after Start()")
+	}
+	c.adapters = append(c.adapters, adapter)
+}
+
 // Start initializes the logging runtime. Idempotent.
 // Fetches all logger/group definitions, resolves levels, opens WebSocket,
 // and starts the periodic flush timer.
 func (c *LoggingClient) Start(ctx context.Context) error {
 	var startErr error
 	c.startOnce.Do(func() {
-		// Flush any loggers registered before Start.
+		// Warn if no adapters registered.
+		if len(c.adapters) == 0 {
+			log.Println("smplkit: no logging adapters registered — framework-level control disabled")
+		}
+
+		// Discover loggers from all adapters and buffer them for bulk registration.
+		for _, adapter := range c.adapters {
+			discovered := adapter.Discover()
+			for _, dl := range discovered {
+				normalized := NormalizeLoggerName(dl.Name)
+				if normalized == "" {
+					continue
+				}
+				c.buffer.add(normalized, dl.Level, c.client.service)
+			}
+		}
+
+		// Install hooks on all adapters.
+		for _, adapter := range c.adapters {
+			adapter.InstallHook(c.onNewLogger)
+		}
+
+		// Flush any loggers registered before Start (including discovered ones).
 		c.flushBuffer(ctx)
 
 		// Fetch definitions.
@@ -244,6 +283,9 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 			startErr = err
 			return
 		}
+
+		// Apply resolved levels to all adapters.
+		c.applyLevels()
 
 		// Open WebSocket and register listeners.
 		ws := c.client.ensureWS()
@@ -278,6 +320,53 @@ func (c *LoggingClient) OnChangeKey(key string, cb func(*LoggerChangeEvent)) {
 	c.listenersMu.Lock()
 	c.keyListeners[key] = append(c.keyListeners[key], cb)
 	c.listenersMu.Unlock()
+}
+
+// --- Internal: adapter helpers ---
+
+// applyLevels resolves levels for all known loggers and calls ApplyLevel on each adapter.
+func (c *LoggingClient) applyLevels() {
+	if len(c.adapters) == 0 {
+		return
+	}
+
+	// Collect all logger names from adapters.
+	type adapterLogger struct {
+		adapter    adapters.LoggingAdapter
+		loggerName string
+	}
+	var targets []adapterLogger
+	for _, adapter := range c.adapters {
+		for _, dl := range adapter.Discover() {
+			if dl.Name != "" {
+				targets = append(targets, adapterLogger{adapter: adapter, loggerName: dl.Name})
+			}
+		}
+	}
+
+	for _, t := range targets {
+		normalized := NormalizeLoggerName(t.loggerName)
+		resolved := resolveLoggerLevel(normalized, c.client.environment, c.loggersCache, c.groupsCache)
+		t.adapter.ApplyLevel(t.loggerName, string(resolved))
+	}
+}
+
+// onNewLogger is the callback passed to adapters via InstallHook.
+// Fired when a framework creates a new logger.
+func (c *LoggingClient) onNewLogger(name string, level string) {
+	normalized := NormalizeLoggerName(name)
+	if normalized == "" {
+		return
+	}
+	c.buffer.add(normalized, level, c.client.service)
+
+	// If already started, resolve and apply the level immediately.
+	if c.started {
+		resolved := resolveLoggerLevel(normalized, c.client.environment, c.loggersCache, c.groupsCache)
+		for _, adapter := range c.adapters {
+			adapter.ApplyLevel(name, string(resolved))
+		}
+	}
 }
 
 // --- Internal: CRUD helpers ---
@@ -683,6 +772,7 @@ func (c *LoggingClient) handleLoggerChanged(data map[string]interface{}) {
 	if err := c.fetchAndCache(context.Background()); err != nil {
 		return
 	}
+	c.applyLevels()
 	c.fireChangeListeners(loggerKey, "websocket")
 }
 
