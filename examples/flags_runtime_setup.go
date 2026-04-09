@@ -70,16 +70,10 @@ func setupDemoFlags(ctx context.Context, client *smplkit.Client) ([]*smplkit.Fla
 		return nil, fmt.Errorf("update banner-color: %w", err)
 	}
 
-	// 3. max-retries — numeric
+	// 3. max-retries — numeric (unconstrained)
 	retryFlag := client.Flags().NewNumberFlag("max-retries", 3,
 		smplkit.WithFlagName("Max Retries"),
 		smplkit.WithFlagDescription("Maximum number of API retries before failing."),
-		smplkit.WithFlagValues([]smplkit.FlagValue{
-			{Name: "Low (1)", Value: 1},
-			{Name: "Standard (3)", Value: 3},
-			{Name: "High (5)", Value: 5},
-			{Name: "Aggressive (10)", Value: 10},
-		}),
 	)
 	if err := retryFlag.Save(ctx); err != nil {
 		return nil, fmt.Errorf("create max-retries: %w", err)

@@ -78,8 +78,16 @@ func main() {
 	bannerFlag := demoFlags[1]
 	retryFlag := demoFlags[2]
 
+	// banner-color is a constrained flag — its values parameter defines a
+	// closed set. The Console UI shows dropdowns for value selection.
 	step(fmt.Sprintf("checkout-v2  id=%s  type=%s  default=%v", checkoutFlag.ID, checkoutFlag.Type, checkoutFlag.Default))
 	step(fmt.Sprintf("banner-color id=%s  type=%s  default=%v", bannerFlag.ID, bannerFlag.Type, bannerFlag.Default))
+
+	// max-retries is an unconstrained flag — no predefined values.
+	// Any number is valid as a default or rule serve-value. This is
+	// useful for tunables like thresholds, retry counts, and timeouts
+	// where the value space is open-ended.
+	// Omitting the values option creates an unconstrained flag.
 	step(fmt.Sprintf("max-retries  id=%s  type=%s  default=%v", retryFlag.ID, retryFlag.Type, retryFlag.Default))
 
 	// ====================================================================
