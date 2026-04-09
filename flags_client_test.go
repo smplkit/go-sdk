@@ -97,7 +97,52 @@ func TestFlagsClient_NewBooleanFlag_AutoValues(t *testing.T) {
 	// NewBooleanFlag auto-generates True/False values.
 	flag := client.Flags().NewBooleanFlag("feature-x", false)
 	assert.Equal(t, "feature-x", flag.Key)
-	assert.Len(t, flag.Values, 2)
+	require.NotNil(t, flag.Values)
+	assert.Len(t, *flag.Values, 2)
+}
+
+func TestFlagsClient_NewStringFlag_Unconstrained(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	// NewStringFlag without WithFlagValues creates an unconstrained flag (Values=nil).
+	flag := client.Flags().NewStringFlag("greeting", "hello")
+	assert.Equal(t, "greeting", flag.Key)
+	assert.Equal(t, "hello", flag.Default)
+	assert.Nil(t, flag.Values)
+}
+
+func TestFlagsClient_NewNumberFlag_Unconstrained(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	flag := client.Flags().NewNumberFlag("max-retries", 3.0)
+	assert.Equal(t, "max-retries", flag.Key)
+	assert.Nil(t, flag.Values)
+}
+
+func TestFlagsClient_NewJsonFlag_Unconstrained(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	flag := client.Flags().NewJsonFlag("config", map[string]interface{}{"key": "value"})
+	assert.Equal(t, "config", flag.Key)
+	assert.Nil(t, flag.Values)
+}
+
+func TestFlagsClient_NewStringFlag_Constrained(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
+	require.NoError(t, err)
+
+	flag := client.Flags().NewStringFlag("theme", "light",
+		smplkit.WithFlagValues([]smplkit.FlagValue{
+			{Name: "Light", Value: "light"},
+			{Name: "Dark", Value: "dark"},
+		}),
+	)
+	assert.Equal(t, "theme", flag.Key)
+	require.NotNil(t, flag.Values)
+	assert.Len(t, *flag.Values, 2)
 }
 
 // --- Flag model tests ---
@@ -180,7 +225,8 @@ func TestNewBooleanFlag_Fields(t *testing.T) {
 	assert.Equal(t, "feature-x", flag.Key)
 	assert.Equal(t, "Feature X", flag.Name)
 	assert.Equal(t, true, flag.Default)
-	assert.Len(t, flag.Values, 2)
+	require.NotNil(t, flag.Values)
+	assert.Len(t, *flag.Values, 2)
 }
 
 func TestFlag_MutateName(t *testing.T) {

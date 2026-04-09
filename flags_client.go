@@ -28,12 +28,13 @@ type FlagsClient struct {
 // If name is not provided via WithFlagName, it is auto-generated from the key.
 // Boolean values are auto-generated if not provided via WithFlagValues.
 func (c *FlagsClient) NewBooleanFlag(key string, defaultValue bool, opts ...FlagOption) *Flag {
+	boolValues := []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}}
 	f := &Flag{
 		Key:          key,
 		Name:         keyToDisplayName(key),
 		Type:         string(FlagTypeBoolean),
 		Default:      defaultValue,
-		Values:       []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}},
+		Values:       &boolValues,
 		Environments: map[string]interface{}{},
 		client:       c,
 	}
@@ -412,9 +413,13 @@ func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
 		id = *r.Id
 	}
 
-	values := make([]FlagValue, len(attrs.Values))
-	for i, v := range attrs.Values {
-		values[i] = FlagValue{Name: v.Name, Value: v.Value}
+	var values *[]FlagValue
+	if attrs.Values != nil {
+		v := make([]FlagValue, len(attrs.Values))
+		for i, fv := range attrs.Values {
+			v[i] = FlagValue{Name: fv.Name, Value: fv.Value}
+		}
+		values = &v
 	}
 
 	envs := extractFlagEnvironments(attrs.Environments)
@@ -470,16 +475,19 @@ func extractFlagEnvironments(envs *map[string]genflags.FlagEnvironment) map[stri
 }
 
 // buildFlagRequest constructs a ResponseFlag for create or update.
-func buildFlagRequest(id, key, name, flagType string, dflt interface{}, values []FlagValue, desc *string, envs map[string]interface{}) genflags.ResponseFlag {
+func buildFlagRequest(id, key, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.ResponseFlag {
 	var idPtr *string
 	if id != "" {
 		idPtr = &id
 	}
 	flagT := "flag"
 
-	genValues := make([]genflags.FlagValue, len(values))
-	for i, v := range values {
-		genValues[i] = genflags.FlagValue{Name: v.Name, Value: v.Value}
+	var genValues []genflags.FlagValue
+	if values != nil {
+		genValues = make([]genflags.FlagValue, len(*values))
+		for i, v := range *values {
+			genValues[i] = genflags.FlagValue{Name: v.Name, Value: v.Value}
+		}
 	}
 
 	genEnvs := buildGenFlagEnvironments(envs)
@@ -625,9 +633,13 @@ func (c *FlagsClient) fetchFlagsList(ctx context.Context) ([]map[string]interfac
 	flags := make([]map[string]interface{}, 0, len(result.Data))
 	for _, r := range result.Data {
 		attrs := r.Attributes
-		values := make([]interface{}, len(attrs.Values))
-		for i, v := range attrs.Values {
-			values[i] = map[string]interface{}{"name": v.Name, "value": v.Value}
+		var values interface{}
+		if attrs.Values != nil {
+			v := make([]interface{}, len(attrs.Values))
+			for i, fv := range attrs.Values {
+				v[i] = map[string]interface{}{"name": fv.Name, "value": fv.Value}
+			}
+			values = v
 		}
 
 		f := map[string]interface{}{

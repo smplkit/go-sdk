@@ -18,8 +18,8 @@ type Flag struct {
 	Type string
 	// Default is the default value for the flag.
 	Default interface{}
-	// Values is the closed set of possible values.
-	Values []FlagValue
+	// Values is the closed set of possible values (constrained), or nil (unconstrained).
+	Values *[]FlagValue
 	// Description is an optional description of the flag.
 	Description *string
 	// Environments maps environment names to their configuration.
@@ -52,9 +52,9 @@ func WithFlagDescription(desc string) FlagOption {
 	return func(f *Flag) { f.Description = &desc }
 }
 
-// WithFlagValues sets the closed value set for a flag.
+// WithFlagValues sets the closed value set for a flag (constrained).
 func WithFlagValues(values []FlagValue) FlagOption {
-	return func(f *Flag) { f.Values = values }
+	return func(f *Flag) { f.Values = &values }
 }
 
 // Save creates (POST) the flag if ID is empty, or updates (PUT) if ID is set.
