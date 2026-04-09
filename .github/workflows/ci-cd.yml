@@ -32,8 +32,8 @@ jobs:
       - name: Test
         run: |
           go test -race -coverprofile=coverage.out ./...
-          cd logging/adapters/slog && go test -race ./...
-          cd logging/adapters/zap && go test -race ./...
+          (cd logging/adapters/slog && go test -race ./...)
+          (cd logging/adapters/zap && go test -race ./...)
 
       - name: Check 100% line coverage
         run: |
