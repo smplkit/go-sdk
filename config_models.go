@@ -50,6 +50,16 @@ func WithConfigParent(parentID string) ConfigOption {
 	return func(c *Config) { c.Parent = &parentID }
 }
 
+// WithConfigItems sets the base configuration values for a config.
+func WithConfigItems(items map[string]interface{}) ConfigOption {
+	return func(c *Config) { c.Items = items }
+}
+
+// WithConfigEnvironments sets the environment-specific overrides for a config.
+func WithConfigEnvironments(envs map[string]map[string]interface{}) ConfigOption {
+	return func(c *Config) { c.Environments = envs }
+}
+
 // Save creates (POST) the config if ID is empty, or updates (PUT) if ID is set.
 // Applies the server response back to the Config instance.
 func (c *Config) Save(ctx context.Context) error {

@@ -139,7 +139,7 @@ func main() {
 	}
 	step("Subscribed to user_service — LiveConfig active")
 
-	snapshot := live.Values()
+	snapshot := live.Value()
 	step(fmt.Sprintf("Initial snapshot keys: %d", len(snapshot)))
 	step(fmt.Sprintf("max_retries from live = %v", snapshot["max_retries"]))
 

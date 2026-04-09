@@ -64,9 +64,9 @@ func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs
 	// User Service config — new config with env overrides
 	// ----------------------------------------------------------------
 	userService := client.Config().New("user_service",
-		smplkit.WithName("User Service"),
-		smplkit.WithDescription("Configuration for the user microservice."),
-		smplkit.WithItems(map[string]interface{}{
+		smplkit.WithConfigName("User Service"),
+		smplkit.WithConfigDescription("Configuration for the user microservice."),
+		smplkit.WithConfigItems(map[string]interface{}{
 			"database": map[string]interface{}{
 				"host":      "localhost",
 				"port":      5432,
@@ -77,7 +77,7 @@ func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs
 			"enable_signup":                true,
 			"pagination_default_page_size": 50,
 		}),
-		smplkit.WithEnvironments(map[string]map[string]interface{}{
+		smplkit.WithConfigEnvironments(map[string]map[string]interface{}{
 			"production": {
 				"database": map[string]interface{}{
 					"host":      "prod-users-rds.internal.acme.dev",
@@ -98,14 +98,14 @@ func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs
 	// Auth Module config — child of user_service with env overrides
 	// ----------------------------------------------------------------
 	authModule := client.Config().New("auth_module",
-		smplkit.WithName("Auth Module"),
-		smplkit.WithDescription("Authentication module within the user service."),
-		smplkit.WithParent(userService.ID),
-		smplkit.WithItems(map[string]interface{}{
+		smplkit.WithConfigName("Auth Module"),
+		smplkit.WithConfigDescription("Authentication module within the user service."),
+		smplkit.WithConfigParent(userService.ID),
+		smplkit.WithConfigItems(map[string]interface{}{
 			"session_ttl_minutes": 60,
 			"mfa_enabled":        false,
 		}),
-		smplkit.WithEnvironments(map[string]map[string]interface{}{
+		smplkit.WithConfigEnvironments(map[string]map[string]interface{}{
 			"production": {
 				"session_ttl_minutes": 30,
 				"mfa_enabled":        true,

@@ -733,6 +733,26 @@ func TestWithConfigParent(t *testing.T) {
 	assert.Equal(t, "parent-uuid", *cfg.Parent)
 }
 
+// ---------- WithConfigItems ----------
+
+func TestWithConfigItems(t *testing.T) {
+	cc := &ConfigClient{client: &Client{environment: "test"}}
+	items := map[string]interface{}{"key1": "val1", "key2": 42}
+	cfg := cc.New("cfg", WithConfigItems(items))
+	assert.Equal(t, items, cfg.Items)
+}
+
+// ---------- WithConfigEnvironments ----------
+
+func TestWithConfigEnvironments(t *testing.T) {
+	cc := &ConfigClient{client: &Client{environment: "test"}}
+	envs := map[string]map[string]interface{}{
+		"production": {"key1": "prod-val"},
+	}
+	cfg := cc.New("cfg", WithConfigEnvironments(envs))
+	assert.Equal(t, envs, cfg.Environments)
+}
+
 // ---------- LiveConfig.Value ----------
 
 func TestLiveConfig_Value(t *testing.T) {
