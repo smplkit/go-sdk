@@ -820,26 +820,85 @@
       }
     },
     "/api/v1/environments": {
+      "get": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "List Environments",
+        "operationId": "list_environments",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "Environments"
         ],
         "summary": "Create Environment",
         "operationId": "create_environment",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/EnvironmentResponse"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -892,83 +951,12 @@
               }
             }
           }
-        }
-      },
-      "get": {
-        "tags": [
-          "Environments"
-        ],
-        "summary": "List Environments",
-        "operationId": "list_environments",
+        },
         "security": [
           {
             "HTTPBearer": []
           }
-        ],
-        "parameters": [
-          {
-            "name": "filter[key]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "nullable": true,
-              "title": "Filter[Key]"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnvironmentListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
+        ]
       }
     },
     "/api/v1/environments/{id}": {
@@ -1823,7 +1811,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -1899,7 +1886,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -1985,7 +1971,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -2127,13 +2112,13 @@
         ],
         "parameters": [
           {
-            "name": "filter[context_type_id]",
+            "name": "filter[context_type]",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
               "nullable": true,
-              "title": "Filter[Context Type Id]"
+              "title": "Filter[Context Type]"
             }
           }
         ],
@@ -2337,26 +2322,85 @@
       }
     },
     "/api/v1/services": {
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "List Services",
+        "operationId": "list_services",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "Services"
         ],
         "summary": "Create Service",
         "operationId": "create_service",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/ServiceResponse"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -2409,83 +2453,12 @@
               }
             }
           }
-        }
-      },
-      "get": {
-        "tags": [
-          "Services"
-        ],
-        "summary": "List Services",
-        "operationId": "list_services",
+        },
         "security": [
           {
             "HTTPBearer": []
           }
-        ],
-        "parameters": [
-          {
-            "name": "filter[key]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "nullable": true,
-              "title": "Filter[Key]"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServiceListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
+        ]
       }
     },
     "/api/v1/services/{id}": {
@@ -3100,6 +3073,263 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/api/v1/metrics/bulk": {
+      "post": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Bulk Ingest Metrics",
+        "operationId": "bulk_ingest_metrics",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetricBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "List Metrics",
+        "operationId": "list_metrics",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[name]",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filter[Name]"
+            }
+          },
+          {
+            "name": "filter[recorded_at]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "Filter[Recorded At]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metric_rollups": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "List Metric Rollups",
+        "operationId": "list_metric_rollups",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[name]",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filter[Name]"
+            }
+          },
+          {
+            "name": "filter[rollup]",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filter[Rollup]"
+            }
+          },
+          {
+            "name": "filter[recorded_at]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "Filter[Recorded At]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricRollupListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/users": {
@@ -3984,10 +4214,12 @@
       },
       "ContextType": {
         "properties": {
-          "key": {
+          "id": {
             "type": "string",
-            "title": "Key",
-            "description": "Programmatic identifier: user, account, device"
+            "maxLength": 64,
+            "nullable": true,
+            "title": "Id",
+            "writeOnly": true
           },
           "name": {
             "type": "string",
@@ -4017,7 +4249,6 @@
         },
         "type": "object",
         "required": [
-          "key",
           "name"
         ],
         "title": "ContextType",
@@ -4028,7 +4259,6 @@
             "plan": {}
           },
           "created_at": "2026-03-31T10:00:00Z",
-          "key": "user",
           "name": "User",
           "updated_at": "2026-03-31T10:00:00Z"
         }
@@ -4469,6 +4699,190 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "MetricAttributes": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "nullable": true,
+            "title": "Unit"
+          },
+          "period_seconds": {
+            "type": "integer",
+            "title": "Period Seconds"
+          },
+          "dimensions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Dimensions"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Created At",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "period_seconds",
+          "recorded_at"
+        ],
+        "title": "MetricAttributes"
+      },
+      "MetricBulkRequest": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MetricResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "MetricBulkRequest"
+      },
+      "MetricListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MetricResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "MetricListResponse"
+      },
+      "MetricResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "metric"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/MetricAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "MetricResource"
+      },
+      "MetricRollupAttributes": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "value": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "nullable": true,
+            "title": "Unit"
+          },
+          "bucket": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Bucket"
+          },
+          "rollup": {
+            "type": "string",
+            "title": "Rollup"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "bucket",
+          "rollup"
+        ],
+        "title": "MetricRollupAttributes"
+      },
+      "MetricRollupListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MetricRollupResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "MetricRollupListResponse"
+      },
+      "MetricRollupResource": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "metric_rollup"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/MetricRollupAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "MetricRollupResource"
       },
       "OidcProvider": {
         "type": "string",
