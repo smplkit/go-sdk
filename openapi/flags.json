@@ -63,22 +63,6 @@
         ],
         "parameters": [
           {
-            "name": "filter[key]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Filter[Key]"
-            }
-          },
-          {
             "name": "filter[type]",
             "in": "query",
             "required": false,
@@ -138,7 +122,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -184,7 +167,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -240,7 +222,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -267,10 +248,18 @@
     "schemas": {
       "Flag": {
         "properties": {
-          "key": {
-            "type": "string",
-            "title": "Key",
-            "description": "Unique key within account"
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "writeOnly": true
           },
           "name": {
             "type": "string",
@@ -290,15 +279,22 @@
           },
           "default": {
             "title": "Default",
-            "description": "Default value; must reference a value in the values array"
+            "description": "Default value; must reference a value in the values array (constrained) or match the flag type (unconstrained)"
           },
           "values": {
-            "items": {
-              "$ref": "#/components/schemas/FlagValue"
-            },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FlagValue"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Values",
-            "description": "Closed set of possible values"
+            "description": "Ordered set of allowed values (constrained), or null (unconstrained)"
           },
           "environments": {
             "additionalProperties": {
@@ -336,11 +332,9 @@
         },
         "type": "object",
         "required": [
-          "key",
           "name",
           "type",
-          "default",
-          "values"
+          "default"
         ],
         "title": "Flag",
         "example": {
@@ -369,7 +363,6 @@
               "rules": []
             }
           },
-          "key": "dark_mode",
           "name": "Dark Mode",
           "type": "BOOLEAN",
           "updated_at": "2026-03-27T10:00:00Z",
@@ -478,7 +471,6 @@
                 ]
               }
             },
-            "key": "dark_mode",
             "name": "Dark Mode",
             "type": "BOOLEAN",
             "updated_at": "2026-03-27T10:00:00Z",
@@ -493,7 +485,7 @@
               }
             ]
           },
-          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "id": "dark_mode",
           "type": "flag"
         }
       },
