@@ -64,22 +64,6 @@
         ],
         "parameters": [
           {
-            "name": "filter[key]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Filter[Key]"
-            }
-          },
-          {
             "name": "filter[parent]",
             "in": "query",
             "required": false,
@@ -139,7 +123,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -185,7 +168,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -241,7 +223,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Id"
             }
           }
@@ -268,7 +249,7 @@
     "schemas": {
       "Config": {
         "properties": {
-          "key": {
+          "id": {
             "anyOf": [
               {
                 "type": "string",
@@ -278,7 +259,8 @@
                 "type": "null"
               }
             ],
-            "title": "Key"
+            "title": "Id",
+            "writeOnly": true
           },
           "name": {
             "type": "string",
@@ -395,7 +377,6 @@
               "value": 10
             }
           },
-          "key": "database",
           "name": "Database",
           "updated_at": "2026-03-27T10:00:00Z"
         }
@@ -519,11 +500,11 @@
                 "value": "db.internal"
               }
             },
-            "key": "database",
             "name": "Database",
+            "parent": "common",
             "updated_at": "2026-03-27T10:00:00Z"
           },
-          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "id": "database",
           "type": "config"
         }
       },

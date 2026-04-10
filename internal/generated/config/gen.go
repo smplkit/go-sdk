@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
@@ -66,8 +65,8 @@ type Config struct {
 	CreatedAt    *time.Time                       `json:"created_at,omitempty"`
 	Description  *string                          `json:"description,omitempty"`
 	Environments *map[string]EnvironmentOverride  `json:"environments,omitempty"`
+	Id           *string                          `json:"id,omitempty"`
 	Items        *map[string]ConfigItemDefinition `json:"items,omitempty"`
-	Key          *string                          `json:"key,omitempty"`
 	Name         string                           `json:"name"`
 	Parent       *string                          `json:"parent,omitempty"`
 	UpdatedAt    *time.Time                       `json:"updated_at,omitempty"`
@@ -150,7 +149,6 @@ type ValidationError_Loc_Item struct {
 
 // ListConfigsParams defines parameters for ListConfigs.
 type ListConfigsParams struct {
-	FilterKey    *string `form:"filter[key],omitempty" json:"filter[key],omitempty"`
 	FilterParent *string `form:"filter[parent],omitempty" json:"filter[parent],omitempty"`
 }
 
@@ -304,15 +302,15 @@ type ClientInterface interface {
 	CreateConfig(ctx context.Context, body CreateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteConfig request
-	DeleteConfig(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteConfig(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetConfig request
-	GetConfig(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetConfig(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateConfigWithBody request with any body
-	UpdateConfigWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateConfigWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateConfig(ctx context.Context, id openapi_types.UUID, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateConfig(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListConfigs(ctx context.Context, params *ListConfigsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -351,7 +349,7 @@ func (c *Client) CreateConfig(ctx context.Context, body CreateConfigJSONRequestB
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteConfig(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteConfig(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteConfigRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -363,7 +361,7 @@ func (c *Client) DeleteConfig(ctx context.Context, id openapi_types.UUID, reqEdi
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetConfig(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetConfig(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetConfigRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -375,7 +373,7 @@ func (c *Client) GetConfig(ctx context.Context, id openapi_types.UUID, reqEditor
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateConfigWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateConfigWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateConfigRequestWithBody(c.Server, id, contentType, body)
 	if err != nil {
 		return nil, err
@@ -387,7 +385,7 @@ func (c *Client) UpdateConfigWithBody(ctx context.Context, id openapi_types.UUID
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateConfig(ctx context.Context, id openapi_types.UUID, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateConfig(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateConfigRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
@@ -420,22 +418,6 @@ func NewListConfigsRequest(server string, params *ListConfigsParams) (*http.Requ
 
 	if params != nil {
 		queryValues := queryURL.Query()
-
-		if params.FilterKey != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[key]", *params.FilterKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
 
 		if params.FilterParent != nil {
 
@@ -505,12 +487,12 @@ func NewCreateConfigRequestWithBody(server string, contentType string, body io.R
 }
 
 // NewDeleteConfigRequest generates requests for DeleteConfig
-func NewDeleteConfigRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteConfigRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -539,12 +521,12 @@ func NewDeleteConfigRequest(server string, id openapi_types.UUID) (*http.Request
 }
 
 // NewGetConfigRequest generates requests for GetConfig
-func NewGetConfigRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetConfigRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -573,7 +555,7 @@ func NewGetConfigRequest(server string, id openapi_types.UUID) (*http.Request, e
 }
 
 // NewUpdateConfigRequest calls the generic UpdateConfig builder with application/json body
-func NewUpdateConfigRequest(server string, id openapi_types.UUID, body UpdateConfigJSONRequestBody) (*http.Request, error) {
+func NewUpdateConfigRequest(server string, id string, body UpdateConfigJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -584,12 +566,12 @@ func NewUpdateConfigRequest(server string, id openapi_types.UUID, body UpdateCon
 }
 
 // NewUpdateConfigRequestWithBody generates requests for UpdateConfig with any type of body
-func NewUpdateConfigRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateConfigRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -671,15 +653,15 @@ type ClientWithResponsesInterface interface {
 	CreateConfigWithResponse(ctx context.Context, body CreateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConfigResponse, error)
 
 	// DeleteConfigWithResponse request
-	DeleteConfigWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteConfigResponse, error)
+	DeleteConfigWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteConfigResponse, error)
 
 	// GetConfigWithResponse request
-	GetConfigWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetConfigResponse, error)
+	GetConfigWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetConfigResponse, error)
 
 	// UpdateConfigWithBodyWithResponse request with any body
-	UpdateConfigWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
+	UpdateConfigWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
 
-	UpdateConfigWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
+	UpdateConfigWithResponse(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
 }
 
 type ListConfigsResponse struct {
@@ -823,7 +805,7 @@ func (c *ClientWithResponses) CreateConfigWithResponse(ctx context.Context, body
 }
 
 // DeleteConfigWithResponse request returning *DeleteConfigResponse
-func (c *ClientWithResponses) DeleteConfigWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteConfigResponse, error) {
+func (c *ClientWithResponses) DeleteConfigWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteConfigResponse, error) {
 	rsp, err := c.DeleteConfig(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -832,7 +814,7 @@ func (c *ClientWithResponses) DeleteConfigWithResponse(ctx context.Context, id o
 }
 
 // GetConfigWithResponse request returning *GetConfigResponse
-func (c *ClientWithResponses) GetConfigWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetConfigResponse, error) {
+func (c *ClientWithResponses) GetConfigWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetConfigResponse, error) {
 	rsp, err := c.GetConfig(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -841,7 +823,7 @@ func (c *ClientWithResponses) GetConfigWithResponse(ctx context.Context, id open
 }
 
 // UpdateConfigWithBodyWithResponse request with arbitrary body returning *UpdateConfigResponse
-func (c *ClientWithResponses) UpdateConfigWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error) {
+func (c *ClientWithResponses) UpdateConfigWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error) {
 	rsp, err := c.UpdateConfigWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -849,7 +831,7 @@ func (c *ClientWithResponses) UpdateConfigWithBodyWithResponse(ctx context.Conte
 	return ParseUpdateConfigResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateConfigWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error) {
+func (c *ClientWithResponses) UpdateConfigWithResponse(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error) {
 	rsp, err := c.UpdateConfig(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
