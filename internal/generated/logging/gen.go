@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
@@ -75,7 +74,7 @@ type LogGroup struct {
 	CreatedAt    *time.Time              `json:"created_at,omitempty"`
 	Environments *map[string]interface{} `json:"environments,omitempty"`
 	Group        *string                 `json:"group,omitempty"`
-	Key          *string                 `json:"key,omitempty"`
+	Id           *string                 `json:"id,omitempty"`
 	Level        *string                 `json:"level,omitempty"`
 	Name         string                  `json:"name"`
 	UpdatedAt    *time.Time              `json:"updated_at,omitempty"`
@@ -106,7 +105,7 @@ type Logger struct {
 	CreatedAt    *time.Time                `json:"created_at,omitempty"`
 	Environments *map[string]interface{}   `json:"environments,omitempty"`
 	Group        *string                   `json:"group,omitempty"`
-	Key          *string                   `json:"key,omitempty"`
+	Id           *string                   `json:"id,omitempty"`
 	Level        *string                   `json:"level,omitempty"`
 	Managed      *bool                     `json:"managed,omitempty"`
 	Name         string                    `json:"name"`
@@ -116,8 +115,8 @@ type Logger struct {
 
 // LoggerBulkItem defines model for LoggerBulkItem.
 type LoggerBulkItem struct {
-	// Key Normalized logger name
-	Key string `json:"key"`
+	// Id Normalized logger name
+	Id string `json:"id"`
 
 	// Level Observed log level in smplkit canonical format
 	Level string `json:"level"`
@@ -200,8 +199,7 @@ type ValidationError_Loc_Item struct {
 
 // ListLoggersParams defines parameters for ListLoggers.
 type ListLoggersParams struct {
-	FilterKey     *string `form:"filter[key],omitempty" json:"filter[key],omitempty"`
-	FilterManaged *bool   `form:"filter[managed],omitempty" json:"filter[managed],omitempty"`
+	FilterManaged *bool `form:"filter[managed],omitempty" json:"filter[managed],omitempty"`
 }
 
 // CreateLogGroupJSONRequestBody defines body for CreateLogGroup for application/json ContentType.
@@ -363,15 +361,15 @@ type ClientInterface interface {
 	CreateLogGroup(ctx context.Context, body CreateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteLogGroup request
-	DeleteLogGroup(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteLogGroup(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetLogGroup request
-	GetLogGroup(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetLogGroup(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateLogGroupWithBody request with any body
-	UpdateLogGroupWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateLogGroupWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateLogGroup(ctx context.Context, id openapi_types.UUID, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateLogGroup(ctx context.Context, id string, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListLoggers request
 	ListLoggers(ctx context.Context, params *ListLoggersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -387,15 +385,15 @@ type ClientInterface interface {
 	BulkRegisterLoggers(ctx context.Context, body BulkRegisterLoggersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteLogger request
-	DeleteLogger(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteLogger(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetLogger request
-	GetLogger(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetLogger(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateLoggerWithBody request with any body
-	UpdateLoggerWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateLoggerWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateLogger(ctx context.Context, id openapi_types.UUID, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateLogger(ctx context.Context, id string, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListLogGroups(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -434,7 +432,7 @@ func (c *Client) CreateLogGroup(ctx context.Context, body CreateLogGroupJSONRequ
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteLogGroup(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteLogGroup(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteLogGroupRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -446,7 +444,7 @@ func (c *Client) DeleteLogGroup(ctx context.Context, id openapi_types.UUID, reqE
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetLogGroup(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetLogGroup(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetLogGroupRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -458,7 +456,7 @@ func (c *Client) GetLogGroup(ctx context.Context, id openapi_types.UUID, reqEdit
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateLogGroupWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateLogGroupWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateLogGroupRequestWithBody(c.Server, id, contentType, body)
 	if err != nil {
 		return nil, err
@@ -470,7 +468,7 @@ func (c *Client) UpdateLogGroupWithBody(ctx context.Context, id openapi_types.UU
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateLogGroup(ctx context.Context, id openapi_types.UUID, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateLogGroup(ctx context.Context, id string, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateLogGroupRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
@@ -542,7 +540,7 @@ func (c *Client) BulkRegisterLoggers(ctx context.Context, body BulkRegisterLogge
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteLogger(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteLogger(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteLoggerRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -554,7 +552,7 @@ func (c *Client) DeleteLogger(ctx context.Context, id openapi_types.UUID, reqEdi
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetLogger(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetLogger(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetLoggerRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -566,7 +564,7 @@ func (c *Client) GetLogger(ctx context.Context, id openapi_types.UUID, reqEditor
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateLoggerWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateLoggerWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateLoggerRequestWithBody(c.Server, id, contentType, body)
 	if err != nil {
 		return nil, err
@@ -578,7 +576,7 @@ func (c *Client) UpdateLoggerWithBody(ctx context.Context, id openapi_types.UUID
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateLogger(ctx context.Context, id openapi_types.UUID, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateLogger(ctx context.Context, id string, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateLoggerRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
@@ -658,12 +656,12 @@ func NewCreateLogGroupRequestWithBody(server string, contentType string, body io
 }
 
 // NewDeleteLogGroupRequest generates requests for DeleteLogGroup
-func NewDeleteLogGroupRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteLogGroupRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -692,12 +690,12 @@ func NewDeleteLogGroupRequest(server string, id openapi_types.UUID) (*http.Reque
 }
 
 // NewGetLogGroupRequest generates requests for GetLogGroup
-func NewGetLogGroupRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetLogGroupRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -726,7 +724,7 @@ func NewGetLogGroupRequest(server string, id openapi_types.UUID) (*http.Request,
 }
 
 // NewUpdateLogGroupRequest calls the generic UpdateLogGroup builder with application/json body
-func NewUpdateLogGroupRequest(server string, id openapi_types.UUID, body UpdateLogGroupJSONRequestBody) (*http.Request, error) {
+func NewUpdateLogGroupRequest(server string, id string, body UpdateLogGroupJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -737,12 +735,12 @@ func NewUpdateLogGroupRequest(server string, id openapi_types.UUID, body UpdateL
 }
 
 // NewUpdateLogGroupRequestWithBody generates requests for UpdateLogGroup with any type of body
-func NewUpdateLogGroupRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateLogGroupRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -793,22 +791,6 @@ func NewListLoggersRequest(server string, params *ListLoggersParams) (*http.Requ
 
 	if params != nil {
 		queryValues := queryURL.Query()
-
-		if params.FilterKey != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[key]", *params.FilterKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
 
 		if params.FilterManaged != nil {
 
@@ -918,12 +900,12 @@ func NewBulkRegisterLoggersRequestWithBody(server string, contentType string, bo
 }
 
 // NewDeleteLoggerRequest generates requests for DeleteLogger
-func NewDeleteLoggerRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteLoggerRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -952,12 +934,12 @@ func NewDeleteLoggerRequest(server string, id openapi_types.UUID) (*http.Request
 }
 
 // NewGetLoggerRequest generates requests for GetLogger
-func NewGetLoggerRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetLoggerRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -986,7 +968,7 @@ func NewGetLoggerRequest(server string, id openapi_types.UUID) (*http.Request, e
 }
 
 // NewUpdateLoggerRequest calls the generic UpdateLogger builder with application/json body
-func NewUpdateLoggerRequest(server string, id openapi_types.UUID, body UpdateLoggerJSONRequestBody) (*http.Request, error) {
+func NewUpdateLoggerRequest(server string, id string, body UpdateLoggerJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -997,12 +979,12 @@ func NewUpdateLoggerRequest(server string, id openapi_types.UUID, body UpdateLog
 }
 
 // NewUpdateLoggerRequestWithBody generates requests for UpdateLogger with any type of body
-func NewUpdateLoggerRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateLoggerRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -1084,15 +1066,15 @@ type ClientWithResponsesInterface interface {
 	CreateLogGroupWithResponse(ctx context.Context, body CreateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLogGroupResponse, error)
 
 	// DeleteLogGroupWithResponse request
-	DeleteLogGroupWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteLogGroupResponse, error)
+	DeleteLogGroupWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteLogGroupResponse, error)
 
 	// GetLogGroupWithResponse request
-	GetLogGroupWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetLogGroupResponse, error)
+	GetLogGroupWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetLogGroupResponse, error)
 
 	// UpdateLogGroupWithBodyWithResponse request with any body
-	UpdateLogGroupWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error)
+	UpdateLogGroupWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error)
 
-	UpdateLogGroupWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error)
+	UpdateLogGroupWithResponse(ctx context.Context, id string, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error)
 
 	// ListLoggersWithResponse request
 	ListLoggersWithResponse(ctx context.Context, params *ListLoggersParams, reqEditors ...RequestEditorFn) (*ListLoggersResponse, error)
@@ -1108,15 +1090,15 @@ type ClientWithResponsesInterface interface {
 	BulkRegisterLoggersWithResponse(ctx context.Context, body BulkRegisterLoggersJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterLoggersResponse, error)
 
 	// DeleteLoggerWithResponse request
-	DeleteLoggerWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteLoggerResponse, error)
+	DeleteLoggerWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteLoggerResponse, error)
 
 	// GetLoggerWithResponse request
-	GetLoggerWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetLoggerResponse, error)
+	GetLoggerWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetLoggerResponse, error)
 
 	// UpdateLoggerWithBodyWithResponse request with any body
-	UpdateLoggerWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error)
+	UpdateLoggerWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error)
 
-	UpdateLoggerWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error)
+	UpdateLoggerWithResponse(ctx context.Context, id string, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error)
 }
 
 type ListLogGroupsResponse struct {
@@ -1440,7 +1422,7 @@ func (c *ClientWithResponses) CreateLogGroupWithResponse(ctx context.Context, bo
 }
 
 // DeleteLogGroupWithResponse request returning *DeleteLogGroupResponse
-func (c *ClientWithResponses) DeleteLogGroupWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteLogGroupResponse, error) {
+func (c *ClientWithResponses) DeleteLogGroupWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteLogGroupResponse, error) {
 	rsp, err := c.DeleteLogGroup(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1449,7 +1431,7 @@ func (c *ClientWithResponses) DeleteLogGroupWithResponse(ctx context.Context, id
 }
 
 // GetLogGroupWithResponse request returning *GetLogGroupResponse
-func (c *ClientWithResponses) GetLogGroupWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetLogGroupResponse, error) {
+func (c *ClientWithResponses) GetLogGroupWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetLogGroupResponse, error) {
 	rsp, err := c.GetLogGroup(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1458,7 +1440,7 @@ func (c *ClientWithResponses) GetLogGroupWithResponse(ctx context.Context, id op
 }
 
 // UpdateLogGroupWithBodyWithResponse request with arbitrary body returning *UpdateLogGroupResponse
-func (c *ClientWithResponses) UpdateLogGroupWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error) {
+func (c *ClientWithResponses) UpdateLogGroupWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error) {
 	rsp, err := c.UpdateLogGroupWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1466,7 +1448,7 @@ func (c *ClientWithResponses) UpdateLogGroupWithBodyWithResponse(ctx context.Con
 	return ParseUpdateLogGroupResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateLogGroupWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error) {
+func (c *ClientWithResponses) UpdateLogGroupWithResponse(ctx context.Context, id string, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error) {
 	rsp, err := c.UpdateLogGroup(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1518,7 +1500,7 @@ func (c *ClientWithResponses) BulkRegisterLoggersWithResponse(ctx context.Contex
 }
 
 // DeleteLoggerWithResponse request returning *DeleteLoggerResponse
-func (c *ClientWithResponses) DeleteLoggerWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteLoggerResponse, error) {
+func (c *ClientWithResponses) DeleteLoggerWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteLoggerResponse, error) {
 	rsp, err := c.DeleteLogger(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1527,7 +1509,7 @@ func (c *ClientWithResponses) DeleteLoggerWithResponse(ctx context.Context, id o
 }
 
 // GetLoggerWithResponse request returning *GetLoggerResponse
-func (c *ClientWithResponses) GetLoggerWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetLoggerResponse, error) {
+func (c *ClientWithResponses) GetLoggerWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetLoggerResponse, error) {
 	rsp, err := c.GetLogger(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1536,7 +1518,7 @@ func (c *ClientWithResponses) GetLoggerWithResponse(ctx context.Context, id open
 }
 
 // UpdateLoggerWithBodyWithResponse request with arbitrary body returning *UpdateLoggerResponse
-func (c *ClientWithResponses) UpdateLoggerWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error) {
+func (c *ClientWithResponses) UpdateLoggerWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error) {
 	rsp, err := c.UpdateLoggerWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1544,7 +1526,7 @@ func (c *ClientWithResponses) UpdateLoggerWithBodyWithResponse(ctx context.Conte
 	return ParseUpdateLoggerResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateLoggerWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error) {
+func (c *ClientWithResponses) UpdateLoggerWithResponse(ctx context.Context, id string, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error) {
 	rsp, err := c.UpdateLogger(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
