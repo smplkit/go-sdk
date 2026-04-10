@@ -261,7 +261,6 @@ func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
 // --- Runtime: Resolve / Subscribe ---
 
 // Resolve returns the resolved config values for the given key.
-// Connects and fetches definitions automatically if not already initialized.
 func (c *ConfigClient) Resolve(ctx context.Context, key string) (map[string]interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
@@ -291,7 +290,6 @@ func (c *ConfigClient) ResolveInto(ctx context.Context, key string, target inter
 
 // Subscribe returns a LiveConfig whose Value() always reflects the latest
 // resolved values for the given key.
-// Connects and fetches definitions automatically if not already initialized.
 func (c *ConfigClient) Subscribe(ctx context.Context, key string) (*LiveConfig, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
@@ -330,7 +328,6 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 
 // Refresh re-fetches all configs and re-resolves values.
 // OnChange listeners fire for any values that changed.
-// Connects and fetches definitions automatically if not already initialized.
 func (c *ConfigClient) Refresh(ctx context.Context) error {
 	if err := c.ensureInit(ctx); err != nil {
 		return err
@@ -400,7 +397,6 @@ func WithItemKey(key string) ChangeListenerOption {
 // --- Prescriptive access (legacy, delegates to Resolve) ---
 
 // GetValue reads a resolved config value.
-// Connects and fetches definitions automatically if not already initialized.
 func (c *ConfigClient) GetValue(ctx context.Context, configKey string, itemKey ...string) (interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
