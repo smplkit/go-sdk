@@ -316,9 +316,7 @@ type ContextType struct {
 	// Attributes Known attribute keys with metadata objects
 	Attributes *map[string]interface{} `json:"attributes,omitempty"`
 	CreatedAt  *time.Time              `json:"created_at,omitempty"`
-
-	// Key Programmatic identifier: user, account, device
-	Key string `json:"key"`
+	Id         *string                 `json:"id,omitempty"`
 
 	// Name Display label: User, Account, Device
 	Name      string     `json:"name"`
@@ -599,22 +597,12 @@ type BeginOidcLoginParams struct {
 
 // ListContextsParams defines parameters for ListContexts.
 type ListContextsParams struct {
-	FilterContextTypeId *string `form:"filter[context_type_id],omitempty" json:"filter[context_type_id],omitempty"`
-}
-
-// ListEnvironmentsParams defines parameters for ListEnvironments.
-type ListEnvironmentsParams struct {
-	FilterKey *string `form:"filter[key],omitempty" json:"filter[key],omitempty"`
+	FilterContextType *string `form:"filter[context_type],omitempty" json:"filter[context_type],omitempty"`
 }
 
 // ListInvitationsParams defines parameters for ListInvitations.
 type ListInvitationsParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
-}
-
-// ListServicesParams defines parameters for ListServices.
-type ListServicesParams struct {
-	FilterKey *string `form:"filter[key],omitempty" json:"filter[key],omitempty"`
 }
 
 // ListUsersParams defines parameters for ListUsers.
@@ -813,15 +801,15 @@ type ClientInterface interface {
 	CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteContextType request
-	DeleteContextType(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteContextType(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetContextType request
-	GetContextType(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetContextType(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateContextTypeWithBody request with any body
-	UpdateContextTypeWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateContextTypeWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListContexts request
 	ListContexts(ctx context.Context, params *ListContextsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -838,7 +826,7 @@ type ClientInterface interface {
 	GetContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListEnvironments request
-	ListEnvironments(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListEnvironments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateEnvironmentWithBody request with any body
 	CreateEnvironmentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -882,7 +870,7 @@ type ClientInterface interface {
 	ListProducts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListServices request
-	ListServices(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListServices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateServiceWithBody request with any body
 	CreateServiceWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1211,7 +1199,7 @@ func (c *Client) CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteContextType(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteContextType(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteContextTypeRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1223,7 +1211,7 @@ func (c *Client) DeleteContextType(ctx context.Context, id openapi_types.UUID, r
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetContextType(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetContextType(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetContextTypeRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1235,7 +1223,7 @@ func (c *Client) GetContextType(ctx context.Context, id openapi_types.UUID, reqE
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateContextTypeWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateContextTypeWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateContextTypeRequestWithBody(c.Server, id, contentType, body)
 	if err != nil {
 		return nil, err
@@ -1247,7 +1235,7 @@ func (c *Client) UpdateContextTypeWithBody(ctx context.Context, id openapi_types
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
 	if err != nil {
 		return nil, err
@@ -1319,8 +1307,8 @@ func (c *Client) GetContext(ctx context.Context, id string, reqEditors ...Reques
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListEnvironments(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListEnvironmentsRequest(c.Server, params)
+func (c *Client) ListEnvironments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEnvironmentsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -1511,8 +1499,8 @@ func (c *Client) ListProducts(ctx context.Context, reqEditors ...RequestEditorFn
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListServices(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListServicesRequest(c.Server, params)
+func (c *Client) ListServices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListServicesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -2414,12 +2402,12 @@ func NewCreateContextTypeRequestWithBody(server string, contentType string, body
 }
 
 // NewDeleteContextTypeRequest generates requests for DeleteContextType
-func NewDeleteContextTypeRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteContextTypeRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2448,12 +2436,12 @@ func NewDeleteContextTypeRequest(server string, id openapi_types.UUID) (*http.Re
 }
 
 // NewGetContextTypeRequest generates requests for GetContextType
-func NewGetContextTypeRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetContextTypeRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2482,7 +2470,7 @@ func NewGetContextTypeRequest(server string, id openapi_types.UUID) (*http.Reque
 }
 
 // NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateContextType builder with application/vnd.api+json body
-func NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+func NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -2493,12 +2481,12 @@ func NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(server string,
 }
 
 // NewUpdateContextTypeRequestWithBody generates requests for UpdateContextType with any type of body
-func NewUpdateContextTypeRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateContextTypeRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2550,9 +2538,9 @@ func NewListContextsRequest(server string, params *ListContextsParams) (*http.Re
 	if params != nil {
 		queryValues := queryURL.Query()
 
-		if params.FilterContextTypeId != nil {
+		if params.FilterContextType != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[context_type_id]", *params.FilterContextTypeId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[context_type]", *params.FilterContextType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2686,7 +2674,7 @@ func NewGetContextRequest(server string, id string) (*http.Request, error) {
 }
 
 // NewListEnvironmentsRequest generates requests for ListEnvironments
-func NewListEnvironmentsRequest(server string, params *ListEnvironmentsParams) (*http.Request, error) {
+func NewListEnvironmentsRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -2702,28 +2690,6 @@ func NewListEnvironmentsRequest(server string, params *ListEnvironmentsParams) (
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.FilterKey != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[key]", *params.FilterKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -3141,7 +3107,7 @@ func NewListProductsRequest(server string) (*http.Request, error) {
 }
 
 // NewListServicesRequest generates requests for ListServices
-func NewListServicesRequest(server string, params *ListServicesParams) (*http.Request, error) {
+func NewListServicesRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3157,28 +3123,6 @@ func NewListServicesRequest(server string, params *ListServicesParams) (*http.Re
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.FilterKey != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[key]", *params.FilterKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -3700,15 +3644,15 @@ type ClientWithResponsesInterface interface {
 	CreateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateContextTypeResponse, error)
 
 	// DeleteContextTypeWithResponse request
-	DeleteContextTypeWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteContextTypeResponse, error)
+	DeleteContextTypeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteContextTypeResponse, error)
 
 	// GetContextTypeWithResponse request
-	GetContextTypeWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetContextTypeResponse, error)
+	GetContextTypeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextTypeResponse, error)
 
 	// UpdateContextTypeWithBodyWithResponse request with any body
-	UpdateContextTypeWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
+	UpdateContextTypeWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
 
-	UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
+	UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
 
 	// ListContextsWithResponse request
 	ListContextsWithResponse(ctx context.Context, params *ListContextsParams, reqEditors ...RequestEditorFn) (*ListContextsResponse, error)
@@ -3725,7 +3669,7 @@ type ClientWithResponsesInterface interface {
 	GetContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextResponse, error)
 
 	// ListEnvironmentsWithResponse request
-	ListEnvironmentsWithResponse(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error)
+	ListEnvironmentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error)
 
 	// CreateEnvironmentWithBodyWithResponse request with any body
 	CreateEnvironmentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error)
@@ -3769,7 +3713,7 @@ type ClientWithResponsesInterface interface {
 	ListProductsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProductsResponse, error)
 
 	// ListServicesWithResponse request
-	ListServicesWithResponse(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*ListServicesResponse, error)
+	ListServicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServicesResponse, error)
 
 	// CreateServiceWithBodyWithResponse request with any body
 	CreateServiceWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateServiceResponse, error)
@@ -5234,7 +5178,7 @@ func (c *ClientWithResponses) CreateContextTypeWithApplicationVndAPIPlusJSONBody
 }
 
 // DeleteContextTypeWithResponse request returning *DeleteContextTypeResponse
-func (c *ClientWithResponses) DeleteContextTypeWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteContextTypeResponse, error) {
+func (c *ClientWithResponses) DeleteContextTypeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteContextTypeResponse, error) {
 	rsp, err := c.DeleteContextType(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5243,7 +5187,7 @@ func (c *ClientWithResponses) DeleteContextTypeWithResponse(ctx context.Context,
 }
 
 // GetContextTypeWithResponse request returning *GetContextTypeResponse
-func (c *ClientWithResponses) GetContextTypeWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetContextTypeResponse, error) {
+func (c *ClientWithResponses) GetContextTypeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextTypeResponse, error) {
 	rsp, err := c.GetContextType(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5252,7 +5196,7 @@ func (c *ClientWithResponses) GetContextTypeWithResponse(ctx context.Context, id
 }
 
 // UpdateContextTypeWithBodyWithResponse request with arbitrary body returning *UpdateContextTypeResponse
-func (c *ClientWithResponses) UpdateContextTypeWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error) {
+func (c *ClientWithResponses) UpdateContextTypeWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error) {
 	rsp, err := c.UpdateContextTypeWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5260,7 +5204,7 @@ func (c *ClientWithResponses) UpdateContextTypeWithBodyWithResponse(ctx context.
 	return ParseUpdateContextTypeResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error) {
+func (c *ClientWithResponses) UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error) {
 	rsp, err := c.UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5313,8 +5257,8 @@ func (c *ClientWithResponses) GetContextWithResponse(ctx context.Context, id str
 }
 
 // ListEnvironmentsWithResponse request returning *ListEnvironmentsResponse
-func (c *ClientWithResponses) ListEnvironmentsWithResponse(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error) {
-	rsp, err := c.ListEnvironments(ctx, params, reqEditors...)
+func (c *ClientWithResponses) ListEnvironmentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error) {
+	rsp, err := c.ListEnvironments(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -5453,8 +5397,8 @@ func (c *ClientWithResponses) ListProductsWithResponse(ctx context.Context, reqE
 }
 
 // ListServicesWithResponse request returning *ListServicesResponse
-func (c *ClientWithResponses) ListServicesWithResponse(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*ListServicesResponse, error) {
-	rsp, err := c.ListServices(ctx, params, reqEditors...)
+func (c *ClientWithResponses) ListServicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServicesResponse, error) {
+	rsp, err := c.ListServices(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
