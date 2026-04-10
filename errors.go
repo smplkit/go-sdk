@@ -30,8 +30,6 @@ type SmplError struct {
 }
 
 // Error implements the error interface.
-// When Errors contains parsed JSON:API details, the output includes each error
-// serialized as JSON for debugging.
 func (e *SmplError) Error() string {
 	if len(e.Errors) > 0 {
 		var b strings.Builder
@@ -77,7 +75,7 @@ func (e *SmplTimeoutError) Error() string { return e.SmplError.Error() }
 // Unwrap returns the embedded SmplError for errors.Is/errors.As support.
 func (e *SmplTimeoutError) Unwrap() error { return &e.SmplError }
 
-// SmplNotFoundError is raised when a requested resource does not exist (HTTP 404).
+// SmplNotFoundError is raised when a requested resource does not exist.
 type SmplNotFoundError struct {
 	SmplError
 }
@@ -88,7 +86,7 @@ func (e *SmplNotFoundError) Error() string { return e.SmplError.Error() }
 // Unwrap returns the embedded SmplError for errors.Is/errors.As support.
 func (e *SmplNotFoundError) Unwrap() error { return &e.SmplError }
 
-// SmplConflictError is raised when an operation conflicts with current state (HTTP 409).
+// SmplConflictError is raised when an operation conflicts with the current resource state.
 type SmplConflictError struct {
 	SmplError
 }
@@ -99,7 +97,7 @@ func (e *SmplConflictError) Error() string { return e.SmplError.Error() }
 // Unwrap returns the embedded SmplError for errors.Is/errors.As support.
 func (e *SmplConflictError) Unwrap() error { return &e.SmplError }
 
-// SmplValidationError is raised when the server rejects a request due to validation errors (HTTP 422).
+// SmplValidationError is raised when the server rejects a request due to validation errors.
 type SmplValidationError struct {
 	SmplError
 }

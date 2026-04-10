@@ -5,11 +5,11 @@
 //
 // Demonstrates the full management surface:
 //   - Client initialization
-//   - Flag CRUD: create (boolean, string, numeric), get, list, delete
+//   - Flag management: create (boolean, string, numeric), get, list, delete
 //   - Typed flag values and defaults
 //   - Environment configuration with convenience methods
 //   - Flag.Save() for persisting changes
-//   - Flag.AddRule() for appending a single rule (local mutation)
+//   - Flag.AddRule() for appending a single rule
 //   - Context type management: create, update, list, delete
 //   - Cleanup
 //
@@ -207,9 +207,9 @@ func main() {
 	fmt.Println("  [x] Create flags (boolean, string, numeric) via factory + Save")
 	fmt.Println("  [x] Get flag by key")
 	fmt.Println("  [x] List all flags")
-	fmt.Println("  [x] Update flag via local mutation + Save")
-	fmt.Println("  [x] AddRule (local mutation + Save)")
-	fmt.Println("  [x] Context type CRUD (create, list)")
+	fmt.Println("  [x] Update flag + Save")
+	fmt.Println("  [x] AddRule + Save")
+	fmt.Println("  [x] Context type management (create, list)")
 	fmt.Println("  [x] Delete flags by key")
 	fmt.Println("  [x] Delete context types")
 }

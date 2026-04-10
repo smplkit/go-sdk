@@ -34,7 +34,7 @@ type configChangeListener struct {
 	cb        func(*ConfigChangeEvent)
 }
 
-// ConfigClient provides CRUD operations for config resources and
+// ConfigClient provides operations for config resources and
 // resolved value access.
 // Obtain one via Client.Config().
 type ConfigClient struct {
@@ -48,8 +48,6 @@ type ConfigClient struct {
 	listenersMu sync.Mutex
 	listeners   []configChangeListener
 }
-
-// --- Factory method (Active Record pattern) ---
 
 // New creates an unsaved Config with the given key. Call Save(ctx) to persist.
 // If name is not provided via WithConfigName, it is auto-generated from the key.
@@ -66,8 +64,6 @@ func (c *ConfigClient) New(key string, opts ...ConfigOption) *Config {
 	}
 	return cfg
 }
-
-// --- Management CRUD ---
 
 // Get retrieves a config by its key.
 // Returns SmplNotFoundError if no match.
@@ -197,7 +193,7 @@ func (c *ConfigClient) deleteByID(ctx context.Context, id string) error {
 	return checkStatus(resp.StatusCode, body)
 }
 
-// createConfig sends a POST to create the config, then applies the response.
+// createConfig creates the config on the server and updates the local instance.
 func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
 	reqBody := buildConfigRequest("", cfg.Name, &cfg.Key, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
@@ -225,7 +221,7 @@ func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
-// updateConfig sends a PUT to update the config, then applies the response.
+// updateConfig updates the config on the server and updates the local instance.
 func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
 	uid, err := uuid.Parse(cfg.ID)
 	if err != nil {
@@ -258,8 +254,6 @@ func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
-// --- Runtime: Resolve / Subscribe ---
-
 // Resolve returns the resolved config values for the given key.
 func (c *ConfigClient) Resolve(ctx context.Context, key string) (map[string]interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
@@ -278,8 +272,8 @@ func (c *ConfigClient) Resolve(ctx context.Context, key string) (map[string]inte
 }
 
 // ResolveInto resolves the config and unmarshals it into the target struct.
-// The target must be a pointer to a struct. Dot-notation keys are unflattened
-// into nested maps before unmarshaling via JSON round-trip.
+// The target must be a pointer to a struct. Dot-notation keys (e.g. "database.host")
+// are expanded into nested structures before unmarshaling.
 func (c *ConfigClient) ResolveInto(ctx context.Context, key string, target interface{}) error {
 	resolved, err := c.Resolve(ctx, key)
 	if err != nil {
@@ -297,10 +291,7 @@ func (c *ConfigClient) Subscribe(ctx context.Context, key string) (*LiveConfig, 
 	return &LiveConfig{client: c, key: key}, nil
 }
 
-// --- Runtime: Lazy Init ---
-
-// ensureInit performs lazy initialization on first prescriptive access.
-// Fetches all configs, resolves values for the environment, and caches them.
+// ensureInit performs initialization on first runtime access.
 func (c *ConfigClient) ensureInit(ctx context.Context) error {
 	c.initOnce.Do(func() {
 		environment := c.client.environment
@@ -324,9 +315,7 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 	return c.initErr
 }
 
-// --- Runtime: Refresh & OnChange ---
-
-// Refresh re-fetches all configs and re-resolves values.
+// Refresh re-fetches all configs and resolves current values.
 // OnChange listeners fire for any values that changed.
 func (c *ConfigClient) Refresh(ctx context.Context) error {
 	if err := c.ensureInit(ctx); err != nil {
@@ -393,8 +382,6 @@ func WithItemKey(key string) ChangeListenerOption {
 		c.itemKey = key
 	}
 }
-
-// --- Prescriptive access (legacy, delegates to Resolve) ---
 
 // GetValue reads a resolved config value.
 func (c *ConfigClient) GetValue(ctx context.Context, configKey string, itemKey ...string) (interface{}, error) {
@@ -469,9 +456,7 @@ func (c *ConfigClient) GetBool(ctx context.Context, configKey, itemKey string, d
 	return false, nil
 }
 
-// --- Internal helpers ---
-
-// diffAndFire compares old and new caches and fires change listeners.
+// diffAndFire compares old and new values and fires change listeners.
 func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]interface{}, source string) { //nolint:unparam // "websocket" source will be used when real-time config push is wired up
 	c.listenersMu.Lock()
 	listeners := make([]configChangeListener, len(c.listeners))
@@ -606,7 +591,7 @@ func buildConfigRequest(id, name string, key, desc, parent *string, items map[st
 	}
 }
 
-// unmarshalResolved unflattens dot-notation keys and unmarshals into target.
+// unmarshalResolved expands dot-notation keys and unmarshals into target.
 func unmarshalResolved(resolved map[string]interface{}, target interface{}) error {
 	if resolved == nil {
 		return nil
@@ -651,7 +636,6 @@ func unflattenDotNotation(flat map[string]interface{}) map[string]interface{} {
 	return result
 }
 
-// --- Value wrapping/unwrapping helpers ---
 
 func derefMap(m *map[string]genconfig.ConfigItemDefinition) map[string]interface{} {
 	if m == nil {

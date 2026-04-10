@@ -2,14 +2,9 @@ package smplkit
 
 import "strings"
 
-// resolveLoggerLevel resolves the effective log level for a logger key using
-// the resolution algorithm from ADR-034:
-//
-//  1. Logger's own environment-specific level
-//  2. Logger's own base level
-//  3. Group chain (recursive): env level → base level → parent group
-//  4. Dot-notation ancestry: walk up the logger name hierarchy
-//  5. Fallback: INFO
+// resolveLoggerLevel resolves the effective log level for a logger key.
+// Resolution checks the logger's own level, its group hierarchy, and
+// ancestor loggers by name, falling back to INFO if no level is found.
 func resolveLoggerLevel(
 	loggerKey string,
 	environment string,

@@ -65,8 +65,6 @@ func (c *LoggingClient) close() {
 	}
 }
 
-// --- Factory methods ---
-
 // New creates an unsaved Logger with the given key. Call Save(ctx) to persist.
 // If name is not provided via WithLoggerName, it is auto-generated from the key.
 func (c *LoggingClient) New(key string, opts ...LoggerOption) *Logger {
@@ -96,8 +94,6 @@ func (c *LoggingClient) NewGroup(key string, opts ...LogGroupOption) *LogGroup {
 	}
 	return g
 }
-
-// --- Logger CRUD ---
 
 // Get retrieves a logger by its key.
 func (c *LoggingClient) Get(ctx context.Context, key string) (*Logger, error) {
@@ -173,8 +169,6 @@ func (c *LoggingClient) Delete(ctx context.Context, key string) error {
 	return c.deleteLoggerByID(ctx, logger.ID)
 }
 
-// --- LogGroup CRUD ---
-
 // GetGroup retrieves a log group by its key.
 func (c *LoggingClient) GetGroup(ctx context.Context, key string) (*LogGroup, error) {
 	// The generated client doesn't have a filter param for groups,
@@ -235,11 +229,8 @@ func (c *LoggingClient) DeleteGroup(ctx context.Context, key string) error {
 	return c.deleteGroupByID(ctx, group.ID)
 }
 
-// --- Runtime ---
-
 // RegisterAdapter registers a logging adapter. Must be called before Start().
-// Go does not support auto-loading — at least one adapter must be registered
-// for runtime features to function.
+// At least one adapter must be registered for runtime features to function.
 func (c *LoggingClient) RegisterAdapter(adapter adapters.LoggingAdapter) {
 	if c.started {
 		panic("smplkit: cannot register adapters after Start()")
@@ -247,9 +238,8 @@ func (c *LoggingClient) RegisterAdapter(adapter adapters.LoggingAdapter) {
 	c.adapters = append(c.adapters, adapter)
 }
 
-// Start initializes the logging runtime. Idempotent.
-// Discovers loggers from registered adapters, fetches definitions, resolves
-// levels, and begins listening for real-time level changes.
+// Start initializes the logging runtime and begins listening for level changes.
+// Safe to call multiple times; only the first call takes effect.
 func (c *LoggingClient) Start(ctx context.Context) error {
 	var startErr error
 	c.startOnce.Do(func() {
@@ -302,7 +292,7 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 }
 
 // RegisterLogger explicitly registers a logger name for smplkit management.
-// Call before or after Start(). Names are normalized (slash/colon → dot, lowercase).
+// Call before or after Start().
 func (c *LoggingClient) RegisterLogger(name string, level LogLevel) {
 	normalized := NormalizeLoggerName(name)
 	c.buffer.add(normalized, string(level), c.client.service)
@@ -322,9 +312,7 @@ func (c *LoggingClient) OnChangeKey(key string, cb func(*LoggerChangeEvent)) {
 	c.listenersMu.Unlock()
 }
 
-// --- Internal: adapter helpers ---
-
-// applyLevels resolves levels for all known loggers and calls ApplyLevel on each adapter.
+// applyLevels resolves and applies levels to all known loggers across adapters.
 func (c *LoggingClient) applyLevels() {
 	if len(c.adapters) == 0 {
 		return
@@ -351,8 +339,7 @@ func (c *LoggingClient) applyLevels() {
 	}
 }
 
-// onNewLogger is the callback passed to adapters via InstallHook.
-// Fired when a framework creates a new logger.
+// onNewLogger is called when a logging framework creates a new logger.
 func (c *LoggingClient) onNewLogger(name string, level string) {
 	normalized := NormalizeLoggerName(name)
 	if normalized == "" {
@@ -369,7 +356,6 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 	}
 }
 
-// --- Internal: CRUD helpers ---
 
 func (c *LoggingClient) createLogger(ctx context.Context, l *Logger) error {
 	loggerType := "logger"
@@ -553,7 +539,6 @@ func (c *LoggingClient) deleteGroupByID(ctx context.Context, id string) error {
 	return checkStatus(resp.StatusCode, body)
 }
 
-// --- Internal: resource conversion ---
 
 func resourceToLogger(r genlogging.LoggerResource, c *LoggingClient) *Logger {
 	attrs := r.Attributes
@@ -681,7 +666,6 @@ func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
 	}
 }
 
-// --- Internal: runtime helpers ---
 
 func (c *LoggingClient) fetchAndCache(ctx context.Context) error {
 	loggers, err := c.List(ctx)
@@ -820,7 +804,6 @@ func (c *LoggingClient) fireChangeListeners(loggerKey string, source string) { /
 	}
 }
 
-// --- Logger registration buffer ---
 
 type loggerRegistrationEntry struct {
 	key     string

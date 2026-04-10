@@ -86,8 +86,6 @@ func (a *Adapter) Name() string {
 }
 
 // WrapCore wraps a zapcore.Core with smplkit level control.
-// The returned SmplCore applies the smplkit-managed level when filtering
-// log entries.
 func (a *Adapter) WrapCore(c zapcore.Core) *SmplCore {
 	atomicLevel := zap.NewAtomicLevelAt(zapcore.InfoLevel)
 
@@ -157,7 +155,7 @@ func (a *Adapter) fireHook(name string, level string) {
 	}
 }
 
-// SmplCore is a zapcore.Core that applies smplkit-managed log levels.
+// SmplCore is a zapcore.Core with smplkit-controlled log levels.
 type SmplCore struct {
 	inner   zapcore.Core
 	level   zap.AtomicLevel

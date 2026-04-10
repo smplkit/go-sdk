@@ -11,8 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// sharedWebSocket manages a single WebSocket connection to the app service
-// event gateway, shared across all product modules (config, flags).
+// sharedWebSocket manages the real-time event connection.
 type sharedWebSocket struct {
 	appBaseURL string
 	apiKey     string

@@ -57,7 +57,7 @@ func WithFlagValues(values []FlagValue) FlagOption {
 	return func(f *Flag) { f.Values = &values }
 }
 
-// Save creates the flag if new, or updates it if it already exists.
+// Save persists the flag to the server.
 // The Flag instance is updated with the server response.
 func (f *Flag) Save(ctx context.Context) error {
 	if f.ID == "" {
@@ -68,7 +68,7 @@ func (f *Flag) Save(ctx context.Context) error {
 
 // AddRule appends a rule to the specified environment. The builtRule must
 // include an "environment" key (use NewRule(...).Environment("env").Build()).
-// This is a local mutation — call Save(ctx) to persist.
+// Call Save(ctx) to persist.
 func (f *Flag) AddRule(builtRule map[string]interface{}) error {
 	envKey, ok := builtRule["environment"].(string)
 	if !ok || envKey == "" {
@@ -98,7 +98,7 @@ func (f *Flag) AddRule(builtRule map[string]interface{}) error {
 }
 
 // SetEnvironmentEnabled sets the enabled flag for an environment.
-// This is a local mutation — call Save(ctx) to persist.
+// Call Save(ctx) to persist.
 func (f *Flag) SetEnvironmentEnabled(envKey string, enabled bool) {
 	envs := copyEnvMap(f.Environments)
 	envData, ok := envs[envKey].(map[string]interface{})
@@ -113,7 +113,7 @@ func (f *Flag) SetEnvironmentEnabled(envKey string, enabled bool) {
 }
 
 // SetEnvironmentDefault sets the environment-specific default value.
-// This is a local mutation — call Save(ctx) to persist.
+// Call Save(ctx) to persist.
 func (f *Flag) SetEnvironmentDefault(envKey string, defaultVal interface{}) {
 	envs := copyEnvMap(f.Environments)
 	envData, ok := envs[envKey].(map[string]interface{})
@@ -128,7 +128,7 @@ func (f *Flag) SetEnvironmentDefault(envKey string, defaultVal interface{}) {
 }
 
 // ClearRules removes all rules for the specified environment.
-// This is a local mutation — call Save(ctx) to persist.
+// Call Save(ctx) to persist.
 func (f *Flag) ClearRules(envKey string) {
 	envs := copyEnvMap(f.Environments)
 	if envData, ok := envs[envKey].(map[string]interface{}); ok {

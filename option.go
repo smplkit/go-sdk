@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-// clientConfig holds internal configuration for the Client, populated by
-// functional options passed to NewClient.
+// clientConfig holds configuration for the Client.
 type clientConfig struct {
 	baseURL    string
 	timeout    time.Duration

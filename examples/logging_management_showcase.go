@@ -3,7 +3,7 @@
 // Logging Management Showcase
 //
 // Demonstrates the smplkit Go SDK's logging management API:
-//   - Logger and LogGroup CRUD via active record pattern
+//   - Logger and LogGroup management (create, read, update, delete)
 //   - Level management (base + environment-specific)
 //   - Group assignment and hierarchy
 //

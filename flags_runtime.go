@@ -18,15 +18,14 @@ type FlagChangeEvent struct {
 	Source string
 }
 
-// FlagStats holds cache statistics for the flags runtime.
+// FlagStats holds runtime statistics for the flags subsystem.
 type FlagStats struct {
-	// CacheHits is the number of evaluation cache hits.
+	// CacheHits is the number of evaluations served from cache.
 	CacheHits int
-	// CacheMisses is the number of evaluation cache misses.
+	// CacheMisses is the number of evaluations that required computation.
 	CacheMisses int
 }
 
-// --- Resolution Cache (LRU, thread-safe) ---
 
 const defaultCacheMaxSize = 10000
 
@@ -100,7 +99,6 @@ func (c *resolutionCache) stats() (hits, misses int) {
 	return c.hits, c.misses
 }
 
-// --- Context Registration Buffer ---
 
 const (
 	contextRegistrationLRUSize = 10000
@@ -155,8 +153,6 @@ func (b *contextRegistrationBuffer) pendingCount() int {
 	defer b.mu.Unlock()
 	return len(b.pending)
 }
-
-// --- Typed Flag Handles ---
 
 // BooleanFlag returns a typed handle for a boolean flag.
 func (rt *FlagsRuntime) BooleanFlag(key string, defaultValue bool) *BooleanFlagHandle {
@@ -271,11 +267,8 @@ func (h *JsonFlagHandle) Get(ctx context.Context, contexts ...Context) map[strin
 	return h.defaultVal.(map[string]interface{})
 }
 
-// --- FlagsRuntime ---
-
-// FlagsRuntime holds the prescriptive runtime state for the flags namespace.
-// It is created internally; access it via FlagsClient methods like BooleanFlag,
-// Disconnect, etc.
+// FlagsRuntime holds the runtime state for the flags subsystem.
+// Access it via FlagsClient methods like BooleanFlag, Disconnect, etc.
 type FlagsRuntime struct {
 	flagsClient *FlagsClient
 
@@ -314,15 +307,13 @@ func newFlagsRuntime(fc *FlagsClient) *FlagsRuntime {
 }
 
 // SetContextProvider registers a function that provides evaluation contexts.
-// The provider receives the Go context.Context and returns a slice of Contexts.
 func (rt *FlagsRuntime) SetContextProvider(fn func(ctx context.Context) []Context) {
 	rt.providerMu.Lock()
 	rt.contextProvider = fn
 	rt.providerMu.Unlock()
 }
 
-// ensureInit performs lazy initialization on first runtime use.
-// It fetches flag definitions and registers on the shared WebSocket.
+// ensureInit performs initialization on first runtime use.
 func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 	rt.initOnce.Do(func() {
 		if rt.flagsClient == nil || rt.flagsClient.client == nil {
@@ -334,7 +325,7 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 		rt.environment = rt.flagsClient.client.environment
 		rt.mu.Unlock()
 
-		// Register service context (fire-and-forget).
+		// Register service context.
 		rt.flagsClient.client.registerServiceContext(ctx)
 
 		store, err := rt.flagsClient.fetchAllFlags(ctx)
@@ -358,7 +349,7 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 	return rt.initErr
 }
 
-// disconnect unregisters from WebSocket, flushes contexts, and clears state.
+// disconnect stops real-time updates and releases runtime resources.
 func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 	if rt.wsManager != nil {
 		rt.wsManager.off("flag_changed", rt.handleFlagChanged)
@@ -381,7 +372,7 @@ func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 	rt.initErr = nil
 }
 
-// Refresh re-fetches all flag definitions from the server.
+// Refresh fetches the latest flag definitions from the server.
 // Change listeners fire after the refresh completes.
 func (rt *FlagsRuntime) Refresh(ctx context.Context) error {
 	store, err := rt.flagsClient.fetchAllFlags(ctx)
@@ -406,7 +397,7 @@ func (rt *FlagsRuntime) ConnectionStatus() string {
 	return "disconnected"
 }
 
-// Stats returns cache statistics.
+// Stats returns runtime statistics.
 func (rt *FlagsRuntime) Stats() FlagStats {
 	hits, misses := rt.cache.stats()
 	return FlagStats{CacheHits: hits, CacheMisses: misses}
@@ -428,7 +419,6 @@ func (rt *FlagsRuntime) OnChangeKey(key string, cb func(*FlagChangeEvent)) {
 }
 
 // Register explicitly registers context(s) with the server.
-// Contexts are batched and sent periodically.
 func (rt *FlagsRuntime) Register(ctx context.Context, contexts ...Context) {
 	rt.contextBuffer.observe(contexts)
 }
@@ -439,7 +429,7 @@ func (rt *FlagsRuntime) FlushContexts(ctx context.Context) {
 	rt.flagsClient.flushContexts(ctx, batch)
 }
 
-// Evaluate performs Tier 1 explicit evaluation — stateless, no provider or cache.
+// Evaluate evaluates a flag with the given environment and contexts.
 func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment string, contexts []Context) interface{} {
 	evalDict := contextsToEvalDict(contexts)
 
@@ -471,11 +461,10 @@ func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment st
 	return nil
 }
 
-// --- Internal evaluation ---
 
 func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultVal interface{}, explicitContexts []Context) interface{} {
 	if err := rt.ensureInit(ctx); err != nil {
-		log.Printf("smplkit: flags lazy init failed: %v", err)
+		log.Printf("smplkit: flags init failed: %v", err)
 		return defaultVal
 	}
 
@@ -534,8 +523,6 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 	rt.cache.put(cacheKey, value)
 	return value
 }
-
-// --- JSON Logic evaluation (ADR-022 §2.6) ---
 
 // evaluateFlag evaluates a flag definition against the given context.
 // Returns nil if no match or no environment.
@@ -615,7 +602,6 @@ func isTruthy(v interface{}) bool {
 	return true
 }
 
-// --- Event handlers ---
 
 func (rt *FlagsRuntime) handleFlagChanged(data map[string]interface{}) {
 	flagKey, _ := data["key"].(string)

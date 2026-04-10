@@ -1,6 +1,6 @@
 package smplkit
 
-// chainEntry holds a single config node's resolved data for inheritance walking.
+// chainEntry holds a single config node's data for inheritance resolution.
 type chainEntry struct {
 	ID           string
 	Values       map[string]interface{}
@@ -28,10 +28,8 @@ func deepMerge(base, override map[string]interface{}) map[string]interface{} {
 	return result
 }
 
-// resolveChain computes the final resolved cache from a parent chain.
-// chain is ordered child→root; we walk root→child for inheritance.
-// For each node: merge base values with environment-specific values, then
-// merge onto the accumulated result (child wins over parent).
+// resolveChain computes the final resolved values from an inheritance chain,
+// with child configs taking precedence over parent configs.
 func resolveChain(chain []chainEntry, environment string) map[string]interface{} {
 	result := make(map[string]interface{})
 	for i := len(chain) - 1; i >= 0; i-- {

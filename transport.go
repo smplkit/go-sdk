@@ -11,9 +11,7 @@ import (
 
 const userAgent = "smplkit-go-sdk/0.0.0"
 
-// parseJSONAPIErrors attempts to parse a JSON:API error response body.
-// Returns the parsed error details and a derived message, or nil if the body
-// is not a valid JSON:API error envelope.
+// parseJSONAPIErrors extracts error details from a response body.
 func parseJSONAPIErrors(body []byte) ([]ErrorDetail, string) {
 	var envelope struct {
 		Errors []ErrorDetail `json:"errors"`
@@ -43,9 +41,7 @@ func parseJSONAPIErrors(body []byte) ([]ErrorDetail, string) {
 	return envelope.Errors, msg
 }
 
-// checkStatus maps HTTP error status codes to typed SDK errors.
-// It attempts to parse JSON:API error details from the response body to
-// provide rich error messages. Falls back to HTTP status code for non-JSON bodies.
+// checkStatus returns a typed SDK error for non-success status codes, or nil.
 func checkStatus(code int, body []byte) error {
 	if code < 400 {
 		return nil

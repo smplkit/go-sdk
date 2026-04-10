@@ -58,7 +58,7 @@ func WithConfigEnvironments(envs map[string]map[string]interface{}) ConfigOption
 	return func(c *Config) { c.Environments = envs }
 }
 
-// Save creates the config if new, or updates it if it already exists.
+// Save persists the config to the server.
 // The Config instance is updated with the server response.
 func (c *Config) Save(ctx context.Context) error {
 	if c.ID == "" {
@@ -104,8 +104,8 @@ func (lc *LiveConfig) Value() map[string]interface{} {
 }
 
 // ValueInto unmarshals the latest resolved values into the target struct.
-// The target must be a pointer to a struct. Dot-notation keys are unflattened
-// into nested maps before unmarshaling.
+// The target must be a pointer to a struct. Dot-notation keys (e.g. "database.host")
+// are expanded into nested structures before unmarshaling.
 func (lc *LiveConfig) ValueInto(target interface{}) error {
 	resolved := lc.Value()
 	return unmarshalResolved(resolved, target)

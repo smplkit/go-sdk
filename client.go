@@ -213,7 +213,7 @@ func (c *Client) Close() error {
 }
 
 // registerServiceContext sends a service context registration to the app service.
-// Errors are logged but not returned (fire-and-forget).
+// Errors are logged but not returned.
 func (c *Client) registerServiceContext(ctx context.Context) {
 	attrs := map[string]interface{}{"name": c.service}
 	reqBody := genapp.ContextBulkRegister{
@@ -233,7 +233,7 @@ func (c *Client) registerServiceContext(ctx context.Context) {
 	resp.Body.Close()
 }
 
-// ensureWS returns the shared WebSocket, starting it if needed.
+// ensureWS returns the shared WebSocket connection.
 func (c *Client) ensureWS() *sharedWebSocket {
 	c.wsMu.Lock()
 	defer c.wsMu.Unlock()
@@ -244,7 +244,7 @@ func (c *Client) ensureWS() *sharedWebSocket {
 	return c.ws
 }
 
-// stopWS stops the shared WebSocket if running.
+// stopWS stops the shared WebSocket connection.
 func (c *Client) stopWS() {
 	c.wsMu.Lock()
 	ws := c.ws

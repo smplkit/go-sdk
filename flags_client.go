@@ -22,11 +22,8 @@ type FlagsClient struct {
 	runtime *FlagsRuntime
 }
 
-// --- Factory methods (Active Record pattern) ---
-
 // NewBooleanFlag creates an unsaved boolean flag. Call Save(ctx) to persist.
 // If name is not provided via WithFlagName, it is auto-generated from the key.
-// Boolean values are auto-generated if not provided via WithFlagValues.
 func (c *FlagsClient) NewBooleanFlag(key string, defaultValue bool, opts ...FlagOption) *Flag {
 	boolValues := []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}}
 	f := &Flag{
@@ -91,8 +88,6 @@ func (c *FlagsClient) NewJsonFlag(key string, defaultValue map[string]interface{
 	}
 	return f
 }
-
-// --- Management CRUD ---
 
 // Get retrieves a flag by its key.
 // Returns SmplNotFoundError if no match.
@@ -192,7 +187,7 @@ func (c *FlagsClient) deleteByID(ctx context.Context, flagID string) error {
 	return checkStatus(resp.StatusCode, body)
 }
 
-// createFlag sends a POST to create the flag, then applies the response.
+// createFlag creates the flag on the server and updates the local instance.
 func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
 	reqBody := buildFlagRequest("", flag.Key, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
 
@@ -220,7 +215,7 @@ func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
 	return nil
 }
 
-// updateFlag sends a PUT to update the flag, then applies the response.
+// updateFlag updates the flag on the server and updates the local instance.
 func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
 	uid, err := uuid.Parse(flag.ID)
 	if err != nil {
@@ -252,8 +247,6 @@ func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
 	flag.apply(resourceToFlag(result.Data, c))
 	return nil
 }
-
-// --- Context type management — via generated app client ---
 
 // CreateContextType creates a new context type.
 func (c *FlagsClient) CreateContextType(ctx context.Context, key string, name string) (*ContextType, error) {
@@ -401,8 +394,6 @@ func (c *FlagsClient) ListContexts(ctx context.Context, contextTypeKey string) (
 	}
 	return result.Data, nil
 }
-
-// --- Internal helpers ---
 
 // resourceToFlag converts a generated FlagResource to the SDK Flag type.
 func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
@@ -655,9 +646,6 @@ func (c *FlagsClient) fetchFlagsList(ctx context.Context) ([]map[string]interfac
 	return flags, nil
 }
 
-// --- Runtime pass-throughs ---
-// These delegate to the embedded FlagsRuntime so users access them via client.Flags().
-
 // BooleanFlag returns a typed handle for a boolean flag.
 func (c *FlagsClient) BooleanFlag(key string, defaultValue bool) *BooleanFlagHandle {
 	return c.runtime.BooleanFlag(key, defaultValue)
@@ -683,12 +671,12 @@ func (c *FlagsClient) SetContextProvider(fn func(ctx context.Context) []Context)
 	c.runtime.SetContextProvider(fn)
 }
 
-// Disconnect stops real-time updates, flushes pending context registrations, and resets runtime state.
+// Disconnect stops real-time updates and releases runtime resources.
 func (c *FlagsClient) Disconnect(ctx context.Context) {
 	c.runtime.disconnect(ctx)
 }
 
-// Refresh re-fetches all flag definitions from the server.
+// Refresh fetches the latest flag definitions from the server.
 func (c *FlagsClient) Refresh(ctx context.Context) error {
 	return c.runtime.Refresh(ctx)
 }
@@ -698,7 +686,7 @@ func (c *FlagsClient) ConnectionStatus() string {
 	return c.runtime.ConnectionStatus()
 }
 
-// Stats returns cache statistics.
+// Stats returns runtime statistics.
 func (c *FlagsClient) Stats() FlagStats {
 	return c.runtime.Stats()
 }
@@ -715,7 +703,6 @@ func (c *FlagsClient) OnChangeKey(key string, cb func(*FlagChangeEvent)) {
 }
 
 // Register explicitly registers context(s) with the server.
-// Contexts are batched and sent periodically.
 func (c *FlagsClient) Register(ctx context.Context, contexts ...Context) {
 	c.runtime.Register(ctx, contexts...)
 }
@@ -725,7 +712,7 @@ func (c *FlagsClient) FlushContexts(ctx context.Context) {
 	c.runtime.FlushContexts(ctx)
 }
 
-// Evaluate performs Tier 1 explicit evaluation — stateless, no provider or cache.
+// Evaluate evaluates a flag with the given environment and contexts.
 func (c *FlagsClient) Evaluate(ctx context.Context, key string, environment string, contexts []Context) interface{} {
 	return c.runtime.Evaluate(ctx, key, environment, contexts)
 }
@@ -746,7 +733,6 @@ func (c *FlagsClient) flushContexts(ctx context.Context, batch []map[string]inte
 		items = append(items, item)
 	}
 	reqBody := genapp.ContextBulkRegister{Contexts: items}
-	// Fire-and-forget — errors are silently ignored.
 	resp, err := c.appGenerated.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err == nil && resp != nil {
 		resp.Body.Close()

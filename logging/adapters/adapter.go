@@ -1,9 +1,9 @@
 package adapters
 
-// LoggingAdapter is the contract for pluggable logging framework integration.
+// LoggingAdapter is the interface for logging framework integration.
 //
-// Adapters bridge the smplkit logging runtime to a specific logging framework
-// (e.g., slog, zap). Implement this interface to add support for a new framework.
+// Implement this interface to add smplkit level control for a logging framework
+// (e.g., slog, zap).
 type LoggingAdapter interface {
 	// Name returns a human-readable adapter name for diagnostics (e.g., "slog").
 	Name() string

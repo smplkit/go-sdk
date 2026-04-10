@@ -1,15 +1,15 @@
 //go:build ignore
 
 // Config Runtime Showcase — end-to-end walkthrough of the Smpl Config
-// prescriptive runtime tier in the Go SDK.
+// runtime in the Go SDK.
 //
 // Demonstrates the full runtime surface:
 //   - Client initialization and config creation (via demo helpers)
-//   - Resolve / ResolveInto for prescriptive access
+//   - Resolve / ResolveInto for reading config values
 //   - Subscribe for live config updates
 //   - Multi-level inheritance (common -> user_service -> auth_module)
 //   - Change listeners (global + key-specific)
-//   - Manual refresh after management-plane mutation
+//   - Manual refresh after server-side changes
 //   - Cleanup
 //
 // Prerequisites:

@@ -30,7 +30,7 @@ type Logger struct {
 	Level *LogLevel
 	// Group is the group UUID (nil = no group).
 	Group *string
-	// Managed indicates whether the SDK controls this logger's level.
+	// Managed indicates whether smplkit controls this logger's level.
 	Managed bool
 	// Sources holds source metadata.
 	Sources []map[string]interface{}
@@ -52,12 +52,12 @@ func WithLoggerName(name string) LoggerOption {
 	return func(l *Logger) { l.Name = name }
 }
 
-// WithLoggerManaged sets whether the SDK manages this logger's level.
+// WithLoggerManaged sets whether smplkit controls this logger's level.
 func WithLoggerManaged(managed bool) LoggerOption {
 	return func(l *Logger) { l.Managed = managed }
 }
 
-// Save creates the logger if new, or updates it if it already exists.
+// Save persists the logger to the server.
 // The Logger instance is updated with the server response.
 func (l *Logger) Save(ctx context.Context) error {
 	if l.ID == "" {
@@ -66,18 +66,18 @@ func (l *Logger) Save(ctx context.Context) error {
 	return l.client.updateLogger(ctx, l)
 }
 
-// SetLevel sets the base log level. Local mutation — call Save to persist.
+// SetLevel sets the base log level. Call Save to persist.
 func (l *Logger) SetLevel(level LogLevel) {
 	l.Level = &level
 }
 
-// ClearLevel clears the base log level. Local mutation — call Save to persist.
+// ClearLevel clears the base log level. Call Save to persist.
 func (l *Logger) ClearLevel() {
 	l.Level = nil
 }
 
 // SetEnvironmentLevel sets the log level for a specific environment.
-// Local mutation — call Save to persist.
+// Call Save to persist.
 func (l *Logger) SetEnvironmentLevel(env string, level LogLevel) {
 	if l.Environments == nil {
 		l.Environments = make(map[string]interface{})
@@ -91,7 +91,7 @@ func (l *Logger) SetEnvironmentLevel(env string, level LogLevel) {
 }
 
 // ClearEnvironmentLevel clears the log level for a specific environment.
-// Local mutation — call Save to persist.
+// Call Save to persist.
 func (l *Logger) ClearEnvironmentLevel(env string) {
 	if l.Environments == nil {
 		return
@@ -109,7 +109,7 @@ func (l *Logger) ClearEnvironmentLevel(env string) {
 }
 
 // ClearAllEnvironmentLevels clears all environment-specific levels.
-// Local mutation — call Save to persist.
+// Call Save to persist.
 func (l *Logger) ClearAllEnvironmentLevels() {
 	l.Environments = make(map[string]interface{})
 }
@@ -162,7 +162,7 @@ func WithLogGroupParent(groupID string) LogGroupOption {
 	return func(g *LogGroup) { g.Group = &groupID }
 }
 
-// Save creates the log group if new, or updates it if it already exists.
+// Save persists the log group to the server.
 // The LogGroup instance is updated with the server response.
 func (g *LogGroup) Save(ctx context.Context) error {
 	if g.ID == "" {
@@ -171,18 +171,18 @@ func (g *LogGroup) Save(ctx context.Context) error {
 	return g.client.updateGroup(ctx, g)
 }
 
-// SetLevel sets the base log level. Local mutation — call Save to persist.
+// SetLevel sets the base log level. Call Save to persist.
 func (g *LogGroup) SetLevel(level LogLevel) {
 	g.Level = &level
 }
 
-// ClearLevel clears the base log level. Local mutation — call Save to persist.
+// ClearLevel clears the base log level. Call Save to persist.
 func (g *LogGroup) ClearLevel() {
 	g.Level = nil
 }
 
 // SetEnvironmentLevel sets the log level for a specific environment.
-// Local mutation — call Save to persist.
+// Call Save to persist.
 func (g *LogGroup) SetEnvironmentLevel(env string, level LogLevel) {
 	if g.Environments == nil {
 		g.Environments = make(map[string]interface{})
@@ -196,7 +196,7 @@ func (g *LogGroup) SetEnvironmentLevel(env string, level LogLevel) {
 }
 
 // ClearEnvironmentLevel clears the log level for a specific environment.
-// Local mutation — call Save to persist.
+// Call Save to persist.
 func (g *LogGroup) ClearEnvironmentLevel(env string) {
 	if g.Environments == nil {
 		return
@@ -214,7 +214,7 @@ func (g *LogGroup) ClearEnvironmentLevel(env string) {
 }
 
 // ClearAllEnvironmentLevels clears all environment-specific levels.
-// Local mutation — call Save to persist.
+// Call Save to persist.
 func (g *LogGroup) ClearAllEnvironmentLevels() {
 	g.Environments = make(map[string]interface{})
 }

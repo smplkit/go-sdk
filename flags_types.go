@@ -162,8 +162,7 @@ func (r *Rule) Build() map[string]interface{} {
 	return result
 }
 
-// contextsToEvalDict converts a list of Context objects to the nested evaluation
-// dict for JSON Logic. Each Context's type becomes a top-level key.
+// contextsToEvalDict converts a list of Context objects to the evaluation format.
 func contextsToEvalDict(contexts []Context) map[string]interface{} {
 	result := make(map[string]interface{})
 	for _, ctx := range contexts {
@@ -177,7 +176,7 @@ func contextsToEvalDict(contexts []Context) map[string]interface{} {
 	return result
 }
 
-// hashContext computes a stable MD5 hash for a context evaluation dict.
+// hashContext computes a stable hash for a context evaluation map.
 func hashContext(evalDict map[string]interface{}) string {
 	// Sort keys for deterministic serialization.
 	b, _ := marshalSorted(evalDict)

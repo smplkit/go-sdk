@@ -1,15 +1,15 @@
 //go:build ignore
 
 // Flags Runtime Showcase — end-to-end walkthrough of the Smpl Flags
-// prescriptive runtime tier in the Go SDK.
+// runtime in the Go SDK.
 //
 // Demonstrates the full runtime surface:
 //   - Client initialization and flag creation (via demo helpers)
 //   - Typed flag handles: BooleanFlag, StringFlag, NumberFlag
 //   - Context providers
 //   - Explicit context evaluation
-//   - Resolution caching and cache stats
-//   - Real-time updates via WebSocket and change listeners
+//   - Evaluation statistics
+//   - Real-time updates and change listeners
 //   - OnChangeKey listener
 //   - Manual refresh
 //   - Context registration

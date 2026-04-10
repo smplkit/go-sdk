@@ -93,8 +93,6 @@ func (a *Adapter) Name() string {
 }
 
 // WrapHandler wraps a slog.Handler with smplkit level control.
-// The returned SmplHandler applies the smplkit-managed level when filtering
-// log records.
 func (a *Adapter) WrapHandler(h slog.Handler) *SmplHandler {
 	levelVar := new(slog.LevelVar)
 	levelVar.Set(slog.LevelInfo) // Default to INFO
@@ -165,7 +163,7 @@ func (a *Adapter) fireHook(name string, level string) {
 	}
 }
 
-// SmplHandler is a slog.Handler that applies smplkit-managed log levels.
+// SmplHandler is a slog.Handler with smplkit-controlled log levels.
 type SmplHandler struct {
 	inner    slog.Handler
 	levelVar *slog.LevelVar
