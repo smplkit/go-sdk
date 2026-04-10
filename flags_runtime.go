@@ -381,7 +381,8 @@ func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 	rt.initErr = nil
 }
 
-// Refresh re-fetches all flag definitions and clears cache.
+// Refresh re-fetches all flag definitions from the server.
+// Change listeners fire after the refresh completes.
 func (rt *FlagsRuntime) Refresh(ctx context.Context) error {
 	store, err := rt.flagsClient.fetchAllFlags(ctx)
 	if err != nil {
@@ -397,7 +398,7 @@ func (rt *FlagsRuntime) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// ConnectionStatus returns the current WebSocket connection status.
+// ConnectionStatus returns the current real-time connection status.
 func (rt *FlagsRuntime) ConnectionStatus() string {
 	if rt.wsManager != nil {
 		return rt.wsManager.connectionStatus()
@@ -426,12 +427,13 @@ func (rt *FlagsRuntime) OnChangeKey(key string, cb func(*FlagChangeEvent)) {
 	rt.listenersMu.Unlock()
 }
 
-// Register explicitly registers context(s) for background batch registration.
+// Register explicitly registers context(s) with the server.
+// Contexts are batched and sent periodically.
 func (rt *FlagsRuntime) Register(ctx context.Context, contexts ...Context) {
 	rt.contextBuffer.observe(contexts)
 }
 
-// FlushContexts flushes pending context registrations to the server.
+// FlushContexts sends any pending context registrations to the server immediately.
 func (rt *FlagsRuntime) FlushContexts(ctx context.Context) {
 	batch := rt.contextBuffer.drain()
 	rt.flagsClient.flushContexts(ctx, batch)

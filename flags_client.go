@@ -95,7 +95,6 @@ func (c *FlagsClient) NewJsonFlag(key string, defaultValue map[string]interface{
 // --- Management CRUD ---
 
 // Get retrieves a flag by its key.
-// Uses the list endpoint with a filter[key] query parameter.
 // Returns SmplNotFoundError if no match.
 func (c *FlagsClient) Get(ctx context.Context, key string) (*Flag, error) {
 	params := &genflags.ListFlagsParams{FilterKey: &key}
@@ -161,8 +160,8 @@ func (c *FlagsClient) List(ctx context.Context) ([]*Flag, error) {
 	return flags, nil
 }
 
-// Delete removes a flag by its key. Fetches by key first to get UUID, then
-// deletes by UUID. Returns SmplNotFoundError if not found.
+// Delete removes a flag by its key.
+// Returns SmplNotFoundError if not found.
 func (c *FlagsClient) Delete(ctx context.Context, key string) error {
 	flag, err := c.Get(ctx, key)
 	if err != nil {
@@ -684,17 +683,17 @@ func (c *FlagsClient) SetContextProvider(fn func(ctx context.Context) []Context)
 	c.runtime.SetContextProvider(fn)
 }
 
-// Disconnect unregisters from WebSocket, flushes contexts, and clears state.
+// Disconnect stops real-time updates, flushes pending context registrations, and resets runtime state.
 func (c *FlagsClient) Disconnect(ctx context.Context) {
 	c.runtime.disconnect(ctx)
 }
 
-// Refresh re-fetches all flag definitions and clears cache.
+// Refresh re-fetches all flag definitions from the server.
 func (c *FlagsClient) Refresh(ctx context.Context) error {
 	return c.runtime.Refresh(ctx)
 }
 
-// ConnectionStatus returns the current WebSocket connection status.
+// ConnectionStatus returns the current real-time connection status.
 func (c *FlagsClient) ConnectionStatus() string {
 	return c.runtime.ConnectionStatus()
 }
@@ -715,12 +714,13 @@ func (c *FlagsClient) OnChangeKey(key string, cb func(*FlagChangeEvent)) {
 	c.runtime.OnChangeKey(key, cb)
 }
 
-// Register explicitly registers context(s) for background batch registration.
+// Register explicitly registers context(s) with the server.
+// Contexts are batched and sent periodically.
 func (c *FlagsClient) Register(ctx context.Context, contexts ...Context) {
 	c.runtime.Register(ctx, contexts...)
 }
 
-// FlushContexts flushes pending context registrations to the server.
+// FlushContexts sends any pending context registrations to the server immediately.
 func (c *FlagsClient) FlushContexts(ctx context.Context) {
 	c.runtime.FlushContexts(ctx)
 }

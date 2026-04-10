@@ -1,8 +1,6 @@
 // Package zapadapter provides a smplkit logging adapter for go.uber.org/zap.
 //
-// The adapter uses a core wrapper pattern: customers wrap their zapcore.Core
-// with the adapter, which intercepts Enabled() checks to apply smplkit-controlled
-// levels dynamically.
+// Wrap your zapcore.Core with the adapter to enable smplkit-controlled log levels.
 //
 // Usage:
 //
@@ -88,8 +86,8 @@ func (a *Adapter) Name() string {
 }
 
 // WrapCore wraps a zapcore.Core with smplkit level control.
-// The returned SmplCore intercepts Enabled() to check against the
-// smplkit-controlled AtomicLevel.
+// The returned SmplCore applies the smplkit-managed level when filtering
+// log entries.
 func (a *Adapter) WrapCore(c zapcore.Core) *SmplCore {
 	atomicLevel := zap.NewAtomicLevelAt(zapcore.InfoLevel)
 
@@ -135,7 +133,7 @@ func (a *Adapter) ApplyLevel(loggerName string, level string) {
 	}
 }
 
-// InstallHook stores a callback that fires when Named() creates a new sub-logger.
+// InstallHook registers a callback that fires when a new sub-logger is created.
 func (a *Adapter) InstallHook(onNewLogger func(name string, level string)) {
 	a.mu.Lock()
 	a.hookFn = onNewLogger
@@ -159,7 +157,7 @@ func (a *Adapter) fireHook(name string, level string) {
 	}
 }
 
-// SmplCore wraps a zapcore.Core with smplkit-controlled level filtering.
+// SmplCore is a zapcore.Core that applies smplkit-managed log levels.
 type SmplCore struct {
 	inner   zapcore.Core
 	level   zap.AtomicLevel
@@ -176,7 +174,6 @@ func (c *SmplCore) loggerName() string {
 }
 
 // Enabled reports whether the core handles entries at the given level.
-// Uses the smplkit-controlled level instead of the inner core's level.
 func (c *SmplCore) Enabled(level zapcore.Level) bool {
 	return c.level.Enabled(level)
 }
@@ -199,7 +196,7 @@ func (c *SmplCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.C
 	return ce
 }
 
-// Write serializes the entry and any fields to their destination.
+// Write writes the entry and any fields to the log output.
 func (c *SmplCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 	return c.inner.Write(ent, fields)
 }
@@ -210,7 +207,6 @@ func (c *SmplCore) Sync() error {
 }
 
 // Named adds a new path segment to the core's logger name.
-// This creates a new tracked core and fires the hook if installed.
 func (c *SmplCore) Named(name string) *SmplCore {
 	if name == "" {
 		return c

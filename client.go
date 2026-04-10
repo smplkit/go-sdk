@@ -203,7 +203,7 @@ func (c *Client) Logging() *LoggingClient {
 	return c.logging
 }
 
-// Close stops the shared WebSocket and cleans up all product clients.
+// Close releases all resources held by the client and its sub-clients.
 func (c *Client) Close() error {
 	if c.logging != nil {
 		c.logging.close()

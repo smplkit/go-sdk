@@ -35,7 +35,7 @@ type configChangeListener struct {
 }
 
 // ConfigClient provides CRUD operations for config resources and
-// prescriptive value access via lazy initialization.
+// resolved value access.
 // Obtain one via Client.Config().
 type ConfigClient struct {
 	client      *Client
@@ -70,7 +70,6 @@ func (c *ConfigClient) New(key string, opts ...ConfigOption) *Config {
 // --- Management CRUD ---
 
 // Get retrieves a config by its key.
-// Uses the list endpoint with a filter[key] query parameter.
 // Returns SmplNotFoundError if no match.
 func (c *ConfigClient) Get(ctx context.Context, key string) (*Config, error) {
 	params := &genconfig.ListConfigsParams{FilterKey: &key}
@@ -166,8 +165,8 @@ func (c *ConfigClient) List(ctx context.Context) ([]*Config, error) {
 	return configs, nil
 }
 
-// Delete removes a config by its key. Fetches by key first to get UUID,
-// then deletes by UUID. Returns SmplNotFoundError if not found.
+// Delete removes a config by its key.
+// Returns SmplNotFoundError if not found.
 func (c *ConfigClient) Delete(ctx context.Context, key string) error {
 	cfg, err := c.Get(ctx, key)
 	if err != nil {
@@ -262,7 +261,7 @@ func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
 // --- Runtime: Resolve / Subscribe ---
 
 // Resolve returns the resolved config values for the given key.
-// Triggers lazy initialization on first call.
+// Connects and fetches definitions automatically if not already initialized.
 func (c *ConfigClient) Resolve(ctx context.Context, key string) (map[string]interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
@@ -291,8 +290,8 @@ func (c *ConfigClient) ResolveInto(ctx context.Context, key string, target inter
 }
 
 // Subscribe returns a LiveConfig whose Value() always reflects the latest
-// cached resolved values for the given key.
-// Triggers lazy initialization on first call.
+// resolved values for the given key.
+// Connects and fetches definitions automatically if not already initialized.
 func (c *ConfigClient) Subscribe(ctx context.Context, key string) (*LiveConfig, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
@@ -329,9 +328,9 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 
 // --- Runtime: Refresh & OnChange ---
 
-// Refresh re-fetches all configs, re-resolves values, and updates the cache.
-// Fires OnChange listeners for any values that differ from the previous cache.
-// Triggers lazy initialization on first call.
+// Refresh re-fetches all configs and re-resolves values.
+// OnChange listeners fire for any values that changed.
+// Connects and fetches definitions automatically if not already initialized.
 func (c *ConfigClient) Refresh(ctx context.Context) error {
 	if err := c.ensureInit(ctx); err != nil {
 		return err
@@ -400,8 +399,8 @@ func WithItemKey(key string) ChangeListenerOption {
 
 // --- Prescriptive access (legacy, delegates to Resolve) ---
 
-// GetValue reads a resolved config value (prescriptive access).
-// Triggers lazy initialization on first call.
+// GetValue reads a resolved config value.
+// Connects and fetches definitions automatically if not already initialized.
 func (c *ConfigClient) GetValue(ctx context.Context, configKey string, itemKey ...string) (interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err

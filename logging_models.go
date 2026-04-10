@@ -57,8 +57,8 @@ func WithLoggerManaged(managed bool) LoggerOption {
 	return func(l *Logger) { l.Managed = managed }
 }
 
-// Save creates (POST) the logger if ID is empty, or updates (PUT) if ID is set.
-// Applies the server response back to the Logger instance.
+// Save creates the logger if new, or updates it if it already exists.
+// The Logger instance is updated with the server response.
 func (l *Logger) Save(ctx context.Context) error {
 	if l.ID == "" {
 		return l.client.createLogger(ctx, l)
@@ -162,8 +162,8 @@ func WithLogGroupParent(groupID string) LogGroupOption {
 	return func(g *LogGroup) { g.Group = &groupID }
 }
 
-// Save creates (POST) the log group if ID is empty, or updates (PUT) if ID is set.
-// Applies the server response back to the LogGroup instance.
+// Save creates the log group if new, or updates it if it already exists.
+// The LogGroup instance is updated with the server response.
 func (g *LogGroup) Save(ctx context.Context) error {
 	if g.ID == "" {
 		return g.client.createGroup(ctx, g)

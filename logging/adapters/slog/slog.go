@@ -1,8 +1,6 @@
 // Package slogadapter provides a smplkit logging adapter for Go's log/slog package.
 //
-// The adapter uses a handler wrapper pattern: customers wrap their slog.Handler
-// with the adapter, which intercepts Enabled() checks to apply smplkit-controlled
-// levels dynamically.
+// Wrap your slog.Handler with the adapter to enable smplkit-controlled log levels.
 //
 // Usage:
 //
@@ -94,9 +92,9 @@ func (a *Adapter) Name() string {
 	return "slog"
 }
 
-// WrapHandler wraps a customer's slog.Handler with smplkit level control.
-// The returned SmplHandler intercepts Enabled() to check against the
-// smplkit-controlled level.
+// WrapHandler wraps a slog.Handler with smplkit level control.
+// The returned SmplHandler applies the smplkit-managed level when filtering
+// log records.
 func (a *Adapter) WrapHandler(h slog.Handler) *SmplHandler {
 	levelVar := new(slog.LevelVar)
 	levelVar.Set(slog.LevelInfo) // Default to INFO
@@ -143,7 +141,7 @@ func (a *Adapter) ApplyLevel(loggerName string, level string) {
 	}
 }
 
-// InstallHook stores a callback that fires when WithGroup creates a new sub-logger.
+// InstallHook registers a callback that fires when a new sub-logger is created.
 func (a *Adapter) InstallHook(onNewLogger func(name string, level string)) {
 	a.mu.Lock()
 	a.hookFn = onNewLogger
@@ -167,7 +165,7 @@ func (a *Adapter) fireHook(name string, level string) {
 	}
 }
 
-// SmplHandler wraps a slog.Handler with smplkit-controlled level filtering.
+// SmplHandler is a slog.Handler that applies smplkit-managed log levels.
 type SmplHandler struct {
 	inner    slog.Handler
 	levelVar *slog.LevelVar
@@ -184,12 +182,11 @@ func (h *SmplHandler) groupName() string {
 }
 
 // Enabled reports whether the handler handles records at the given level.
-// Uses the smplkit-controlled level instead of the inner handler's level.
 func (h *SmplHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.levelVar.Level()
 }
 
-// Handle passes the record to the inner handler.
+// Handle processes a log record.
 func (h *SmplHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.inner.Handle(ctx, r)
 }
@@ -205,7 +202,6 @@ func (h *SmplHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 // WithGroup returns a new handler with the given group name.
-// This creates a new tracked handler and fires the hook if installed.
 func (h *SmplHandler) WithGroup(name string) slog.Handler {
 	if name == "" {
 		return h

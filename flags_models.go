@@ -57,8 +57,8 @@ func WithFlagValues(values []FlagValue) FlagOption {
 	return func(f *Flag) { f.Values = &values }
 }
 
-// Save creates (POST) the flag if ID is empty, or updates (PUT) if ID is set.
-// Applies the server response back to the Flag instance.
+// Save creates the flag if new, or updates it if it already exists.
+// The Flag instance is updated with the server response.
 func (f *Flag) Save(ctx context.Context) error {
 	if f.ID == "" {
 		return f.client.createFlag(ctx, f)

@@ -2,18 +2,14 @@ package adapters
 
 // LoggingAdapter is the contract for pluggable logging framework integration.
 //
-// Adapters bridge the smplkit logging runtime to a specific logging framework.
-// The core LoggingClient delegates all framework-specific work through this interface.
-//
-// Adapters are NOT responsible for: key normalization, caching, bulk registration,
-// level resolution, or WebSocket handling. Those remain in the core client.
+// Adapters bridge the smplkit logging runtime to a specific logging framework
+// (e.g., slog, zap). Implement this interface to add support for a new framework.
 type LoggingAdapter interface {
 	// Name returns a human-readable adapter name for diagnostics (e.g., "slog").
 	Name() string
 
 	// Discover scans the runtime for existing loggers.
 	// Returns a list of discovered loggers with their names and levels.
-	// The core client handles normalization of names after receiving them.
 	Discover() []DiscoveredLogger
 
 	// ApplyLevel sets the level on a specific logger.

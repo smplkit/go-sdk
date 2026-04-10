@@ -17,11 +17,9 @@ type Config struct {
 	Description *string
 	// Parent is the parent config UUID, or nil for root configs.
 	Parent *string
-	// Items holds the base configuration values (extracted raw values from typed items).
+	// Items holds the base configuration values.
 	Items map[string]interface{}
 	// Environments maps environment names to their value overrides.
-	// Each environment entry is a map that contains a "values" key
-	// with extracted raw values from wrapped overrides.
 	Environments map[string]map[string]interface{}
 	// CreatedAt is the creation timestamp.
 	CreatedAt *time.Time
@@ -60,8 +58,8 @@ func WithConfigEnvironments(envs map[string]map[string]interface{}) ConfigOption
 	return func(c *Config) { c.Environments = envs }
 }
 
-// Save creates (POST) the config if ID is empty, or updates (PUT) if ID is set.
-// Applies the server response back to the Config instance.
+// Save creates the config if new, or updates it if it already exists.
+// The Config instance is updated with the server response.
 func (c *Config) Save(ctx context.Context) error {
 	if c.ID == "" {
 		return c.client.createConfig(ctx, c)
@@ -82,7 +80,7 @@ func (c *Config) apply(other *Config) {
 }
 
 // LiveConfig is a handle returned by Subscribe that always reflects the latest
-// cached resolved values for a config key.
+// resolved values for a config key.
 type LiveConfig struct {
 	client *ConfigClient
 	key    string

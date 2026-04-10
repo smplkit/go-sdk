@@ -1,8 +1,5 @@
 // Package smplkit provides a Go client for the smplkit platform.
 //
-// The SDK follows a two-layer architecture: auto-generated types live in
-// internal/generated, while this package provides the hand-crafted public API.
-//
 // Quick start:
 //
 //	client, err := smplkit.NewClient("sk_api_...", "production", "my-service")

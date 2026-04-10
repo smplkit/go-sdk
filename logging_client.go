@@ -248,8 +248,8 @@ func (c *LoggingClient) RegisterAdapter(adapter adapters.LoggingAdapter) {
 }
 
 // Start initializes the logging runtime. Idempotent.
-// Fetches all logger/group definitions, resolves levels, opens WebSocket,
-// and starts the periodic flush timer.
+// Discovers loggers from registered adapters, fetches definitions, resolves
+// levels, and begins listening for real-time level changes.
 func (c *LoggingClient) Start(ctx context.Context) error {
 	var startErr error
 	c.startOnce.Do(func() {
