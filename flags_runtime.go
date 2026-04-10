@@ -26,7 +26,6 @@ type FlagStats struct {
 	CacheMisses int
 }
 
-
 const defaultCacheMaxSize = 10000
 
 type resolutionCache struct {
@@ -98,7 +97,6 @@ func (c *resolutionCache) stats() (hits, misses int) {
 	defer c.mu.Unlock()
 	return c.hits, c.misses
 }
-
 
 const (
 	contextRegistrationLRUSize = 10000
@@ -461,7 +459,6 @@ func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment st
 	return nil
 }
 
-
 func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultVal interface{}, explicitContexts []Context) interface{} {
 	if err := rt.ensureInit(ctx); err != nil {
 		log.Printf("smplkit: flags init failed: %v", err)
@@ -601,7 +598,6 @@ func isTruthy(v interface{}) bool {
 	}
 	return true
 }
-
 
 func (rt *FlagsRuntime) handleFlagChanged(data map[string]interface{}) {
 	flagKey, _ := data["key"].(string)

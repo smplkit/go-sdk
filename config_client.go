@@ -636,7 +636,6 @@ func unflattenDotNotation(flat map[string]interface{}) map[string]interface{} {
 	return result
 }
 
-
 func derefMap(m *map[string]genconfig.ConfigItemDefinition) map[string]interface{} {
 	if m == nil {
 		return nil

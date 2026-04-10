@@ -356,7 +356,6 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 	}
 }
 
-
 func (c *LoggingClient) createLogger(ctx context.Context, l *Logger) error {
 	loggerType := "logger"
 	reqBody := genlogging.ResponseLogger{
@@ -539,7 +538,6 @@ func (c *LoggingClient) deleteGroupByID(ctx context.Context, id string) error {
 	return checkStatus(resp.StatusCode, body)
 }
 
-
 func resourceToLogger(r genlogging.LoggerResource, c *LoggingClient) *Logger {
 	attrs := r.Attributes
 	id := ""
@@ -665,7 +663,6 @@ func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
 		Environments: envs,
 	}
 }
-
 
 func (c *LoggingClient) fetchAndCache(ctx context.Context) error {
 	loggers, err := c.List(ctx)
@@ -803,7 +800,6 @@ func (c *LoggingClient) fireChangeListeners(loggerKey string, source string) { /
 		}()
 	}
 }
-
 
 type loggerRegistrationEntry struct {
 	key     string
