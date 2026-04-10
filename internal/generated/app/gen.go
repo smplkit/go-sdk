@@ -112,6 +112,36 @@ func (e InvitationResourceType) Valid() bool {
 	}
 }
 
+// Defines values for MetricResourceType.
+const (
+	Metric MetricResourceType = "metric"
+)
+
+// Valid indicates whether the value is a known member of the MetricResourceType enum.
+func (e MetricResourceType) Valid() bool {
+	switch e {
+	case Metric:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MetricRollupResourceType.
+const (
+	MetricRollup MetricRollupResourceType = "metric_rollup"
+)
+
+// Valid indicates whether the value is a known member of the MetricRollupResourceType enum.
+func (e MetricRollupResourceType) Valid() bool {
+	switch e {
+	case MetricRollup:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OidcProvider.
 const (
 	Google    OidcProvider = "google"
@@ -316,9 +346,7 @@ type ContextType struct {
 	// Attributes Known attribute keys with metadata objects
 	Attributes *map[string]interface{} `json:"attributes,omitempty"`
 	CreatedAt  *time.Time              `json:"created_at,omitempty"`
-
-	// Key Programmatic identifier: user, account, device
-	Key string `json:"key"`
+	Id         *string                 `json:"id,omitempty"`
 
 	// Name Display label: User, Account, Device
 	Name      string     `json:"name"`
@@ -447,6 +475,71 @@ type LoginRequest struct {
 	Email    openapi_types.Email `json:"email"`
 	Password string              `json:"password"`
 }
+
+// MetricAttributes defines model for MetricAttributes.
+type MetricAttributes struct {
+	CreatedAt     *time.Time             `json:"created_at,omitempty"`
+	Dimensions    *map[string]string     `json:"dimensions,omitempty"`
+	Name          string                 `json:"name"`
+	PeriodSeconds int                    `json:"period_seconds"`
+	RecordedAt    time.Time              `json:"recorded_at"`
+	Unit          *string                `json:"unit,omitempty"`
+	Value         MetricAttributes_Value `json:"value"`
+}
+
+// MetricAttributesValue0 defines model for .
+type MetricAttributesValue0 = float32
+
+// MetricAttributesValue1 defines model for .
+type MetricAttributesValue1 = string
+
+// MetricAttributes_Value defines model for MetricAttributes.Value.
+type MetricAttributes_Value struct {
+	union json.RawMessage
+}
+
+// MetricBulkRequest defines model for MetricBulkRequest.
+type MetricBulkRequest struct {
+	Data []MetricResource `json:"data"`
+}
+
+// MetricListResponse defines model for MetricListResponse.
+type MetricListResponse struct {
+	Data []MetricResource `json:"data"`
+}
+
+// MetricResource defines model for MetricResource.
+type MetricResource struct {
+	Attributes MetricAttributes   `json:"attributes"`
+	Id         *string            `json:"id,omitempty"`
+	Type       MetricResourceType `json:"type"`
+}
+
+// MetricResourceType defines model for MetricResource.Type.
+type MetricResourceType string
+
+// MetricRollupAttributes defines model for MetricRollupAttributes.
+type MetricRollupAttributes struct {
+	Bucket time.Time `json:"bucket"`
+	Name   string    `json:"name"`
+	Rollup string    `json:"rollup"`
+	Unit   *string   `json:"unit,omitempty"`
+	Value  string    `json:"value"`
+}
+
+// MetricRollupListResponse defines model for MetricRollupListResponse.
+type MetricRollupListResponse struct {
+	Data []MetricRollupResource `json:"data"`
+}
+
+// MetricRollupResource defines model for MetricRollupResource.
+type MetricRollupResource struct {
+	Attributes MetricRollupAttributes   `json:"attributes"`
+	Type       MetricRollupResourceType `json:"type"`
+}
+
+// MetricRollupResourceType defines model for MetricRollupResource.Type.
+type MetricRollupResourceType string
 
 // OidcProvider defines model for OidcProvider.
 type OidcProvider string
@@ -599,12 +692,7 @@ type BeginOidcLoginParams struct {
 
 // ListContextsParams defines parameters for ListContexts.
 type ListContextsParams struct {
-	FilterContextTypeId *string `form:"filter[context_type_id],omitempty" json:"filter[context_type_id],omitempty"`
-}
-
-// ListEnvironmentsParams defines parameters for ListEnvironments.
-type ListEnvironmentsParams struct {
-	FilterKey *string `form:"filter[key],omitempty" json:"filter[key],omitempty"`
+	FilterContextType *string `form:"filter[context_type],omitempty" json:"filter[context_type],omitempty"`
 }
 
 // ListInvitationsParams defines parameters for ListInvitations.
@@ -612,9 +700,17 @@ type ListInvitationsParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
 }
 
-// ListServicesParams defines parameters for ListServices.
-type ListServicesParams struct {
-	FilterKey *string `form:"filter[key],omitempty" json:"filter[key],omitempty"`
+// ListMetricRollupsParams defines parameters for ListMetricRollups.
+type ListMetricRollupsParams struct {
+	FilterName       string  `form:"filter[name]" json:"filter[name]"`
+	FilterRollup     string  `form:"filter[rollup]" json:"filter[rollup]"`
+	FilterRecordedAt *string `form:"filter[recorded_at],omitempty" json:"filter[recorded_at],omitempty"`
+}
+
+// ListMetricsParams defines parameters for ListMetrics.
+type ListMetricsParams struct {
+	FilterName       string  `form:"filter[name]" json:"filter[name]"`
+	FilterRecordedAt *string `form:"filter[recorded_at],omitempty" json:"filter[recorded_at],omitempty"`
 }
 
 // ListUsersParams defines parameters for ListUsers.
@@ -662,6 +758,9 @@ type CreateInvitationsApplicationVndAPIPlusJSONRequestBody = InvitationBulkCreat
 // AcceptInvitationApplicationVndAPIPlusJSONRequestBody defines body for AcceptInvitation for application/vnd.api+json ContentType.
 type AcceptInvitationApplicationVndAPIPlusJSONRequestBody = InvitationAcceptRequest
 
+// BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody defines body for BulkIngestMetrics for application/vnd.api+json ContentType.
+type BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody = MetricBulkRequest
+
 // CreateServiceApplicationVndAPIPlusJSONRequestBody defines body for CreateService for application/vnd.api+json ContentType.
 type CreateServiceApplicationVndAPIPlusJSONRequestBody = ServiceResponse
 
@@ -673,6 +772,68 @@ type UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody = UserResponse
 
 // UpdateUserRoleApplicationVndAPIPlusJSONRequestBody defines body for UpdateUserRole for application/vnd.api+json ContentType.
 type UpdateUserRoleApplicationVndAPIPlusJSONRequestBody = UserResponse
+
+// AsMetricAttributesValue0 returns the union data inside the MetricAttributes_Value as a MetricAttributesValue0
+func (t MetricAttributes_Value) AsMetricAttributesValue0() (MetricAttributesValue0, error) {
+	var body MetricAttributesValue0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMetricAttributesValue0 overwrites any union data inside the MetricAttributes_Value as the provided MetricAttributesValue0
+func (t *MetricAttributes_Value) FromMetricAttributesValue0(v MetricAttributesValue0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMetricAttributesValue0 performs a merge with any union data inside the MetricAttributes_Value, using the provided MetricAttributesValue0
+func (t *MetricAttributes_Value) MergeMetricAttributesValue0(v MetricAttributesValue0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMetricAttributesValue1 returns the union data inside the MetricAttributes_Value as a MetricAttributesValue1
+func (t MetricAttributes_Value) AsMetricAttributesValue1() (MetricAttributesValue1, error) {
+	var body MetricAttributesValue1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMetricAttributesValue1 overwrites any union data inside the MetricAttributes_Value as the provided MetricAttributesValue1
+func (t *MetricAttributes_Value) FromMetricAttributesValue1(v MetricAttributesValue1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMetricAttributesValue1 performs a merge with any union data inside the MetricAttributes_Value, using the provided MetricAttributesValue1
+func (t *MetricAttributes_Value) MergeMetricAttributesValue1(v MetricAttributesValue1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t MetricAttributes_Value) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *MetricAttributes_Value) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -813,15 +974,15 @@ type ClientInterface interface {
 	CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteContextType request
-	DeleteContextType(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteContextType(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetContextType request
-	GetContextType(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetContextType(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateContextTypeWithBody request with any body
-	UpdateContextTypeWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateContextTypeWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListContexts request
 	ListContexts(ctx context.Context, params *ListContextsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -838,7 +999,7 @@ type ClientInterface interface {
 	GetContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListEnvironments request
-	ListEnvironments(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListEnvironments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateEnvironmentWithBody request with any body
 	CreateEnvironmentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -875,6 +1036,17 @@ type ClientInterface interface {
 	// RevokeInvitation request
 	RevokeInvitation(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListMetricRollups request
+	ListMetricRollups(ctx context.Context, params *ListMetricRollupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMetrics request
+	ListMetrics(ctx context.Context, params *ListMetricsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BulkIngestMetricsWithBody request with any body
+	BulkIngestMetricsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	BulkIngestMetricsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListPlans request
 	ListPlans(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -882,7 +1054,7 @@ type ClientInterface interface {
 	ListProducts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListServices request
-	ListServices(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListServices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateServiceWithBody request with any body
 	CreateServiceWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1211,7 +1383,7 @@ func (c *Client) CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteContextType(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteContextType(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteContextTypeRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1223,7 +1395,7 @@ func (c *Client) DeleteContextType(ctx context.Context, id openapi_types.UUID, r
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetContextType(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetContextType(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetContextTypeRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -1235,7 +1407,7 @@ func (c *Client) GetContextType(ctx context.Context, id openapi_types.UUID, reqE
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateContextTypeWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateContextTypeWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateContextTypeRequestWithBody(c.Server, id, contentType, body)
 	if err != nil {
 		return nil, err
@@ -1247,7 +1419,7 @@ func (c *Client) UpdateContextTypeWithBody(ctx context.Context, id openapi_types
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
 	if err != nil {
 		return nil, err
@@ -1319,8 +1491,8 @@ func (c *Client) GetContext(ctx context.Context, id string, reqEditors ...Reques
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListEnvironments(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListEnvironmentsRequest(c.Server, params)
+func (c *Client) ListEnvironments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEnvironmentsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -1487,6 +1659,54 @@ func (c *Client) RevokeInvitation(ctx context.Context, id openapi_types.UUID, re
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListMetricRollups(ctx context.Context, params *ListMetricRollupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMetricRollupsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListMetrics(ctx context.Context, params *ListMetricsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMetricsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkIngestMetricsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkIngestMetricsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkIngestMetricsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkIngestMetricsRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListPlans(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListPlansRequest(c.Server)
 	if err != nil {
@@ -1511,8 +1731,8 @@ func (c *Client) ListProducts(ctx context.Context, reqEditors ...RequestEditorFn
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListServices(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListServicesRequest(c.Server, params)
+func (c *Client) ListServices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListServicesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -2414,12 +2634,12 @@ func NewCreateContextTypeRequestWithBody(server string, contentType string, body
 }
 
 // NewDeleteContextTypeRequest generates requests for DeleteContextType
-func NewDeleteContextTypeRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteContextTypeRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2448,12 +2668,12 @@ func NewDeleteContextTypeRequest(server string, id openapi_types.UUID) (*http.Re
 }
 
 // NewGetContextTypeRequest generates requests for GetContextType
-func NewGetContextTypeRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetContextTypeRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2482,7 +2702,7 @@ func NewGetContextTypeRequest(server string, id openapi_types.UUID) (*http.Reque
 }
 
 // NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateContextType builder with application/vnd.api+json body
-func NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+func NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -2493,12 +2713,12 @@ func NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(server string,
 }
 
 // NewUpdateContextTypeRequestWithBody generates requests for UpdateContextType with any type of body
-func NewUpdateContextTypeRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateContextTypeRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2550,9 +2770,9 @@ func NewListContextsRequest(server string, params *ListContextsParams) (*http.Re
 	if params != nil {
 		queryValues := queryURL.Query()
 
-		if params.FilterContextTypeId != nil {
+		if params.FilterContextType != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[context_type_id]", *params.FilterContextTypeId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[context_type]", *params.FilterContextType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -2686,7 +2906,7 @@ func NewGetContextRequest(server string, id string) (*http.Request, error) {
 }
 
 // NewListEnvironmentsRequest generates requests for ListEnvironments
-func NewListEnvironmentsRequest(server string, params *ListEnvironmentsParams) (*http.Request, error) {
+func NewListEnvironmentsRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -2702,28 +2922,6 @@ func NewListEnvironmentsRequest(server string, params *ListEnvironmentsParams) (
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.FilterKey != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[key]", *params.FilterKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -3086,6 +3284,180 @@ func NewRevokeInvitationRequest(server string, id openapi_types.UUID) (*http.Req
 	return req, nil
 }
 
+// NewListMetricRollupsRequest generates requests for ListMetricRollups
+func NewListMetricRollupsRequest(server string, params *ListMetricRollupsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/metric_rollups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[name]", params.FilterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[rollup]", params.FilterRollup, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.FilterRecordedAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[recorded_at]", *params.FilterRecordedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListMetricsRequest generates requests for ListMetrics
+func NewListMetricsRequest(server string, params *ListMetricsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/metrics")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[name]", params.FilterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.FilterRecordedAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[recorded_at]", *params.FilterRecordedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewBulkIngestMetricsRequestWithApplicationVndAPIPlusJSONBody calls the generic BulkIngestMetrics builder with application/vnd.api+json body
+func NewBulkIngestMetricsRequestWithApplicationVndAPIPlusJSONBody(server string, body BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBulkIngestMetricsRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewBulkIngestMetricsRequestWithBody generates requests for BulkIngestMetrics with any type of body
+func NewBulkIngestMetricsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/metrics/bulk")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListPlansRequest generates requests for ListPlans
 func NewListPlansRequest(server string) (*http.Request, error) {
 	var err error
@@ -3141,7 +3513,7 @@ func NewListProductsRequest(server string) (*http.Request, error) {
 }
 
 // NewListServicesRequest generates requests for ListServices
-func NewListServicesRequest(server string, params *ListServicesParams) (*http.Request, error) {
+func NewListServicesRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3157,28 +3529,6 @@ func NewListServicesRequest(server string, params *ListServicesParams) (*http.Re
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if params.FilterKey != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[key]", *params.FilterKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -3700,15 +4050,15 @@ type ClientWithResponsesInterface interface {
 	CreateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateContextTypeResponse, error)
 
 	// DeleteContextTypeWithResponse request
-	DeleteContextTypeWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteContextTypeResponse, error)
+	DeleteContextTypeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteContextTypeResponse, error)
 
 	// GetContextTypeWithResponse request
-	GetContextTypeWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetContextTypeResponse, error)
+	GetContextTypeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextTypeResponse, error)
 
 	// UpdateContextTypeWithBodyWithResponse request with any body
-	UpdateContextTypeWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
+	UpdateContextTypeWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
 
-	UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
+	UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
 
 	// ListContextsWithResponse request
 	ListContextsWithResponse(ctx context.Context, params *ListContextsParams, reqEditors ...RequestEditorFn) (*ListContextsResponse, error)
@@ -3725,7 +4075,7 @@ type ClientWithResponsesInterface interface {
 	GetContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextResponse, error)
 
 	// ListEnvironmentsWithResponse request
-	ListEnvironmentsWithResponse(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error)
+	ListEnvironmentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error)
 
 	// CreateEnvironmentWithBodyWithResponse request with any body
 	CreateEnvironmentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error)
@@ -3762,6 +4112,17 @@ type ClientWithResponsesInterface interface {
 	// RevokeInvitationWithResponse request
 	RevokeInvitationWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error)
 
+	// ListMetricRollupsWithResponse request
+	ListMetricRollupsWithResponse(ctx context.Context, params *ListMetricRollupsParams, reqEditors ...RequestEditorFn) (*ListMetricRollupsResponse, error)
+
+	// ListMetricsWithResponse request
+	ListMetricsWithResponse(ctx context.Context, params *ListMetricsParams, reqEditors ...RequestEditorFn) (*ListMetricsResponse, error)
+
+	// BulkIngestMetricsWithBodyWithResponse request with any body
+	BulkIngestMetricsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkIngestMetricsResponse, error)
+
+	BulkIngestMetricsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkIngestMetricsResponse, error)
+
 	// ListPlansWithResponse request
 	ListPlansWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPlansResponse, error)
 
@@ -3769,7 +4130,7 @@ type ClientWithResponsesInterface interface {
 	ListProductsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProductsResponse, error)
 
 	// ListServicesWithResponse request
-	ListServicesWithResponse(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*ListServicesResponse, error)
+	ListServicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServicesResponse, error)
 
 	// CreateServiceWithBodyWithResponse request with any body
 	CreateServiceWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateServiceResponse, error)
@@ -4688,6 +5049,84 @@ func (r RevokeInvitationResponse) StatusCode() int {
 	return 0
 }
 
+type ListMetricRollupsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *MetricRollupListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMetricRollupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMetricRollupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListMetricsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *MetricListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMetricsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMetricsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type BulkIngestMetricsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON202 *interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r BulkIngestMetricsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BulkIngestMetricsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListPlansResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -5234,7 +5673,7 @@ func (c *ClientWithResponses) CreateContextTypeWithApplicationVndAPIPlusJSONBody
 }
 
 // DeleteContextTypeWithResponse request returning *DeleteContextTypeResponse
-func (c *ClientWithResponses) DeleteContextTypeWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteContextTypeResponse, error) {
+func (c *ClientWithResponses) DeleteContextTypeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteContextTypeResponse, error) {
 	rsp, err := c.DeleteContextType(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5243,7 +5682,7 @@ func (c *ClientWithResponses) DeleteContextTypeWithResponse(ctx context.Context,
 }
 
 // GetContextTypeWithResponse request returning *GetContextTypeResponse
-func (c *ClientWithResponses) GetContextTypeWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetContextTypeResponse, error) {
+func (c *ClientWithResponses) GetContextTypeWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextTypeResponse, error) {
 	rsp, err := c.GetContextType(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5252,7 +5691,7 @@ func (c *ClientWithResponses) GetContextTypeWithResponse(ctx context.Context, id
 }
 
 // UpdateContextTypeWithBodyWithResponse request with arbitrary body returning *UpdateContextTypeResponse
-func (c *ClientWithResponses) UpdateContextTypeWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error) {
+func (c *ClientWithResponses) UpdateContextTypeWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error) {
 	rsp, err := c.UpdateContextTypeWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5260,7 +5699,7 @@ func (c *ClientWithResponses) UpdateContextTypeWithBodyWithResponse(ctx context.
 	return ParseUpdateContextTypeResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error) {
+func (c *ClientWithResponses) UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error) {
 	rsp, err := c.UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -5313,8 +5752,8 @@ func (c *ClientWithResponses) GetContextWithResponse(ctx context.Context, id str
 }
 
 // ListEnvironmentsWithResponse request returning *ListEnvironmentsResponse
-func (c *ClientWithResponses) ListEnvironmentsWithResponse(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error) {
-	rsp, err := c.ListEnvironments(ctx, params, reqEditors...)
+func (c *ClientWithResponses) ListEnvironmentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error) {
+	rsp, err := c.ListEnvironments(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -5434,6 +5873,41 @@ func (c *ClientWithResponses) RevokeInvitationWithResponse(ctx context.Context, 
 	return ParseRevokeInvitationResponse(rsp)
 }
 
+// ListMetricRollupsWithResponse request returning *ListMetricRollupsResponse
+func (c *ClientWithResponses) ListMetricRollupsWithResponse(ctx context.Context, params *ListMetricRollupsParams, reqEditors ...RequestEditorFn) (*ListMetricRollupsResponse, error) {
+	rsp, err := c.ListMetricRollups(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMetricRollupsResponse(rsp)
+}
+
+// ListMetricsWithResponse request returning *ListMetricsResponse
+func (c *ClientWithResponses) ListMetricsWithResponse(ctx context.Context, params *ListMetricsParams, reqEditors ...RequestEditorFn) (*ListMetricsResponse, error) {
+	rsp, err := c.ListMetrics(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMetricsResponse(rsp)
+}
+
+// BulkIngestMetricsWithBodyWithResponse request with arbitrary body returning *BulkIngestMetricsResponse
+func (c *ClientWithResponses) BulkIngestMetricsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkIngestMetricsResponse, error) {
+	rsp, err := c.BulkIngestMetricsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkIngestMetricsResponse(rsp)
+}
+
+func (c *ClientWithResponses) BulkIngestMetricsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkIngestMetricsResponse, error) {
+	rsp, err := c.BulkIngestMetricsWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkIngestMetricsResponse(rsp)
+}
+
 // ListPlansWithResponse request returning *ListPlansResponse
 func (c *ClientWithResponses) ListPlansWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPlansResponse, error) {
 	rsp, err := c.ListPlans(ctx, reqEditors...)
@@ -5453,8 +5927,8 @@ func (c *ClientWithResponses) ListProductsWithResponse(ctx context.Context, reqE
 }
 
 // ListServicesWithResponse request returning *ListServicesResponse
-func (c *ClientWithResponses) ListServicesWithResponse(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*ListServicesResponse, error) {
-	rsp, err := c.ListServices(ctx, params, reqEditors...)
+func (c *ClientWithResponses) ListServicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServicesResponse, error) {
+	rsp, err := c.ListServices(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -7343,6 +7817,168 @@ func ParseRevokeInvitationResponse(rsp *http.Response) (*RevokeInvitationRespons
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMetricRollupsResponse parses an HTTP response from a ListMetricRollupsWithResponse call
+func ParseListMetricRollupsResponse(rsp *http.Response) (*ListMetricRollupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMetricRollupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MetricRollupListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMetricsResponse parses an HTTP response from a ListMetricsWithResponse call
+func ParseListMetricsResponse(rsp *http.Response) (*ListMetricsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMetricsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MetricListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBulkIngestMetricsResponse parses an HTTP response from a BulkIngestMetricsWithResponse call
+func ParseBulkIngestMetricsResponse(rsp *http.Response) (*BulkIngestMetricsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BulkIngestMetricsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON202 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorResponse
