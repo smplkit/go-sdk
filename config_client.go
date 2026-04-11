@@ -224,7 +224,7 @@ func (c *ConfigClient) Resolve(ctx context.Context, id string) (map[string]inter
 		return nil, err
 	}
 	if metrics := c.client.metrics; metrics != nil {
-		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config_id": id})
+		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config": id})
 	}
 	resolved, ok := c.configCache[id]
 	if !ok {
@@ -466,7 +466,7 @@ func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]inte
 			if !reflect.DeepEqual(oldVal, newVal) {
 				if c.client != nil {
 					if metrics := c.client.metrics; metrics != nil {
-						metrics.Record("config.changes", 1, "changes", map[string]string{"config_id": cfgKey})
+						metrics.Record("config.changes", 1, "changes", map[string]string{"config": cfgKey})
 					}
 				}
 				evt := &ConfigChangeEvent{

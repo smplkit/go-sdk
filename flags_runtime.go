@@ -507,7 +507,7 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 	if cached, hit := rt.cache.get(cacheKey); hit {
 		if metrics != nil {
 			metrics.Record("flags.cache_hits", 1, "hits", nil)
-			metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag_id": key})
+			metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag": key})
 		}
 		return cached
 	}
@@ -523,7 +523,7 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 	if !ok {
 		rt.cache.put(cacheKey, defaultVal)
 		if metrics != nil {
-			metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag_id": key})
+			metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag": key})
 		}
 		return defaultVal
 	}
@@ -535,7 +535,7 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 
 	rt.cache.put(cacheKey, value)
 	if metrics != nil {
-		metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag_id": key})
+		metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag": key})
 	}
 	return value
 }

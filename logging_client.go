@@ -318,7 +318,7 @@ func (c *LoggingClient) applyLevels() {
 		resolved := resolveLoggerLevel(normalized, c.client.environment, c.loggersCache, c.groupsCache)
 		t.adapter.ApplyLevel(t.loggerName, string(resolved))
 		if metrics := c.client.metrics; metrics != nil {
-			metrics.Record("logging.level_changes", 1, "changes", map[string]string{"logger_id": normalized})
+			metrics.Record("logging.level_changes", 1, "changes", map[string]string{"logger": normalized})
 		}
 	}
 }
@@ -338,7 +338,7 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 			adapter.ApplyLevel(name, string(resolved))
 		}
 		if metrics := c.client.metrics; metrics != nil {
-			metrics.Record("logging.level_changes", 1, "changes", map[string]string{"logger_id": normalized})
+			metrics.Record("logging.level_changes", 1, "changes", map[string]string{"logger": normalized})
 		}
 	}
 }

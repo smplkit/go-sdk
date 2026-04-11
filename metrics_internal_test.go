@@ -114,8 +114,8 @@ func TestMetricsReporter_DifferentDimensionsSeparateCounters(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	r.Record("flags.evaluations", 1, "", map[string]string{"flag_id": "checkout-v2"})
-	r.Record("flags.evaluations", 1, "", map[string]string{"flag_id": "dark-mode"})
+	r.Record("flags.evaluations", 1, "", map[string]string{"flag": "checkout-v2"})
+	r.Record("flags.evaluations", 1, "", map[string]string{"flag": "dark-mode"})
 
 	r.mu.Lock()
 	assert.Len(t, r.counters, 2)
@@ -126,8 +126,8 @@ func TestMetricsReporter_SameDimensionsAccumulate(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	r.Record("flags.evaluations", 1, "", map[string]string{"flag_id": "checkout-v2"})
-	r.Record("flags.evaluations", 1, "", map[string]string{"flag_id": "checkout-v2"})
+	r.Record("flags.evaluations", 1, "", map[string]string{"flag": "checkout-v2"})
+	r.Record("flags.evaluations", 1, "", map[string]string{"flag": "checkout-v2"})
 
 	r.mu.Lock()
 	assert.Len(t, r.counters, 1)
@@ -141,14 +141,14 @@ func TestMetricsReporter_BaseDimensionsInjected(t *testing.T) {
 	r := newMetricsReporter(http.DefaultClient, "https://app.smplkit.com", "prod", "user-svc", 60*time.Second)
 	defer r.Close()
 
-	r.Record("flags.evaluations", 1, "", map[string]string{"flag_id": "x"})
+	r.Record("flags.evaluations", 1, "", map[string]string{"flag": "x"})
 
 	r.mu.Lock()
 	for key := range r.counters {
 		_, dims := parseDimensions(key)
 		assert.Equal(t, "prod", dims["environment"])
 		assert.Equal(t, "user-svc", dims["service"])
-		assert.Equal(t, "x", dims["flag_id"])
+		assert.Equal(t, "x", dims["flag"])
 	}
 	r.mu.Unlock()
 }
@@ -248,7 +248,7 @@ func TestMetricsReporter_FlushSendsHTTPPost(t *testing.T) {
 	r, getPayload := captureFlush(t)
 	defer r.Close()
 
-	r.Record("flags.evaluations", 3, "evaluations", map[string]string{"flag_id": "x"})
+	r.Record("flags.evaluations", 3, "evaluations", map[string]string{"flag": "x"})
 	r.flush()
 
 	payload := getPayload()
@@ -270,7 +270,7 @@ func TestMetricsReporter_FlushSendsHTTPPost(t *testing.T) {
 	dims := attrs["dimensions"].(map[string]interface{})
 	assert.Equal(t, "test", dims["environment"])
 	assert.Equal(t, "test-service", dims["service"])
-	assert.Equal(t, "x", dims["flag_id"])
+	assert.Equal(t, "x", dims["flag"])
 }
 
 func TestMetricsReporter_FlushIncludesGauges(t *testing.T) {
@@ -555,21 +555,21 @@ func TestParseDimensions(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	key := r.makeKey("flags.evaluations", map[string]string{"flag_id": "checkout-v2"})
+	key := r.makeKey("flags.evaluations", map[string]string{"flag": "checkout-v2"})
 	name, dims := parseDimensions(key)
 
 	assert.Equal(t, "flags.evaluations", name)
 	assert.Equal(t, "test", dims["environment"])
 	assert.Equal(t, "test-service", dims["service"])
-	assert.Equal(t, "checkout-v2", dims["flag_id"])
+	assert.Equal(t, "checkout-v2", dims["flag"])
 }
 
 func TestMakeKey_Deterministic(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	dims1 := map[string]string{"flag_id": "x", "extra": "y"}
-	dims2 := map[string]string{"extra": "y", "flag_id": "x"}
+	dims1 := map[string]string{"flag": "x", "extra": "y"}
+	dims2 := map[string]string{"extra": "y", "flag": "x"}
 
 	key1 := r.makeKey("test", dims1)
 	key2 := r.makeKey("test", dims2)
@@ -584,7 +584,7 @@ func TestPayloadFormat_JSONAPIStructure(t *testing.T) {
 	r, getPayload := captureFlush(t)
 	defer r.Close()
 
-	r.Record("flags.evaluations", 42, "evaluations", map[string]string{"flag_id": "x"})
+	r.Record("flags.evaluations", 42, "evaluations", map[string]string{"flag": "x"})
 	r.RecordGauge("platform.websocket_connections", 1, "connections", nil)
 	r.flush()
 
@@ -897,7 +897,7 @@ func TestConfigClient_ResolveRecordsMetric(t *testing.T) {
 	for key := range r.counters {
 		name, dims := parseDimensions(key)
 		if name == "config.resolutions" {
-			assert.Equal(t, "my-config", dims["config_id"])
+			assert.Equal(t, "my-config", dims["config"])
 			found = true
 		}
 	}
@@ -949,7 +949,7 @@ func TestConfigClient_ChangeListenersRecordMetric(t *testing.T) {
 	for key := range r.counters {
 		name, dims := parseDimensions(key)
 		if name == "config.changes" {
-			assert.Equal(t, "my-config", dims["config_id"])
+			assert.Equal(t, "my-config", dims["config"])
 			found = true
 		}
 	}
