@@ -499,8 +499,21 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 	ctxHash := hashContext(evalDict)
 	cacheKey := fmt.Sprintf("%s:%s", key, ctxHash)
 
+	var metrics *metricsReporter
+	if rt.flagsClient != nil && rt.flagsClient.client != nil {
+		metrics = rt.flagsClient.client.metrics
+	}
+
 	if cached, hit := rt.cache.get(cacheKey); hit {
+		if metrics != nil {
+			metrics.Record("flags.cache_hits", 1, "hits", nil)
+			metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag_id": key})
+		}
 		return cached
+	}
+
+	if metrics != nil {
+		metrics.Record("flags.cache_misses", 1, "misses", nil)
 	}
 
 	rt.mu.RLock()
@@ -509,6 +522,9 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 
 	if !ok {
 		rt.cache.put(cacheKey, defaultVal)
+		if metrics != nil {
+			metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag_id": key})
+		}
 		return defaultVal
 	}
 
@@ -518,6 +534,9 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 	}
 
 	rt.cache.put(cacheKey, value)
+	if metrics != nil {
+		metrics.Record("flags.evaluations", 1, "evaluations", map[string]string{"flag_id": key})
+	}
 	return value
 }
 

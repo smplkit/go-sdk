@@ -36,6 +36,8 @@ type Client struct {
 	flags   *FlagsClient
 	logging *LoggingClient
 
+	metrics *metricsReporter
+
 	wsMu sync.Mutex
 	ws   *sharedWebSocket
 }
@@ -175,6 +177,11 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
 	}
+
+	if !cfg.disableTelemetry {
+		c.metrics = newMetricsReporter(httpClient, appURL, resolvedEnv, resolvedService, 0)
+	}
+
 	c.config = &ConfigClient{client: c, generated: genConfigClient}
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	c.flags.runtime = newFlagsRuntime(c.flags)
@@ -209,6 +216,9 @@ func (c *Client) Close() error {
 		c.logging.close()
 	}
 	c.stopWS()
+	if c.metrics != nil {
+		c.metrics.Close()
+	}
 	return nil
 }
 
@@ -238,7 +248,7 @@ func (c *Client) ensureWS() *sharedWebSocket {
 	c.wsMu.Lock()
 	defer c.wsMu.Unlock()
 	if c.ws == nil {
-		c.ws = newSharedWebSocket(appBaseURL, c.apiKey)
+		c.ws = newSharedWebSocket(appBaseURL, c.apiKey, c.metrics)
 		c.ws.start()
 	}
 	return c.ws

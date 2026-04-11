@@ -419,32 +419,32 @@ func TestFlagApply(t *testing.T) {
 // --- sharedWebSocket tests ---
 
 func TestSharedWebSocket_BuildWSURL(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "sk_test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "sk_test", nil)
 	url := ws.buildWSURL()
 	assert.Contains(t, url, "wss://app.smplkit.com")
 	assert.Contains(t, url, "api_key=sk_test")
 }
 
 func TestSharedWebSocket_BuildWSURL_HTTP(t *testing.T) {
-	ws := newSharedWebSocket("http://localhost:8000", "sk_test")
+	ws := newSharedWebSocket("http://localhost:8000", "sk_test", nil)
 	url := ws.buildWSURL()
 	assert.Contains(t, url, "ws://localhost:8000")
 }
 
 func TestSharedWebSocket_BuildWSURL_NoScheme(t *testing.T) {
-	ws := newSharedWebSocket("app.smplkit.com", "sk_test")
+	ws := newSharedWebSocket("app.smplkit.com", "sk_test", nil)
 	url := ws.buildWSURL()
 	assert.Contains(t, url, "wss://app.smplkit.com")
 }
 
 func TestSharedWebSocket_BuildWSURL_TrailingSlash(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com/", "sk_test")
+	ws := newSharedWebSocket("https://app.smplkit.com/", "sk_test", nil)
 	url := ws.buildWSURL()
 	assert.Contains(t, url, "wss://app.smplkit.com/api/ws/v1/events")
 }
 
 func TestSharedWebSocket_OnOff(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 
 	var called bool
 	cb := func(data map[string]interface{}) { called = true }
@@ -460,7 +460,7 @@ func TestSharedWebSocket_OnOff(t *testing.T) {
 }
 
 func TestSharedWebSocket_DispatchPanicRecovery(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	ws.on("crash_event", func(data map[string]interface{}) {
 		panic("test panic")
 	})
@@ -471,7 +471,7 @@ func TestSharedWebSocket_DispatchPanicRecovery(t *testing.T) {
 }
 
 func TestSharedWebSocket_ConnectionStatus(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	assert.Equal(t, "disconnected", ws.connectionStatus())
 
 	ws.setStatus("connected")
@@ -479,19 +479,19 @@ func TestSharedWebSocket_ConnectionStatus(t *testing.T) {
 }
 
 func TestSharedWebSocket_Off_Empty(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	// off on empty list should not panic
 	ws.off("nonexistent", func(data map[string]interface{}) {})
 }
 
 func TestSharedWebSocket_DispatchNoListeners(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	// dispatch with no listeners should not panic
 	ws.dispatch("no_listeners", map[string]interface{}{})
 }
 
 func TestSharedWebSocket_Stop(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	ws.dialWS = func(url string) (*websocket.Conn, error) {
 		return nil, assert.AnError
 	}
@@ -505,14 +505,14 @@ func TestSharedWebSocket_Stop(t *testing.T) {
 }
 
 func TestSharedWebSocket_Run_ClosedImmediately(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	close(ws.closeCh)
 	ws.run() // should exit immediately
 	assert.Equal(t, "disconnected", ws.connectionStatus())
 }
 
 func TestSharedWebSocket_Connect_DialError(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	ws.dialWS = func(url string) (*websocket.Conn, error) {
 		return nil, assert.AnError
 	}
@@ -521,7 +521,7 @@ func TestSharedWebSocket_Connect_DialError(t *testing.T) {
 }
 
 func TestSharedWebSocket_Connect_DialError_Closed(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	close(ws.closeCh)
 	ws.dialWS = func(url string) (*websocket.Conn, error) {
 		return nil, assert.AnError
@@ -546,7 +546,7 @@ func TestSharedWebSocket_Connect_ErrorMessage(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ws := newSharedWebSocket(server.URL, "test")
+	ws := newSharedWebSocket(server.URL, "test", nil)
 	closed := ws.connect()
 	assert.False(t, closed)
 }
@@ -563,7 +563,7 @@ func TestSharedWebSocket_Connect_ReadConfirmError_Closed(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ws := newSharedWebSocket(server.URL, "test")
+	ws := newSharedWebSocket(server.URL, "test", nil)
 	close(ws.closeCh)
 	closed := ws.connect()
 	assert.True(t, closed)
@@ -580,7 +580,7 @@ func TestSharedWebSocket_Connect_ReadConfirmError_NotClosed(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ws := newSharedWebSocket(server.URL, "test")
+	ws := newSharedWebSocket(server.URL, "test", nil)
 	closed := ws.connect()
 	assert.False(t, closed)
 }
@@ -618,7 +618,7 @@ func TestSharedWebSocket_Connect_PingPong(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ws := newSharedWebSocket(server.URL, "test")
+	ws := newSharedWebSocket(server.URL, "test", nil)
 	var dispatched bool
 	var mu sync.Mutex
 	ws.on("test_event", func(data map[string]interface{}) {
@@ -663,7 +663,7 @@ func TestSharedWebSocket_Connect_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ws := newSharedWebSocket(server.URL, "test")
+	ws := newSharedWebSocket(server.URL, "test", nil)
 	closed := ws.connect()
 	assert.False(t, closed)
 }
@@ -684,7 +684,7 @@ func TestSharedWebSocket_Connect_EventNoEventField(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ws := newSharedWebSocket(server.URL, "test")
+	ws := newSharedWebSocket(server.URL, "test", nil)
 	closed := ws.connect()
 	assert.False(t, closed)
 }
@@ -708,7 +708,7 @@ func TestSharedWebSocket_Run_Reconnect(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ws := newSharedWebSocket(server.URL, "test")
+	ws := newSharedWebSocket(server.URL, "test", nil)
 
 	go ws.run()
 
@@ -739,7 +739,7 @@ func TestSharedWebSocket_Connect_ReadError_CloseCh(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ws := newSharedWebSocket(server.URL, "test")
+	ws := newSharedWebSocket(server.URL, "test", nil)
 
 	done := make(chan bool)
 	go func() {
@@ -1761,7 +1761,7 @@ func (t *failingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 // --- FlagsRuntime ConnectionStatus with wsManager ---
 
 func TestFlagsRuntime_ConnectionStatus_WithWSManager(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	ws.setStatus("connected")
 
 	rt := newFlagsRuntime(nil)
@@ -2449,7 +2449,7 @@ func TestSharedWebSocket_Run_BackoffCap(t *testing.T) {
 	var mu sync.Mutex
 	var connectCount int
 
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	ws.dialWS = func(url string) (*websocket.Conn, error) {
 		mu.Lock()
 		connectCount++
@@ -2475,7 +2475,7 @@ func TestSharedWebSocket_Run_BackoffCap(t *testing.T) {
 // --- ws.go run: closeCh already closed before loop starts ---
 
 func TestSharedWebSocket_Run_ClosedBeforeLoop(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	ws.initBackoff = time.Millisecond
 	ws.maxBackoff = time.Millisecond
 	// Close the channel before run() starts — exercises the top-of-loop select
@@ -2490,7 +2490,7 @@ func TestSharedWebSocket_Run_ClosedBeforeLoop(t *testing.T) {
 func TestSharedWebSocket_Run_ClosedDuringBackoff(t *testing.T) {
 	var mu sync.Mutex
 	connectCount := 0
-	ws := newSharedWebSocket("https://app.smplkit.com", "test")
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	ws.initBackoff = 500 * time.Millisecond
 	ws.maxBackoff = 500 * time.Millisecond
 	ws.dialWS = func(url string) (*websocket.Conn, error) {

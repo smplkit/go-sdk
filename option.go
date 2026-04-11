@@ -7,9 +7,10 @@ import (
 
 // clientConfig holds configuration for the Client.
 type clientConfig struct {
-	baseURL    string
-	timeout    time.Duration
-	httpClient *http.Client
+	baseURL          string
+	timeout          time.Duration
+	httpClient       *http.Client
+	disableTelemetry bool
 }
 
 // defaultConfig returns sensible defaults for a new Client.
@@ -42,5 +43,13 @@ func WithTimeout(d time.Duration) ClientOption {
 func WithHTTPClient(c *http.Client) ClientOption {
 	return func(cfg *clientConfig) {
 		cfg.httpClient = c
+	}
+}
+
+// DisableTelemetry disables internal SDK usage telemetry. By default,
+// the SDK reports anonymous usage metrics to the smplkit service.
+func DisableTelemetry() ClientOption {
+	return func(cfg *clientConfig) {
+		cfg.disableTelemetry = true
 	}
 }

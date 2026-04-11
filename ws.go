@@ -31,6 +31,8 @@ type sharedWebSocket struct {
 	// initBackoff and maxBackoff allow tests to override defaults; zero means use defaults.
 	initBackoff time.Duration
 	maxBackoff  time.Duration
+
+	metrics *metricsReporter
 }
 
 type eventCallback struct {
@@ -48,7 +50,7 @@ func nextCallbackID() uintptr {
 	return callbackIDCounter
 }
 
-func newSharedWebSocket(appBaseURL, apiKey string) *sharedWebSocket {
+func newSharedWebSocket(appBaseURL, apiKey string, metrics *metricsReporter) *sharedWebSocket {
 	return &sharedWebSocket{
 		appBaseURL: appBaseURL,
 		apiKey:     apiKey,
@@ -57,6 +59,7 @@ func newSharedWebSocket(appBaseURL, apiKey string) *sharedWebSocket {
 		closeCh:    make(chan struct{}),
 		wsDone:     make(chan struct{}),
 		dialWS:     defaultDialWS,
+		metrics:    metrics,
 	}
 }
 
@@ -226,6 +229,9 @@ func (ws *sharedWebSocket) connect() (closed bool) {
 	}
 
 	ws.setStatus("connected")
+	if ws.metrics != nil {
+		ws.metrics.RecordGauge("platform.websocket_connections", 1, "connections", nil)
+	}
 
 	// Close the WebSocket when closeCh fires.
 	stopWatcher := make(chan struct{})
@@ -242,6 +248,9 @@ func (ws *sharedWebSocket) connect() (closed bool) {
 	for {
 		_, message, readErr := conn.ReadMessage()
 		if readErr != nil {
+			if ws.metrics != nil {
+				ws.metrics.RecordGauge("platform.websocket_connections", 0, "connections", nil)
+			}
 			select {
 			case <-ws.closeCh:
 				return true

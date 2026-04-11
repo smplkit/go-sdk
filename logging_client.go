@@ -336,6 +336,9 @@ func (c *LoggingClient) applyLevels() {
 		normalized := NormalizeLoggerName(t.loggerName)
 		resolved := resolveLoggerLevel(normalized, c.client.environment, c.loggersCache, c.groupsCache)
 		t.adapter.ApplyLevel(t.loggerName, string(resolved))
+		if metrics := c.client.metrics; metrics != nil {
+			metrics.Record("logging.level_changes", 1, "changes", map[string]string{"logger_id": normalized})
+		}
 	}
 }
 
@@ -352,6 +355,9 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 		resolved := resolveLoggerLevel(normalized, c.client.environment, c.loggersCache, c.groupsCache)
 		for _, adapter := range c.adapters {
 			adapter.ApplyLevel(name, string(resolved))
+		}
+		if metrics := c.client.metrics; metrics != nil {
+			metrics.Record("logging.level_changes", 1, "changes", map[string]string{"logger_id": normalized})
 		}
 	}
 }
@@ -716,6 +722,9 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 	batch := c.buffer.drain()
 	if len(batch) == 0 {
 		return
+	}
+	if metrics := c.client.metrics; metrics != nil && len(batch) > 0 {
+		metrics.Record("logging.loggers_discovered", len(batch), "loggers", nil)
 	}
 	items := make([]genlogging.LoggerBulkItem, 0, len(batch))
 	for _, entry := range batch {
