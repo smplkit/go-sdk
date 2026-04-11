@@ -3844,14 +3844,14 @@
         }
       }
     },
-    "/api/v1/billing/subscriptions": {
+    "/api/v1/subscriptions": {
       "get": {
         "tags": [
-          "Billing"
+          "Subscriptions"
         ],
-        "summary": "List Billing Subscriptions",
+        "summary": "List Subscriptions",
         "description": "Return per-product subscription state for the authenticated account.",
-        "operationId": "list_billing_subscriptions",
+        "operationId": "list_subscriptions",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3910,11 +3910,11 @@
       },
       "post": {
         "tags": [
-          "Billing"
+          "Subscriptions"
         ],
-        "summary": "Create Billing Subscription",
+        "summary": "Create Subscription",
         "description": "Create a new paid subscription for a product.",
-        "operationId": "create_billing_subscription",
+        "operationId": "create_subscription",
         "requestBody": {
           "content": {
             "application/vnd.api+json": {
@@ -3982,79 +3982,14 @@
         ]
       }
     },
-    "/api/v1/billing/setup_intent": {
-      "post": {
-        "tags": [
-          "Billing"
-        ],
-        "summary": "Create Setup Intent",
-        "description": "Create a Stripe SetupIntent for saving a payment method.",
-        "operationId": "create_setup_intent",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {}
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/billing/subscriptions/{product}": {
+    "/api/v1/subscriptions/{product}": {
       "patch": {
         "tags": [
-          "Billing"
+          "Subscriptions"
         ],
-        "summary": "Update Billing Subscription",
+        "summary": "Update Subscription",
         "description": "Change the plan for an existing paid subscription (upgrade or downgrade).",
-        "operationId": "update_billing_subscription",
+        "operationId": "update_subscription",
         "security": [
           {
             "HTTPBearer": []
@@ -4134,11 +4069,11 @@
       },
       "delete": {
         "tags": [
-          "Billing"
+          "Subscriptions"
         ],
-        "summary": "Cancel Billing Subscription",
+        "summary": "Cancel Subscription",
         "description": "Cancel a subscription at end of the current billing period.",
-        "operationId": "cancel_billing_subscription",
+        "operationId": "cancel_subscription",
         "security": [
           {
             "HTTPBearer": []
@@ -4202,14 +4137,79 @@
         }
       }
     },
-    "/api/v1/billing/payment_methods": {
+    "/api/v1/payment_methods": {
       "get": {
         "tags": [
-          "Billing"
+          "Payment Methods"
         ],
         "summary": "List Payment Methods",
         "description": "Return the default payment method for the account's Stripe Customer.",
         "operationId": "list_payment_methods",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/functions/setup_intent/actions/execute": {
+      "post": {
+        "tags": [
+          "Functions"
+        ],
+        "summary": "Execute Setup Intent",
+        "description": "Create a Stripe SetupIntent for saving a payment method.\n\nReturns a ``client_secret`` that the frontend passes to Stripe's\nPayment Element so the customer can securely enter card details\nwithout an immediate charge.",
+        "operationId": "execute_setup_intent",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5952,16 +5952,13 @@
   },
   "tags": [
     {
-      "name": "Account"
-    },
-    {
       "name": "API Keys"
     },
     {
-      "name": "Auth"
+      "name": "Account"
     },
     {
-      "name": "Billing"
+      "name": "Auth"
     },
     {
       "name": "Context Types"
@@ -5973,7 +5970,16 @@
       "name": "Environments"
     },
     {
+      "name": "Functions"
+    },
+    {
       "name": "Invitations"
+    },
+    {
+      "name": "Metrics"
+    },
+    {
+      "name": "Payment Methods"
     },
     {
       "name": "Plans"
@@ -5983,6 +5989,9 @@
     },
     {
       "name": "Services"
+    },
+    {
+      "name": "Subscriptions"
     },
     {
       "name": "Users"
