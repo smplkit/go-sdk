@@ -1433,6 +1433,32 @@ func TestHandleLoggerChanged_FetchError(t *testing.T) {
 	assert.False(t, called)
 }
 
+func TestHandleLoggerChanged_FallbackToKey(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+
+	lc := newTestLoggingClient(t, mux)
+
+	var received *LoggerChangeEvent
+	lc.OnChange(func(evt *LoggerChangeEvent) {
+		received = evt
+	})
+
+	// No "id" key — should fall back to "key" field.
+	lc.handleLoggerChanged(map[string]interface{}{"key": "my.logger"})
+
+	require.NotNil(t, received)
+	assert.Equal(t, "my.logger", received.ID)
+	assert.Equal(t, "websocket", received.Source)
+}
+
 // --- Logger.SetEnvironmentLevel with nil Environments ---
 
 func TestLoggerSetEnvironmentLevel_NilEnvironments(t *testing.T) {

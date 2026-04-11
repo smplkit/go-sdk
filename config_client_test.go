@@ -51,25 +51,6 @@ func sampleConfigJSON(id, name string) string {
 	}`
 }
 
-// sampleListJSON returns a JSON:API list response body with one item.
-func sampleListJSON(id, name string) string {
-	return `{
-		"data": [{
-			"id": "` + id + `",
-			"type": "config",
-			"attributes": {
-				"name": "` + name + `",
-				"description": null,
-				"parent": null,
-				"items": {},
-				"environments": {},
-				"created_at": "2024-01-01T00:00:00Z",
-				"updated_at": null
-			}
-		}]
-	}`
-}
-
 func newTestClient(t *testing.T, handler http.HandlerFunc) *smplkit.Client {
 	t.Helper()
 	server := httptest.NewServer(handler)
@@ -172,6 +153,84 @@ func TestConfigClient_New_Save(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new-config", cfg.ID)
 	assert.Equal(t, "New Config", cfg.Name)
+}
+
+func TestConfigClient_Save_CreatePath(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/configs", r.URL.Path)
+
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(sampleConfigJSON("server-assigned-id", "New Config")))
+	})
+
+	cfg := client.Config().New("temp-id", smplkit.WithConfigName("New Config"))
+	cfg.ID = "" // Clear ID to trigger create path
+	err := cfg.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "server-assigned-id", cfg.ID)
+	assert.Equal(t, "New Config", cfg.Name)
+}
+
+func TestConfigClient_Save_CreatePath_NetworkError(t *testing.T) {
+	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	cfg := client.Config().New("temp", smplkit.WithConfigName("Test"))
+	cfg.ID = ""
+	err = cfg.Save(context.Background())
+	require.Error(t, err)
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestConfigClient_Save_CreatePath_ReadBodyError(t *testing.T) {
+	transport := &brokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	cfg := client.Config().New("temp", smplkit.WithConfigName("Test"))
+	cfg.ID = ""
+	err = cfg.Save(context.Background())
+	require.Error(t, err)
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestConfigClient_Save_CreatePath_HTTPError(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
+	})
+
+	cfg := client.Config().New("temp", smplkit.WithConfigName("Test"))
+	cfg.ID = ""
+	err := cfg.Save(context.Background())
+	require.Error(t, err)
+	var valErr *smplkit.SmplValidationError
+	require.True(t, errors.As(err, &valErr))
+}
+
+func TestConfigClient_Save_CreatePath_MalformedJSON(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not valid}`))
+	})
+
+	cfg := client.Config().New("temp", smplkit.WithConfigName("Test"))
+	cfg.ID = ""
+	err := cfg.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
 }
 
 func TestConfigClient_New_Save_WithEnvironments(t *testing.T) {

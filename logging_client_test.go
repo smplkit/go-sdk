@@ -52,34 +52,6 @@ func sampleLoggerJSON(id, name, level string, managed bool) string {
 	}`
 }
 
-// sampleLoggerListJSON returns a JSON:API list response for loggers.
-func sampleLoggerListJSON(id, name, level string, managed bool) string {
-	managedStr := "true"
-	if !managed {
-		managedStr = "false"
-	}
-	levelStr := "null"
-	if level != "" {
-		levelStr = `"` + level + `"`
-	}
-	return `{
-		"data": [{
-			"id": "` + id + `",
-			"type": "logger",
-			"attributes": {
-				"id": "` + id + `",
-				"name": "` + name + `",
-				"level": ` + levelStr + `,
-				"managed": ` + managedStr + `,
-				"environments": {},
-				"sources": [],
-				"created_at": "2024-01-01T00:00:00Z",
-				"updated_at": "2024-06-15T12:00:00Z"
-			}
-		}]
-	}`
-}
-
 // sampleLogGroupJSON returns a JSON:API single-resource response for a log group.
 func sampleLogGroupJSON(id, name, level string) string {
 	levelStr := "null"
@@ -220,6 +192,23 @@ func TestLogger_Save_Create(t *testing.T) {
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "my.logger", logger.ID)
+	assert.Equal(t, "My Logger", logger.Name)
+}
+
+func TestLogger_Save_CreatePath_EmptyID(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/loggers", r.URL.Path)
+
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(sampleLoggerJSON("server-assigned", "My Logger", "INFO", true)))
+	}))
+
+	logger := client.Logging().New("temp-id", smplkit.WithLoggerName("My Logger"))
+	logger.ID = "" // Clear ID to trigger create (POST) path
+	err := logger.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "server-assigned", logger.ID)
 	assert.Equal(t, "My Logger", logger.Name)
 }
 
@@ -379,6 +368,23 @@ func TestLogGroup_Save_Create(t *testing.T) {
 	err := group.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "infra", group.ID)
+}
+
+func TestLogGroup_Save_CreatePath_EmptyID(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/log_groups", r.URL.Path)
+
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(sampleLogGroupJSON("server-assigned", "Infra", "WARN")))
+	}))
+
+	group := client.Logging().NewGroup("temp-id", smplkit.WithLogGroupName("Infra"))
+	group.ID = "" // Clear ID to trigger create (POST) path
+	err := group.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "server-assigned", group.ID)
+	assert.Equal(t, "Infra", group.Name)
 }
 
 func TestLogGroup_Save_Update(t *testing.T) {
@@ -918,6 +924,66 @@ func TestLogger_Save_Create_HTTPError(t *testing.T) {
 	require.True(t, errors.As(err, &valErr))
 }
 
+// --- createLogger (POST) error paths — ID cleared to trigger create branch ---
+
+func TestLogger_Save_CreatePath_NetworkError(t *testing.T) {
+	transport := &failTransport{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	logger := client.Logging().New("temp")
+	logger.ID = ""
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogger_Save_CreatePath_ReadBodyError(t *testing.T) {
+	transport := &loggingBrokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	logger := client.Logging().New("temp")
+	logger.ID = ""
+	err = logger.Save(context.Background())
+	require.Error(t, err)
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogger_Save_CreatePath_HTTPError(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
+	}))
+
+	logger := client.Logging().New("temp")
+	logger.ID = ""
+	err := logger.Save(context.Background())
+	require.Error(t, err)
+	var valErr *smplkit.SmplValidationError
+	require.True(t, errors.As(err, &valErr))
+}
+
+func TestLogger_Save_CreatePath_MalformedJSON(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not valid}`))
+	}))
+
+	logger := client.Logging().New("temp")
+	logger.ID = ""
+	err := logger.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
 func TestLogger_Save_Update_NetworkError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
@@ -1079,6 +1145,66 @@ func TestLogGroup_Save_Create_HTTPError(t *testing.T) {
 
 	var valErr *smplkit.SmplValidationError
 	require.True(t, errors.As(err, &valErr))
+}
+
+// --- createGroup (POST) error paths — ID cleared to trigger create branch ---
+
+func TestLogGroup_Save_CreatePath_NetworkError(t *testing.T) {
+	transport := &failTransport{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
+	require.NoError(t, err)
+
+	group := client.Logging().NewGroup("temp")
+	group.ID = ""
+	err = group.Save(context.Background())
+	require.Error(t, err)
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogGroup_Save_CreatePath_ReadBodyError(t *testing.T) {
+	transport := &loggingBrokenBodyRoundTripper{}
+	httpClient := &http.Client{Transport: transport}
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+		smplkit.WithBaseURL("http://example.com"),
+		smplkit.WithHTTPClient(httpClient),
+	)
+	require.NoError(t, err)
+
+	group := client.Logging().NewGroup("temp")
+	group.ID = ""
+	err = group.Save(context.Background())
+	require.Error(t, err)
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+}
+
+func TestLogGroup_Save_CreatePath_HTTPError(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
+	}))
+
+	group := client.Logging().NewGroup("temp")
+	group.ID = ""
+	err := group.Save(context.Background())
+	require.Error(t, err)
+	var valErr *smplkit.SmplValidationError
+	require.True(t, errors.As(err, &valErr))
+}
+
+func TestLogGroup_Save_CreatePath_MalformedJSON(t *testing.T) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not valid}`))
+	}))
+
+	group := client.Logging().NewGroup("temp")
+	group.ID = ""
+	err := group.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
 }
 
 func TestLogGroup_Save_Update_NetworkError(t *testing.T) {

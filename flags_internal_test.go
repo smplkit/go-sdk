@@ -94,6 +94,15 @@ func TestParseContextType_InvalidJSON(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestParseContextTypeRaw_FallbackToAttributeID(t *testing.T) {
+	// Root id is empty; should fall back to attributes.id.
+	raw := json.RawMessage(`{"id":"","attributes":{"id":"user","name":"User","attributes":{"plan":"string"}}}`)
+	ct, err := parseContextTypeRaw(raw)
+	require.NoError(t, err)
+	assert.Equal(t, "user", ct.ID)
+	assert.Equal(t, "User", ct.Name)
+}
+
 func TestParseContextTypeRaw_InvalidJSON(t *testing.T) {
 	_, err := parseContextTypeRaw(json.RawMessage(`{invalid}`))
 	assert.Error(t, err)
@@ -1240,6 +1249,23 @@ func TestFlagsClient_Create_Success(t *testing.T) {
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "feature-x", flag.ID)
+}
+
+func TestFlagsClient_Create_EmptyID_PostPath(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/flags", r.URL.Path)
+
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(sampleFlagResponseJSON("server-id", "Feature X", "BOOLEAN")))
+	}))
+
+	flag := fc.NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
+	flag.ID = "" // Clear ID to trigger create (POST) path
+	err := flag.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "server-id", flag.ID)
 }
 
 func TestFlagsClient_Create_NonBooleanNoAutoValues(t *testing.T) {
@@ -3259,6 +3285,49 @@ func TestHandleFlagChanged(t *testing.T) {
 	require.NotNil(t, received)
 	assert.Equal(t, "my-flag", received.ID)
 	assert.Equal(t, "websocket", received.Source)
+}
+
+// --- createFlag (POST) error paths ---
+
+func TestFlagsClient_CreateFlag_NetworkError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &failingTransport{})
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag.ID = "" // trigger create (POST) path
+	err := flag.Save(context.Background())
+	assert.Error(t, err)
+}
+
+func TestFlagsClient_CreateFlag_ReadBodyError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag.ID = ""
+	err := flag.Save(context.Background())
+	assert.Error(t, err)
+}
+
+func TestFlagsClient_CreateFlag_HTTPError(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
+	}))
+
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag.ID = ""
+	err := flag.Save(context.Background())
+	assert.Error(t, err)
+}
+
+func TestFlagsClient_CreateFlag_MalformedJSON(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not valid}`))
+	}))
+
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag.ID = ""
+	err := flag.Save(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
 }
 
 func TestHandleFlagChanged_FetchError(t *testing.T) {
