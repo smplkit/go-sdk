@@ -65,7 +65,6 @@ type Config struct {
 	CreatedAt    *time.Time                       `json:"created_at,omitempty"`
 	Description  *string                          `json:"description,omitempty"`
 	Environments *map[string]EnvironmentOverride  `json:"environments,omitempty"`
-	Id           *string                          `json:"id,omitempty"`
 	Items        *map[string]ConfigItemDefinition `json:"items,omitempty"`
 	Name         string                           `json:"name"`
 	Parent       *string                          `json:"parent,omitempty"`
