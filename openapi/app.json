@@ -3847,7 +3847,7 @@
     "/api/v1/subscriptions": {
       "get": {
         "tags": [
-          "Subscriptions"
+          "Billing"
         ],
         "summary": "List Subscriptions",
         "description": "Return per-product subscription state for the authenticated account.",
@@ -3910,7 +3910,7 @@
       },
       "post": {
         "tags": [
-          "Subscriptions"
+          "Billing"
         ],
         "summary": "Create Subscription",
         "description": "Create a new paid subscription for a product.",
@@ -3985,7 +3985,7 @@
     "/api/v1/subscriptions/{product}": {
       "patch": {
         "tags": [
-          "Subscriptions"
+          "Billing"
         ],
         "summary": "Update Subscription",
         "description": "Change the plan for an existing paid subscription (upgrade or downgrade).",
@@ -4069,7 +4069,7 @@
       },
       "delete": {
         "tags": [
-          "Subscriptions"
+          "Billing"
         ],
         "summary": "Cancel Subscription",
         "description": "Cancel a subscription at end of the current billing period.",
@@ -4140,7 +4140,7 @@
     "/api/v1/payment_methods": {
       "get": {
         "tags": [
-          "Payment Methods"
+          "Billing"
         ],
         "summary": "List Payment Methods",
         "description": "Return the default payment method for the account's Stripe Customer.",
@@ -4205,7 +4205,7 @@
     "/api/v1/functions/setup_intent/actions/execute": {
       "post": {
         "tags": [
-          "Functions"
+          "Billing"
         ],
         "summary": "Execute Setup Intent",
         "description": "Create a Stripe SetupIntent for saving a payment method.\n\nReturns a ``client_secret`` that the frontend passes to Stripe's\nPayment Element so the customer can securely enter card details\nwithout an immediate charge.",
@@ -5961,6 +5961,9 @@
       "name": "Auth"
     },
     {
+      "name": "Billing"
+    },
+    {
       "name": "Context Types"
     },
     {
@@ -5970,16 +5973,10 @@
       "name": "Environments"
     },
     {
-      "name": "Functions"
-    },
-    {
       "name": "Invitations"
     },
     {
       "name": "Metrics"
-    },
-    {
-      "name": "Payment Methods"
     },
     {
       "name": "Plans"
@@ -5989,9 +5986,6 @@
     },
     {
       "name": "Services"
-    },
-    {
-      "name": "Subscriptions"
     },
     {
       "name": "Users"
