@@ -44,7 +44,6 @@ type Flag struct {
 	Default      interface{}                 `json:"default"`
 	Description  *string                     `json:"description,omitempty"`
 	Environments *map[string]FlagEnvironment `json:"environments,omitempty"`
-	Id           *string                     `json:"id,omitempty"`
 
 	// Name Human-readable display name
 	Name string `json:"name"`
