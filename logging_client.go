@@ -347,6 +347,7 @@ func (c *LoggingClient) createLogger(ctx context.Context, l *Logger) error {
 	loggerType := "logger"
 	reqBody := genlogging.ResponseLogger{
 		Data: genlogging.ResourceLogger{
+			Id:         &l.ID,
 			Type:       &loggerType,
 			Attributes: buildLoggerAttributes(l),
 		},
@@ -429,6 +430,7 @@ func (c *LoggingClient) createGroup(ctx context.Context, g *LogGroup) error {
 	groupType := "log_group"
 	reqBody := genlogging.ResponseLogGroup{
 		Data: genlogging.ResourceLogGroup{
+			Id:         &g.ID,
 			Type:       &groupType,
 			Attributes: buildLogGroupAttributes(g),
 		},
@@ -578,7 +580,6 @@ func resourceToLogGroup(r genlogging.LogGroupResource, c *LoggingClient) *LogGro
 }
 
 func buildLoggerAttributes(l *Logger) genlogging.Logger {
-	id := l.ID
 	var level *string
 	if l.Level != nil {
 		s := string(*l.Level)
@@ -593,7 +594,6 @@ func buildLoggerAttributes(l *Logger) genlogging.Logger {
 		sources = &l.Sources
 	}
 	return genlogging.Logger{
-		Id:           &id,
 		Name:         l.Name,
 		Level:        level,
 		Group:        l.Group,
@@ -604,7 +604,6 @@ func buildLoggerAttributes(l *Logger) genlogging.Logger {
 }
 
 func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
-	id := g.ID
 	var level *string
 	if g.Level != nil {
 		s := string(*g.Level)
@@ -615,7 +614,6 @@ func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
 		envs = &g.Environments
 	}
 	return genlogging.LogGroup{
-		Id:           &id,
 		Name:         g.Name,
 		Level:        level,
 		Group:        g.Group,

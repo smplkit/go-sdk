@@ -163,7 +163,7 @@ func (c *FlagsClient) Delete(ctx context.Context, id string) error {
 
 // createFlag creates the flag on the server and updates the local instance.
 func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
-	reqBody := buildFlagRequest("", flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
+	reqBody := buildFlagRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
 
 	resp, err := c.generated.CreateFlag(ctx, reqBody)
 	if err != nil {
@@ -191,7 +191,7 @@ func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
 
 // updateFlag updates the flag on the server and updates the local instance.
 func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
-	reqBody := buildFlagRequest(flag.ID, flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
+	reqBody := buildFlagRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
 
 	resp, err := c.generated.UpdateFlag(ctx, flag.ID, reqBody)
 	if err != nil {
@@ -374,15 +374,6 @@ func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
 
 	envs := extractFlagEnvironments(attrs.Environments)
 
-	attrID := ""
-	if attrs.Id != nil {
-		attrID = *attrs.Id
-	}
-	// Prefer the JSON:API resource-level id, fall back to attributes.id.
-	if id == "" {
-		id = attrID
-	}
-
 	return &Flag{
 		ID:           id,
 		Name:         attrs.Name,
@@ -433,11 +424,7 @@ func extractFlagEnvironments(envs *map[string]genflags.FlagEnvironment) map[stri
 }
 
 // buildFlagRequest constructs a ResponseFlag for create or update.
-func buildFlagRequest(id, attrID, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.ResponseFlag {
-	var idPtr *string
-	if id != "" {
-		idPtr = &id
-	}
+func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.ResponseFlag {
 	flagT := "flag"
 
 	var genValues *[]genflags.FlagValue
@@ -453,10 +440,9 @@ func buildFlagRequest(id, attrID, name, flagType string, dflt interface{}, value
 
 	return genflags.ResponseFlag{
 		Data: genflags.ResourceFlag{
-			Id:   idPtr,
+			Id:   &id,
 			Type: &flagT,
 			Attributes: genflags.Flag{
-				Id:           &attrID,
 				Name:         name,
 				Type:         flagType,
 				Default:      dflt,

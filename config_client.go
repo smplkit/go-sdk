@@ -164,7 +164,7 @@ func (c *ConfigClient) Delete(ctx context.Context, id string) error {
 
 // createConfig creates the config on the server and updates the local instance.
 func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
-	reqBody := buildConfigRequest("", cfg.Name, &cfg.ID, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
 	resp, err := c.generated.CreateConfig(ctx, reqBody)
 	if err != nil {
@@ -192,7 +192,7 @@ func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
 
 // updateConfig updates the config on the server and updates the local instance.
 func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
-	reqBody := buildConfigRequest(cfg.ID, cfg.Name, &cfg.ID, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
 	resp, err := c.generated.UpdateConfig(ctx, cfg.ID, reqBody)
 	if err != nil {
@@ -536,19 +536,14 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 }
 
 // buildConfigRequest constructs a ResponseConfig for create or update.
-func buildConfigRequest(id, name string, attrID, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
-	var idPtr *string
-	if id != "" {
-		idPtr = &id
-	}
+func buildConfigRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
 	configType := "config"
 	return genconfig.ResponseConfig{
 		Data: genconfig.ResourceConfig{
-			Id:   idPtr,
+			Id:   &id,
 			Type: &configType,
 			Attributes: genconfig.Config{
 				Name:         name,
-				Id:           attrID,
 				Description:  desc,
 				Parent:       parent,
 				Items:        refMap(wrapItemValues(items)),

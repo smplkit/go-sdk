@@ -7,7 +7,7 @@ import (
 
 // Config represents a configuration resource from the smplkit platform.
 type Config struct {
-	// ID is the config identifier (e.g. "user_service"). Empty for unsaved configs.
+	// ID is the config identifier (e.g. "user_service").
 	ID string
 	// Name is the display name for the config.
 	Name string
@@ -59,7 +59,7 @@ func WithConfigEnvironments(envs map[string]map[string]interface{}) ConfigOption
 // Save persists the config to the server.
 // The Config instance is updated with the server response.
 func (c *Config) Save(ctx context.Context) error {
-	if c.ID == "" {
+	if c.CreatedAt == nil {
 		return c.client.createConfig(ctx, c)
 	}
 	return c.client.updateConfig(ctx, c)

@@ -20,7 +20,7 @@ const (
 
 // Logger represents a logger resource from the smplkit platform.
 type Logger struct {
-	// ID is the logger identifier. Empty for unsaved loggers.
+	// ID is the logger identifier.
 	ID string
 	// Name is the display name for the logger.
 	Name string
@@ -58,7 +58,7 @@ func WithLoggerManaged(managed bool) LoggerOption {
 // Save persists the logger to the server.
 // The Logger instance is updated with the server response.
 func (l *Logger) Save(ctx context.Context) error {
-	if l.ID == "" {
+	if l.CreatedAt == nil {
 		return l.client.createLogger(ctx, l)
 	}
 	return l.client.updateLogger(ctx, l)
@@ -126,7 +126,7 @@ func (l *Logger) apply(other *Logger) {
 
 // LogGroup represents a log group resource from the smplkit platform.
 type LogGroup struct {
-	// ID is the log group identifier. Empty for unsaved groups.
+	// ID is the log group identifier.
 	ID string
 	// Name is the display name for the log group.
 	Name string
@@ -160,7 +160,7 @@ func WithLogGroupParent(groupID string) LogGroupOption {
 // Save persists the log group to the server.
 // The LogGroup instance is updated with the server response.
 func (g *LogGroup) Save(ctx context.Context) error {
-	if g.ID == "" {
+	if g.CreatedAt == nil {
 		return g.client.createGroup(ctx, g)
 	}
 	return g.client.updateGroup(ctx, g)

@@ -145,12 +145,10 @@ func TestResourceToFlag_NilValues(t *testing.T) {
 	flagType := "flag"
 	now := time.Now()
 	desc := "unconstrained"
-	attrID := "max-retries"
 	r := genflags.FlagResource{
 		Id:   &id,
 		Type: genflags.FlagResourceType(flagType),
 		Attributes: genflags.Flag{
-			Id:           &attrID,
 			Name:         "Max Retries",
 			Type:         "NUMERIC",
 			Default:      float64(3),
@@ -168,7 +166,7 @@ func TestResourceToFlag_NilValues(t *testing.T) {
 }
 
 func TestBuildFlagRequest_NilValues(t *testing.T) {
-	req := buildFlagRequest("", "max-retries", "Max Retries", "NUMERIC", float64(3), nil, nil, nil)
+	req := buildFlagRequest("max-retries", "Max Retries", "NUMERIC", float64(3), nil, nil, nil)
 	assert.Nil(t, req.Data.Attributes.Values, "nil values should serialize as null")
 }
 
@@ -238,9 +236,9 @@ func TestExtractFlagEnvironments_RuleNoDescription(t *testing.T) {
 func TestBuildFlagRequest_Create(t *testing.T) {
 	desc := "A test flag"
 	values := []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}}
-	req := buildFlagRequest("", "feature-x", "Feature X", "BOOLEAN", true, &values, &desc, nil)
-	assert.Nil(t, req.Data.Id)
-	assert.Equal(t, "feature-x", *req.Data.Attributes.Id)
+	req := buildFlagRequest("feature-x", "Feature X", "BOOLEAN", true, &values, &desc, nil)
+	require.NotNil(t, req.Data.Id)
+	assert.Equal(t, "feature-x", *req.Data.Id)
 	require.NotNil(t, req.Data.Attributes.Values)
 	assert.Len(t, *req.Data.Attributes.Values, 2)
 }
@@ -254,7 +252,7 @@ func TestBuildFlagRequest_Update(t *testing.T) {
 			"rules":   []interface{}{},
 		},
 	}
-	req := buildFlagRequest("flag-id", "feature-x", "Feature X", "BOOLEAN", true, &values, nil, envs)
+	req := buildFlagRequest("flag-id", "Feature X", "BOOLEAN", true, &values, nil, envs)
 	assert.NotNil(t, req.Data.Id)
 	assert.Equal(t, "flag-id", *req.Data.Id)
 	assert.NotNil(t, req.Data.Attributes.Environments)
@@ -772,6 +770,40 @@ func TestSharedWebSocket_Connect_ReadError_CloseCh(t *testing.T) {
 	}
 }
 
+func TestSharedWebSocket_Connect_WithMetrics(t *testing.T) {
+	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := wsUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		// Send connected confirmation
+		_ = conn.WriteJSON(map[string]interface{}{"type": "connected"})
+		// Close immediately to trigger read error
+		time.Sleep(50 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	metrics := newMetricsReporter(http.DefaultClient, "https://app.smplkit.com", "test", "test-service", 60*time.Second)
+	defer metrics.Close()
+
+	ws := newSharedWebSocket(server.URL, "test", metrics)
+
+	done := make(chan bool)
+	go func() {
+		closed := ws.connect()
+		done <- closed
+	}()
+
+	select {
+	case closed := <-done:
+		assert.False(t, closed) // read error, not closeCh
+	case <-time.After(2 * time.Second):
+		t.Fatal("connect did not return")
+	}
+}
+
 // --- Client ensureWS / stopWS ---
 
 func TestClient_EnsureWS(t *testing.T) {
@@ -1162,7 +1194,6 @@ func sampleFlagResponseJSON(id, name, flagType string) string {
 			"id": "` + id + `",
 			"type": "flag",
 			"attributes": {
-				"id": "` + id + `",
 				"name": "` + name + `",
 				"type": "` + flagType + `",
 				"default": true,
@@ -1182,7 +1213,6 @@ func sampleFlagListResponseJSON(id, name, flagType string) string {
 			"id": "` + id + `",
 			"type": "flag",
 			"attributes": {
-				"id": "` + id + `",
 				"name": "` + name + `",
 				"type": "` + flagType + `",
 				"default": true,
@@ -1229,16 +1259,15 @@ func TestFlagsClient_Get_NotFound(t *testing.T) {
 
 func TestFlagsClient_Create_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" && r.URL.Path == "/api/v1/flags/feature-x" {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/flags" {
 			b, _ := io.ReadAll(r.Body)
 			var req map[string]interface{}
 			_ = json.Unmarshal(b, &req)
 			data := req["data"].(map[string]interface{})
-			attrs := data["attributes"].(map[string]interface{})
-			assert.Equal(t, "feature-x", attrs["id"])
+			assert.Equal(t, "feature-x", data["id"])
 
 			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(sampleFlagResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 			return
 		}
@@ -1290,7 +1319,6 @@ func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 			"id": "max-retries",
 			"type": "flag",
 			"attributes": {
-				"id": "max-retries",
 				"name": "Max Retries",
 				"type": "NUMERIC",
 				"default": 3,
@@ -1303,7 +1331,7 @@ func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 		}
 	}`
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" && r.URL.Path == "/api/v1/flags/max-retries" {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/flags" {
 			b, _ := io.ReadAll(r.Body)
 			var req map[string]interface{}
 			_ = json.Unmarshal(b, &req)
@@ -1312,7 +1340,7 @@ func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 			assert.Nil(t, attrs["values"], "unconstrained create should send values: null")
 
 			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(unconstrainedResp))
 			return
 		}
@@ -1453,6 +1481,32 @@ func TestFlagsClient_UpdateFlag_WithAllParams(t *testing.T) {
 	}
 	err := fc.updateFlag(context.Background(), flag)
 	require.NoError(t, err)
+}
+
+func TestFlag_Save_UpdatePath(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/flags/"+testFlagID {
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagID, "Updated via Save", "BOOLEAN")))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	now := time.Now()
+	flag := &Flag{
+		ID:        testFlagID,
+		Name:      "Feature X",
+		Type:      "BOOLEAN",
+		Default:   true,
+		CreatedAt: &now,
+		client:    fc,
+	}
+
+	err := flag.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Updated via Save", flag.Name)
 }
 
 // --- Context management methods (via doJSONApp) ---
@@ -2523,13 +2577,11 @@ func TestFlagsRuntime_EnsureInit_FetchError(t *testing.T) {
 // --- helpers for test infrastructure ---
 
 func flagResource(id, flagType, name, vType string, dflt interface{}, desc string, created time.Time) genflags.FlagResource {
-	attrID := id
 	vals := []genflags.FlagValue{{Name: "True", Value: true}}
 	return genflags.FlagResource{
 		Id:   &id,
 		Type: genflags.FlagResourceType(flagType),
 		Attributes: genflags.Flag{
-			Id:           &attrID,
 			Name:         name,
 			Type:         vType,
 			Default:      dflt,

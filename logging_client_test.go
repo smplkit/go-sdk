@@ -171,17 +171,16 @@ func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
 
 func TestLogger_Save_Create(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" {
-			assert.Equal(t, "/api/v1/loggers/my.logger", r.URL.Path)
+		if r.Method == "POST" {
+			assert.Equal(t, "/api/v1/loggers", r.URL.Path)
 
 			var body map[string]interface{}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			data := body["data"].(map[string]interface{})
 			assert.Equal(t, "logger", data["type"])
-			attrs := data["attributes"].(map[string]interface{})
-			assert.Equal(t, "my.logger", attrs["id"])
+			assert.Equal(t, "my.logger", data["id"])
 
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
 			return
 		}
@@ -349,15 +348,16 @@ func TestLogger_ClearAllEnvironmentLevels(t *testing.T) {
 
 func TestLogGroup_Save_Create(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" {
-			assert.Equal(t, "/api/v1/log_groups/infra", r.URL.Path)
+		if r.Method == "POST" {
+			assert.Equal(t, "/api/v1/log_groups", r.URL.Path)
 
 			var body map[string]interface{}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			data := body["data"].(map[string]interface{})
 			assert.Equal(t, "log_group", data["type"])
+			assert.Equal(t, "infra", data["id"])
 
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(sampleLogGroupJSON("infra", "Infra", "WARN")))
 			return
 		}

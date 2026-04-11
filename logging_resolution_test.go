@@ -625,8 +625,6 @@ func TestBuildLoggerAttributes_WithLevel(t *testing.T) {
 	}
 
 	attrs := buildLoggerAttributes(logger)
-	require.NotNil(t, attrs.Id)
-	assert.Equal(t, "test", *attrs.Id)
 	require.NotNil(t, attrs.Level)
 	assert.Equal(t, "DEBUG", *attrs.Level)
 	require.NotNil(t, attrs.Managed)
@@ -682,8 +680,6 @@ func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
 	}
 
 	attrs := buildLogGroupAttributes(group)
-	require.NotNil(t, attrs.Id)
-	assert.Equal(t, "infra", *attrs.Id)
 	require.NotNil(t, attrs.Level)
 	assert.Equal(t, "WARN", *attrs.Level)
 	require.NotNil(t, attrs.Group)

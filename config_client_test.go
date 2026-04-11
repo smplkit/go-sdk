@@ -127,8 +127,8 @@ func TestConfigClient_List_Empty(t *testing.T) {
 
 func TestConfigClient_New_Save(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "PUT", r.Method)
-		assert.Equal(t, "/api/v1/configs/new-config", r.URL.Path)
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/configs", r.URL.Path)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		var body map[string]interface{}
@@ -136,6 +136,7 @@ func TestConfigClient_New_Save(t *testing.T) {
 
 		data := body["data"].(map[string]interface{})
 		assert.Equal(t, "config", data["type"])
+		assert.Equal(t, "new-config", data["id"])
 
 		attrs := data["attributes"].(map[string]interface{})
 		assert.Equal(t, "New Config", attrs["name"])

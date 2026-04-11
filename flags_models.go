@@ -8,7 +8,7 @@ import (
 
 // Flag represents a flag resource from the smplkit platform.
 type Flag struct {
-	// ID is the flag identifier (e.g. "dark-mode"). Empty for unsaved flags.
+	// ID is the flag identifier (e.g. "dark-mode").
 	ID string
 	// Name is the display name for the flag.
 	Name string
@@ -58,7 +58,7 @@ func WithFlagValues(values []FlagValue) FlagOption {
 // Save persists the flag to the server.
 // The Flag instance is updated with the server response.
 func (f *Flag) Save(ctx context.Context) error {
-	if f.ID == "" {
+	if f.CreatedAt == nil {
 		return f.client.createFlag(ctx, f)
 	}
 	return f.client.updateFlag(ctx, f)
