@@ -87,7 +87,7 @@ func main() {
 		if e.Level != nil {
 			levelStr = string(*e.Level)
 		}
-		globalEvents = append(globalEvents, fmt.Sprintf("%s→%s", e.Key, levelStr))
+		globalEvents = append(globalEvents, fmt.Sprintf("%s→%s", e.ID, levelStr))
 	})
 	fmt.Println("  Global listener registered")
 
@@ -98,7 +98,7 @@ func main() {
 		if e.Level != nil {
 			levelStr = string(*e.Level)
 		}
-		keyEvents = append(keyEvents, fmt.Sprintf("%s→%s", e.Key, levelStr))
+		keyEvents = append(keyEvents, fmt.Sprintf("%s→%s", e.ID, levelStr))
 	})
 	fmt.Println("  Key-scoped listener registered for com.acme.payments")
 
@@ -114,7 +114,7 @@ func main() {
 	if err := paymentsLogger.Save(ctx); err != nil {
 		fatal("Failed to update payments logger", err)
 	}
-	fmt.Printf("  Updated: key=%s, level=%s\n", paymentsLogger.Key, *paymentsLogger.Level)
+	fmt.Printf("  Updated: id=%s, level=%s\n", paymentsLogger.ID, *paymentsLogger.Level)
 
 	// Wait briefly for WebSocket event propagation.
 	time.Sleep(2 * time.Second)

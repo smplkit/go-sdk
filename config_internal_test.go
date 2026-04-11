@@ -161,7 +161,7 @@ func TestDiffAndFire_RemovedKey(t *testing.T) {
 
 	var events []*ConfigChangeEvent
 	c.listeners = []configChangeListener{
-		{configKey: "", itemKey: "", cb: func(evt *ConfigChangeEvent) {
+		{configID: "", itemKey: "", cb: func(evt *ConfigChangeEvent) {
 			events = append(events, evt)
 		}},
 	}
@@ -176,7 +176,7 @@ func TestDiffAndFire_RemovedKey(t *testing.T) {
 	c.diffAndFire(oldCache, newCache, "manual")
 
 	require.Len(t, events, 1)
-	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, "app", events[0].ConfigID)
 	assert.Equal(t, "b", events[0].ItemKey)
 	assert.Nil(t, events[0].NewValue)
 }
@@ -207,12 +207,12 @@ func TestDiffAndFire_ListenerPanic(t *testing.T) {
 	assert.Equal(t, 2, events[0].NewValue)
 }
 
-func TestDiffAndFire_FiltersByConfigKey(t *testing.T) {
+func TestDiffAndFire_FiltersByConfigID(t *testing.T) {
 	c := &ConfigClient{}
 
 	var events []*ConfigChangeEvent
 	c.listeners = []configChangeListener{
-		{configKey: "db", cb: func(evt *ConfigChangeEvent) {
+		{configID: "db", cb: func(evt *ConfigChangeEvent) {
 			events = append(events, evt)
 		}},
 	}
@@ -229,7 +229,7 @@ func TestDiffAndFire_FiltersByConfigKey(t *testing.T) {
 	c.diffAndFire(oldCache, newCache, "manual")
 
 	require.Len(t, events, 1)
-	assert.Equal(t, "db", events[0].ConfigKey)
+	assert.Equal(t, "db", events[0].ConfigID)
 }
 
 func TestDiffAndFire_FiltersByItemKey(t *testing.T) {
@@ -237,7 +237,7 @@ func TestDiffAndFire_FiltersByItemKey(t *testing.T) {
 
 	var events []*ConfigChangeEvent
 	c.listeners = []configChangeListener{
-		{configKey: "app", itemKey: "a", cb: func(evt *ConfigChangeEvent) {
+		{configID: "app", itemKey: "a", cb: func(evt *ConfigChangeEvent) {
 			events = append(events, evt)
 		}},
 	}
@@ -374,7 +374,7 @@ func TestDiffAndFire_NewConfig(t *testing.T) {
 	c.diffAndFire(oldCache, newCache, "manual")
 
 	require.Len(t, events, 1)
-	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, "app", events[0].ConfigID)
 	assert.Equal(t, "a", events[0].ItemKey)
 	assert.Nil(t, events[0].OldValue)
 	assert.Equal(t, 1, events[0].NewValue)
@@ -398,7 +398,7 @@ func TestDiffAndFire_RemovedConfig(t *testing.T) {
 	c.diffAndFire(oldCache, newCache, "manual")
 
 	require.Len(t, events, 1)
-	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, "app", events[0].ConfigID)
 	assert.Equal(t, 1, events[0].OldValue)
 	assert.Nil(t, events[0].NewValue)
 }
@@ -447,7 +447,7 @@ func TestGetByID_ReadBodyError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	_, err := cc.getByID(context.Background(), "test-config")
 	require.Error(t, err)
 }
 
@@ -466,23 +466,23 @@ func TestGetByID_ReadBodyFailure(t *testing.T) {
 		conn.Close()
 	}))
 
-	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	_, err := cc.getByID(context.Background(), "test-config")
 	require.Error(t, err)
 }
 
-// ---------- deleteByID error paths ----------
+// ---------- Delete error paths ----------
 
-func TestDeleteByID_Config_CheckStatusError(t *testing.T) {
+func TestDelete_Config_CheckStatusError(t *testing.T) {
 	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	err := cc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := cc.Delete(context.Background(), "test-config")
 	require.Error(t, err)
 }
 
-func TestDeleteByID_Config_ReadBodyFailure(t *testing.T) {
+func TestDelete_Config_ReadBodyFailure(t *testing.T) {
 	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hj, ok := w.(http.Hijacker)
 		if !ok {
@@ -495,7 +495,7 @@ func TestDeleteByID_Config_ReadBodyFailure(t *testing.T) {
 		conn.Close()
 	}))
 
-	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	_, err := cc.getByID(context.Background(), "test-config")
 	// Either body read fails or JSON unmarshal fails — both are errors
 	require.Error(t, err)
 }
@@ -585,8 +585,8 @@ func TestSubscribe_ReturnsLiveConfig(t *testing.T) {
 // ---------- fetchChain with parent walking ----------
 
 func TestFetchChain_ParentWalking(t *testing.T) {
-	parentID := "660e8400-e29b-41d4-a716-446655440000"
-	childID := "550e8400-e29b-41d4-a716-446655440000"
+	parentID := "parent-config"
+	childID := "child-config"
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/configs/"+childID, func(w http.ResponseWriter, r *http.Request) {
@@ -598,7 +598,6 @@ func TestFetchChain_ParentWalking(t *testing.T) {
 				"type": "config",
 				"attributes": map[string]interface{}{
 					"name":         "Child",
-					"key":          "child",
 					"parent":       parentID,
 					"items":        map[string]interface{}{},
 					"environments": map[string]interface{}{},
@@ -617,7 +616,6 @@ func TestFetchChain_ParentWalking(t *testing.T) {
 				"type": "config",
 				"attributes": map[string]interface{}{
 					"name":         "Parent",
-					"key":          "parent",
 					"items":        map[string]interface{}{},
 					"environments": map[string]interface{}{},
 				},
@@ -762,7 +760,7 @@ func TestLiveConfig_Value(t *testing.T) {
 			"app": {"host": "localhost"},
 		},
 	}
-	lc := &LiveConfig{client: cc, key: "app"}
+	lc := &LiveConfig{client: cc, id: "app"}
 	val := lc.Value()
 	assert.Equal(t, "localhost", val["host"])
 }
@@ -771,7 +769,7 @@ func TestLiveConfig_Value_NilCache(t *testing.T) {
 	cc := &ConfigClient{
 		client: &Client{environment: "test"},
 	}
-	lc := &LiveConfig{client: cc, key: "app"}
+	lc := &LiveConfig{client: cc, id: "app"}
 	val := lc.Value()
 	assert.Nil(t, val)
 }
@@ -781,7 +779,7 @@ func TestLiveConfig_Value_KeyNotFound(t *testing.T) {
 		client:      &Client{environment: "test"},
 		configCache: map[string]map[string]interface{}{},
 	}
-	lc := &LiveConfig{client: cc, key: "missing"}
+	lc := &LiveConfig{client: cc, id: "missing"}
 	val := lc.Value()
 	assert.Nil(t, val)
 }
@@ -795,7 +793,7 @@ func TestLiveConfig_ValueInto(t *testing.T) {
 			"db": {"host": "localhost", "port": float64(5432)},
 		},
 	}
-	lc := &LiveConfig{client: cc, key: "db"}
+	lc := &LiveConfig{client: cc, id: "db"}
 
 	var target struct {
 		Host string  `json:"host"`
@@ -811,7 +809,7 @@ func TestLiveConfig_ValueInto_NilCache(t *testing.T) {
 	cc := &ConfigClient{
 		client: &Client{environment: "test"},
 	}
-	lc := &LiveConfig{client: cc, key: "app"}
+	lc := &LiveConfig{client: cc, id: "app"}
 
 	var target struct{ Host string }
 	err := lc.ValueInto(&target)
@@ -821,16 +819,6 @@ func TestLiveConfig_ValueInto_NilCache(t *testing.T) {
 
 // ---------- getByID with io.ReadAll failure (via broken body) ----------
 
-func TestGetByID_InvalidUUID(t *testing.T) {
-	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	_, err := cc.getByID(context.Background(), "not-a-uuid")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid config ID")
-}
-
 func TestGetByID_InvalidJSONResponse(t *testing.T) {
 	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -838,21 +826,9 @@ func TestGetByID_InvalidJSONResponse(t *testing.T) {
 		_, _ = w.Write([]byte(`not valid json`))
 	}))
 
-	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	_, err := cc.getByID(context.Background(), "test-config")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
-}
-
-// ---------- deleteByID with invalid UUID ----------
-
-func TestDeleteByID_Config_InvalidUUID(t *testing.T) {
-	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	err := cc.deleteByID(context.Background(), "not-a-uuid")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid config ID")
 }
 
 // ---------- getByID connection error ----------
@@ -869,13 +845,13 @@ func TestGetByID_ConnectionError(t *testing.T) {
 		generated: genConfigClient,
 	}
 
-	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	_, err := cc.getByID(context.Background(), "test-config")
 	require.Error(t, err)
 }
 
-// ---------- deleteByID connection error ----------
+// ---------- Delete connection error ----------
 
-func TestDeleteByID_Config_ConnectionError(t *testing.T) {
+func TestDelete_Config_ConnectionError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	serverURL := server.URL
 	server.Close()
@@ -887,7 +863,7 @@ func TestDeleteByID_Config_ConnectionError(t *testing.T) {
 		generated: genConfigClient,
 	}
 
-	err := cc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := cc.Delete(context.Background(), "test-config")
 	require.Error(t, err)
 }
 
@@ -1020,13 +996,13 @@ func TestGetByID_BodyReadFailure_CustomTransport(t *testing.T) {
 		generated: genConfigClient,
 	}
 
-	_, err := cc.getByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	_, err := cc.getByID(context.Background(), "test-config")
 	require.Error(t, err)
 	var connErr *SmplConnectionError
 	assert.True(t, errors.As(err, &connErr))
 }
 
-func TestDeleteByID_Config_BodyReadFailure_CustomTransport(t *testing.T) {
+func TestDelete_Config_BodyReadFailure_CustomTransport(t *testing.T) {
 	httpClient := &http.Client{
 		Transport: &brokenBodyTransportConfig{statusCode: 204},
 	}
@@ -1038,7 +1014,7 @@ func TestDeleteByID_Config_BodyReadFailure_CustomTransport(t *testing.T) {
 		generated: genConfigClient,
 	}
 
-	err := cc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := cc.Delete(context.Background(), "test-config")
 	require.Error(t, err)
 	var connErr *SmplConnectionError
 	assert.True(t, errors.As(err, &connErr))

@@ -29,7 +29,7 @@ func setupDemoLoggers(ctx context.Context, client *smplkit.Client) ([]*smplkit.L
 	if err := group.Save(ctx); err != nil {
 		fatal("Failed to create log group", err)
 	}
-	fmt.Printf("  Created group: %s (level=%s)\n", group.Key, *group.Level)
+	fmt.Printf("  Created group: %s (level=%s)\n", group.ID, *group.Level)
 
 	// Create loggers.
 	var loggers []*smplkit.Logger
@@ -63,13 +63,13 @@ func setupDemoLoggers(ctx context.Context, client *smplkit.Client) ([]*smplkit.L
 func teardownDemoLoggers(ctx context.Context, client *smplkit.Client, loggers []*smplkit.Logger, groups []*smplkit.LogGroup) {
 	logging := client.Logging()
 	for _, l := range loggers {
-		if err := logging.Delete(ctx, l.Key); err != nil {
-			fmt.Printf("  Warning: failed to delete logger %s: %v\n", l.Key, err)
+		if err := logging.Delete(ctx, l.ID); err != nil {
+			fmt.Printf("  Warning: failed to delete logger %s: %v\n", l.ID, err)
 		}
 	}
 	for _, g := range groups {
-		if err := logging.DeleteGroup(ctx, g.Key); err != nil {
-			fmt.Printf("  Warning: failed to delete group %s: %v\n", g.Key, err)
+		if err := logging.DeleteGroup(ctx, g.ID); err != nil {
+			fmt.Printf("  Warning: failed to delete group %s: %v\n", g.ID, err)
 		}
 	}
 }

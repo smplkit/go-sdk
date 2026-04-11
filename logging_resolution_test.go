@@ -535,14 +535,12 @@ func TestLoggingClient_Accessor(t *testing.T) {
 func TestLogger_Apply(t *testing.T) {
 	logger := &Logger{
 		ID:   "old-id",
-		Key:  "old-key",
 		Name: "Old Name",
 	}
 	level := LogLevelDebug
 	groupID := "group-123"
 	other := &Logger{
 		ID:           "new-id",
-		Key:          "new-key",
 		Name:         "New Name",
 		Level:        &level,
 		Group:        &groupID,
@@ -552,7 +550,6 @@ func TestLogger_Apply(t *testing.T) {
 	logger.apply(other)
 
 	assert.Equal(t, "new-id", logger.ID)
-	assert.Equal(t, "new-key", logger.Key)
 	assert.Equal(t, "New Name", logger.Name)
 	require.NotNil(t, logger.Level)
 	assert.Equal(t, LogLevelDebug, *logger.Level)
@@ -566,14 +563,12 @@ func TestLogger_Apply(t *testing.T) {
 func TestLogGroup_Apply(t *testing.T) {
 	group := &LogGroup{
 		ID:   "old-id",
-		Key:  "old-key",
 		Name: "Old Name",
 	}
 	level := LogLevelError
 	parentID := "parent-123"
 	other := &LogGroup{
 		ID:           "new-id",
-		Key:          "new-key",
 		Name:         "New Name",
 		Level:        &level,
 		Group:        &parentID,
@@ -582,7 +577,6 @@ func TestLogGroup_Apply(t *testing.T) {
 	group.apply(other)
 
 	assert.Equal(t, "new-id", group.ID)
-	assert.Equal(t, "new-key", group.Key)
 	assert.Equal(t, "New Name", group.Name)
 	require.NotNil(t, group.Level)
 	assert.Equal(t, LogLevelError, *group.Level)
@@ -622,7 +616,7 @@ func TestLoggerRegistrationBuffer_DrainEmpty(t *testing.T) {
 func TestBuildLoggerAttributes_WithLevel(t *testing.T) {
 	level := LogLevelDebug
 	logger := &Logger{
-		Key:          "test",
+		ID:           "test",
 		Name:         "Test",
 		Level:        &level,
 		Managed:      true,
@@ -631,8 +625,8 @@ func TestBuildLoggerAttributes_WithLevel(t *testing.T) {
 	}
 
 	attrs := buildLoggerAttributes(logger)
-	require.NotNil(t, attrs.Key)
-	assert.Equal(t, "test", *attrs.Key)
+	require.NotNil(t, attrs.Id)
+	assert.Equal(t, "test", *attrs.Id)
 	require.NotNil(t, attrs.Level)
 	assert.Equal(t, "DEBUG", *attrs.Level)
 	require.NotNil(t, attrs.Managed)
@@ -643,7 +637,7 @@ func TestBuildLoggerAttributes_WithLevel(t *testing.T) {
 
 func TestBuildLoggerAttributes_NilLevel(t *testing.T) {
 	logger := &Logger{
-		Key:     "test",
+		ID:      "test",
 		Name:    "Test",
 		Managed: true,
 	}
@@ -654,7 +648,7 @@ func TestBuildLoggerAttributes_NilLevel(t *testing.T) {
 
 func TestBuildLoggerAttributes_NilEnvironments(t *testing.T) {
 	logger := &Logger{
-		Key:     "test",
+		ID:      "test",
 		Name:    "Test",
 		Managed: true,
 	}
@@ -665,7 +659,7 @@ func TestBuildLoggerAttributes_NilEnvironments(t *testing.T) {
 
 func TestBuildLoggerAttributes_NilSources(t *testing.T) {
 	logger := &Logger{
-		Key:     "test",
+		ID:      "test",
 		Name:    "Test",
 		Managed: true,
 	}
@@ -680,7 +674,7 @@ func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
 	level := LogLevelWarn
 	parentID := "parent-id"
 	group := &LogGroup{
-		Key:          "infra",
+		ID:           "infra",
 		Name:         "Infra",
 		Level:        &level,
 		Group:        &parentID,
@@ -688,8 +682,8 @@ func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
 	}
 
 	attrs := buildLogGroupAttributes(group)
-	require.NotNil(t, attrs.Key)
-	assert.Equal(t, "infra", *attrs.Key)
+	require.NotNil(t, attrs.Id)
+	assert.Equal(t, "infra", *attrs.Id)
 	require.NotNil(t, attrs.Level)
 	assert.Equal(t, "WARN", *attrs.Level)
 	require.NotNil(t, attrs.Group)
@@ -699,7 +693,7 @@ func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
 
 func TestBuildLogGroupAttributes_NilLevel(t *testing.T) {
 	group := &LogGroup{
-		Key:  "infra",
+		ID:   "infra",
 		Name: "Infra",
 	}
 
@@ -709,7 +703,7 @@ func TestBuildLogGroupAttributes_NilLevel(t *testing.T) {
 
 func TestBuildLogGroupAttributes_NilEnvironments(t *testing.T) {
 	group := &LogGroup{
-		Key:  "infra",
+		ID:   "infra",
 		Name: "Infra",
 	}
 
@@ -762,13 +756,13 @@ func TestFireChangeListeners_GlobalAndKeyListeners(t *testing.T) {
 	c.fireChangeListeners("my.logger", "websocket")
 
 	require.NotNil(t, globalEvent)
-	assert.Equal(t, "my.logger", globalEvent.Key)
+	assert.Equal(t, "my.logger", globalEvent.ID)
 	assert.Equal(t, "websocket", globalEvent.Source)
 	require.NotNil(t, globalEvent.Level)
 	assert.Equal(t, LogLevelWarn, *globalEvent.Level)
 
 	require.NotNil(t, keyEvent)
-	assert.Equal(t, "my.logger", keyEvent.Key)
+	assert.Equal(t, "my.logger", keyEvent.ID)
 }
 
 func TestFireChangeListeners_PanicRecovery(t *testing.T) {
@@ -839,7 +833,7 @@ func TestFireChangeListeners_LoggerNotInCache(t *testing.T) {
 
 	// Should fire with nil level since logger is not in cache.
 	require.NotNil(t, event)
-	assert.Equal(t, "unknown.logger", event.Key)
+	assert.Equal(t, "unknown.logger", event.ID)
 	assert.Nil(t, event.Level)
 }
 
@@ -875,10 +869,10 @@ func TestFetchAndCache(t *testing.T) {
 	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": [{
-			"id": "` + "770e8400-e29b-41d4-a716-446655440000" + `",
+			"id": "my.logger",
 			"type": "logger",
 			"attributes": {
-				"key": "my.logger",
+				"id": "my.logger",
 				"name": "My Logger",
 				"level": "WARN",
 				"group": "group-id",
@@ -891,10 +885,10 @@ func TestFetchAndCache(t *testing.T) {
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": [{
-			"id": "` + "770e8400-e29b-41d4-a716-446655440001" + `",
+			"id": "infra",
 			"type": "log_group",
 			"attributes": {
-				"key": "infra",
+				"id": "infra",
 				"name": "Infra",
 				"level": "ERROR",
 				"group": "parent-group-id",
@@ -942,8 +936,8 @@ func TestFetchAndCache(t *testing.T) {
 	assert.Equal(t, true, loggerEntry["managed"])
 
 	// Verify group cache.
-	require.Contains(t, lc.groupsCache, "770e8400-e29b-41d4-a716-446655440001")
-	groupEntry := lc.groupsCache["770e8400-e29b-41d4-a716-446655440001"]
+	require.Contains(t, lc.groupsCache, "infra")
+	groupEntry := lc.groupsCache["infra"]
 	assert.Equal(t, "ERROR", groupEntry["level"])
 	assert.Equal(t, "parent-group-id", groupEntry["group"])
 }
@@ -1009,10 +1003,10 @@ func TestFetchAndCache_NilLevelAndGroup(t *testing.T) {
 	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": [{
-			"id": "770e8400-e29b-41d4-a716-446655440000",
+			"id": "my.logger",
 			"type": "logger",
 			"attributes": {
-				"key": "my.logger",
+				"id": "my.logger",
 				"name": "My Logger",
 				"managed": true,
 				"environments": {}
@@ -1022,10 +1016,10 @@ func TestFetchAndCache_NilLevelAndGroup(t *testing.T) {
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": [{
-			"id": "770e8400-e29b-41d4-a716-446655440001",
+			"id": "infra",
 			"type": "log_group",
 			"attributes": {
-				"key": "infra",
+				"id": "infra",
 				"name": "Infra",
 				"environments": {}
 			}
@@ -1057,7 +1051,7 @@ func TestFetchAndCache_NilLevelAndGroup(t *testing.T) {
 	assert.False(t, hasGroup)
 
 	// Group cache should not have "level" or "group" keys.
-	groupEntry := lc.groupsCache["770e8400-e29b-41d4-a716-446655440001"]
+	groupEntry := lc.groupsCache["infra"]
 	_, hasLevel = groupEntry["level"]
 	_, hasGroup = groupEntry["group"]
 	assert.False(t, hasLevel)
@@ -1107,7 +1101,7 @@ func TestDeleteLoggerByID_CheckStatusError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	err := lc.deleteLoggerByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := lc.deleteLoggerByID(context.Background(), "my-logger")
 	require.Error(t, err)
 }
 
@@ -1121,16 +1115,8 @@ func TestDeleteLoggerByID_ConnectionError(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, genLoggingClient)
 
-	err := lc.deleteLoggerByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := lc.deleteLoggerByID(context.Background(), "my-logger")
 	require.Error(t, err)
-}
-
-func TestDeleteLoggerByID_InvalidUUID(t *testing.T) {
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, nil)
-	err := lc.deleteLoggerByID(context.Background(), "not-a-uuid")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid logger ID")
 }
 
 // brokenBodyTransportLogging wraps an HTTP transport and returns a broken response body.
@@ -1162,7 +1148,7 @@ func TestDeleteLoggerByID_BodyReadFailure(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, genLoggingClient)
 
-	err := lc.deleteLoggerByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := lc.deleteLoggerByID(context.Background(), "my-logger")
 	require.Error(t, err)
 }
 
@@ -1174,7 +1160,7 @@ func TestDeleteGroupByID_CheckStatusError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	err := lc.deleteGroupByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := lc.deleteGroupByID(context.Background(), "my-group")
 	require.Error(t, err)
 }
 
@@ -1188,16 +1174,8 @@ func TestDeleteGroupByID_ConnectionError(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, genLoggingClient)
 
-	err := lc.deleteGroupByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := lc.deleteGroupByID(context.Background(), "my-group")
 	require.Error(t, err)
-}
-
-func TestDeleteGroupByID_InvalidUUID(t *testing.T) {
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, nil)
-	err := lc.deleteGroupByID(context.Background(), "not-a-uuid")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid log group ID")
 }
 
 func TestDeleteGroupByID_BodyReadFailure(t *testing.T) {
@@ -1210,7 +1188,7 @@ func TestDeleteGroupByID_BodyReadFailure(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, genLoggingClient)
 
-	err := lc.deleteGroupByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	err := lc.deleteGroupByID(context.Background(), "my-group")
 	require.Error(t, err)
 }
 
@@ -1223,13 +1201,12 @@ func TestResourceToLogger_NilOptionalFields(t *testing.T) {
 	r := genlogging.LoggerResource{
 		Attributes: genlogging.Logger{
 			Name: "Test Logger",
-			// Id, Key, Level, Managed, Sources, Environments all nil
+			// Id, Level, Managed, Sources, Environments all nil
 		},
 	}
 
 	logger := resourceToLogger(r, lc)
 	assert.Equal(t, "", logger.ID)
-	assert.Equal(t, "", logger.Key)
 	assert.Nil(t, logger.Level)
 	assert.True(t, logger.Managed) // default true when Managed is nil
 	assert.Nil(t, logger.Sources)
@@ -1277,13 +1254,12 @@ func TestResourceToLogGroup_NilOptionalFields(t *testing.T) {
 	r := genlogging.LogGroupResource{
 		Attributes: genlogging.LogGroup{
 			Name: "Test Group",
-			// Id, Key, Level, Environments all nil
+			// Id, Level, Environments all nil
 		},
 	}
 
 	group := resourceToLogGroup(r, lc)
 	assert.Equal(t, "", group.ID)
-	assert.Equal(t, "", group.Key)
 	assert.Nil(t, group.Level)
 	assert.NotNil(t, group.Environments) // defaults to empty map when nil
 }
@@ -1417,12 +1393,10 @@ func TestPeriodicFlush_TickerFires(t *testing.T) {
 // --- handleLoggerChanged ---
 
 func TestHandleLoggerChanged(t *testing.T) {
-	loggerID := "770e8400-e29b-41d4-a716-446655440000"
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"` + loggerID + `","type":"logger","attributes":{"key":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}]}`))
 	})
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1436,10 +1410,10 @@ func TestHandleLoggerChanged(t *testing.T) {
 		received = evt
 	})
 
-	lc.handleLoggerChanged(map[string]interface{}{"key": "my.logger"})
+	lc.handleLoggerChanged(map[string]interface{}{"id": "my.logger"})
 
 	require.NotNil(t, received)
-	assert.Equal(t, "my.logger", received.Key)
+	assert.Equal(t, "my.logger", received.ID)
 	assert.Equal(t, "websocket", received.Source)
 }
 
@@ -1455,7 +1429,7 @@ func TestHandleLoggerChanged_FetchError(t *testing.T) {
 	})
 
 	// Should not panic; error causes early return
-	lc.handleLoggerChanged(map[string]interface{}{"key": "my.logger"})
+	lc.handleLoggerChanged(map[string]interface{}{"id": "my.logger"})
 	assert.False(t, called)
 }
 
@@ -1490,7 +1464,6 @@ func TestLogGroupSetEnvironmentLevel_NilEnvironments(t *testing.T) {
 // --- Start ---
 
 func TestStart_Basic(t *testing.T) {
-	loggerID := "770e8400-e29b-41d4-a716-446655440000"
 	var bulkCalled atomic.Int32
 
 	mux := http.NewServeMux()
@@ -1502,7 +1475,7 @@ func TestStart_Basic(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"` + loggerID + `","type":"logger","attributes":{"key":"my.logger","name":"My Logger","level":"INFO","managed":true,"environments":{}}}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"INFO","managed":true,"environments":{}}}]}`))
 	})
 	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
 		bulkCalled.Add(1)
@@ -1599,7 +1572,6 @@ func TestStart_FetchError(t *testing.T) {
 }
 
 func TestStart_Idempotent(t *testing.T) {
-	loggerID := "770e8400-e29b-41d4-a716-446655440000"
 	var callCount atomic.Int32
 
 	mux := http.NewServeMux()
@@ -1611,7 +1583,7 @@ func TestStart_Idempotent(t *testing.T) {
 		}
 		callCount.Add(1)
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"` + loggerID + `","type":"logger","attributes":{"key":"my.logger","name":"My Logger","managed":true,"environments":{}}}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","managed":true,"environments":{}}}]}`))
 	})
 	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -58,7 +58,7 @@ func main() {
 	if err := infraGroup.Save(ctx); err != nil {
 		fatal("Failed to create infra group", err)
 	}
-	fmt.Printf("  Created: key=%s, name=%s, level=%s\n", infraGroup.Key, infraGroup.Name, *infraGroup.Level)
+	fmt.Printf("  Created: id=%s, name=%s, level=%s\n", infraGroup.ID, infraGroup.Name, *infraGroup.Level)
 
 	step("Creating child group: showcase-backend (parent=showcase-infra)")
 	backendGroup := logging.NewGroup("showcase-backend", smplkit.WithLogGroupName("Backend Services"),
@@ -67,8 +67,8 @@ func main() {
 	if err := backendGroup.Save(ctx); err != nil {
 		fatal("Failed to create backend group", err)
 	}
-	fmt.Printf("  Created: key=%s, name=%s, level=%s, parent=%s\n",
-		backendGroup.Key, backendGroup.Name, *backendGroup.Level, *backendGroup.Group)
+	fmt.Printf("  Created: id=%s, name=%s, level=%s, parent=%s\n",
+		backendGroup.ID, backendGroup.Name, *backendGroup.Level, *backendGroup.Group)
 
 	// ── Section 3: Create Loggers ────────────────────────────────────
 	section("3. Create Loggers")
@@ -80,7 +80,7 @@ func main() {
 	if err := apiLogger.Save(ctx); err != nil {
 		fatal("Failed to create API logger", err)
 	}
-	fmt.Printf("  Created: key=%s, level=%s, group=%s\n", apiLogger.Key, *apiLogger.Level, *apiLogger.Group)
+	fmt.Printf("  Created: id=%s, level=%s, group=%s\n", apiLogger.ID, *apiLogger.Level, *apiLogger.Group)
 
 	step("Creating logger: showcase.worker (no group, environment-specific levels)")
 	workerLogger := logging.New("showcase.worker", smplkit.WithLoggerName("Worker"))
@@ -90,7 +90,7 @@ func main() {
 	if err := workerLogger.Save(ctx); err != nil {
 		fatal("Failed to create worker logger", err)
 	}
-	fmt.Printf("  Created: key=%s, level=%s\n", workerLogger.Key, *workerLogger.Level)
+	fmt.Printf("  Created: id=%s, level=%s\n", workerLogger.ID, *workerLogger.Level)
 
 	step("Creating logger: showcase.db (unmanaged — level inherited from group/platform)")
 	dbLogger := logging.New("showcase.db", smplkit.WithLoggerName("Database"), smplkit.WithLoggerManaged(false))
@@ -101,7 +101,7 @@ func main() {
 	if dbLogger.Level != nil {
 		levelStr = string(*dbLogger.Level)
 	}
-	fmt.Printf("  Created: key=%s, level=%s, managed=%v\n", dbLogger.Key, levelStr, dbLogger.Managed)
+	fmt.Printf("  Created: id=%s, level=%s, managed=%v\n", dbLogger.ID, levelStr, dbLogger.Managed)
 
 	// ── Section 4: List and Get ──────────────────────────────────────
 	section("4. List and Get")
@@ -117,7 +117,7 @@ func main() {
 		if l.Level != nil {
 			levelStr = string(*l.Level)
 		}
-		fmt.Printf("    - %s (level=%s, managed=%v)\n", l.Key, levelStr, l.Managed)
+		fmt.Printf("    - %s (level=%s, managed=%v)\n", l.ID, levelStr, l.Managed)
 	}
 
 	step("Getting logger by key: showcase.api")
@@ -125,7 +125,7 @@ func main() {
 	if err != nil {
 		fatal("Failed to get logger", err)
 	}
-	fmt.Printf("  Got: key=%s, name=%s\n", fetched.Key, fetched.Name)
+	fmt.Printf("  Got: id=%s, name=%s\n", fetched.ID, fetched.Name)
 
 	step("Listing all log groups")
 	groups, err := logging.ListGroups(ctx)
@@ -138,7 +138,7 @@ func main() {
 		if g.Level != nil {
 			levelStr = string(*g.Level)
 		}
-		fmt.Printf("    - %s (level=%s)\n", g.Key, levelStr)
+		fmt.Printf("    - %s (level=%s)\n", g.ID, levelStr)
 	}
 
 	step("Getting group by key: showcase-backend")
@@ -146,7 +146,7 @@ func main() {
 	if err != nil {
 		fatal("Failed to get group", err)
 	}
-	fmt.Printf("  Got: key=%s, name=%s\n", fetchedGroup.Key, fetchedGroup.Name)
+	fmt.Printf("  Got: id=%s, name=%s\n", fetchedGroup.ID, fetchedGroup.Name)
 
 	// ── Section 5: Update Loggers and Groups ─────────────────────────
 	section("5. Update Loggers and Groups")
@@ -156,21 +156,21 @@ func main() {
 	if err := apiLogger.Save(ctx); err != nil {
 		fatal("Failed to update API logger", err)
 	}
-	fmt.Printf("  Updated: key=%s, level=%s\n", apiLogger.Key, *apiLogger.Level)
+	fmt.Printf("  Updated: id=%s, level=%s\n", apiLogger.ID, *apiLogger.Level)
 
 	step("Updating infra group: add environment level for production")
 	infraGroup.SetEnvironmentLevel("production", smplkit.LogLevelError)
 	if err := infraGroup.Save(ctx); err != nil {
 		fatal("Failed to update infra group", err)
 	}
-	fmt.Printf("  Updated: key=%s\n", infraGroup.Key)
+	fmt.Printf("  Updated: id=%s\n", infraGroup.ID)
 
 	step("Clearing worker logger environment levels")
 	workerLogger.ClearAllEnvironmentLevels()
 	if err := workerLogger.Save(ctx); err != nil {
 		fatal("Failed to update worker logger", err)
 	}
-	fmt.Printf("  Cleared all environment levels for: %s\n", workerLogger.Key)
+	fmt.Printf("  Cleared all environment levels for: %s\n", workerLogger.ID)
 
 	// ── Section 6: Cleanup ───────────────────────────────────────────
 	section("6. Cleanup")

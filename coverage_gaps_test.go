@@ -278,11 +278,11 @@ func TestEvaluate_NotConnected_FetchesList(t *testing.T) {
 	flagsJSON := map[string]interface{}{
 		"data": []map[string]interface{}{
 			{
-				"id":   "550e8400-e29b-41d4-a716-446655440000",
+				"id":   "my-flag",
 				"type": "flag",
 				"attributes": map[string]interface{}{
+					"id":          "my-flag",
 					"name":        "My Flag",
-					"key":         "my-flag",
 					"description": "A test flag",
 					"default":     "default-val",
 					"environments": map[string]interface{}{

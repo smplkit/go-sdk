@@ -96,7 +96,7 @@ func setupDemoFlags(ctx context.Context, client *smplkit.Client) ([]*smplkit.Fla
 // teardownDemoFlags deletes the demo flags and any auto-created context types.
 func teardownDemoFlags(ctx context.Context, client *smplkit.Client, flags []*smplkit.Flag) {
 	for _, f := range flags {
-		_ = client.Flags().Delete(ctx, f.Key)
+		_ = client.Flags().Delete(ctx, f.ID)
 	}
 	if cts, err := client.Flags().ListContextTypes(ctx); err == nil {
 		for _, ct := range cts {

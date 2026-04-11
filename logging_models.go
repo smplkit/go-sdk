@@ -20,15 +20,13 @@ const (
 
 // Logger represents a logger resource from the smplkit platform.
 type Logger struct {
-	// ID is the unique identifier (UUID) of the logger. Empty for unsaved loggers.
+	// ID is the logger identifier. Empty for unsaved loggers.
 	ID string
-	// Key is the normalized logger name.
-	Key string
 	// Name is the display name for the logger.
 	Name string
 	// Level is the base log level (nil = inherit).
 	Level *LogLevel
-	// Group is the group UUID (nil = no group).
+	// Group is the group ID (nil = no group).
 	Group *string
 	// Managed indicates whether smplkit controls this logger's level.
 	Managed bool
@@ -116,7 +114,6 @@ func (l *Logger) ClearAllEnvironmentLevels() {
 
 func (l *Logger) apply(other *Logger) {
 	l.ID = other.ID
-	l.Key = other.Key
 	l.Name = other.Name
 	l.Level = other.Level
 	l.Group = other.Group
@@ -129,15 +126,13 @@ func (l *Logger) apply(other *Logger) {
 
 // LogGroup represents a log group resource from the smplkit platform.
 type LogGroup struct {
-	// ID is the unique identifier (UUID) of the log group. Empty for unsaved groups.
+	// ID is the log group identifier. Empty for unsaved groups.
 	ID string
-	// Key is the human-readable key.
-	Key string
 	// Name is the display name for the log group.
 	Name string
 	// Level is the base log level (nil = inherit).
 	Level *LogLevel
-	// Group is the parent group UUID (nil = no parent).
+	// Group is the parent group ID (nil = no parent).
 	Group *string
 	// Environments maps environment names to their configuration.
 	Environments map[string]interface{}
@@ -221,7 +216,6 @@ func (g *LogGroup) ClearAllEnvironmentLevels() {
 
 func (g *LogGroup) apply(other *LogGroup) {
 	g.ID = other.ID
-	g.Key = other.Key
 	g.Name = other.Name
 	g.Level = other.Level
 	g.Group = other.Group
@@ -232,8 +226,8 @@ func (g *LogGroup) apply(other *LogGroup) {
 
 // LoggerChangeEvent describes a logger definition change.
 type LoggerChangeEvent struct {
-	// Key is the logger key that changed.
-	Key string
+	// ID is the logger ID that changed.
+	ID string
 	// Level is the new resolved level (nil if deleted).
 	Level *LogLevel
 	// Source is "websocket" or "refresh".

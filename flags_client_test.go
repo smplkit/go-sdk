@@ -13,18 +13,14 @@ import (
 	smplkit "github.com/smplkit/go-sdk"
 )
 
-const (
-	flagUUID0 = "660e8400-e29b-41d4-a716-446655440000"
-)
-
-func sampleFlagListJSON(id, key, name, flagType string) string {
+func sampleFlagListJSON(id, name, flagType string) string {
 	return `{
 		"data": [{
 			"id": "` + id + `",
 			"type": "flag",
 			"attributes": {
+				"id": "` + id + `",
 				"name": "` + name + `",
-				"key": "` + key + `",
 				"type": "` + flagType + `",
 				"default": true,
 				"values": [{"name": "True", "value": true}, {"name": "False", "value": false}],
@@ -48,10 +44,10 @@ func TestClient_FlagsReturnsSubClient(t *testing.T) {
 
 func TestFlagsClient_Get(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/v1/flags" {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/flags/feature-x" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagListJSON(flagUUID0, "feature-x", "Feature X", "BOOLEAN")))
+			_, _ = w.Write([]byte(sampleFlagListJSON("feature-x", "Feature X", "BOOLEAN")))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -72,21 +68,21 @@ func TestFlagsClient_Get(t *testing.T) {
 	_ = client
 }
 
-func TestFlagsClient_Get_ByKey_Error(t *testing.T) {
+func TestFlagsClient_Get_ByID_Error(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	// Get by key will fail because the real server is unreachable
-	_, err = client.Flags().Get(context.Background(), "some-key")
+	// Get by ID will fail because the real server is unreachable
+	_, err = client.Flags().Get(context.Background(), "some-flag")
 	assert.Error(t, err)
 }
 
-func TestFlagsClient_Delete_ByKey_Error(t *testing.T) {
+func TestFlagsClient_Delete_ByID_Error(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	// Delete by key will fail because the real server is unreachable
-	err = client.Flags().Delete(context.Background(), "some-key")
+	// Delete by ID will fail because the real server is unreachable
+	err = client.Flags().Delete(context.Background(), "some-flag")
 	assert.Error(t, err)
 }
 
@@ -96,7 +92,7 @@ func TestFlagsClient_NewBooleanFlag_AutoValues(t *testing.T) {
 
 	// NewBooleanFlag auto-generates True/False values.
 	flag := client.Flags().NewBooleanFlag("feature-x", false)
-	assert.Equal(t, "feature-x", flag.Key)
+	assert.Equal(t, "feature-x", flag.ID)
 	require.NotNil(t, flag.Values)
 	assert.Len(t, *flag.Values, 2)
 }
@@ -107,7 +103,7 @@ func TestFlagsClient_NewStringFlag_Unconstrained(t *testing.T) {
 
 	// NewStringFlag without WithFlagValues creates an unconstrained flag (Values=nil).
 	flag := client.Flags().NewStringFlag("greeting", "hello")
-	assert.Equal(t, "greeting", flag.Key)
+	assert.Equal(t, "greeting", flag.ID)
 	assert.Equal(t, "hello", flag.Default)
 	assert.Nil(t, flag.Values)
 }
@@ -117,7 +113,7 @@ func TestFlagsClient_NewNumberFlag_Unconstrained(t *testing.T) {
 	require.NoError(t, err)
 
 	flag := client.Flags().NewNumberFlag("max-retries", 3.0)
-	assert.Equal(t, "max-retries", flag.Key)
+	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values)
 }
 
@@ -126,7 +122,7 @@ func TestFlagsClient_NewJsonFlag_Unconstrained(t *testing.T) {
 	require.NoError(t, err)
 
 	flag := client.Flags().NewJsonFlag("config", map[string]interface{}{"key": "value"})
-	assert.Equal(t, "config", flag.Key)
+	assert.Equal(t, "config", flag.ID)
 	assert.Nil(t, flag.Values)
 }
 
@@ -140,7 +136,7 @@ func TestFlagsClient_NewStringFlag_Constrained(t *testing.T) {
 			{Name: "Dark", Value: "dark"},
 		}),
 	)
-	assert.Equal(t, "theme", flag.Key)
+	assert.Equal(t, "theme", flag.ID)
 	require.NotNil(t, flag.Values)
 	assert.Len(t, *flag.Values, 2)
 }
@@ -149,8 +145,7 @@ func TestFlagsClient_NewStringFlag_Constrained(t *testing.T) {
 
 func TestFlag_AddRule_RequiresEnvironment(t *testing.T) {
 	flag := &smplkit.Flag{
-		ID:  flagUUID0,
-		Key: "test-flag",
+		ID: "test-flag",
 	}
 
 	rule := map[string]interface{}{
@@ -168,13 +163,11 @@ func TestFlag_AddRule_RequiresEnvironment(t *testing.T) {
 
 func TestContextType_Fields(t *testing.T) {
 	ct := smplkit.ContextType{
-		ID:         "ct-1",
-		Key:        "user",
+		ID:         "user",
 		Name:       "User",
 		Attributes: map[string]interface{}{"plan": "string"},
 	}
-	assert.Equal(t, "ct-1", ct.ID)
-	assert.Equal(t, "user", ct.Key)
+	assert.Equal(t, "user", ct.ID)
 	assert.Equal(t, "User", ct.Name)
 	assert.Equal(t, "string", ct.Attributes["plan"])
 }
@@ -222,7 +215,7 @@ func TestNewBooleanFlag_Fields(t *testing.T) {
 			{Name: "False", Value: false},
 		}),
 	)
-	assert.Equal(t, "feature-x", flag.Key)
+	assert.Equal(t, "feature-x", flag.ID)
 	assert.Equal(t, "Feature X", flag.Name)
 	assert.Equal(t, true, flag.Default)
 	require.NotNil(t, flag.Values)
@@ -231,7 +224,7 @@ func TestNewBooleanFlag_Fields(t *testing.T) {
 
 func TestFlag_MutateName(t *testing.T) {
 	flag := &smplkit.Flag{
-		Key:  "feature-x",
+		ID:   "feature-x",
 		Name: "Old Name",
 	}
 	flag.Name = "Updated Name"

@@ -8,10 +8,8 @@ import (
 
 // Flag represents a flag resource from the smplkit platform.
 type Flag struct {
-	// ID is the unique identifier (UUID) of the flag. Empty for unsaved flags.
+	// ID is the flag identifier (e.g. "dark-mode"). Empty for unsaved flags.
 	ID string
-	// Key is the human-readable flag key.
-	Key string
 	// Name is the display name for the flag.
 	Name string
 	// Type is the value type (BOOLEAN, STRING, NUMERIC, JSON).
@@ -141,7 +139,6 @@ func (f *Flag) ClearRules(envKey string) {
 
 func (f *Flag) apply(other *Flag) {
 	f.ID = other.ID
-	f.Key = other.Key
 	f.Name = other.Name
 	f.Type = other.Type
 	f.Default = other.Default
@@ -154,10 +151,8 @@ func (f *Flag) apply(other *Flag) {
 
 // ContextType represents a context type resource from the management API.
 type ContextType struct {
-	// ID is the unique identifier (UUID) of the context type.
+	// ID is the context type identifier.
 	ID string
-	// Key is the human-readable key.
-	Key string
 	// Name is the display name.
 	Name string
 	// Attributes holds the context type's attribute definitions.

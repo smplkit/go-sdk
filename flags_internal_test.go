@@ -73,17 +73,16 @@ func newTestFlagsClient(t *testing.T, handler http.HandlerFunc) (*FlagsClient, *
 // --- Context type management ---
 
 func TestParseContextType(t *testing.T) {
-	body := []byte(`{"data":{"id":"ct-1","attributes":{"key":"user","name":"User","attributes":{"plan":"string"}}}}`)
+	body := []byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{"plan":"string"}}}}`)
 	ct, err := parseContextType(body)
 	require.NoError(t, err)
-	assert.Equal(t, "ct-1", ct.ID)
-	assert.Equal(t, "user", ct.Key)
+	assert.Equal(t, "user", ct.ID)
 	assert.Equal(t, "User", ct.Name)
 	assert.Equal(t, "string", ct.Attributes["plan"])
 }
 
 func TestParseContextType_NilAttributes(t *testing.T) {
-	body := []byte(`{"data":{"id":"ct-2","attributes":{"key":"device","name":"Device"}}}`)
+	body := []byte(`{"data":{"id":"device","attributes":{"id":"device","name":"Device"}}}`)
 	ct, err := parseContextType(body)
 	require.NoError(t, err)
 	assert.NotNil(t, ct.Attributes)
@@ -105,15 +104,14 @@ func TestParseContextTypeRaw_InvalidJSON(t *testing.T) {
 func TestResourceToFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
-	id := "flag-id-1"
+	id := "feature-x"
 	flagType := "flag"
 	desc := "A flag"
 	now := time.Now()
-	r := flagResource(id, flagType, "feature-x", "Feature X", "BOOLEAN", true, desc, now)
+	r := flagResource(id, flagType, "Feature X", "BOOLEAN", true, desc, now)
 
 	flag := resourceToFlag(r, fc)
 	assert.Equal(t, id, flag.ID)
-	assert.Equal(t, "feature-x", flag.Key)
 	assert.Equal(t, "Feature X", flag.Name)
 	assert.Equal(t, "BOOLEAN", flag.Type)
 	assert.Equal(t, true, flag.Default)
@@ -125,7 +123,7 @@ func TestResourceToFlag_NilID(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
 	now := time.Now()
-	r := flagResourceNoID("feature-x", "Feature X", "BOOLEAN", true, now)
+	r := flagResourceNoID("Feature X", "BOOLEAN", true, now)
 
 	flag := resourceToFlag(r, fc)
 	assert.Equal(t, "", flag.ID)
@@ -134,15 +132,16 @@ func TestResourceToFlag_NilID(t *testing.T) {
 func TestResourceToFlag_NilValues(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
-	id := "flag-id-2"
+	id := "max-retries"
 	flagType := "flag"
 	now := time.Now()
 	desc := "unconstrained"
+	attrID := "max-retries"
 	r := genflags.FlagResource{
 		Id:   &id,
 		Type: genflags.FlagResourceType(flagType),
 		Attributes: genflags.Flag{
-			Key:          "max-retries",
+			Id:           &attrID,
 			Name:         "Max Retries",
 			Type:         "NUMERIC",
 			Default:      float64(3),
@@ -154,7 +153,7 @@ func TestResourceToFlag_NilValues(t *testing.T) {
 	}
 
 	flag := resourceToFlag(r, fc)
-	assert.Equal(t, "max-retries", flag.Key)
+	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values, "unconstrained flag should have nil Values")
 	assert.Equal(t, float64(3), flag.Default)
 }
@@ -232,8 +231,9 @@ func TestBuildFlagRequest_Create(t *testing.T) {
 	values := []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}}
 	req := buildFlagRequest("", "feature-x", "Feature X", "BOOLEAN", true, &values, &desc, nil)
 	assert.Nil(t, req.Data.Id)
-	assert.Equal(t, "feature-x", req.Data.Attributes.Key)
-	assert.Len(t, req.Data.Attributes.Values, 2)
+	assert.Equal(t, "feature-x", *req.Data.Attributes.Id)
+	require.NotNil(t, req.Data.Attributes.Values)
+	assert.Len(t, *req.Data.Attributes.Values, 2)
 }
 
 func TestBuildFlagRequest_Update(t *testing.T) {
@@ -406,14 +406,12 @@ func TestFlagApply(t *testing.T) {
 	f := &Flag{ID: "old"}
 	other := &Flag{
 		ID:      "new",
-		Key:     "feature",
 		Name:    "Feature",
 		Type:    "BOOLEAN",
 		Default: true,
 	}
 	f.apply(other)
 	assert.Equal(t, "new", f.ID)
-	assert.Equal(t, "feature", f.Key)
 }
 
 // --- sharedWebSocket tests ---
@@ -1149,14 +1147,14 @@ func TestRule_WithoutEnvironment(t *testing.T) {
 
 // --- FlagsClient generated-client methods ---
 
-func sampleFlagResponseJSON(id, key, name, flagType string) string {
+func sampleFlagResponseJSON(id, name, flagType string) string {
 	return `{
 		"data": {
 			"id": "` + id + `",
 			"type": "flag",
 			"attributes": {
+				"id": "` + id + `",
 				"name": "` + name + `",
-				"key": "` + key + `",
 				"type": "` + flagType + `",
 				"default": true,
 				"values": [{"name": "True", "value": true}, {"name": "False", "value": false}],
@@ -1169,14 +1167,14 @@ func sampleFlagResponseJSON(id, key, name, flagType string) string {
 	}`
 }
 
-func sampleFlagListResponseJSON(id, key, name, flagType string) string {
+func sampleFlagListResponseJSON(id, name, flagType string) string {
 	return `{
 		"data": [{
 			"id": "` + id + `",
 			"type": "flag",
 			"attributes": {
+				"id": "` + id + `",
 				"name": "` + name + `",
-				"key": "` + key + `",
 				"type": "` + flagType + `",
 				"default": true,
 				"values": [{"name": "True", "value": true}],
@@ -1189,14 +1187,14 @@ func sampleFlagListResponseJSON(id, key, name, flagType string) string {
 	}`
 }
 
-const testFlagUUID = "660e8400-e29b-41d4-a716-446655440000"
+const testFlagID = "feature-x"
 
 func TestFlagsClient_Get_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/v1/flags" {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/flags/feature-x" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+			_, _ = w.Write([]byte(sampleFlagResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -1204,8 +1202,7 @@ func TestFlagsClient_Get_Success(t *testing.T) {
 
 	flag, err := fc.Get(context.Background(), "feature-x")
 	require.NoError(t, err)
-	assert.Equal(t, testFlagUUID, flag.ID)
-	assert.Equal(t, "feature-x", flag.Key)
+	assert.Equal(t, "feature-x", flag.ID)
 	assert.Equal(t, "Feature X", flag.Name)
 	assert.Equal(t, "BOOLEAN", flag.Type)
 	assert.Equal(t, true, flag.Default)
@@ -1213,29 +1210,27 @@ func TestFlagsClient_Get_Success(t *testing.T) {
 
 func TestFlagsClient_Get_NotFound(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
-	_, err := fc.Get(context.Background(), "nonexistent-key")
+	_, err := fc.Get(context.Background(), "nonexistent-flag")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestFlagsClient_Create_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" && r.URL.Path == "/api/v1/flags" {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/flags/feature-x" {
 			b, _ := io.ReadAll(r.Body)
 			var req map[string]interface{}
 			_ = json.Unmarshal(b, &req)
 			data := req["data"].(map[string]interface{})
 			attrs := data["attributes"].(map[string]interface{})
-			assert.Equal(t, "feature-x", attrs["key"])
+			assert.Equal(t, "feature-x", attrs["id"])
 
 			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleFlagResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -1244,14 +1239,14 @@ func TestFlagsClient_Create_Success(t *testing.T) {
 	flag := fc.NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "feature-x", flag.Key)
+	assert.Equal(t, "feature-x", flag.ID)
 }
 
 func TestFlagsClient_Create_NonBooleanNoAutoValues(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "color", "Color", "STRING")))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleFlagResponseJSON("color", "Color", "STRING")))
 	}))
 
 	flag := fc.NewStringFlag("color", "red",
@@ -1266,11 +1261,11 @@ func TestFlagsClient_Create_NonBooleanNoAutoValues(t *testing.T) {
 func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 	unconstrainedResp := `{
 		"data": {
-			"id": "` + testFlagUUID + `",
+			"id": "max-retries",
 			"type": "flag",
 			"attributes": {
+				"id": "max-retries",
 				"name": "Max Retries",
-				"key": "max-retries",
 				"type": "NUMERIC",
 				"default": 3,
 				"values": null,
@@ -1282,7 +1277,7 @@ func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 		}
 	}`
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/flags/max-retries" {
 			b, _ := io.ReadAll(r.Body)
 			var req map[string]interface{}
 			_ = json.Unmarshal(b, &req)
@@ -1291,7 +1286,7 @@ func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 			assert.Nil(t, attrs["values"], "unconstrained create should send values: null")
 
 			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusCreated)
+			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(unconstrainedResp))
 			return
 		}
@@ -1301,18 +1296,18 @@ func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 	flag := fc.NewNumberFlag("max-retries", 3, WithFlagName("Max Retries"))
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "max-retries", flag.Key)
+	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values, "unconstrained flag response should have nil Values")
 }
 
 func TestFlagsClient_Get_Unconstrained(t *testing.T) {
-	unconstrainedListResp := `{
-		"data": [{
-			"id": "` + testFlagUUID + `",
+	unconstrainedResp := `{
+		"data": {
+			"id": "max-retries",
 			"type": "flag",
 			"attributes": {
+				"id": "max-retries",
 				"name": "Max Retries",
-				"key": "max-retries",
 				"type": "NUMERIC",
 				"default": 3,
 				"values": null,
@@ -1321,17 +1316,17 @@ func TestFlagsClient_Get_Unconstrained(t *testing.T) {
 				"created_at": null,
 				"updated_at": null
 			}
-		}]
+		}
 	}`
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(unconstrainedListResp))
+		_, _ = w.Write([]byte(unconstrainedResp))
 	}))
 
 	flag, err := fc.Get(context.Background(), "max-retries")
 	require.NoError(t, err)
-	assert.Equal(t, "max-retries", flag.Key)
+	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values, "unconstrained flag should have nil Values")
 	assert.Equal(t, float64(3), flag.Default)
 }
@@ -1341,7 +1336,7 @@ func TestFlagsClient_List_Success(t *testing.T) {
 		if r.Method == "GET" && r.URL.Path == "/api/v1/flags" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+			_, _ = w.Write([]byte(sampleFlagListResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -1350,18 +1345,12 @@ func TestFlagsClient_List_Success(t *testing.T) {
 	flags, err := fc.List(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, flags, 1)
-	assert.Equal(t, "feature-x", flags[0].Key)
+	assert.Equal(t, "feature-x", flags[0].ID)
 }
 
 func TestFlagsClient_Delete_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/v1/flags" {
-			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
-			return
-		}
-		if r.Method == "DELETE" && r.URL.Path == "/api/v1/flags/"+testFlagUUID {
+		if r.Method == "DELETE" && r.URL.Path == "/api/v1/flags/feature-x" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -1374,29 +1363,26 @@ func TestFlagsClient_Delete_Success(t *testing.T) {
 
 func TestFlagsClient_Delete_NotFound(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
-	err := fc.Delete(context.Background(), "nonexistent-key")
+	err := fc.Delete(context.Background(), "nonexistent-flag")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestFlagsClient_UpdateFlag_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" && r.URL.Path == "/api/v1/flags/"+testFlagUUID {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/flags/"+testFlagID {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Updated Name", "BOOLEAN")))
+			_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagID, "Updated Name", "BOOLEAN")))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
 	flag := &Flag{
-		ID:           testFlagUUID,
-		Key:          "feature-x",
+		ID:           testFlagID,
 		Name:         "Feature X",
 		Type:         "BOOLEAN",
 		Default:      true,
@@ -1411,24 +1397,15 @@ func TestFlagsClient_UpdateFlag_Success(t *testing.T) {
 	assert.Equal(t, "Updated Name", flag.Name)
 }
 
-func TestFlagsClient_UpdateFlag_InvalidUUID(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	flag := &Flag{ID: "invalid", Key: "x", Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	err := fc.updateFlag(context.Background(), flag)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid flag ID")
-}
-
 func TestFlagsClient_UpdateFlag_WithAllParams(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagID, "Feature X", "BOOLEAN")))
 	}))
 
 	flag := &Flag{
-		ID:           testFlagUUID,
-		Key:          "feature-x",
+		ID:           testFlagID,
 		Name:         "Feature X",
 		Type:         "BOOLEAN",
 		Default:      true,
@@ -1461,7 +1438,7 @@ func TestFlagsClient_CreateContextType_FullMethod(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && r.URL.Path == "/api/v1/context_types" {
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"data":{"id":"ct-1","attributes":{"key":"user","name":"User","attributes":{}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{}}}}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -1469,22 +1446,21 @@ func TestFlagsClient_CreateContextType_FullMethod(t *testing.T) {
 
 	ct, err := fc.CreateContextType(context.Background(), "user", "User")
 	require.NoError(t, err)
-	assert.Equal(t, "ct-1", ct.ID)
-	assert.Equal(t, "user", ct.Key)
+	assert.Equal(t, "user", ct.ID)
 }
 
 func TestFlagsClient_UpdateContextType_FullMethod(t *testing.T) {
-	testUUID := "5a0c6be1-0000-0000-0000-000000000001"
+	ctID := "user"
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" && r.URL.Path == "/api/v1/context_types/"+testUUID {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/context_types/"+ctID {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + testUUID + `","attributes":{"key":"user","name":"User","attributes":{"plan":"string"}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + ctID + `","attributes":{"id":"` + ctID + `","name":"User","attributes":{"plan":"string"}}}}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	ct, err := fc.UpdateContextType(context.Background(), testUUID, map[string]interface{}{"plan": "string"})
+	ct, err := fc.UpdateContextType(context.Background(), ctID, map[string]interface{}{"plan": "string"})
 	require.NoError(t, err)
 	assert.Equal(t, "string", ct.Attributes["plan"])
 }
@@ -1494,8 +1470,8 @@ func TestFlagsClient_ListContextTypes_FullMethod(t *testing.T) {
 		if r.Method == "GET" && r.URL.Path == "/api/v1/context_types" {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"data":[
-				{"id":"ct-1","attributes":{"key":"user","name":"User","attributes":{}}},
-				{"id":"ct-2","attributes":{"key":"account","name":"Account","attributes":{}}}
+				{"id":"user","attributes":{"id":"user","name":"User","attributes":{}}},
+				{"id":"account","attributes":{"id":"account","name":"Account","attributes":{}}}
 			]}`))
 			return
 		}
@@ -1505,27 +1481,27 @@ func TestFlagsClient_ListContextTypes_FullMethod(t *testing.T) {
 	types, err := fc.ListContextTypes(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, types, 2)
-	assert.Equal(t, "user", types[0].Key)
+	assert.Equal(t, "user", types[0].ID)
 }
 
 func TestFlagsClient_DeleteContextType_FullMethod(t *testing.T) {
-	testUUID := "5a0c6be1-0000-0000-0000-000000000001"
+	ctID := "user"
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "DELETE" && r.URL.Path == "/api/v1/context_types/"+testUUID {
+		if r.Method == "DELETE" && r.URL.Path == "/api/v1/context_types/"+ctID {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	err := fc.DeleteContextType(context.Background(), testUUID)
+	err := fc.DeleteContextType(context.Background(), ctID)
 	assert.NoError(t, err)
 }
 
 func TestFlagsClient_ListContexts_FullMethod(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && r.URL.Path == "/api/v1/contexts" {
-			assert.Contains(t, r.URL.RawQuery, "filter%5Bcontext_type_id%5D=user")
+			assert.Contains(t, r.URL.RawQuery, "filter%5Bcontext_type%5D=user")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"data":[{"id":"ctx-1","type":"context","attributes":{"key":"u1"}}]}`))
 			return
@@ -1568,7 +1544,7 @@ func TestFlagsClient_FetchAllFlags(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+		_, _ = w.Write([]byte(sampleFlagListResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 	}))
 
 	store, err := fc.fetchAllFlags(context.Background())
@@ -1580,13 +1556,13 @@ func TestFlagsClient_FetchFlagsList(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+		_, _ = w.Write([]byte(sampleFlagListResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 	}))
 
 	flags, err := fc.fetchFlagsList(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, flags, 1)
-	assert.Equal(t, "feature-x", flags[0]["key"])
+	assert.Equal(t, "feature-x", flags[0]["id"])
 }
 
 // --- FlagsRuntime Connect / Disconnect / Refresh ---
@@ -1595,7 +1571,7 @@ func TestFlagsRuntime_LazyInit(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+		_, _ = w.Write([]byte(sampleFlagListResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 	}))
 	fc.client.environment = "production"
 
@@ -1638,7 +1614,7 @@ func TestFlagsRuntime_Refresh(t *testing.T) {
 		callCount++
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature-x", "Feature X", "BOOLEAN")))
+		_, _ = w.Write([]byte(sampleFlagListResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 	}))
 
 	// Manually set connected
@@ -1659,10 +1635,10 @@ func TestFlagsRuntime_Evaluate_NotConnected_Fetches(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data":[{
-			"id": "` + testFlagUUID + `",
+			"id": "feature",
 			"type": "flag",
 			"attributes": {
-				"key": "feature",
+				"id": "feature",
 				"name": "Feature",
 				"type": "BOOLEAN",
 				"default": true,
@@ -1693,12 +1669,11 @@ func TestFlag_Update(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagUUID, "feature-x", "Updated", "BOOLEAN")))
+		_, _ = w.Write([]byte(sampleFlagResponseJSON(testFlagID, "Updated", "BOOLEAN")))
 	}))
 
 	flag := &Flag{
-		ID:           testFlagUUID,
-		Key:          "feature-x",
+		ID:           testFlagID,
 		Name:         "Feature X",
 		Type:         "BOOLEAN",
 		Default:      true,
@@ -1716,8 +1691,7 @@ func TestFlag_AddRule_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
 	flag := &Flag{
-		ID:           testFlagUUID,
-		Key:          "feature-x",
+		ID:           testFlagID,
 		Name:         "Feature X",
 		Type:         "BOOLEAN",
 		Default:      true,
@@ -1742,7 +1716,7 @@ func TestFlag_AddRule_Success(t *testing.T) {
 
 func TestFlag_AddRule_MissingEnvironment(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	flag := &Flag{ID: testFlagUUID, client: fc}
+	flag := &Flag{ID: testFlagID, client: fc}
 
 	err := flag.AddRule(map[string]interface{}{
 		"logic": map[string]interface{}{},
@@ -1788,10 +1762,10 @@ func TestFlagsRuntime_HandleFlagChanged(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data":[{
-			"id": "` + testFlagUUID + `",
+			"id": "feature-x",
 			"type": "flag",
 			"attributes": {
-				"key": "feature-x",
+				"id": "feature-x",
 				"name": "Feature X",
 				"type": "BOOLEAN",
 				"default": false,
@@ -1809,7 +1783,7 @@ func TestFlagsRuntime_HandleFlagChanged(t *testing.T) {
 	fc.runtime.handleFlagChanged(map[string]interface{}{"key": "feature-x"})
 
 	assert.NotNil(t, changeEvent)
-	assert.Equal(t, "feature-x", changeEvent.Key)
+	assert.Equal(t, "feature-x", changeEvent.ID)
 	assert.Equal(t, "websocket", changeEvent.Source)
 }
 
@@ -2040,7 +2014,7 @@ func TestFlagsClient_UpdateFlag_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
 	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
@@ -2051,7 +2025,7 @@ func TestFlagsClient_UpdateFlag_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
 	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
@@ -2072,7 +2046,7 @@ func TestFlagsClient_UpdateContextType_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	_, err := fc.UpdateContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001", map[string]interface{}{})
+	_, err := fc.UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
 	assert.Error(t, err)
 }
 
@@ -2102,7 +2076,7 @@ func TestFlagsClient_DeleteContextType_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	err := fc.DeleteContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001")
+	err := fc.DeleteContextType(context.Background(), "user-type")
 	assert.Error(t, err)
 }
 
@@ -2300,7 +2274,7 @@ func TestFlag_Update_Error(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
 	}))
 
-	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
@@ -2310,7 +2284,7 @@ func TestFlag_Update_Error(t *testing.T) {
 func TestFlag_AddRule_MissingEnvironmentKey(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
-	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
 	// Rule without environment key should fail.
 	rule := map[string]interface{}{
 		"logic": map[string]interface{}{},
@@ -2323,8 +2297,7 @@ func TestFlag_AddRule_MissingEnvironmentKey(t *testing.T) {
 
 func TestFlag_AddRule_NewEnvironment(t *testing.T) {
 	flag := &Flag{
-		ID:           testFlagUUID,
-		Key:          "feature-x",
+		ID:           testFlagID,
 		Name:         "Feature X",
 		Type:         "BOOLEAN",
 		Default:      true,
@@ -2349,8 +2322,7 @@ func TestFlag_AddRule_NewEnvironment(t *testing.T) {
 
 func TestFlag_AddRule_ExistingEnvironment(t *testing.T) {
 	flag := &Flag{
-		ID:   testFlagUUID,
-		Key:  "feature-x",
+		ID:   testFlagID,
 		Name: "Feature X",
 		Type: "BOOLEAN",
 		Environments: map[string]interface{}{
@@ -2524,16 +2496,18 @@ func TestFlagsRuntime_EnsureInit_FetchError(t *testing.T) {
 
 // --- helpers for test infrastructure ---
 
-func flagResource(id, flagType, key, name, vType string, dflt interface{}, desc string, created time.Time) genflags.FlagResource {
+func flagResource(id, flagType, name, vType string, dflt interface{}, desc string, created time.Time) genflags.FlagResource {
+	attrID := id
+	vals := []genflags.FlagValue{{Name: "True", Value: true}}
 	return genflags.FlagResource{
 		Id:   &id,
 		Type: genflags.FlagResourceType(flagType),
 		Attributes: genflags.Flag{
-			Key:          key,
+			Id:           &attrID,
 			Name:         name,
 			Type:         vType,
 			Default:      dflt,
-			Values:       []genflags.FlagValue{{Name: "True", Value: true}},
+			Values:       &vals,
 			Description:  &desc,
 			Environments: nil,
 			CreatedAt:    &created,
@@ -2541,16 +2515,16 @@ func flagResource(id, flagType, key, name, vType string, dflt interface{}, desc 
 	}
 }
 
-func flagResourceNoID(key, name, vType string, dflt interface{}, created time.Time) genflags.FlagResource {
+func flagResourceNoID(name, vType string, dflt interface{}, created time.Time) genflags.FlagResource {
+	vals := []genflags.FlagValue{}
 	return genflags.FlagResource{
 		Id:   nil,
 		Type: genflags.FlagResourceTypeFlag,
 		Attributes: genflags.Flag{
-			Key:       key,
 			Name:      name,
 			Type:      vType,
 			Default:   dflt,
-			Values:    []genflags.FlagValue{},
+			Values:    &vals,
 			CreatedAt: &created,
 		},
 	}
@@ -2646,7 +2620,7 @@ func TestFlagsClient_Delete_NetworkError(t *testing.T) {
 
 func TestFlagsClient_UpdateFlag_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
 	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
@@ -2686,7 +2660,7 @@ func TestFlagsClient_Delete_ReadBodyError(t *testing.T) {
 
 func TestFlagsClient_UpdateFlag_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	flag := &Flag{ID: testFlagUUID, Key: "x", Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
 	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
@@ -2707,15 +2681,8 @@ func TestFlagsClient_CreateContextType_NetworkError(t *testing.T) {
 
 func TestFlagsClient_UpdateContextType_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.UpdateContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001", map[string]interface{}{})
+	_, err := fc.UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
 	assert.Error(t, err)
-}
-
-func TestFlagsClient_UpdateContextType_InvalidUUID(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	_, err := fc.UpdateContextType(context.Background(), "not-a-uuid", map[string]interface{}{})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid context type ID")
 }
 
 func TestFlagsClient_ListContextTypes_NetworkError(t *testing.T) {
@@ -2726,15 +2693,8 @@ func TestFlagsClient_ListContextTypes_NetworkError(t *testing.T) {
 
 func TestFlagsClient_DeleteContextType_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	err := fc.DeleteContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001")
+	err := fc.DeleteContextType(context.Background(), "user-type")
 	assert.Error(t, err)
-}
-
-func TestFlagsClient_DeleteContextType_InvalidUUID(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	err := fc.DeleteContextType(context.Background(), "not-a-uuid")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid context type ID")
 }
 
 func TestFlagsClient_ListContexts_NetworkError(t *testing.T) {
@@ -2753,7 +2713,7 @@ func TestFlagsClient_CreateContextType_ReadBodyError(t *testing.T) {
 
 func TestFlagsClient_UpdateContextType_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.UpdateContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001", map[string]interface{}{})
+	_, err := fc.UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
 	assert.Error(t, err)
 }
 
@@ -2765,7 +2725,7 @@ func TestFlagsClient_ListContextTypes_ReadBodyError(t *testing.T) {
 
 func TestFlagsClient_DeleteContextType_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	err := fc.DeleteContextType(context.Background(), "5a0c6be1-0000-0000-0000-000000000001")
+	err := fc.DeleteContextType(context.Background(), "user-type")
 	assert.Error(t, err)
 }
 
@@ -2785,8 +2745,7 @@ func TestFlag_AddRule_ThenSave_UpdateError(t *testing.T) {
 	}))
 
 	flag := &Flag{
-		ID:           testFlagUUID,
-		Key:          "feature-x",
+		ID:           testFlagID,
 		Name:         "Feature X",
 		Type:         "BOOLEAN",
 		Default:      true,
@@ -2814,8 +2773,7 @@ func TestFlag_AddRule_ThenSave_UpdateError(t *testing.T) {
 
 func TestFlag_AddRule_ExistingEnvWithRules(t *testing.T) {
 	flag := &Flag{
-		ID:   testFlagUUID,
-		Key:  "feature-x",
+		ID:   testFlagID,
 		Name: "Feature X",
 		Type: "BOOLEAN",
 		Environments: map[string]interface{}{
@@ -2913,7 +2871,7 @@ func TestFlagsRuntime_ServiceContextAutoInjection(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagListResponseJSON(testFlagUUID, "feature", "Feature", "BOOLEAN")))
+		_, _ = w.Write([]byte(sampleFlagListResponseJSON("feature", "Feature", "BOOLEAN")))
 	}))
 
 	// Set service on the client
@@ -3000,7 +2958,7 @@ func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
 func TestNewNumberFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	flag := fc.NewNumberFlag("price_multiplier", 1.5)
-	assert.Equal(t, "price_multiplier", flag.Key)
+	assert.Equal(t, "price_multiplier", flag.ID)
 	assert.Equal(t, "Price Multiplier", flag.Name)
 	assert.Equal(t, string(FlagTypeNumeric), flag.Type)
 	assert.Equal(t, 1.5, flag.Default)
@@ -3022,7 +2980,7 @@ func TestNewJsonFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	defaultVal := map[string]interface{}{"theme": "dark"}
 	flag := fc.NewJsonFlag("ui_config", defaultVal)
-	assert.Equal(t, "ui_config", flag.Key)
+	assert.Equal(t, "ui_config", flag.ID)
 	assert.Equal(t, "Ui Config", flag.Name)
 	assert.Equal(t, string(FlagTypeJSON), flag.Type)
 	assert.Equal(t, defaultVal, flag.Default)
@@ -3034,47 +2992,6 @@ func TestNewJsonFlag_WithOptions(t *testing.T) {
 	defaultVal := map[string]interface{}{"key": "val"}
 	flag := fc.NewJsonFlag("config", defaultVal, WithFlagName("JSON Config"))
 	assert.Equal(t, "JSON Config", flag.Name)
-}
-
-// ---------- FlagsClient.deleteByID error paths ----------
-
-func TestDeleteByID_Flags_CheckStatusError(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
-	}))
-
-	err := fc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
-	require.Error(t, err)
-}
-
-func TestDeleteByID_Flags_ConnectionError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	serverURL := server.URL
-	server.Close()
-
-	httpClient := &http.Client{}
-	genFlagsClient, _ := genflags.NewClient(serverURL, genflags.WithHTTPClient(httpClient))
-	fc := &FlagsClient{
-		client:    &Client{environment: "test"},
-		generated: genFlagsClient,
-	}
-
-	err := fc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
-	require.Error(t, err)
-}
-
-func TestDeleteByID_Flags_InvalidUUID(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	err := fc.deleteByID(context.Background(), "not-a-uuid")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid flag ID")
-}
-
-func TestDeleteByID_Flags_BodyReadFailure(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	err := fc.deleteByID(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
-	require.Error(t, err)
 }
 
 // ---------- FlagsClient.OnChangeKey ----------
@@ -3097,7 +3014,7 @@ func TestFlagsClient_OnChangeKey(t *testing.T) {
 	fc.runtime.fireChangeListeners("my-flag", "manual")
 
 	require.NotNil(t, received)
-	assert.Equal(t, "my-flag", received.Key)
+	assert.Equal(t, "my-flag", received.ID)
 	assert.Equal(t, "manual", received.Source)
 }
 
@@ -3208,7 +3125,7 @@ func TestFlagsRuntime_OnChangeKey(t *testing.T) {
 	rt.fireChangeListeners("test-flag", "websocket")
 
 	require.NotNil(t, received)
-	assert.Equal(t, "test-flag", received.Key)
+	assert.Equal(t, "test-flag", received.ID)
 	assert.Equal(t, "websocket", received.Source)
 }
 
@@ -3236,7 +3153,7 @@ func TestFireChangeListeners_KeyListeners(t *testing.T) {
 
 	require.NotNil(t, globalReceived)
 	require.NotNil(t, keyReceived)
-	assert.Equal(t, "my-flag", keyReceived.Key)
+	assert.Equal(t, "my-flag", keyReceived.ID)
 }
 
 func TestFireChangeListeners_HandleListeners(t *testing.T) {
@@ -3259,7 +3176,7 @@ func TestFireChangeListeners_HandleListeners(t *testing.T) {
 	rt.fireChangeListeners("my-flag", "websocket")
 
 	require.NotNil(t, handleReceived)
-	assert.Equal(t, "my-flag", handleReceived.Key)
+	assert.Equal(t, "my-flag", handleReceived.ID)
 }
 
 func TestFireChangeListeners_KeyListenerPanicRecovery(t *testing.T) {
@@ -3323,7 +3240,7 @@ func TestFireChangeListeners_Flags_EmptyKey(t *testing.T) {
 // ---------- handleFlagChanged ----------
 
 func TestHandleFlagChanged(t *testing.T) {
-	flagsJSON := `{"data":[{"id":"550e8400-e29b-41d4-a716-446655440000","type":"flag","attributes":{"name":"My Flag","key":"my-flag","type":"BOOLEAN","default":true,"values":[],"environments":{}}}]}`
+	flagsJSON := `{"data":[{"id":"my-flag","type":"flag","attributes":{"id":"my-flag","name":"My Flag","type":"BOOLEAN","default":true,"values":[],"environments":{}}}]}`
 
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -3340,7 +3257,7 @@ func TestHandleFlagChanged(t *testing.T) {
 	rt.handleFlagChanged(map[string]interface{}{"key": "my-flag"})
 
 	require.NotNil(t, received)
-	assert.Equal(t, "my-flag", received.Key)
+	assert.Equal(t, "my-flag", received.ID)
 	assert.Equal(t, "websocket", received.Source)
 }
 

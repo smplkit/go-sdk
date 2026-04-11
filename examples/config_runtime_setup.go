@@ -103,12 +103,12 @@ func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs
 		smplkit.WithConfigParent(userService.ID),
 		smplkit.WithConfigItems(map[string]interface{}{
 			"session_ttl_minutes": 60,
-			"mfa_enabled":        false,
+			"mfa_enabled":         false,
 		}),
 		smplkit.WithConfigEnvironments(map[string]map[string]interface{}{
 			"production": {
 				"session_ttl_minutes": 30,
-				"mfa_enabled":        true,
+				"mfa_enabled":         true,
 			},
 		}),
 	)

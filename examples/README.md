@@ -42,7 +42,7 @@ go run examples/config_management_showcase.go examples/helpers.go
 
 ### Runtime Showcase
 
-Demonstrates `Resolve(ctx, key)`, `ResolveInto(ctx, key, &target)`, `Subscribe(ctx, key)`, `OnChange` with `WithConfigKey` / `WithItemKey`, `Refresh()`.
+Demonstrates `Resolve(ctx, key)`, `ResolveInto(ctx, key, &target)`, `Subscribe(ctx, key)`, `OnChange` with `WithConfigID` / `WithItemKey`, `Refresh()`.
 
 ```bash
 go run examples/config_runtime_showcase.go examples/config_runtime_setup.go examples/helpers.go

@@ -16,8 +16,8 @@
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk
 //   - A valid smplkit API key, provided via one of:
-//       - SMPLKIT_API_KEY environment variable
-//       - ~/.smplkit configuration file (see SDK docs)
+//   - SMPLKIT_API_KEY environment variable
+//   - ~/.smplkit configuration file (see SDK docs)
 //   - The smplkit flags service running and reachable
 //
 // Usage:
@@ -100,7 +100,7 @@ func main() {
 	if err != nil {
 		fatal("failed to get flag", err)
 	}
-	step(fmt.Sprintf("Get(key=%q): name=%q type=%s", fetched.Key, fetched.Name, fetched.Type))
+	step(fmt.Sprintf("Get(id=%q): name=%q type=%s", fetched.ID, fetched.Name, fetched.Type))
 
 	// List all.
 	allFlags, err := flags.List(ctx)
@@ -113,7 +113,7 @@ func main() {
 		if f.Description != nil {
 			desc = *f.Description
 		}
-		step(fmt.Sprintf("  %-15s  type=%-8s  default=%-6v  desc=%q", f.Key, f.Type, f.Default, desc))
+		step(fmt.Sprintf("  %-15s  type=%-8s  default=%-6v  desc=%q", f.ID, f.Type, f.Default, desc))
 	}
 
 	// ====================================================================
@@ -167,14 +167,14 @@ func main() {
 	if err != nil {
 		step(fmt.Sprintf("CreateContextType('user') returned error (may already exist): %v", err))
 	} else {
-		step(fmt.Sprintf("Created context type: id=%s key=%q name=%q", userCT.ID, userCT.Key, userCT.Name))
+		step(fmt.Sprintf("Created context type: id=%s name=%q", userCT.ID, userCT.Name))
 	}
 
 	accountCT, err := flags.CreateContextType(ctx, "account", "Account")
 	if err != nil {
 		step(fmt.Sprintf("CreateContextType('account') returned error (may already exist): %v", err))
 	} else {
-		step(fmt.Sprintf("Created context type: id=%s key=%q name=%q", accountCT.ID, accountCT.Key, accountCT.Name))
+		step(fmt.Sprintf("Created context type: id=%s name=%q", accountCT.ID, accountCT.Name))
 	}
 
 	// List context types.
@@ -184,7 +184,7 @@ func main() {
 	}
 	step(fmt.Sprintf("ListContextTypes: %d types", len(ctList)))
 	for _, ct := range ctList {
-		step(fmt.Sprintf("  id=%s key=%q name=%q", ct.ID, ct.Key, ct.Name))
+		step(fmt.Sprintf("  id=%s name=%q", ct.ID, ct.Name))
 	}
 
 	// ====================================================================

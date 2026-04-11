@@ -19,8 +19,8 @@
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk
 //   - A valid smplkit API key, provided via one of:
-//       - SMPLKIT_API_KEY environment variable
-//       - ~/.smplkit configuration file (see SDK docs)
+//   - SMPLKIT_API_KEY environment variable
+//   - ~/.smplkit configuration file (see SDK docs)
 //   - The smplkit flags service running and reachable
 //
 // Usage:
@@ -179,7 +179,7 @@ func main() {
 	globalChanges := 0
 	flags.OnChange(func(evt *smplkit.FlagChangeEvent) {
 		globalChanges++
-		fmt.Printf("    [GLOBAL CHANGE] key=%s source=%s\n", evt.Key, evt.Source)
+		fmt.Printf("    [GLOBAL CHANGE] id=%s source=%s\n", evt.ID, evt.Source)
 	})
 	step("Global change listener registered")
 
@@ -211,8 +211,8 @@ func main() {
 
 	flags.Register(ctx,
 		smplkit.NewContext("device", "device-abc", map[string]interface{}{
-			"os":       "iOS",
-			"version":  "17.4",
+			"os":        "iOS",
+			"version":   "17.4",
 			"app_build": "2024.03.1",
 		}),
 	)

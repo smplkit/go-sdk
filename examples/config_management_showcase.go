@@ -15,8 +15,8 @@
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk
 //   - A valid smplkit API key, provided via one of:
-//       - SMPLKIT_API_KEY environment variable
-//       - ~/.smplkit configuration file (see SDK docs)
+//   - SMPLKIT_API_KEY environment variable
+//   - ~/.smplkit configuration file (see SDK docs)
 //   - The smplkit config service running and reachable
 //
 // Usage:
@@ -76,7 +76,7 @@ func main() {
 	if err != nil {
 		fatal("failed to fetch common config", err)
 	}
-	step(fmt.Sprintf("Fetched common config: id=%s, key=%q", common.ID, common.Key))
+	step(fmt.Sprintf("Fetched common config: id=%s", common.ID))
 
 	common.Description = strPtr("Organization-wide shared configuration")
 	common.Items = map[string]interface{}{
@@ -161,12 +161,12 @@ func main() {
 		smplkit.WithConfigParent(userService.ID),
 		smplkit.WithConfigItems(map[string]interface{}{
 			"session_ttl_minutes": 60,
-			"mfa_enabled":        false,
+			"mfa_enabled":         false,
 		}),
 		smplkit.WithConfigEnvironments(map[string]map[string]interface{}{
 			"production": {
 				"session_ttl_minutes": 30,
-				"mfa_enabled":        true,
+				"mfa_enabled":         true,
 			},
 		}),
 	)
@@ -192,7 +192,7 @@ func main() {
 		if cfg.Parent != nil {
 			parent = fmt.Sprintf("(parent: %s)", *cfg.Parent)
 		}
-		step(fmt.Sprintf("  %s %s", cfg.Key, parent))
+		step(fmt.Sprintf("  %s %s", cfg.ID, parent))
 	}
 
 	// ====================================================================
@@ -204,7 +204,7 @@ func main() {
 	if err != nil {
 		fatal("failed to get user_service by key", err)
 	}
-	step(fmt.Sprintf("Get(key=%q): id=%s name=%q", fetched.Key, fetched.ID, fetched.Name))
+	step(fmt.Sprintf("Get(id=%q): name=%q", fetched.ID, fetched.Name))
 	if fetched.Description != nil {
 		step(fmt.Sprintf("  description=%q", *fetched.Description))
 	}

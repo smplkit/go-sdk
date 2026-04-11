@@ -9,15 +9,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/google/uuid"
-
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
 )
 
 // ConfigChangeEvent describes a single value change detected on refresh.
 type ConfigChangeEvent struct {
-	// ConfigKey is the config key that changed (e.g. "user_service").
-	ConfigKey string
+	// ConfigID is the config ID that changed (e.g. "user_service").
+	ConfigID string
 	// ItemKey is the item key within the config that changed.
 	ItemKey string
 	// OldValue is the value before the change (nil if the key was new).
@@ -29,9 +27,9 @@ type ConfigChangeEvent struct {
 }
 
 type configChangeListener struct {
-	configKey string // "" matches all configs
-	itemKey   string // "" matches all items
-	cb        func(*ConfigChangeEvent)
+	configID string // "" matches all configs
+	itemKey  string // "" matches all items
+	cb       func(*ConfigChangeEvent)
 }
 
 // ConfigClient provides operations for config resources and
@@ -49,12 +47,12 @@ type ConfigClient struct {
 	listeners   []configChangeListener
 }
 
-// New creates an unsaved Config with the given key. Call Save(ctx) to persist.
-// If name is not provided via WithConfigName, it is auto-generated from the key.
-func (c *ConfigClient) New(key string, opts ...ConfigOption) *Config {
+// New creates an unsaved Config with the given ID. Call Save(ctx) to persist.
+// If name is not provided via WithConfigName, it is auto-generated from the ID.
+func (c *ConfigClient) New(id string, opts ...ConfigOption) *Config {
 	cfg := &Config{
-		Key:          key,
-		Name:         keyToDisplayName(key),
+		ID:           id,
+		Name:         keyToDisplayName(id),
 		Items:        map[string]interface{}{},
 		Environments: map[string]map[string]interface{}{},
 		client:       c,
@@ -65,11 +63,10 @@ func (c *ConfigClient) New(key string, opts ...ConfigOption) *Config {
 	return cfg
 }
 
-// Get retrieves a config by its key.
+// Get retrieves a config by its ID.
 // Returns SmplNotFoundError if no match.
-func (c *ConfigClient) Get(ctx context.Context, key string) (*Config, error) {
-	params := &genconfig.ListConfigsParams{FilterKey: &key}
-	resp, err := c.generated.ListConfigs(ctx, params)
+func (c *ConfigClient) Get(ctx context.Context, id string) (*Config, error) {
+	resp, err := c.generated.GetConfig(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -85,30 +82,17 @@ func (c *ConfigClient) Get(ctx context.Context, key string) (*Config, error) {
 		return nil, err
 	}
 
-	var result genconfig.ConfigListResponse
+	var result genconfig.ConfigResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 
-	if len(result.Data) == 0 {
-		return nil, &SmplNotFoundError{
-			SmplError: SmplError{
-				Message:    fmt.Sprintf("config with key %q not found", key),
-				StatusCode: 404,
-			},
-		}
-	}
-	return resourceToConfig(result.Data[0], c), nil
+	return resourceToConfig(result.Data, c), nil
 }
 
-// getByID retrieves a config by its UUID (internal use for chain walking).
+// getByID retrieves a config by its ID (internal use for chain walking).
 func (c *ConfigClient) getByID(ctx context.Context, id string) (*Config, error) {
-	uid, err := uuid.Parse(id)
-	if err != nil {
-		return nil, fmt.Errorf("smplkit: invalid config ID %q: %w", id, err)
-	}
-
-	resp, err := c.generated.GetConfig(ctx, uid)
+	resp, err := c.generated.GetConfig(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -161,24 +145,9 @@ func (c *ConfigClient) List(ctx context.Context) ([]*Config, error) {
 	return configs, nil
 }
 
-// Delete removes a config by its key.
-// Returns SmplNotFoundError if not found.
-func (c *ConfigClient) Delete(ctx context.Context, key string) error {
-	cfg, err := c.Get(ctx, key)
-	if err != nil {
-		return err
-	}
-	return c.deleteByID(ctx, cfg.ID)
-}
-
-// deleteByID removes a config by its UUID.
-func (c *ConfigClient) deleteByID(ctx context.Context, id string) error {
-	uid, err := uuid.Parse(id)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid config ID %q: %w", id, err)
-	}
-
-	resp, err := c.generated.DeleteConfig(ctx, uid)
+// Delete removes a config by its ID.
+func (c *ConfigClient) Delete(ctx context.Context, id string) error {
+	resp, err := c.generated.DeleteConfig(ctx, id)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -195,7 +164,7 @@ func (c *ConfigClient) deleteByID(ctx context.Context, id string) error {
 
 // createConfig creates the config on the server and updates the local instance.
 func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
-	reqBody := buildConfigRequest("", cfg.Name, &cfg.Key, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+	reqBody := buildConfigRequest("", cfg.Name, &cfg.ID, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
 	resp, err := c.generated.CreateConfig(ctx, reqBody)
 	if err != nil {
@@ -223,14 +192,9 @@ func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
 
 // updateConfig updates the config on the server and updates the local instance.
 func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
-	uid, err := uuid.Parse(cfg.ID)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid config ID %q: %w", cfg.ID, err)
-	}
+	reqBody := buildConfigRequest(cfg.ID, cfg.Name, &cfg.ID, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
-	reqBody := buildConfigRequest(cfg.ID, cfg.Name, &cfg.Key, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
-
-	resp, err := c.generated.UpdateConfig(ctx, uid, reqBody)
+	resp, err := c.generated.UpdateConfig(ctx, cfg.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -254,15 +218,15 @@ func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
-// Resolve returns the resolved config values for the given key.
-func (c *ConfigClient) Resolve(ctx context.Context, key string) (map[string]interface{}, error) {
+// Resolve returns the resolved config values for the given ID.
+func (c *ConfigClient) Resolve(ctx context.Context, id string) (map[string]interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
 	}
 	if metrics := c.client.metrics; metrics != nil {
-		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config_id": key})
+		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config_id": id})
 	}
-	resolved, ok := c.configCache[key]
+	resolved, ok := c.configCache[id]
 	if !ok {
 		return nil, nil
 	}
@@ -277,8 +241,8 @@ func (c *ConfigClient) Resolve(ctx context.Context, key string) (map[string]inte
 // ResolveInto resolves the config and unmarshals it into the target struct.
 // The target must be a pointer to a struct. Dot-notation keys (e.g. "database.host")
 // are expanded into nested structures before unmarshaling.
-func (c *ConfigClient) ResolveInto(ctx context.Context, key string, target interface{}) error {
-	resolved, err := c.Resolve(ctx, key)
+func (c *ConfigClient) ResolveInto(ctx context.Context, id string, target interface{}) error {
+	resolved, err := c.Resolve(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -286,12 +250,12 @@ func (c *ConfigClient) ResolveInto(ctx context.Context, key string, target inter
 }
 
 // Subscribe returns a LiveConfig whose Value() always reflects the latest
-// resolved values for the given key.
-func (c *ConfigClient) Subscribe(ctx context.Context, key string) (*LiveConfig, error) {
+// resolved values for the given config ID.
+func (c *ConfigClient) Subscribe(ctx context.Context, id string) (*LiveConfig, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
 	}
-	return &LiveConfig{client: c, key: key}, nil
+	return &LiveConfig{client: c, id: id}, nil
 }
 
 // ensureInit performs initialization on first runtime access.
@@ -311,7 +275,7 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 				c.initErr = fetchErr
 				return
 			}
-			cache[cfg.Key] = resolveChain(chain, environment)
+			cache[cfg.ID] = resolveChain(chain, environment)
 		}
 		c.configCache = cache
 	})
@@ -340,7 +304,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 		if fetchErr != nil {
 			return fetchErr
 		}
-		newCache[cfg.Key] = resolveChain(chain, environment)
+		newCache[cfg.ID] = resolveChain(chain, environment)
 	}
 	oldCache := c.configCache
 	c.configCache = newCache
@@ -349,7 +313,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 }
 
 // OnChange registers a listener that fires when a config value changes (on Refresh).
-// Use WithConfigKey and/or WithItemKey to scope the listener.
+// Use WithConfigID and/or WithItemKey to scope the listener.
 func (c *ConfigClient) OnChange(cb func(*ConfigChangeEvent), opts ...ChangeListenerOption) {
 	var cfg changeListenerConfig
 	for _, opt := range opts {
@@ -357,9 +321,9 @@ func (c *ConfigClient) OnChange(cb func(*ConfigChangeEvent), opts ...ChangeListe
 	}
 	c.listenersMu.Lock()
 	c.listeners = append(c.listeners, configChangeListener{
-		configKey: cfg.configKey,
-		itemKey:   cfg.itemKey,
-		cb:        cb,
+		configID: cfg.configID,
+		itemKey:  cfg.itemKey,
+		cb:       cb,
 	})
 	c.listenersMu.Unlock()
 }
@@ -368,14 +332,14 @@ func (c *ConfigClient) OnChange(cb func(*ConfigChangeEvent), opts ...ChangeListe
 type ChangeListenerOption func(*changeListenerConfig)
 
 type changeListenerConfig struct {
-	configKey string
-	itemKey   string
+	configID string
+	itemKey  string
 }
 
-// WithConfigKey restricts the listener to changes in the given config.
-func WithConfigKey(key string) ChangeListenerOption {
+// WithConfigID restricts the listener to changes in the given config.
+func WithConfigID(id string) ChangeListenerOption {
 	return func(c *changeListenerConfig) {
-		c.configKey = key
+		c.configID = id
 	}
 }
 
@@ -387,11 +351,11 @@ func WithItemKey(key string) ChangeListenerOption {
 }
 
 // GetValue reads a resolved config value.
-func (c *ConfigClient) GetValue(ctx context.Context, configKey string, itemKey ...string) (interface{}, error) {
+func (c *ConfigClient) GetValue(ctx context.Context, configID string, itemKey ...string) (interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
 	}
-	resolved, ok := c.configCache[configKey]
+	resolved, ok := c.configCache[configID]
 	if !ok {
 		return nil, nil
 	}
@@ -409,9 +373,9 @@ func (c *ConfigClient) GetValue(ctx context.Context, configKey string, itemKey .
 	return val, nil
 }
 
-// GetString returns the resolved string value for (configKey, itemKey).
-func (c *ConfigClient) GetString(ctx context.Context, configKey, itemKey string, defaultVal ...string) (string, error) {
-	val, err := c.GetValue(ctx, configKey, itemKey)
+// GetString returns the resolved string value for (configID, itemKey).
+func (c *ConfigClient) GetString(ctx context.Context, configID, itemKey string, defaultVal ...string) (string, error) {
+	val, err := c.GetValue(ctx, configID, itemKey)
 	if err != nil {
 		return "", err
 	}
@@ -424,9 +388,9 @@ func (c *ConfigClient) GetString(ctx context.Context, configKey, itemKey string,
 	return "", nil
 }
 
-// GetInt returns the resolved int value for (configKey, itemKey).
-func (c *ConfigClient) GetInt(ctx context.Context, configKey, itemKey string, defaultVal ...int) (int, error) {
-	val, err := c.GetValue(ctx, configKey, itemKey)
+// GetInt returns the resolved int value for (configID, itemKey).
+func (c *ConfigClient) GetInt(ctx context.Context, configID, itemKey string, defaultVal ...int) (int, error) {
+	val, err := c.GetValue(ctx, configID, itemKey)
 	if err != nil {
 		return 0, err
 	}
@@ -444,9 +408,9 @@ func (c *ConfigClient) GetInt(ctx context.Context, configKey, itemKey string, de
 	return 0, nil
 }
 
-// GetBool returns the resolved bool value for (configKey, itemKey).
-func (c *ConfigClient) GetBool(ctx context.Context, configKey, itemKey string, defaultVal ...bool) (bool, error) {
-	val, err := c.GetValue(ctx, configKey, itemKey)
+// GetBool returns the resolved bool value for (configID, itemKey).
+func (c *ConfigClient) GetBool(ctx context.Context, configID, itemKey string, defaultVal ...bool) (bool, error) {
+	val, err := c.GetValue(ctx, configID, itemKey)
 	if err != nil {
 		return false, err
 	}
@@ -506,14 +470,14 @@ func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]inte
 					}
 				}
 				evt := &ConfigChangeEvent{
-					ConfigKey: cfgKey,
-					ItemKey:   iKey,
-					OldValue:  oldVal,
-					NewValue:  newVal,
-					Source:    source,
+					ConfigID: cfgKey,
+					ItemKey:  iKey,
+					OldValue: oldVal,
+					NewValue: newVal,
+					Source:   source,
 				}
 				for _, l := range listeners {
-					if l.configKey != "" && l.configKey != cfgKey {
+					if l.configID != "" && l.configID != cfgKey {
 						continue
 					}
 					if l.itemKey != "" && l.itemKey != iKey {
@@ -558,13 +522,8 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 	if r.Id != nil {
 		id = *r.Id
 	}
-	key := ""
-	if attrs.Key != nil {
-		key = *attrs.Key
-	}
 	return &Config{
 		ID:           id,
-		Key:          key,
 		Name:         attrs.Name,
 		Description:  attrs.Description,
 		Parent:       attrs.Parent,
@@ -577,7 +536,7 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 }
 
 // buildConfigRequest constructs a ResponseConfig for create or update.
-func buildConfigRequest(id, name string, key, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
+func buildConfigRequest(id, name string, attrID, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
 	var idPtr *string
 	if id != "" {
 		idPtr = &id
@@ -589,7 +548,7 @@ func buildConfigRequest(id, name string, key, desc, parent *string, items map[st
 			Type: &configType,
 			Attributes: genconfig.Config{
 				Name:         name,
-				Key:          key,
+				Id:           attrID,
 				Description:  desc,
 				Parent:       parent,
 				Items:        refMap(wrapItemValues(items)),

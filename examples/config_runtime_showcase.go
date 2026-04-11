@@ -15,8 +15,8 @@
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk
 //   - A valid smplkit API key, provided via one of:
-//       - SMPLKIT_API_KEY environment variable
-//       - ~/.smplkit configuration file (see SDK docs)
+//   - SMPLKIT_API_KEY environment variable
+//   - ~/.smplkit configuration file (see SDK docs)
 //   - The smplkit config service running and reachable
 //
 // Usage:
@@ -34,14 +34,14 @@ import (
 
 // UserServiceConfig is an example struct for ResolveInto demonstration.
 type UserServiceConfig struct {
-	Database                   map[string]interface{} `json:"database"`
-	CacheTTLSeconds            int                    `json:"cache_ttl_seconds"`
-	EnableSignup               bool                   `json:"enable_signup"`
-	PaginationDefaultPageSize  int                    `json:"pagination_default_page_size"`
-	AppName                    string                 `json:"app_name"`
-	SupportEmail               string                 `json:"support_email"`
-	MaxRetries                 int                    `json:"max_retries"`
-	RequestTimeoutMs           int                    `json:"request_timeout_ms"`
+	Database                  map[string]interface{} `json:"database"`
+	CacheTTLSeconds           int                    `json:"cache_ttl_seconds"`
+	EnableSignup              bool                   `json:"enable_signup"`
+	PaginationDefaultPageSize int                    `json:"pagination_default_page_size"`
+	AppName                   string                 `json:"app_name"`
+	SupportEmail              string                 `json:"support_email"`
+	MaxRetries                int                    `json:"max_retries"`
+	RequestTimeoutMs          int                    `json:"request_timeout_ms"`
 }
 
 func main() {
@@ -151,14 +151,14 @@ func main() {
 	var changes []*smplkit.ConfigChangeEvent
 	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
 		changes = append(changes, evt)
-		fmt.Printf("    [CHANGE] %s.%s: %v -> %v\n", evt.ConfigKey, evt.ItemKey, evt.OldValue, evt.NewValue)
+		fmt.Printf("    [CHANGE] %s.%s: %v -> %v\n", evt.ConfigID, evt.ItemKey, evt.OldValue, evt.NewValue)
 	})
 	step("Global change listener registered")
 
 	var retriesChanges []*smplkit.ConfigChangeEvent
 	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
 		retriesChanges = append(retriesChanges, evt)
-	}, smplkit.WithConfigKey("common"), smplkit.WithItemKey("max_retries"))
+	}, smplkit.WithConfigID("common"), smplkit.WithItemKey("max_retries"))
 	step("Key-specific listener registered for common.max_retries")
 
 	// ====================================================================

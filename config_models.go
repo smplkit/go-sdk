@@ -7,15 +7,13 @@ import (
 
 // Config represents a configuration resource from the smplkit platform.
 type Config struct {
-	// ID is the unique identifier (UUID) of the config. Empty for unsaved configs.
+	// ID is the config identifier (e.g. "user_service"). Empty for unsaved configs.
 	ID string
-	// Key is the human-readable config key (e.g. "user_service").
-	Key string
 	// Name is the display name for the config.
 	Name string
 	// Description is an optional description of the config.
 	Description *string
-	// Parent is the parent config UUID, or nil for root configs.
+	// Parent is the parent config ID, or nil for root configs.
 	Parent *string
 	// Items holds the base configuration values.
 	Items map[string]interface{}
@@ -69,7 +67,6 @@ func (c *Config) Save(ctx context.Context) error {
 
 func (c *Config) apply(other *Config) {
 	c.ID = other.ID
-	c.Key = other.Key
 	c.Name = other.Name
 	c.Description = other.Description
 	c.Parent = other.Parent
@@ -80,10 +77,10 @@ func (c *Config) apply(other *Config) {
 }
 
 // LiveConfig is a handle returned by Subscribe that always reflects the latest
-// resolved values for a config key.
+// resolved values for a config ID.
 type LiveConfig struct {
 	client *ConfigClient
-	key    string
+	id     string
 }
 
 // Value returns the latest resolved values for this config.
@@ -91,7 +88,7 @@ func (lc *LiveConfig) Value() map[string]interface{} {
 	if lc.client.configCache == nil {
 		return nil
 	}
-	resolved, ok := lc.client.configCache[lc.key]
+	resolved, ok := lc.client.configCache[lc.id]
 	if !ok {
 		return nil
 	}

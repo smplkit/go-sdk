@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
 	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
 	"github.com/smplkit/go-sdk/logging/adapters"
 )
@@ -24,7 +22,7 @@ type LoggingClient struct {
 	// Runtime state
 	startOnce    sync.Once
 	started      bool
-	loggersCache map[string]map[string]interface{} // key → logger data
+	loggersCache map[string]map[string]interface{} // id → logger data
 	groupsCache  map[string]map[string]interface{} // id → group data
 
 	// Change listeners
@@ -65,12 +63,12 @@ func (c *LoggingClient) close() {
 	}
 }
 
-// New creates an unsaved Logger with the given key. Call Save(ctx) to persist.
-// If name is not provided via WithLoggerName, it is auto-generated from the key.
-func (c *LoggingClient) New(key string, opts ...LoggerOption) *Logger {
+// New creates an unsaved Logger with the given ID. Call Save(ctx) to persist.
+// If name is not provided via WithLoggerName, it is auto-generated from the ID.
+func (c *LoggingClient) New(id string, opts ...LoggerOption) *Logger {
 	l := &Logger{
-		Key:          key,
-		Name:         keyToDisplayName(key),
+		ID:           id,
+		Name:         keyToDisplayName(id),
 		Managed:      true,
 		Environments: map[string]interface{}{},
 		client:       c,
@@ -81,11 +79,11 @@ func (c *LoggingClient) New(key string, opts ...LoggerOption) *Logger {
 	return l
 }
 
-// NewGroup creates an unsaved LogGroup with the given key. Call Save(ctx) to persist.
-func (c *LoggingClient) NewGroup(key string, opts ...LogGroupOption) *LogGroup {
+// NewGroup creates an unsaved LogGroup with the given ID. Call Save(ctx) to persist.
+func (c *LoggingClient) NewGroup(id string, opts ...LogGroupOption) *LogGroup {
 	g := &LogGroup{
-		Key:          key,
-		Name:         keyToDisplayName(key),
+		ID:           id,
+		Name:         keyToDisplayName(id),
 		Environments: map[string]interface{}{},
 		client:       c,
 	}
@@ -95,10 +93,9 @@ func (c *LoggingClient) NewGroup(key string, opts ...LogGroupOption) *LogGroup {
 	return g
 }
 
-// Get retrieves a logger by its key.
-func (c *LoggingClient) Get(ctx context.Context, key string) (*Logger, error) {
-	params := &genlogging.ListLoggersParams{FilterKey: &key}
-	resp, err := c.generated.ListLoggers(ctx, params)
+// Get retrieves a logger by its ID.
+func (c *LoggingClient) Get(ctx context.Context, id string) (*Logger, error) {
+	resp, err := c.generated.GetLogger(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -114,20 +111,12 @@ func (c *LoggingClient) Get(ctx context.Context, key string) (*Logger, error) {
 		return nil, err
 	}
 
-	var result genlogging.LoggerListResponse
+	var result genlogging.LoggerResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 
-	if len(result.Data) == 0 {
-		return nil, &SmplNotFoundError{
-			SmplError: SmplError{
-				Message:    fmt.Sprintf("logger with key %q not found", key),
-				StatusCode: 404,
-			},
-		}
-	}
-	return resourceToLogger(result.Data[0], c), nil
+	return resourceToLogger(result.Data, c), nil
 }
 
 // List returns all loggers for the account.
@@ -160,31 +149,27 @@ func (c *LoggingClient) List(ctx context.Context) ([]*Logger, error) {
 	return loggers, nil
 }
 
-// Delete removes a logger by its key.
-func (c *LoggingClient) Delete(ctx context.Context, key string) error {
-	logger, err := c.Get(ctx, key)
-	if err != nil {
-		return err
-	}
-	return c.deleteLoggerByID(ctx, logger.ID)
+// Delete removes a logger by its ID.
+func (c *LoggingClient) Delete(ctx context.Context, id string) error {
+	return c.deleteLoggerByID(ctx, id)
 }
 
-// GetGroup retrieves a log group by its key.
-func (c *LoggingClient) GetGroup(ctx context.Context, key string) (*LogGroup, error) {
-	// The generated client doesn't have a filter param for groups,
+// GetGroup retrieves a log group by its ID.
+func (c *LoggingClient) GetGroup(ctx context.Context, id string) (*LogGroup, error) {
+	// The generated client doesn't have a direct get-by-id for groups,
 	// so we list all and filter client-side.
 	groups, err := c.ListGroups(ctx)
 	if err != nil {
 		return nil, err
 	}
 	for _, g := range groups {
-		if g.Key == key {
+		if g.ID == id {
 			return g, nil
 		}
 	}
 	return nil, &SmplNotFoundError{
 		SmplError: SmplError{
-			Message:    fmt.Sprintf("log group with key %q not found", key),
+			Message:    fmt.Sprintf("log group with id %q not found", id),
 			StatusCode: 404,
 		},
 	}
@@ -220,13 +205,9 @@ func (c *LoggingClient) ListGroups(ctx context.Context) ([]*LogGroup, error) {
 	return groups, nil
 }
 
-// DeleteGroup removes a log group by its key.
-func (c *LoggingClient) DeleteGroup(ctx context.Context, key string) error {
-	group, err := c.GetGroup(ctx, key)
-	if err != nil {
-		return err
-	}
-	return c.deleteGroupByID(ctx, group.ID)
+// DeleteGroup removes a log group by its ID.
+func (c *LoggingClient) DeleteGroup(ctx context.Context, id string) error {
+	return c.deleteGroupByID(ctx, id)
 }
 
 // RegisterAdapter registers a logging adapter. Must be called before Start().
@@ -396,11 +377,6 @@ func (c *LoggingClient) createLogger(ctx context.Context, l *Logger) error {
 }
 
 func (c *LoggingClient) updateLogger(ctx context.Context, l *Logger) error {
-	uid, err := uuid.Parse(l.ID)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid logger ID %q: %w", l.ID, err)
-	}
-
 	loggerType := "logger"
 	reqBody := genlogging.ResponseLogger{
 		Data: genlogging.ResourceLogger{
@@ -410,7 +386,7 @@ func (c *LoggingClient) updateLogger(ctx context.Context, l *Logger) error {
 		},
 	}
 
-	resp, err := c.generated.UpdateLogger(ctx, uid, reqBody)
+	resp, err := c.generated.UpdateLogger(ctx, l.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -435,11 +411,7 @@ func (c *LoggingClient) updateLogger(ctx context.Context, l *Logger) error {
 }
 
 func (c *LoggingClient) deleteLoggerByID(ctx context.Context, id string) error {
-	uid, err := uuid.Parse(id)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid logger ID %q: %w", id, err)
-	}
-	resp, err := c.generated.DeleteLogger(ctx, uid)
+	resp, err := c.generated.DeleteLogger(ctx, id)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -487,11 +459,6 @@ func (c *LoggingClient) createGroup(ctx context.Context, g *LogGroup) error {
 }
 
 func (c *LoggingClient) updateGroup(ctx context.Context, g *LogGroup) error {
-	uid, err := uuid.Parse(g.ID)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid log group ID %q: %w", g.ID, err)
-	}
-
 	groupType := "log_group"
 	reqBody := genlogging.ResponseLogGroup{
 		Data: genlogging.ResourceLogGroup{
@@ -501,7 +468,7 @@ func (c *LoggingClient) updateGroup(ctx context.Context, g *LogGroup) error {
 		},
 	}
 
-	resp, err := c.generated.UpdateLogGroup(ctx, uid, reqBody)
+	resp, err := c.generated.UpdateLogGroup(ctx, g.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -526,11 +493,7 @@ func (c *LoggingClient) updateGroup(ctx context.Context, g *LogGroup) error {
 }
 
 func (c *LoggingClient) deleteGroupByID(ctx context.Context, id string) error {
-	uid, err := uuid.Parse(id)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid log group ID %q: %w", id, err)
-	}
-	resp, err := c.generated.DeleteLogGroup(ctx, uid)
+	resp, err := c.generated.DeleteLogGroup(ctx, id)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -549,10 +512,6 @@ func resourceToLogger(r genlogging.LoggerResource, c *LoggingClient) *Logger {
 	id := ""
 	if r.Id != nil {
 		id = *r.Id
-	}
-	key := ""
-	if attrs.Key != nil {
-		key = *attrs.Key
 	}
 	var level *LogLevel
 	if attrs.Level != nil && *attrs.Level != "" {
@@ -576,7 +535,6 @@ func resourceToLogger(r genlogging.LoggerResource, c *LoggingClient) *Logger {
 
 	return &Logger{
 		ID:           id,
-		Key:          key,
 		Name:         attrs.Name,
 		Level:        level,
 		Group:        attrs.Group,
@@ -595,10 +553,6 @@ func resourceToLogGroup(r genlogging.LogGroupResource, c *LoggingClient) *LogGro
 	if r.Id != nil {
 		id = *r.Id
 	}
-	key := ""
-	if attrs.Key != nil {
-		key = *attrs.Key
-	}
 	var level *LogLevel
 	if attrs.Level != nil && *attrs.Level != "" {
 		l := LogLevel(*attrs.Level)
@@ -613,7 +567,6 @@ func resourceToLogGroup(r genlogging.LogGroupResource, c *LoggingClient) *LogGro
 
 	return &LogGroup{
 		ID:           id,
-		Key:          key,
 		Name:         attrs.Name,
 		Level:        level,
 		Group:        attrs.Group,
@@ -625,7 +578,7 @@ func resourceToLogGroup(r genlogging.LogGroupResource, c *LoggingClient) *LogGro
 }
 
 func buildLoggerAttributes(l *Logger) genlogging.Logger {
-	key := l.Key
+	id := l.ID
 	var level *string
 	if l.Level != nil {
 		s := string(*l.Level)
@@ -640,7 +593,7 @@ func buildLoggerAttributes(l *Logger) genlogging.Logger {
 		sources = &l.Sources
 	}
 	return genlogging.Logger{
-		Key:          &key,
+		Id:           &id,
 		Name:         l.Name,
 		Level:        level,
 		Group:        l.Group,
@@ -651,7 +604,7 @@ func buildLoggerAttributes(l *Logger) genlogging.Logger {
 }
 
 func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
-	key := g.Key
+	id := g.ID
 	var level *string
 	if g.Level != nil {
 		s := string(*g.Level)
@@ -662,7 +615,7 @@ func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
 		envs = &g.Environments
 	}
 	return genlogging.LogGroup{
-		Key:          &key,
+		Id:           &id,
 		Name:         g.Name,
 		Level:        level,
 		Group:        g.Group,
@@ -683,7 +636,7 @@ func (c *LoggingClient) fetchAndCache(ctx context.Context) error {
 	loggersCache := make(map[string]map[string]interface{}, len(loggers))
 	for _, l := range loggers {
 		entry := map[string]interface{}{
-			"key":          l.Key,
+			"id":           l.ID,
 			"name":         l.Name,
 			"managed":      l.Managed,
 			"environments": l.Environments,
@@ -694,13 +647,13 @@ func (c *LoggingClient) fetchAndCache(ctx context.Context) error {
 		if l.Group != nil {
 			entry["group"] = *l.Group
 		}
-		loggersCache[l.Key] = entry
+		loggersCache[l.ID] = entry
 	}
 
 	groupsCache := make(map[string]map[string]interface{}, len(groups))
 	for _, g := range groups {
 		entry := map[string]interface{}{
-			"key":          g.Key,
+			"id":           g.ID,
 			"name":         g.Name,
 			"environments": g.Environments,
 		}
@@ -729,7 +682,7 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 	items := make([]genlogging.LoggerBulkItem, 0, len(batch))
 	for _, entry := range batch {
 		item := genlogging.LoggerBulkItem{
-			Key:   entry.key,
+			Id:    entry.key,
 			Level: entry.level,
 		}
 		if entry.service != "" {
@@ -758,33 +711,36 @@ func (c *LoggingClient) periodicFlush(done chan struct{}) {
 }
 
 func (c *LoggingClient) handleLoggerChanged(data map[string]interface{}) {
-	loggerKey, _ := data["key"].(string)
+	loggerID, _ := data["id"].(string)
+	if loggerID == "" {
+		loggerID, _ = data["key"].(string)
+	}
 	if err := c.fetchAndCache(context.Background()); err != nil {
 		return
 	}
 	c.applyLevels()
-	c.fireChangeListeners(loggerKey, "websocket")
+	c.fireChangeListeners(loggerID, "websocket")
 }
 
-func (c *LoggingClient) fireChangeListeners(loggerKey string, source string) { //nolint:unparam // "refresh" source will be used when Refresh() is implemented
-	if loggerKey == "" {
+func (c *LoggingClient) fireChangeListeners(loggerID string, source string) { //nolint:unparam // "refresh" source will be used when Refresh() is implemented
+	if loggerID == "" {
 		return
 	}
 
 	var level *LogLevel
-	if cached, ok := c.loggersCache[loggerKey]; ok {
-		resolved := resolveLoggerLevel(loggerKey, c.client.environment, c.loggersCache, c.groupsCache)
+	if cached, ok := c.loggersCache[loggerID]; ok {
+		resolved := resolveLoggerLevel(loggerID, c.client.environment, c.loggersCache, c.groupsCache)
 		level = &resolved
 		_ = cached
 	}
 
-	event := &LoggerChangeEvent{Key: loggerKey, Level: level, Source: source}
+	event := &LoggerChangeEvent{ID: loggerID, Level: level, Source: source}
 
 	c.listenersMu.Lock()
 	globals := make([]func(*LoggerChangeEvent), len(c.globalListeners))
 	copy(globals, c.globalListeners)
-	keyListeners := make([]func(*LoggerChangeEvent), len(c.keyListeners[loggerKey]))
-	copy(keyListeners, c.keyListeners[loggerKey])
+	keyListeners := make([]func(*LoggerChangeEvent), len(c.keyListeners[loggerID]))
+	copy(keyListeners, c.keyListeners[loggerID])
 	c.listenersMu.Unlock()
 
 	for _, cb := range globals {

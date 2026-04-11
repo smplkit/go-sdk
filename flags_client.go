@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/google/uuid"
-
 	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
 )
@@ -23,12 +21,12 @@ type FlagsClient struct {
 }
 
 // NewBooleanFlag creates an unsaved boolean flag. Call Save(ctx) to persist.
-// If name is not provided via WithFlagName, it is auto-generated from the key.
-func (c *FlagsClient) NewBooleanFlag(key string, defaultValue bool, opts ...FlagOption) *Flag {
+// If name is not provided via WithFlagName, it is auto-generated from the ID.
+func (c *FlagsClient) NewBooleanFlag(id string, defaultValue bool, opts ...FlagOption) *Flag {
 	boolValues := []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}}
 	f := &Flag{
-		Key:          key,
-		Name:         keyToDisplayName(key),
+		ID:           id,
+		Name:         keyToDisplayName(id),
 		Type:         string(FlagTypeBoolean),
 		Default:      defaultValue,
 		Values:       &boolValues,
@@ -42,10 +40,10 @@ func (c *FlagsClient) NewBooleanFlag(key string, defaultValue bool, opts ...Flag
 }
 
 // NewStringFlag creates an unsaved string flag. Call Save(ctx) to persist.
-func (c *FlagsClient) NewStringFlag(key string, defaultValue string, opts ...FlagOption) *Flag {
+func (c *FlagsClient) NewStringFlag(id string, defaultValue string, opts ...FlagOption) *Flag {
 	f := &Flag{
-		Key:          key,
-		Name:         keyToDisplayName(key),
+		ID:           id,
+		Name:         keyToDisplayName(id),
 		Type:         string(FlagTypeString),
 		Default:      defaultValue,
 		Environments: map[string]interface{}{},
@@ -58,10 +56,10 @@ func (c *FlagsClient) NewStringFlag(key string, defaultValue string, opts ...Fla
 }
 
 // NewNumberFlag creates an unsaved numeric flag. Call Save(ctx) to persist.
-func (c *FlagsClient) NewNumberFlag(key string, defaultValue float64, opts ...FlagOption) *Flag {
+func (c *FlagsClient) NewNumberFlag(id string, defaultValue float64, opts ...FlagOption) *Flag {
 	f := &Flag{
-		Key:          key,
-		Name:         keyToDisplayName(key),
+		ID:           id,
+		Name:         keyToDisplayName(id),
 		Type:         string(FlagTypeNumeric),
 		Default:      defaultValue,
 		Environments: map[string]interface{}{},
@@ -74,10 +72,10 @@ func (c *FlagsClient) NewNumberFlag(key string, defaultValue float64, opts ...Fl
 }
 
 // NewJsonFlag creates an unsaved JSON flag. Call Save(ctx) to persist.
-func (c *FlagsClient) NewJsonFlag(key string, defaultValue map[string]interface{}, opts ...FlagOption) *Flag {
+func (c *FlagsClient) NewJsonFlag(id string, defaultValue map[string]interface{}, opts ...FlagOption) *Flag {
 	f := &Flag{
-		Key:          key,
-		Name:         keyToDisplayName(key),
+		ID:           id,
+		Name:         keyToDisplayName(id),
 		Type:         string(FlagTypeJSON),
 		Default:      defaultValue,
 		Environments: map[string]interface{}{},
@@ -89,11 +87,10 @@ func (c *FlagsClient) NewJsonFlag(key string, defaultValue map[string]interface{
 	return f
 }
 
-// Get retrieves a flag by its key.
+// Get retrieves a flag by its ID.
 // Returns SmplNotFoundError if no match.
-func (c *FlagsClient) Get(ctx context.Context, key string) (*Flag, error) {
-	params := &genflags.ListFlagsParams{FilterKey: &key}
-	resp, err := c.generated.ListFlags(ctx, params)
+func (c *FlagsClient) Get(ctx context.Context, id string) (*Flag, error) {
+	resp, err := c.generated.GetFlag(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -109,20 +106,12 @@ func (c *FlagsClient) Get(ctx context.Context, key string) (*Flag, error) {
 		return nil, err
 	}
 
-	var result genflags.FlagListResponse
+	var result genflags.FlagResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 
-	if len(result.Data) == 0 {
-		return nil, &SmplNotFoundError{
-			SmplError: SmplError{
-				Message:    fmt.Sprintf("flag with key %q not found", key),
-				StatusCode: 404,
-			},
-		}
-	}
-	return resourceToFlag(result.Data[0], c), nil
+	return resourceToFlag(result.Data, c), nil
 }
 
 // List returns all flags for the account.
@@ -155,24 +144,9 @@ func (c *FlagsClient) List(ctx context.Context) ([]*Flag, error) {
 	return flags, nil
 }
 
-// Delete removes a flag by its key.
-// Returns SmplNotFoundError if not found.
-func (c *FlagsClient) Delete(ctx context.Context, key string) error {
-	flag, err := c.Get(ctx, key)
-	if err != nil {
-		return err
-	}
-	return c.deleteByID(ctx, flag.ID)
-}
-
-// deleteByID removes a flag by its UUID.
-func (c *FlagsClient) deleteByID(ctx context.Context, flagID string) error {
-	uid, err := uuid.Parse(flagID)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid flag ID %q: %w", flagID, err)
-	}
-
-	resp, err := c.generated.DeleteFlag(ctx, uid)
+// Delete removes a flag by its ID.
+func (c *FlagsClient) Delete(ctx context.Context, id string) error {
+	resp, err := c.generated.DeleteFlag(ctx, id)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -189,7 +163,7 @@ func (c *FlagsClient) deleteByID(ctx context.Context, flagID string) error {
 
 // createFlag creates the flag on the server and updates the local instance.
 func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
-	reqBody := buildFlagRequest("", flag.Key, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
+	reqBody := buildFlagRequest("", flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
 
 	resp, err := c.generated.CreateFlag(ctx, reqBody)
 	if err != nil {
@@ -217,14 +191,9 @@ func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
 
 // updateFlag updates the flag on the server and updates the local instance.
 func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
-	uid, err := uuid.Parse(flag.ID)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid flag ID %q: %w", flag.ID, err)
-	}
+	reqBody := buildFlagRequest(flag.ID, flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
 
-	reqBody := buildFlagRequest(flag.ID, flag.Key, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
-
-	resp, err := c.generated.UpdateFlag(ctx, uid, reqBody)
+	resp, err := c.generated.UpdateFlag(ctx, flag.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -249,11 +218,11 @@ func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
 }
 
 // CreateContextType creates a new context type.
-func (c *FlagsClient) CreateContextType(ctx context.Context, key string, name string) (*ContextType, error) {
+func (c *FlagsClient) CreateContextType(ctx context.Context, id string, name string) (*ContextType, error) {
 	reqBody := genapp.ContextTypeResponse{
 		Data: genapp.ContextTypeResource{
 			Type:       "context_type",
-			Attributes: genapp.ContextType{Key: key, Name: name},
+			Attributes: genapp.ContextType{Id: &id, Name: name},
 		},
 	}
 	resp, err := c.appGenerated.CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
@@ -276,17 +245,13 @@ func (c *FlagsClient) CreateContextType(ctx context.Context, key string, name st
 
 // UpdateContextType updates a context type's attributes.
 func (c *FlagsClient) UpdateContextType(ctx context.Context, ctID string, attributes map[string]interface{}) (*ContextType, error) {
-	uid, err := uuid.Parse(ctID)
-	if err != nil {
-		return nil, fmt.Errorf("smplkit: invalid context type ID %q: %w", ctID, err)
-	}
 	reqBody := genapp.ContextTypeResponse{
 		Data: genapp.ContextTypeResource{
 			Type:       "context_type",
 			Attributes: genapp.ContextType{Attributes: &attributes},
 		},
 	}
-	resp, err := c.appGenerated.UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, uid, reqBody)
+	resp, err := c.appGenerated.UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, ctID, reqBody)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -330,7 +295,6 @@ func (c *FlagsClient) ListContextTypes(ctx context.Context) ([]*ContextType, err
 	types := make([]*ContextType, 0, len(result.Data))
 	for _, r := range result.Data {
 		ct := &ContextType{
-			Key:  r.Attributes.Key,
 			Name: r.Attributes.Name,
 		}
 		if r.Id != nil {
@@ -344,13 +308,9 @@ func (c *FlagsClient) ListContextTypes(ctx context.Context) ([]*ContextType, err
 	return types, nil
 }
 
-// DeleteContextType deletes a context type by its UUID.
+// DeleteContextType deletes a context type by its ID.
 func (c *FlagsClient) DeleteContextType(ctx context.Context, ctID string) error {
-	uid, err := uuid.Parse(ctID)
-	if err != nil {
-		return fmt.Errorf("smplkit: invalid context type ID %q: %w", ctID, err)
-	}
-	resp, err := c.appGenerated.DeleteContextType(ctx, uid)
+	resp, err := c.appGenerated.DeleteContextType(ctx, ctID)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -368,7 +328,7 @@ func (c *FlagsClient) DeleteContextType(ctx context.Context, ctID string) error 
 // ListContexts lists context instances filtered by context type key.
 func (c *FlagsClient) ListContexts(ctx context.Context, contextTypeKey string) ([]map[string]interface{}, error) {
 	params := &genapp.ListContextsParams{
-		FilterContextTypeId: &contextTypeKey,
+		FilterContextType: &contextTypeKey,
 	}
 	resp, err := c.appGenerated.ListContexts(ctx, params)
 	if err != nil {
@@ -405,8 +365,8 @@ func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
 
 	var values *[]FlagValue
 	if attrs.Values != nil {
-		v := make([]FlagValue, len(attrs.Values))
-		for i, fv := range attrs.Values {
+		v := make([]FlagValue, len(*attrs.Values))
+		for i, fv := range *attrs.Values {
 			v[i] = FlagValue{Name: fv.Name, Value: fv.Value}
 		}
 		values = &v
@@ -414,9 +374,17 @@ func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
 
 	envs := extractFlagEnvironments(attrs.Environments)
 
+	attrID := ""
+	if attrs.Id != nil {
+		attrID = *attrs.Id
+	}
+	// Prefer the JSON:API resource-level id, fall back to attributes.id.
+	if id == "" {
+		id = attrID
+	}
+
 	return &Flag{
 		ID:           id,
-		Key:          attrs.Key,
 		Name:         attrs.Name,
 		Type:         attrs.Type,
 		Default:      attrs.Default,
@@ -465,19 +433,20 @@ func extractFlagEnvironments(envs *map[string]genflags.FlagEnvironment) map[stri
 }
 
 // buildFlagRequest constructs a ResponseFlag for create or update.
-func buildFlagRequest(id, key, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.ResponseFlag {
+func buildFlagRequest(id, attrID, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.ResponseFlag {
 	var idPtr *string
 	if id != "" {
 		idPtr = &id
 	}
 	flagT := "flag"
 
-	var genValues []genflags.FlagValue
+	var genValues *[]genflags.FlagValue
 	if values != nil {
-		genValues = make([]genflags.FlagValue, len(*values))
+		gv := make([]genflags.FlagValue, len(*values))
 		for i, v := range *values {
-			genValues[i] = genflags.FlagValue{Name: v.Name, Value: v.Value}
+			gv[i] = genflags.FlagValue{Name: v.Name, Value: v.Value}
 		}
+		genValues = &gv
 	}
 
 	genEnvs := buildGenFlagEnvironments(envs)
@@ -487,7 +456,7 @@ func buildFlagRequest(id, key, name, flagType string, dflt interface{}, values *
 			Id:   idPtr,
 			Type: &flagT,
 			Attributes: genflags.Flag{
-				Key:          key,
+				Id:           &attrID,
 				Name:         name,
 				Type:         flagType,
 				Default:      dflt,
@@ -563,7 +532,7 @@ func parseContextTypeRaw(raw json.RawMessage) (*ContextType, error) {
 	var data struct {
 		ID         string `json:"id"`
 		Attributes struct {
-			Key        string                 `json:"key"`
+			ID         string                 `json:"id"`
 			Name       string                 `json:"name"`
 			Attributes map[string]interface{} `json:"attributes"`
 		} `json:"attributes"`
@@ -575,15 +544,18 @@ func parseContextTypeRaw(raw json.RawMessage) (*ContextType, error) {
 	if attrs == nil {
 		attrs = map[string]interface{}{}
 	}
+	ctID := data.ID
+	if ctID == "" {
+		ctID = data.Attributes.ID
+	}
 	return &ContextType{
-		ID:         data.ID,
-		Key:        data.Attributes.Key,
+		ID:         ctID,
 		Name:       data.Attributes.Name,
 		Attributes: attrs,
 	}, nil
 }
 
-// fetchAllFlags fetches all flags and returns them as plain dicts keyed by flag key.
+// fetchAllFlags fetches all flags and returns them as plain dicts keyed by flag ID.
 func (c *FlagsClient) fetchAllFlags(ctx context.Context) (map[string]map[string]interface{}, error) {
 	flags, err := c.fetchFlagsList(ctx)
 	if err != nil {
@@ -591,8 +563,8 @@ func (c *FlagsClient) fetchAllFlags(ctx context.Context) (map[string]map[string]
 	}
 	store := make(map[string]map[string]interface{}, len(flags))
 	for _, f := range flags {
-		key, _ := f["key"].(string)
-		store[key] = f
+		id, _ := f["id"].(string)
+		store[id] = f
 	}
 	return store, nil
 }
@@ -625,15 +597,19 @@ func (c *FlagsClient) fetchFlagsList(ctx context.Context) ([]map[string]interfac
 		attrs := r.Attributes
 		var values interface{}
 		if attrs.Values != nil {
-			v := make([]interface{}, len(attrs.Values))
-			for i, fv := range attrs.Values {
+			v := make([]interface{}, len(*attrs.Values))
+			for i, fv := range *attrs.Values {
 				v[i] = map[string]interface{}{"name": fv.Name, "value": fv.Value}
 			}
 			values = v
 		}
 
+		id := ""
+		if r.Id != nil {
+			id = *r.Id
+		}
 		f := map[string]interface{}{
-			"key":          attrs.Key,
+			"id":           id,
 			"name":         attrs.Name,
 			"type":         attrs.Type,
 			"default":      attrs.Default,

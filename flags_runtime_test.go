@@ -522,7 +522,7 @@ func TestFlagsRuntime_GlobalListeners(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	require.Len(t, events, 1)
-	assert.Equal(t, "feature-x", events[0].Key)
+	assert.Equal(t, "feature-x", events[0].ID)
 	assert.Equal(t, "websocket", events[0].Source)
 }
 

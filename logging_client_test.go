@@ -17,15 +17,15 @@ import (
 	smplkit "github.com/smplkit/go-sdk"
 )
 
-// Test UUIDs for logging tests — all valid RFC 4122 UUIDs.
+// Test IDs for logging tests — slug-style identifiers.
 const (
-	logUUID0 = "770e8400-e29b-41d4-a716-446655440000"
-	logUUID1 = "770e8400-e29b-41d4-a716-446655440001"
-	logUUID2 = "770e8400-e29b-41d4-a716-446655440002"
+	logID0 = "my-logger"
+	logID1 = "infra"
+	logID2 = "database"
 )
 
 // sampleLoggerJSON returns a JSON:API single-resource response for a logger.
-func sampleLoggerJSON(id, key, name, level string, managed bool) string {
+func sampleLoggerJSON(id, name, level string, managed bool) string {
 	managedStr := "true"
 	if !managed {
 		managedStr = "false"
@@ -39,7 +39,7 @@ func sampleLoggerJSON(id, key, name, level string, managed bool) string {
 			"id": "` + id + `",
 			"type": "logger",
 			"attributes": {
-				"key": "` + key + `",
+				"id": "` + id + `",
 				"name": "` + name + `",
 				"level": ` + levelStr + `,
 				"managed": ` + managedStr + `,
@@ -53,7 +53,7 @@ func sampleLoggerJSON(id, key, name, level string, managed bool) string {
 }
 
 // sampleLoggerListJSON returns a JSON:API list response for loggers.
-func sampleLoggerListJSON(id, key, name, level string, managed bool) string {
+func sampleLoggerListJSON(id, name, level string, managed bool) string {
 	managedStr := "true"
 	if !managed {
 		managedStr = "false"
@@ -67,7 +67,7 @@ func sampleLoggerListJSON(id, key, name, level string, managed bool) string {
 			"id": "` + id + `",
 			"type": "logger",
 			"attributes": {
-				"key": "` + key + `",
+				"id": "` + id + `",
 				"name": "` + name + `",
 				"level": ` + levelStr + `,
 				"managed": ` + managedStr + `,
@@ -81,7 +81,7 @@ func sampleLoggerListJSON(id, key, name, level string, managed bool) string {
 }
 
 // sampleLogGroupJSON returns a JSON:API single-resource response for a log group.
-func sampleLogGroupJSON(id, key, name, level string) string {
+func sampleLogGroupJSON(id, name, level string) string {
 	levelStr := "null"
 	if level != "" {
 		levelStr = `"` + level + `"`
@@ -91,7 +91,7 @@ func sampleLogGroupJSON(id, key, name, level string) string {
 			"id": "` + id + `",
 			"type": "log_group",
 			"attributes": {
-				"key": "` + key + `",
+				"id": "` + id + `",
 				"name": "` + name + `",
 				"level": ` + levelStr + `,
 				"environments": {},
@@ -103,7 +103,7 @@ func sampleLogGroupJSON(id, key, name, level string) string {
 }
 
 // sampleLogGroupListJSON returns a JSON:API list response for log groups.
-func sampleLogGroupListJSON(id, key, name, level string) string {
+func sampleLogGroupListJSON(id, name, level string) string {
 	levelStr := "null"
 	if level != "" {
 		levelStr = `"` + level + `"`
@@ -113,7 +113,7 @@ func sampleLogGroupListJSON(id, key, name, level string) string {
 			"id": "` + id + `",
 			"type": "log_group",
 			"attributes": {
-				"key": "` + key + `",
+				"id": "` + id + `",
 				"name": "` + name + `",
 				"level": ` + levelStr + `,
 				"environments": {},
@@ -151,10 +151,9 @@ func TestLoggingClient_New(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := client.Logging().New("my.logger")
-	assert.Equal(t, "my.logger", logger.Key)
+	assert.Equal(t, "my.logger", logger.ID)
 	assert.Equal(t, "My.logger", logger.Name) // keyToDisplayName does not split on "."
 	assert.True(t, logger.Managed)
-	assert.Empty(t, logger.ID)
 	assert.NotNil(t, logger.Environments)
 }
 
@@ -166,7 +165,7 @@ func TestLoggingClient_New_WithOptions(t *testing.T) {
 		smplkit.WithLoggerName("Checkout Logger"),
 		smplkit.WithLoggerManaged(false),
 	)
-	assert.Equal(t, "checkout-v2", logger.Key)
+	assert.Equal(t, "checkout-v2", logger.ID)
 	assert.Equal(t, "Checkout Logger", logger.Name)
 	assert.False(t, logger.Managed)
 }
@@ -176,9 +175,8 @@ func TestLoggingClient_NewGroup(t *testing.T) {
 	require.NoError(t, err)
 
 	group := client.Logging().NewGroup("infra")
-	assert.Equal(t, "infra", group.Key)
+	assert.Equal(t, "infra", group.ID)
 	assert.Equal(t, "Infra", group.Name)
-	assert.Empty(t, group.ID)
 	assert.NotNil(t, group.Environments)
 }
 
@@ -186,12 +184,12 @@ func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	parentID := logUUID0
+	parentID := logID1
 	group := client.Logging().NewGroup("database",
 		smplkit.WithLogGroupName("Database Group"),
 		smplkit.WithLogGroupParent(parentID),
 	)
-	assert.Equal(t, "database", group.Key)
+	assert.Equal(t, "database", group.ID)
 	assert.Equal(t, "Database Group", group.Name)
 	require.NotNil(t, group.Group)
 	assert.Equal(t, parentID, *group.Group)
@@ -201,53 +199,52 @@ func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
 
 func TestLogger_Save_Create(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/api/v1/loggers", r.URL.Path)
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		if r.Method == "PUT" {
+			assert.Equal(t, "/api/v1/loggers/my.logger", r.URL.Path)
 
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		data := body["data"].(map[string]interface{})
-		assert.Equal(t, "logger", data["type"])
-		attrs := data["attributes"].(map[string]interface{})
-		assert.Equal(t, "my.logger", attrs["key"])
+			var body map[string]interface{}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			data := body["data"].(map[string]interface{})
+			assert.Equal(t, "logger", data["type"])
+			attrs := data["attributes"].(map[string]interface{})
+			assert.Equal(t, "my.logger", attrs["id"])
 
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(sampleLoggerJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}))
 
 	logger := client.Logging().New("my.logger", smplkit.WithLoggerName("My Logger"))
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, logUUID0, logger.ID)
+	assert.Equal(t, "my.logger", logger.ID)
 	assert.Equal(t, "My Logger", logger.Name)
 }
 
 func TestLogger_Save_Update(t *testing.T) {
 	mux := http.NewServeMux()
 
-	// GET /api/v1/loggers — returns list with one logger.
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+	// GET /api/v1/loggers/my.logger — returns single resource.
+	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
+			return
+		}
+		if r.Method == "PUT" {
+			var body map[string]interface{}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			data := body["data"].(map[string]interface{})
+			attrs := data["attributes"].(map[string]interface{})
+			assert.Equal(t, "Updated Logger", attrs["name"])
+
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "Updated Logger", "WARN", true)))
 			return
 		}
 		w.WriteHeader(http.StatusMethodNotAllowed)
-	})
-
-	// PUT /api/v1/loggers/{id}
-	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "PUT", r.Method)
-
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		data := body["data"].(map[string]interface{})
-		attrs := data["attributes"].(map[string]interface{})
-		assert.Equal(t, "Updated Logger", attrs["name"])
-
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerJSON(logUUID0, "my.logger", "Updated Logger", "WARN", true)))
 	})
 
 	client := newLoggingTestClient(t, mux)
@@ -255,7 +252,7 @@ func TestLogger_Save_Update(t *testing.T) {
 	// Fetch the logger first.
 	logger, err := client.Logging().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
-	assert.Equal(t, logUUID0, logger.ID)
+	assert.Equal(t, "my.logger", logger.ID)
 
 	// Mutate and save (should PUT since ID is set).
 	logger.Name = "Updated Logger"
@@ -363,49 +360,52 @@ func TestLogger_ClearAllEnvironmentLevels(t *testing.T) {
 
 func TestLogGroup_Save_Create(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/api/v1/log_groups", r.URL.Path)
+		if r.Method == "PUT" {
+			assert.Equal(t, "/api/v1/log_groups/infra", r.URL.Path)
 
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		data := body["data"].(map[string]interface{})
-		assert.Equal(t, "log_group", data["type"])
+			var body map[string]interface{}
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			data := body["data"].(map[string]interface{})
+			assert.Equal(t, "log_group", data["type"])
 
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(sampleLogGroupJSON(logUUID1, "infra", "Infra", "WARN")))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLogGroupJSON("infra", "Infra", "WARN")))
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}))
 
 	group := client.Logging().NewGroup("infra", smplkit.WithLogGroupName("Infra"))
 	err := group.Save(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, logUUID1, group.ID)
+	assert.Equal(t, "infra", group.ID)
 }
 
 func TestLogGroup_Save_Update(t *testing.T) {
 	mux := http.NewServeMux()
 
-	// GET /api/v1/log_groups — returns list with one group.
+	// GET /api/v1/log_groups — returns list with one group (for GetGroup).
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+			_, _ = w.Write([]byte(sampleLogGroupListJSON("infra", "Infra", "WARN")))
 			return
 		}
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	})
 
 	// PUT /api/v1/log_groups/{id}
-	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/log_groups/infra", func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "PUT", r.Method)
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLogGroupJSON(logUUID1, "infra", "Updated Infra", "ERROR")))
+		_, _ = w.Write([]byte(sampleLogGroupJSON("infra", "Updated Infra", "ERROR")))
 	})
 
 	client := newLoggingTestClient(t, mux)
 
 	group, err := client.Logging().GetGroup(context.Background(), "infra")
 	require.NoError(t, err)
-	assert.Equal(t, logUUID1, group.ID)
+	assert.Equal(t, "infra", group.ID)
 
 	group.Name = "Updated Infra"
 	err = group.Save(context.Background())
@@ -506,20 +506,18 @@ func TestLogGroup_ClearAllEnvironmentLevels(t *testing.T) {
 func TestLoggingClient_Get(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/api/v1/loggers", r.URL.Path)
-		assert.Equal(t, "my.logger", r.URL.Query().Get("filter[key]"))
+		assert.Equal(t, "/api/v1/loggers/my.logger", r.URL.Path)
 		assert.Equal(t, "Bearer sk_test_key", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Accept"))
 		assert.True(t, strings.HasPrefix(r.Header.Get("User-Agent"), "smplkit-go-sdk/"))
 
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
+		_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
 	}))
 
 	logger, err := client.Logging().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
-	assert.Equal(t, logUUID0, logger.ID)
-	assert.Equal(t, "my.logger", logger.Key)
+	assert.Equal(t, "my.logger", logger.ID)
 	assert.Equal(t, "My Logger", logger.Name)
 	require.NotNil(t, logger.Level)
 	assert.Equal(t, smplkit.LogLevelInfo, *logger.Level)
@@ -528,8 +526,8 @@ func TestLoggingClient_Get(t *testing.T) {
 
 func TestLoggingClient_Get_NotFound(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": []}`))
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
 	_, err := client.Logging().Get(context.Background(), "nonexistent")
@@ -537,7 +535,6 @@ func TestLoggingClient_Get_NotFound(t *testing.T) {
 
 	var notFound *smplkit.SmplNotFoundError
 	require.True(t, errors.As(err, &notFound))
-	assert.Contains(t, notFound.Error(), "nonexistent")
 }
 
 func TestLoggingClient_Get_HTTPError(t *testing.T) {
@@ -606,8 +603,8 @@ func TestLoggingClient_List(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
 			"data": [
-				{"id": "` + logUUID0 + `", "type": "logger", "attributes": {"key": "a.logger", "name": "A", "managed": true, "environments": {}}},
-				{"id": "` + logUUID1 + `", "type": "logger", "attributes": {"key": "b.logger", "name": "B", "managed": true, "environments": {}}}
+				{"id": "a.logger", "type": "logger", "attributes": {"id": "a.logger", "name": "A", "managed": true, "environments": {}}},
+				{"id": "b.logger", "type": "logger", "attributes": {"id": "b.logger", "name": "B", "managed": true, "environments": {}}}
 			]
 		}`))
 	}))
@@ -687,19 +684,11 @@ func TestLoggingClient_List_HTTPError(t *testing.T) {
 // --- LoggingClient.Delete tests ---
 
 func TestLoggingClient_Delete(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "my.logger", r.URL.Query().Get("filter[key]"))
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
-	})
-	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "DELETE", r.Method)
+		assert.Equal(t, "/api/v1/loggers/my.logger", r.URL.Path)
 		w.WriteHeader(http.StatusNoContent)
-	})
-
-	client := newLoggingTestClient(t, mux)
+	}))
 
 	err := client.Logging().Delete(context.Background(), "my.logger")
 	require.NoError(t, err)
@@ -707,8 +696,8 @@ func TestLoggingClient_Delete(t *testing.T) {
 
 func TestLoggingClient_Delete_NotFound(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": []}`))
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
 	err := client.Logging().Delete(context.Background(), "nonexistent")
@@ -724,7 +713,7 @@ func TestLoggingClient_Delete_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	err = client.Logging().Delete(context.Background(), "some-key")
+	err = client.Logging().Delete(context.Background(), "some-id")
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -739,13 +728,12 @@ func TestLoggingClient_GetGroup(t *testing.T) {
 		assert.Equal(t, "/api/v1/log_groups", r.URL.Path)
 
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+		_, _ = w.Write([]byte(sampleLogGroupListJSON("infra", "Infra", "WARN")))
 	}))
 
 	group, err := client.Logging().GetGroup(context.Background(), "infra")
 	require.NoError(t, err)
-	assert.Equal(t, logUUID1, group.ID)
-	assert.Equal(t, "infra", group.Key)
+	assert.Equal(t, "infra", group.ID)
 	assert.Equal(t, "Infra", group.Name)
 }
 
@@ -786,8 +774,8 @@ func TestLoggingClient_ListGroups(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
 			"data": [
-				{"id": "` + logUUID1 + `", "type": "log_group", "attributes": {"key": "infra", "name": "Infra", "environments": {}}},
-				{"id": "` + logUUID2 + `", "type": "log_group", "attributes": {"key": "app", "name": "App", "environments": {}}}
+				{"id": "infra", "type": "log_group", "attributes": {"id": "infra", "name": "Infra", "environments": {}}},
+				{"id": "app", "type": "log_group", "attributes": {"id": "app", "name": "App", "environments": {}}}
 			]
 		}`))
 	}))
@@ -845,9 +833,9 @@ func TestLoggingClient_DeleteGroup(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+		_, _ = w.Write([]byte(sampleLogGroupListJSON("infra", "Infra", "WARN")))
 	})
-	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/log_groups/infra", func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "DELETE", r.Method)
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -860,8 +848,8 @@ func TestLoggingClient_DeleteGroup(t *testing.T) {
 
 func TestLoggingClient_DeleteGroup_NotFound(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": []}`))
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
 	err := client.Logging().DeleteGroup(context.Background(), "nonexistent")
@@ -930,28 +918,15 @@ func TestLogger_Save_Create_HTTPError(t *testing.T) {
 	require.True(t, errors.As(err, &valErr))
 }
 
-func TestLogger_Save_Update_InvalidUUID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
-	require.NoError(t, err)
-
-	logger := client.Logging().New("test-logger")
-	logger.ID = "not-a-uuid" // Set non-empty but invalid UUID.
-	err = logger.Save(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid logger ID")
-}
-
 func TestLogger_Save_Update_NetworkError(t *testing.T) {
-	// First call succeeds (GET list), second (PUT) fails.
-	callCount := 0
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
-	})
-	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		// Close connection to trigger network error.
+	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
+			return
+		}
+		// Close connection to trigger network error on PUT.
 		hj, ok := w.(http.Hijacker)
 		if !ok {
 			return
@@ -974,7 +949,7 @@ func TestLogger_Save_Update_ReadBodyError(t *testing.T) {
 		getHandler: func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: 200,
-				Body:       io.NopCloser(strings.NewReader(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true))),
+				Body:       io.NopCloser(strings.NewReader(sampleLoggerJSON("my.logger", "My Logger", "INFO", true))),
 				Header:     http.Header{"Content-Type": {"application/vnd.api+json"}},
 			}, nil
 		},
@@ -1005,11 +980,12 @@ func TestLogger_Save_Update_ReadBodyError(t *testing.T) {
 
 func TestLogger_Save_Update_MalformedJSON(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
-	})
-	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{invalid`))
 	})
@@ -1025,11 +1001,12 @@ func TestLogger_Save_Update_MalformedJSON(t *testing.T) {
 
 func TestLogger_Save_Update_HTTPError(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
-	})
-	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
+			return
+		}
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	})
@@ -1104,24 +1081,13 @@ func TestLogGroup_Save_Create_HTTPError(t *testing.T) {
 	require.True(t, errors.As(err, &valErr))
 }
 
-func TestLogGroup_Save_Update_InvalidUUID(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
-	require.NoError(t, err)
-
-	group := client.Logging().NewGroup("test-group")
-	group.ID = "not-a-uuid"
-	err = group.Save(context.Background())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid log group ID")
-}
-
 func TestLogGroup_Save_Update_NetworkError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+		_, _ = w.Write([]byte(sampleLogGroupListJSON("infra", "Infra", "WARN")))
 	})
-	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/log_groups/infra", func(w http.ResponseWriter, r *http.Request) {
 		hj, ok := w.(http.Hijacker)
 		if !ok {
 			return
@@ -1143,7 +1109,7 @@ func TestLogGroup_Save_Update_ReadBodyError(t *testing.T) {
 		getHandler: func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: 200,
-				Body:       io.NopCloser(strings.NewReader(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN"))),
+				Body:       io.NopCloser(strings.NewReader(sampleLogGroupListJSON("infra", "Infra", "WARN"))),
 				Header:     http.Header{"Content-Type": {"application/vnd.api+json"}},
 			}, nil
 		},
@@ -1176,9 +1142,9 @@ func TestLogGroup_Save_Update_MalformedJSON(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+		_, _ = w.Write([]byte(sampleLogGroupListJSON("infra", "Infra", "WARN")))
 	})
-	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/log_groups/infra", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{invalid`))
 	})
@@ -1196,9 +1162,9 @@ func TestLogGroup_Save_Update_HTTPError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+		_, _ = w.Write([]byte(sampleLogGroupListJSON("infra", "Infra", "WARN")))
 	})
-	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/log_groups/infra", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	})
@@ -1216,55 +1182,23 @@ func TestLogGroup_Save_Update_HTTPError(t *testing.T) {
 
 // --- Delete error paths ---
 
-func TestLoggingClient_DeleteLogger_InvalidUUID(t *testing.T) {
+func TestLoggingClient_DeleteLogger_HTTPError(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		// Return a logger with an invalid UUID in the response.
-		_, _ = w.Write([]byte(`{"data":[{"id":"not-a-uuid","type":"logger","attributes":{"key":"bad","name":"Bad","managed":true,"environments":{}}}]}`))
-	}))
-
-	err := client.Logging().Delete(context.Background(), "bad")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid logger ID")
-}
-
-func TestLoggingClient_DeleteLogger_ReadBodyError(t *testing.T) {
-	// Need a mux: GET list succeeds, DELETE returns broken body.
-	mux := http.NewServeMux()
-	callCount := 0
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", true)))
-	})
-	mux.HandleFunc("/api/v1/loggers/"+logUUID0, func(w http.ResponseWriter, r *http.Request) {
-		callCount++
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
-	})
+	}))
 
-	client := newLoggingTestClient(t, mux)
 	err := client.Logging().Delete(context.Background(), "my.logger")
 	require.Error(t, err)
 }
 
-func TestLoggingClient_DeleteGroup_InvalidUUID(t *testing.T) {
-	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"not-a-uuid","type":"log_group","attributes":{"key":"bad","name":"Bad","environments":{}}}]}`))
-	}))
-
-	err := client.Logging().DeleteGroup(context.Background(), "bad")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid log group ID")
-}
-
-func TestLoggingClient_DeleteGroup_ReadBodyError(t *testing.T) {
+func TestLoggingClient_DeleteGroup_HTTPError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLogGroupListJSON(logUUID1, "infra", "Infra", "WARN")))
+		_, _ = w.Write([]byte(sampleLogGroupListJSON("infra", "Infra", "WARN")))
 	})
-	mux.HandleFunc("/api/v1/log_groups/"+logUUID1, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/log_groups/infra", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	})
@@ -1321,11 +1255,11 @@ func TestLoggingClient_OnChangeKey(t *testing.T) {
 func TestLoggingClient_Get_WithEnvironments(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": [{
-			"id": "` + logUUID0 + `",
+		_, _ = w.Write([]byte(`{"data": {
+			"id": "my.logger",
 			"type": "logger",
 			"attributes": {
-				"key": "my.logger",
+				"id": "my.logger",
 				"name": "My Logger",
 				"level": "INFO",
 				"managed": true,
@@ -1334,7 +1268,7 @@ func TestLoggingClient_Get_WithEnvironments(t *testing.T) {
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": "2024-06-15T12:00:00Z"
 			}
-		}]}`))
+		}}`))
 	}))
 
 	logger, err := client.Logging().Get(context.Background(), "my.logger")
@@ -1348,16 +1282,16 @@ func TestLoggingClient_Get_WithEnvironments(t *testing.T) {
 func TestLoggingClient_Get_NilLevel(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": [{
-			"id": "` + logUUID0 + `",
+		_, _ = w.Write([]byte(`{"data": {
+			"id": "my.logger",
 			"type": "logger",
 			"attributes": {
-				"key": "my.logger",
+				"id": "my.logger",
 				"name": "My Logger",
 				"managed": true,
 				"environments": {}
 			}
-		}]}`))
+		}}`))
 	}))
 
 	logger, err := client.Logging().Get(context.Background(), "my.logger")
@@ -1370,17 +1304,17 @@ func TestLoggingClient_Get_NilLevel(t *testing.T) {
 func TestLoggingClient_Get_EmptyLevel(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": [{
-			"id": "` + logUUID0 + `",
+		_, _ = w.Write([]byte(`{"data": {
+			"id": "my.logger",
 			"type": "logger",
 			"attributes": {
-				"key": "my.logger",
+				"id": "my.logger",
 				"name": "My Logger",
 				"level": "",
 				"managed": true,
 				"environments": {}
 			}
-		}]}`))
+		}}`))
 	}))
 
 	logger, err := client.Logging().Get(context.Background(), "my.logger")
@@ -1393,7 +1327,7 @@ func TestLoggingClient_Get_EmptyLevel(t *testing.T) {
 func TestLoggingClient_Get_ManagedFalse(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerListJSON(logUUID0, "my.logger", "My Logger", "INFO", false)))
+		_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", false)))
 	}))
 
 	logger, err := client.Logging().Get(context.Background(), "my.logger")
@@ -1407,13 +1341,13 @@ func TestLoggingClient_GetGroup_WithParent(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": [{
-			"id": "` + logUUID1 + `",
+			"id": "database",
 			"type": "log_group",
 			"attributes": {
-				"key": "database",
+				"id": "database",
 				"name": "Database",
 				"level": "WARN",
-				"group": "` + logUUID2 + `",
+				"group": "infra",
 				"environments": {},
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": "2024-06-15T12:00:00Z"
@@ -1424,7 +1358,7 @@ func TestLoggingClient_GetGroup_WithParent(t *testing.T) {
 	group, err := client.Logging().GetGroup(context.Background(), "database")
 	require.NoError(t, err)
 	require.NotNil(t, group.Group)
-	assert.Equal(t, logUUID2, *group.Group)
+	assert.Equal(t, "infra", *group.Group)
 	assert.NotNil(t, group.CreatedAt)
 	assert.NotNil(t, group.UpdatedAt)
 }
@@ -1434,24 +1368,24 @@ func TestLoggingClient_GetGroup_WithParent(t *testing.T) {
 func TestLoggingClient_Get_WithGroup(t *testing.T) {
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": [{
-			"id": "` + logUUID0 + `",
+		_, _ = w.Write([]byte(`{"data": {
+			"id": "my.logger",
 			"type": "logger",
 			"attributes": {
-				"key": "my.logger",
+				"id": "my.logger",
 				"name": "My Logger",
 				"level": "INFO",
-				"group": "` + logUUID1 + `",
+				"group": "infra",
 				"managed": true,
 				"environments": {}
 			}
-		}]}`))
+		}}`))
 	}))
 
 	logger, err := client.Logging().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	require.NotNil(t, logger.Group)
-	assert.Equal(t, logUUID1, *logger.Group)
+	assert.Equal(t, "infra", *logger.Group)
 }
 
 // --- Adapter integration tests ---
@@ -1734,10 +1668,10 @@ func TestApplyLevelsDelegatesToAdapters(t *testing.T) {
 	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": [{
-			"id": "` + logUUID0 + `",
+			"id": "com.acme.app",
 			"type": "logger",
 			"attributes": {
-				"key": "com.acme.app",
+				"id": "com.acme.app",
 				"name": "App",
 				"level": "WARN",
 				"managed": true,

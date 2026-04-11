@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 const (
@@ -41,13 +40,11 @@ func (e FlagResourceType) Valid() bool {
 type Flag struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
-	// Default Default value; must reference a value in the values array
+	// Default Default value; must reference a value in the values array (constrained) or match the flag type (unconstrained)
 	Default      interface{}                 `json:"default"`
 	Description  *string                     `json:"description,omitempty"`
 	Environments *map[string]FlagEnvironment `json:"environments,omitempty"`
-
-	// Key Unique key within account
-	Key string `json:"key"`
+	Id           *string                     `json:"id,omitempty"`
 
 	// Name Human-readable display name
 	Name string `json:"name"`
@@ -56,8 +53,8 @@ type Flag struct {
 	Type      string     `json:"type"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 
-	// Values Closed set of possible values
-	Values []FlagValue `json:"values"`
+	// Values Ordered set of allowed values (constrained), or null (unconstrained)
+	Values *[]FlagValue `json:"values,omitempty"`
 }
 
 // FlagEnvironment defines model for FlagEnvironment.
@@ -137,7 +134,6 @@ type ValidationError_Loc_Item struct {
 
 // ListFlagsParams defines parameters for ListFlags.
 type ListFlagsParams struct {
-	FilterKey  *string `form:"filter[key],omitempty" json:"filter[key],omitempty"`
 	FilterType *string `form:"filter[type],omitempty" json:"filter[type],omitempty"`
 }
 
@@ -291,15 +287,15 @@ type ClientInterface interface {
 	CreateFlag(ctx context.Context, body CreateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteFlag request
-	DeleteFlag(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteFlag(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetFlag request
-	GetFlag(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetFlag(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateFlagWithBody request with any body
-	UpdateFlagWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateFlagWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateFlag(ctx context.Context, id openapi_types.UUID, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateFlag(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListFlags(ctx context.Context, params *ListFlagsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -338,7 +334,7 @@ func (c *Client) CreateFlag(ctx context.Context, body CreateFlagJSONRequestBody,
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteFlag(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteFlag(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteFlagRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -350,7 +346,7 @@ func (c *Client) DeleteFlag(ctx context.Context, id openapi_types.UUID, reqEdito
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetFlag(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetFlag(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetFlagRequest(c.Server, id)
 	if err != nil {
 		return nil, err
@@ -362,7 +358,7 @@ func (c *Client) GetFlag(ctx context.Context, id openapi_types.UUID, reqEditors 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateFlagWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateFlagWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateFlagRequestWithBody(c.Server, id, contentType, body)
 	if err != nil {
 		return nil, err
@@ -374,7 +370,7 @@ func (c *Client) UpdateFlagWithBody(ctx context.Context, id openapi_types.UUID, 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateFlag(ctx context.Context, id openapi_types.UUID, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateFlag(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateFlagRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
@@ -407,22 +403,6 @@ func NewListFlagsRequest(server string, params *ListFlagsParams) (*http.Request,
 
 	if params != nil {
 		queryValues := queryURL.Query()
-
-		if params.FilterKey != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[key]", *params.FilterKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
-				}
-			}
-
-		}
 
 		if params.FilterType != nil {
 
@@ -492,12 +472,12 @@ func NewCreateFlagRequestWithBody(server string, contentType string, body io.Rea
 }
 
 // NewDeleteFlagRequest generates requests for DeleteFlag
-func NewDeleteFlagRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewDeleteFlagRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -526,12 +506,12 @@ func NewDeleteFlagRequest(server string, id openapi_types.UUID) (*http.Request, 
 }
 
 // NewGetFlagRequest generates requests for GetFlag
-func NewGetFlagRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetFlagRequest(server string, id string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -560,7 +540,7 @@ func NewGetFlagRequest(server string, id openapi_types.UUID) (*http.Request, err
 }
 
 // NewUpdateFlagRequest calls the generic UpdateFlag builder with application/json body
-func NewUpdateFlagRequest(server string, id openapi_types.UUID, body UpdateFlagJSONRequestBody) (*http.Request, error) {
+func NewUpdateFlagRequest(server string, id string, body UpdateFlagJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -571,12 +551,12 @@ func NewUpdateFlagRequest(server string, id openapi_types.UUID, body UpdateFlagJ
 }
 
 // NewUpdateFlagRequestWithBody generates requests for UpdateFlag with any type of body
-func NewUpdateFlagRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateFlagRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -658,15 +638,15 @@ type ClientWithResponsesInterface interface {
 	CreateFlagWithResponse(ctx context.Context, body CreateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateFlagResponse, error)
 
 	// DeleteFlagWithResponse request
-	DeleteFlagWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteFlagResponse, error)
+	DeleteFlagWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteFlagResponse, error)
 
 	// GetFlagWithResponse request
-	GetFlagWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetFlagResponse, error)
+	GetFlagWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetFlagResponse, error)
 
 	// UpdateFlagWithBodyWithResponse request with any body
-	UpdateFlagWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
+	UpdateFlagWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
 
-	UpdateFlagWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
+	UpdateFlagWithResponse(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
 }
 
 type ListFlagsResponse struct {
@@ -810,7 +790,7 @@ func (c *ClientWithResponses) CreateFlagWithResponse(ctx context.Context, body C
 }
 
 // DeleteFlagWithResponse request returning *DeleteFlagResponse
-func (c *ClientWithResponses) DeleteFlagWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteFlagResponse, error) {
+func (c *ClientWithResponses) DeleteFlagWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteFlagResponse, error) {
 	rsp, err := c.DeleteFlag(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -819,7 +799,7 @@ func (c *ClientWithResponses) DeleteFlagWithResponse(ctx context.Context, id ope
 }
 
 // GetFlagWithResponse request returning *GetFlagResponse
-func (c *ClientWithResponses) GetFlagWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetFlagResponse, error) {
+func (c *ClientWithResponses) GetFlagWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetFlagResponse, error) {
 	rsp, err := c.GetFlag(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -828,7 +808,7 @@ func (c *ClientWithResponses) GetFlagWithResponse(ctx context.Context, id openap
 }
 
 // UpdateFlagWithBodyWithResponse request with arbitrary body returning *UpdateFlagResponse
-func (c *ClientWithResponses) UpdateFlagWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error) {
+func (c *ClientWithResponses) UpdateFlagWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error) {
 	rsp, err := c.UpdateFlagWithBody(ctx, id, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -836,7 +816,7 @@ func (c *ClientWithResponses) UpdateFlagWithBodyWithResponse(ctx context.Context
 	return ParseUpdateFlagResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateFlagWithResponse(ctx context.Context, id openapi_types.UUID, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error) {
+func (c *ClientWithResponses) UpdateFlagWithResponse(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error) {
 	rsp, err := c.UpdateFlag(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err

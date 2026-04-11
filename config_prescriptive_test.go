@@ -37,7 +37,6 @@ func makeConfigResource(id, key string, items map[string]interface{}, envs map[s
 
 	attrs := map[string]interface{}{
 		"name":         key,
-		"key":          key,
 		"description":  nil,
 		"parent":       parent,
 		"items":        wrappedItems,
@@ -107,7 +106,7 @@ func connectClient(t *testing.T, server *httptest.Server) *smplkit.Client {
 
 func TestTypedAccessors_GetString(t *testing.T) {
 	cfgs := []map[string]interface{}{
-		makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		makeConfigResource("app", "app",
 			map[string]interface{}{"name": "Acme", "count": 42},
 			map[string]interface{}{}, nil),
 	}
@@ -133,7 +132,7 @@ func TestTypedAccessors_GetString(t *testing.T) {
 
 func TestTypedAccessors_GetInt(t *testing.T) {
 	cfgs := []map[string]interface{}{
-		makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		makeConfigResource("app", "app",
 			map[string]interface{}{"port": 8080, "name": "Acme"},
 			map[string]interface{}{}, nil),
 	}
@@ -159,7 +158,7 @@ func TestTypedAccessors_GetInt(t *testing.T) {
 
 func TestTypedAccessors_GetBool(t *testing.T) {
 	cfgs := []map[string]interface{}{
-		makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		makeConfigResource("app", "app",
 			map[string]interface{}{"enabled": true, "name": "Acme"},
 			map[string]interface{}{}, nil),
 	}
@@ -213,7 +212,7 @@ func TestRefresh_UpdatesCache(t *testing.T) {
 		} else {
 			retries = 7
 		}
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"retries": retries},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
@@ -226,7 +225,7 @@ func TestRefresh_UpdatesCache(t *testing.T) {
 		} else {
 			retries = 7
 		}
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"retries": retries},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
@@ -268,14 +267,14 @@ func TestRefresh_ListError(t *testing.T) {
 			w.WriteHeader(500)
 			return
 		}
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"a": 1},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{cfg}}) //nolint:errcheck
 	})
 	mux.HandleFunc("/api/v1/configs/", func(w http.ResponseWriter, r *http.Request) {
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"a": 1},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
@@ -311,7 +310,7 @@ func TestRefresh_FetchChainError(t *testing.T) {
 	refreshCount := 0
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"a": 1},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
@@ -320,7 +319,7 @@ func TestRefresh_FetchChainError(t *testing.T) {
 	mux.HandleFunc("/api/v1/configs/", func(w http.ResponseWriter, r *http.Request) {
 		refreshCount++
 		if refreshCount <= 1 {
-			cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+			cfg := makeConfigResource("app", "app",
 				map[string]interface{}{"a": 1},
 				map[string]interface{}{}, nil)
 			w.Header().Set("Content-Type", "application/json")
@@ -376,7 +375,7 @@ func TestOnChange_FiresOnRefresh(t *testing.T) {
 		} else {
 			retries = 7
 		}
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"retries": retries},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
@@ -389,7 +388,7 @@ func TestOnChange_FiresOnRefresh(t *testing.T) {
 		} else {
 			retries = 7
 		}
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"retries": retries},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
@@ -425,7 +424,7 @@ func TestOnChange_FiresOnRefresh(t *testing.T) {
 	require.NoError(t, client.Config().Refresh(ctx))
 
 	require.Len(t, events, 1)
-	assert.Equal(t, "app", events[0].ConfigKey)
+	assert.Equal(t, "app", events[0].ConfigID)
 	assert.Equal(t, "retries", events[0].ItemKey)
 	assert.Equal(t, "manual", events[0].Source)
 }
@@ -442,7 +441,7 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 			retries = 7
 			timeout = 2000
 		}
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"retries": retries, "timeout": timeout},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
@@ -457,7 +456,7 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 			retries = 7
 			timeout = 2000
 		}
-		cfg := makeConfigResource("00000000-0000-0000-0000-000000000001", "app",
+		cfg := makeConfigResource("app", "app",
 			map[string]interface{}{"retries": retries, "timeout": timeout},
 			map[string]interface{}{}, nil)
 		w.Header().Set("Content-Type", "application/json")
@@ -487,7 +486,7 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 	var retriesEvents []*smplkit.ConfigChangeEvent
 	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
 		retriesEvents = append(retriesEvents, evt)
-	}, smplkit.WithConfigKey("app"), smplkit.WithItemKey("retries"))
+	}, smplkit.WithConfigID("app"), smplkit.WithItemKey("retries"))
 
 	refreshed = true
 	require.NoError(t, client.Config().Refresh(ctx))

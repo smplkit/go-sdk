@@ -12,8 +12,8 @@ import (
 
 // FlagChangeEvent describes a flag definition change.
 type FlagChangeEvent struct {
-	// Key is the flag key that changed.
-	Key string
+	// ID is the flag ID that changed.
+	ID string
 	// Source is "websocket" or "manual".
 	Source string
 }
@@ -452,7 +452,7 @@ func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment st
 		return nil
 	}
 	for _, f := range flags {
-		if fKey, _ := f["key"].(string); fKey == key {
+		if fID, _ := f["id"].(string); fID == key {
 			return evaluateFlag(f, environment, evalDict)
 		}
 	}
@@ -641,7 +641,7 @@ func (rt *FlagsRuntime) fireChangeListeners(flagKey string, source string) {
 	if flagKey == "" {
 		return
 	}
-	event := &FlagChangeEvent{Key: flagKey, Source: source}
+	event := &FlagChangeEvent{ID: flagKey, Source: source}
 
 	rt.listenersMu.Lock()
 	globals := make([]func(*FlagChangeEvent), len(rt.globalListeners))
