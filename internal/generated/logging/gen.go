@@ -74,7 +74,6 @@ type LogGroup struct {
 	CreatedAt    *time.Time              `json:"created_at,omitempty"`
 	Environments *map[string]interface{} `json:"environments,omitempty"`
 	Group        *string                 `json:"group,omitempty"`
-	Id           *string                 `json:"id,omitempty"`
 	Level        *string                 `json:"level,omitempty"`
 	Name         string                  `json:"name"`
 	UpdatedAt    *time.Time              `json:"updated_at,omitempty"`
@@ -105,7 +104,6 @@ type Logger struct {
 	CreatedAt    *time.Time                `json:"created_at,omitempty"`
 	Environments *map[string]interface{}   `json:"environments,omitempty"`
 	Group        *string                   `json:"group,omitempty"`
-	Id           *string                   `json:"id,omitempty"`
 	Level        *string                   `json:"level,omitempty"`
 	Managed      *bool                     `json:"managed,omitempty"`
 	Name         string                    `json:"name"`
