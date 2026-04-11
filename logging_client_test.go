@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1901,4 +1902,90 @@ func (t *loggingMethodAwareRoundTripper) RoundTrip(req *http.Request) (*http.Res
 		}
 	}
 	return http.DefaultTransport.RoundTrip(req)
+}
+
+// --- flushBuffer error logging ---
+
+func TestFlushBuffer_LogsWarningOnHTTPError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"Invalid level value"}]}`))
+	})
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	var logBuf strings.Builder
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
+
+	client := newLoggingTestClient(t, mux)
+	adapter := &testAdapter{
+		name: "test",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "com.acme.app", Level: "INFO"},
+		},
+	}
+	client.Logging().RegisterAdapter(adapter)
+	_ = client.Logging().Start(context.Background())
+
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "smplkit: bulk logger registration failed")
+	assert.Contains(t, logOutput, "400")
+	assert.Contains(t, logOutput, "Invalid level value")
+}
+
+func TestFlushBuffer_LogsWarningOnNetworkError(t *testing.T) {
+	// Use a server that's immediately closed to trigger network errors on bulk endpoint.
+	mux := http.NewServeMux()
+	bulkCalled := false
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		bulkCalled = true
+		// Close the connection abruptly by hijacking.
+		hj, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hj.Hijack()
+			conn.Close()
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data": []}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	var logBuf strings.Builder
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
+
+	client := newLoggingTestClient(t, mux)
+	adapter := &testAdapter{
+		name: "test",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "com.acme.network", Level: "DEBUG"},
+		},
+	}
+	client.Logging().RegisterAdapter(adapter)
+	_ = client.Logging().Start(context.Background())
+
+	// The bulk endpoint was called (even if it errored).
+	assert.True(t, bulkCalled, "bulk endpoint should have been called")
+	assert.Contains(t, logBuf.String(), "smplkit: bulk logger registration failed")
 }

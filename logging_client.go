@@ -674,9 +674,6 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 	if len(batch) == 0 {
 		return
 	}
-	if metrics := c.client.metrics; metrics != nil && len(batch) > 0 {
-		metrics.Record("logging.loggers_discovered", len(batch), "loggers", nil)
-	}
 	items := make([]genlogging.LoggerBulkItem, 0, len(batch))
 	for _, entry := range batch {
 		item := genlogging.LoggerBulkItem{
@@ -690,8 +687,18 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 	}
 	reqBody := genlogging.LoggerBulkRequest{Loggers: items}
 	resp, err := c.generated.BulkRegisterLoggers(ctx, reqBody)
-	if err == nil && resp != nil {
-		resp.Body.Close()
+	if err != nil {
+		log.Printf("smplkit: bulk logger registration failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		log.Printf("smplkit: bulk logger registration failed: HTTP %d: %s", resp.StatusCode, string(snippet))
+		return
+	}
+	if metrics := c.client.metrics; metrics != nil && len(batch) > 0 {
+		metrics.Record("logging.loggers_discovered", len(batch), "loggers", nil)
 	}
 }
 
