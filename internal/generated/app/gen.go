@@ -508,6 +508,17 @@ type MetricListResponse struct {
 	Data []MetricResource `json:"data"`
 }
 
+// MetricNameItem defines model for MetricNameItem.
+type MetricNameItem struct {
+	Name string  `json:"name"`
+	Unit *string `json:"unit,omitempty"`
+}
+
+// MetricNamesResponse defines model for MetricNamesResponse.
+type MetricNamesResponse struct {
+	Data []MetricNameItem `json:"data"`
+}
+
 // MetricResource defines model for MetricResource.
 type MetricResource struct {
 	Attributes MetricAttributes   `json:"attributes"`
@@ -1035,6 +1046,9 @@ type ClientInterface interface {
 
 	// RevokeInvitation request
 	RevokeInvitation(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMetricNames request
+	ListMetricNames(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListMetricRollups request
 	ListMetricRollups(ctx context.Context, params *ListMetricRollupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1649,6 +1663,18 @@ func (c *Client) ResendInvitation(ctx context.Context, id openapi_types.UUID, re
 
 func (c *Client) RevokeInvitation(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeInvitationRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListMetricNames(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMetricNamesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -3284,6 +3310,33 @@ func NewRevokeInvitationRequest(server string, id openapi_types.UUID) (*http.Req
 	return req, nil
 }
 
+// NewListMetricNamesRequest generates requests for ListMetricNames
+func NewListMetricNamesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/metric_names")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListMetricRollupsRequest generates requests for ListMetricRollups
 func NewListMetricRollupsRequest(server string, params *ListMetricRollupsParams) (*http.Request, error) {
 	var err error
@@ -4111,6 +4164,9 @@ type ClientWithResponsesInterface interface {
 
 	// RevokeInvitationWithResponse request
 	RevokeInvitationWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error)
+
+	// ListMetricNamesWithResponse request
+	ListMetricNamesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error)
 
 	// ListMetricRollupsWithResponse request
 	ListMetricRollupsWithResponse(ctx context.Context, params *ListMetricRollupsParams, reqEditors ...RequestEditorFn) (*ListMetricRollupsResponse, error)
@@ -5049,6 +5105,32 @@ func (r RevokeInvitationResponse) StatusCode() int {
 	return 0
 }
 
+type ListMetricNamesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *MetricNamesResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMetricNamesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMetricNamesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListMetricRollupsResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -5871,6 +5953,15 @@ func (c *ClientWithResponses) RevokeInvitationWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseRevokeInvitationResponse(rsp)
+}
+
+// ListMetricNamesWithResponse request returning *ListMetricNamesResponse
+func (c *ClientWithResponses) ListMetricNamesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error) {
+	rsp, err := c.ListMetricNames(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMetricNamesResponse(rsp)
 }
 
 // ListMetricRollupsWithResponse request returning *ListMetricRollupsResponse
@@ -7813,6 +7904,60 @@ func ParseRevokeInvitationResponse(rsp *http.Response) (*RevokeInvitationRespons
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest InvitationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMetricNamesResponse parses an HTTP response from a ListMetricNamesWithResponse call
+func ParseListMetricNamesResponse(rsp *http.Response) (*ListMetricNamesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMetricNamesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MetricNamesResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
