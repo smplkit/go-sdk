@@ -373,6 +373,24 @@ type ContextTypeResponse struct {
 	Data ContextTypeResource `json:"data"`
 }
 
+// CreateSubscriptionAttributes defines model for CreateSubscriptionAttributes.
+type CreateSubscriptionAttributes struct {
+	PaymentMethodId string `json:"payment_method_id"`
+	Plan            string `json:"plan"`
+	Product         string `json:"product"`
+}
+
+// CreateSubscriptionBody defines model for CreateSubscriptionBody.
+type CreateSubscriptionBody struct {
+	Data CreateSubscriptionData `json:"data"`
+}
+
+// CreateSubscriptionData defines model for CreateSubscriptionData.
+type CreateSubscriptionData struct {
+	Attributes CreateSubscriptionAttributes `json:"attributes"`
+	Type       string                       `json:"type"`
+}
+
 // Environment defines model for Environment.
 type Environment struct {
 	Classification *string    `json:"classification,omitempty"`
@@ -640,6 +658,22 @@ type ServiceResponse struct {
 	Data ServiceResource `json:"data"`
 }
 
+// UpdateSubscriptionAttributes defines model for UpdateSubscriptionAttributes.
+type UpdateSubscriptionAttributes struct {
+	Plan string `json:"plan"`
+}
+
+// UpdateSubscriptionBody defines model for UpdateSubscriptionBody.
+type UpdateSubscriptionBody struct {
+	Data UpdateSubscriptionData `json:"data"`
+}
+
+// UpdateSubscriptionData defines model for UpdateSubscriptionData.
+type UpdateSubscriptionData struct {
+	Attributes UpdateSubscriptionAttributes `json:"attributes"`
+	Type       string                       `json:"type"`
+}
+
 // User defines model for User.
 type User struct {
 	// Account Account UUID
@@ -747,6 +781,12 @@ type RegisterJSONRequestBody = RegisterRequest
 
 // VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
 type VerifyEmailJSONRequestBody = VerifyEmailRequest
+
+// CreateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for CreateBillingSubscription for application/vnd.api+json ContentType.
+type CreateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody = CreateSubscriptionBody
+
+// UpdateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for UpdateBillingSubscription for application/vnd.api+json ContentType.
+type UpdateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody = UpdateSubscriptionBody
 
 // CreateContextTypeApplicationVndAPIPlusJSONRequestBody defines body for CreateContextType for application/vnd.api+json ContentType.
 type CreateContextTypeApplicationVndAPIPlusJSONRequestBody = ContextTypeResponse
@@ -975,6 +1015,28 @@ type ClientInterface interface {
 	VerifyEmailWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPaymentMethods request
+	ListPaymentMethods(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSetupIntent request
+	CreateSetupIntent(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListBillingSubscriptions request
+	ListBillingSubscriptions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateBillingSubscriptionWithBody request with any body
+	CreateBillingSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateBillingSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelBillingSubscription request
+	CancelBillingSubscription(ctx context.Context, product string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateBillingSubscriptionWithBody request with any body
+	UpdateBillingSubscriptionWithBody(ctx context.Context, product string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateBillingSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, product string, body UpdateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListContextTypes request
 	ListContextTypes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1351,6 +1413,102 @@ func (c *Client) VerifyEmailWithBody(ctx context.Context, contentType string, bo
 
 func (c *Client) VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewVerifyEmailRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListPaymentMethods(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPaymentMethodsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSetupIntent(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSetupIntentRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListBillingSubscriptions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBillingSubscriptionsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateBillingSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateBillingSubscriptionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateBillingSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateBillingSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CancelBillingSubscription(ctx context.Context, product string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelBillingSubscriptionRequest(c.Server, product)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateBillingSubscriptionWithBody(ctx context.Context, product string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateBillingSubscriptionRequestWithBody(c.Server, product, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateBillingSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, product string, body UpdateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateBillingSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, product, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2583,6 +2741,208 @@ func NewVerifyEmailRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListPaymentMethodsRequest generates requests for ListPaymentMethods
+func NewListPaymentMethodsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/billing/payment_methods")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateSetupIntentRequest generates requests for CreateSetupIntent
+func NewCreateSetupIntentRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/billing/setup_intent")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListBillingSubscriptionsRequest generates requests for ListBillingSubscriptions
+func NewListBillingSubscriptionsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/billing/subscriptions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateBillingSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateBillingSubscription builder with application/vnd.api+json body
+func NewCreateBillingSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateBillingSubscriptionRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateBillingSubscriptionRequestWithBody generates requests for CreateBillingSubscription with any type of body
+func NewCreateBillingSubscriptionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/billing/subscriptions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCancelBillingSubscriptionRequest generates requests for CancelBillingSubscription
+func NewCancelBillingSubscriptionRequest(server string, product string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "product", product, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/billing/subscriptions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateBillingSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateBillingSubscription builder with application/vnd.api+json body
+func NewUpdateBillingSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, product string, body UpdateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateBillingSubscriptionRequestWithBody(server, product, "application/vnd.api+json", bodyReader)
+}
+
+// NewUpdateBillingSubscriptionRequestWithBody generates requests for UpdateBillingSubscription with any type of body
+func NewUpdateBillingSubscriptionRequestWithBody(server string, product string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "product", product, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/billing/subscriptions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -4094,6 +4454,28 @@ type ClientWithResponsesInterface interface {
 
 	VerifyEmailWithResponse(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyEmailResponse, error)
 
+	// ListPaymentMethodsWithResponse request
+	ListPaymentMethodsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPaymentMethodsResponse, error)
+
+	// CreateSetupIntentWithResponse request
+	CreateSetupIntentWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*CreateSetupIntentResponse, error)
+
+	// ListBillingSubscriptionsWithResponse request
+	ListBillingSubscriptionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBillingSubscriptionsResponse, error)
+
+	// CreateBillingSubscriptionWithBodyWithResponse request with any body
+	CreateBillingSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBillingSubscriptionResponse, error)
+
+	CreateBillingSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateBillingSubscriptionResponse, error)
+
+	// CancelBillingSubscriptionWithResponse request
+	CancelBillingSubscriptionWithResponse(ctx context.Context, product string, reqEditors ...RequestEditorFn) (*CancelBillingSubscriptionResponse, error)
+
+	// UpdateBillingSubscriptionWithBodyWithResponse request with any body
+	UpdateBillingSubscriptionWithBodyWithResponse(ctx context.Context, product string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateBillingSubscriptionResponse, error)
+
+	UpdateBillingSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, product string, body UpdateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateBillingSubscriptionResponse, error)
+
 	// ListContextTypesWithResponse request
 	ListContextTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListContextTypesResponse, error)
 
@@ -4608,6 +4990,161 @@ func (r VerifyEmailResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r VerifyEmailResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListPaymentMethodsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPaymentMethodsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPaymentMethodsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateSetupIntentResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSetupIntentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSetupIntentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListBillingSubscriptionsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListBillingSubscriptionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListBillingSubscriptionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateBillingSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateBillingSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateBillingSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CancelBillingSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelBillingSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelBillingSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateBillingSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateBillingSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateBillingSubscriptionResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -5726,6 +6263,76 @@ func (c *ClientWithResponses) VerifyEmailWithResponse(ctx context.Context, body 
 		return nil, err
 	}
 	return ParseVerifyEmailResponse(rsp)
+}
+
+// ListPaymentMethodsWithResponse request returning *ListPaymentMethodsResponse
+func (c *ClientWithResponses) ListPaymentMethodsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPaymentMethodsResponse, error) {
+	rsp, err := c.ListPaymentMethods(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPaymentMethodsResponse(rsp)
+}
+
+// CreateSetupIntentWithResponse request returning *CreateSetupIntentResponse
+func (c *ClientWithResponses) CreateSetupIntentWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*CreateSetupIntentResponse, error) {
+	rsp, err := c.CreateSetupIntent(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSetupIntentResponse(rsp)
+}
+
+// ListBillingSubscriptionsWithResponse request returning *ListBillingSubscriptionsResponse
+func (c *ClientWithResponses) ListBillingSubscriptionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBillingSubscriptionsResponse, error) {
+	rsp, err := c.ListBillingSubscriptions(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListBillingSubscriptionsResponse(rsp)
+}
+
+// CreateBillingSubscriptionWithBodyWithResponse request with arbitrary body returning *CreateBillingSubscriptionResponse
+func (c *ClientWithResponses) CreateBillingSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBillingSubscriptionResponse, error) {
+	rsp, err := c.CreateBillingSubscriptionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateBillingSubscriptionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateBillingSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateBillingSubscriptionResponse, error) {
+	rsp, err := c.CreateBillingSubscriptionWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateBillingSubscriptionResponse(rsp)
+}
+
+// CancelBillingSubscriptionWithResponse request returning *CancelBillingSubscriptionResponse
+func (c *ClientWithResponses) CancelBillingSubscriptionWithResponse(ctx context.Context, product string, reqEditors ...RequestEditorFn) (*CancelBillingSubscriptionResponse, error) {
+	rsp, err := c.CancelBillingSubscription(ctx, product, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelBillingSubscriptionResponse(rsp)
+}
+
+// UpdateBillingSubscriptionWithBodyWithResponse request with arbitrary body returning *UpdateBillingSubscriptionResponse
+func (c *ClientWithResponses) UpdateBillingSubscriptionWithBodyWithResponse(ctx context.Context, product string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateBillingSubscriptionResponse, error) {
+	rsp, err := c.UpdateBillingSubscriptionWithBody(ctx, product, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateBillingSubscriptionResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateBillingSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, product string, body UpdateBillingSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateBillingSubscriptionResponse, error) {
+	rsp, err := c.UpdateBillingSubscriptionWithApplicationVndAPIPlusJSONBody(ctx, product, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateBillingSubscriptionResponse(rsp)
 }
 
 // ListContextTypesWithResponse request returning *ListContextTypesResponse
@@ -6931,6 +7538,323 @@ func ParseVerifyEmailResponse(rsp *http.Response) (*VerifyEmailResponse, error) 
 			return nil, err
 		}
 		response.JSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPaymentMethodsResponse parses an HTTP response from a ListPaymentMethodsWithResponse call
+func ParseListPaymentMethodsResponse(rsp *http.Response) (*ListPaymentMethodsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPaymentMethodsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSetupIntentResponse parses an HTTP response from a CreateSetupIntentWithResponse call
+func ParseCreateSetupIntentResponse(rsp *http.Response) (*CreateSetupIntentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSetupIntentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListBillingSubscriptionsResponse parses an HTTP response from a ListBillingSubscriptionsWithResponse call
+func ParseListBillingSubscriptionsResponse(rsp *http.Response) (*ListBillingSubscriptionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListBillingSubscriptionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateBillingSubscriptionResponse parses an HTTP response from a CreateBillingSubscriptionWithResponse call
+func ParseCreateBillingSubscriptionResponse(rsp *http.Response) (*CreateBillingSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateBillingSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelBillingSubscriptionResponse parses an HTTP response from a CancelBillingSubscriptionWithResponse call
+func ParseCancelBillingSubscriptionResponse(rsp *http.Response) (*CancelBillingSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelBillingSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateBillingSubscriptionResponse parses an HTTP response from a UpdateBillingSubscriptionWithResponse call
+func ParseUpdateBillingSubscriptionResponse(rsp *http.Response) (*UpdateBillingSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateBillingSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
 
 	}
 
