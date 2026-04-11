@@ -371,6 +371,23 @@ func TestMetricsReporter_FlushHTTPErrorSwallowed(t *testing.T) {
 	r.mu.Unlock()
 }
 
+func TestMetricsReporter_FlushNetworkErrorSwallowed(t *testing.T) {
+	// Use a URL that will fail to connect.
+	r := newMetricsReporter(
+		&http.Client{Timeout: 100 * time.Millisecond},
+		"http://127.0.0.1:1", // port 1 will refuse connections
+		"test", "test-service", 60*time.Second,
+	)
+	defer r.Close()
+
+	r.Record("flags.evaluations", 1, "", nil)
+	r.flush() // Should not panic despite connection error
+
+	r.mu.Lock()
+	assert.Empty(t, r.counters) // Data is discarded
+	r.mu.Unlock()
+}
+
 func TestMetricsReporter_FlushPublicMethod(t *testing.T) {
 	r, getPayload := captureFlush(t)
 	defer r.Close()
@@ -769,6 +786,62 @@ func TestFlagsRuntime_CacheHitRecordsMetrics(t *testing.T) {
 	assert.Equal(t, 2, counterNames["flags.evaluations"])
 	assert.Equal(t, 1, counterNames["flags.cache_misses"])
 	assert.Equal(t, 1, counterNames["flags.cache_hits"])
+}
+
+func TestFlagsRuntime_MissingFlagRecordsEvaluation(t *testing.T) {
+	r := makeReporter(t)
+	defer r.Close()
+
+	client := &Client{
+		environment: "test",
+		service:     "test-service",
+		metrics:     r,
+	}
+	fc := &FlagsClient{client: client}
+	rt := newFlagsRuntime(fc)
+
+	rt.mu.Lock()
+	rt.environment = "test"
+	// Flag store is empty — "missing-flag" won't be found.
+	rt.mu.Unlock()
+
+	rt.initOnce.Do(func() {})
+
+	value := rt.evaluateHandle(context.Background(), "missing-flag", "default-value", nil)
+	assert.Equal(t, "default-value", value)
+
+	r.mu.Lock()
+	counterNames := make(map[string]int)
+	for key, c := range r.counters {
+		name, _ := parseDimensions(key)
+		counterNames[name] += c.value
+	}
+	r.mu.Unlock()
+
+	assert.Equal(t, 1, counterNames["flags.evaluations"])
+	assert.Equal(t, 1, counterNames["flags.cache_misses"])
+}
+
+func TestFlagsRuntime_NoMetricsWhenNilClient(t *testing.T) {
+	// FlagsClient exists but its client field is nil.
+	fc := &FlagsClient{client: nil}
+	rt := newFlagsRuntime(fc)
+
+	rt.mu.Lock()
+	rt.environment = "test"
+	rt.flagStore["checkout-v2"] = map[string]interface{}{
+		"key":          "checkout-v2",
+		"type":         "boolean",
+		"default":      false,
+		"environments": map[string]interface{}{},
+	}
+	rt.mu.Unlock()
+
+	rt.initOnce.Do(func() {})
+
+	// Should not panic with nil client.
+	value := rt.evaluateHandle(context.Background(), "checkout-v2", false, nil)
+	assert.Equal(t, false, value)
 }
 
 func TestFlagsRuntime_NoMetricsWhenDisabled(t *testing.T) {

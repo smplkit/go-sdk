@@ -83,22 +83,14 @@ func parseDimensions(key string) (string, map[string]string) {
 	name := parts[0]
 	dims := make(map[string]string, len(parts)-1)
 	for _, p := range parts[1:] {
-		if p == "" {
-			continue
-		}
 		idx := strings.Index(p, "=")
-		if idx >= 0 {
-			dims[p[:idx]] = p[idx+1:]
-		}
+		dims[p[:idx]] = p[idx+1:]
 	}
 	return name, dims
 }
 
-// Record increments a counter metric by value (default 1).
+// Record increments a counter metric by value.
 func (r *metricsReporter) Record(name string, value int, unit string, dimensions map[string]string) {
-	if value == 0 {
-		value = 1
-	}
 	key := r.makeKey(name, dimensions)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -187,36 +179,19 @@ func (r *metricsReporter) flush() {
 	}
 
 	payload := r.buildPayload(counters, gauges)
+	body, _ := json.Marshal(payload) // payload is always serializable
 
-	func() {
-		defer func() {
-			if rec := recover(); rec != nil {
-				log.Printf("smplkit: metrics flush panic: %v", rec)
-			}
-		}()
+	flushURL := strings.TrimRight(r.appBaseURL, "/") + metricsEndpoint
+	req, _ := http.NewRequest(http.MethodPost, flushURL, bytes.NewReader(body)) // method+URL always valid
+	req.Header.Set("Content-Type", metricsContentType)
+	req.Header.Set("User-Agent", userAgent)
 
-		body, err := json.Marshal(payload)
-		if err != nil {
-			log.Printf("smplkit: metrics flush marshal failed: %v", err)
-			return
-		}
-
-		url := strings.TrimRight(r.appBaseURL, "/") + metricsEndpoint
-		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
-		if err != nil {
-			log.Printf("smplkit: metrics flush request build failed: %v", err)
-			return
-		}
-		req.Header.Set("Content-Type", metricsContentType)
-		req.Header.Set("User-Agent", userAgent)
-
-		resp, err := r.httpClient.Do(req)
-		if err != nil {
-			log.Printf("smplkit: metrics flush failed: %v", err)
-			return
-		}
-		resp.Body.Close()
-	}()
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		log.Printf("smplkit: metrics flush failed: %v", err)
+		return
+	}
+	resp.Body.Close()
 }
 
 func (r *metricsReporter) buildPayload(counters, gauges map[string]*counter) map[string]interface{} {
