@@ -11,6 +11,7 @@
           "Flags"
         ],
         "summary": "Create Flag",
+        "description": "Create a new feature flag. The caller provides the id (key) in the request body.",
         "operationId": "create_flag",
         "security": [
           {
@@ -20,9 +21,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_Flag_"
+                "$ref": "#/components/schemas/FlagResponse"
               }
             }
           }
@@ -37,16 +38,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -55,6 +46,7 @@
           "Flags"
         ],
         "summary": "List Flags",
+        "description": "List all feature flags for the authenticated account.",
         "operationId": "list_flags",
         "security": [
           {
@@ -89,16 +81,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
@@ -109,6 +91,7 @@
           "Flags"
         ],
         "summary": "Get Flag",
+        "description": "Return a feature flag by its key.",
         "operationId": "get_flag",
         "security": [
           {
@@ -136,16 +119,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -154,6 +127,7 @@
           "Flags"
         ],
         "summary": "Update Flag",
+        "description": "Replace a feature flag entirely.",
         "operationId": "update_flag",
         "security": [
           {
@@ -174,9 +148,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_Flag_"
+                "$ref": "#/components/schemas/FlagResponse"
               }
             }
           }
@@ -191,16 +165,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -209,6 +173,7 @@
           "Flags"
         ],
         "summary": "Delete Flag",
+        "description": "Delete a feature flag by its key.",
         "operationId": "delete_flag",
         "security": [
           {
@@ -229,16 +194,6 @@
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
@@ -279,22 +234,14 @@
             "description": "Current usage for the authenticated account",
             "content": {
               "application/vnd.api+json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/UsageListResponse"
+                }
               }
             }
           },
           "400": {
             "description": "Missing or invalid filter[period] parameter"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
@@ -310,9 +257,15 @@
             "description": "Human-readable display name"
           },
           "description": {
-            "type": "string",
-            "title": "Description",
-            "default": ""
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
           },
           "type": {
             "type": "string",
@@ -528,7 +481,7 @@
               }
             ]
           },
-          "id": "dark_mode",
+          "id": "dark-mode",
           "type": "flag"
         }
       },
@@ -590,91 +543,89 @@
         ],
         "title": "FlagValue"
       },
-      "HTTPValidationError": {
+      "UsageAttributes": {
         "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
-      "Resource_Flag_": {
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "type": {
+          "limit_key": {
             "type": "string",
-            "title": "Type",
-            "default": ""
+            "title": "Limit Key"
           },
-          "attributes": {
-            "$ref": "#/components/schemas/Flag"
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "value": {
+            "type": "integer",
+            "title": "Value"
           }
         },
         "type": "object",
         "required": [
-          "attributes"
+          "limit_key",
+          "period",
+          "value"
         ],
-        "title": "Resource[Flag]"
+        "title": "UsageAttributes"
       },
-      "Response_Flag_": {
+      "UsageListResponse": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/Resource_Flag_"
+            "items": {
+              "$ref": "#/components/schemas/UsageResource"
+            },
+            "type": "array",
+            "title": "Data"
           }
         },
         "type": "object",
         "required": [
           "data"
         ],
-        "title": "Response[Flag]"
+        "title": "UsageListResponse",
+        "example": {
+          "data": [
+            {
+              "attributes": {
+                "limit_key": "flags.items",
+                "period": "current",
+                "value": 5
+              },
+              "id": "550e8400-e29b-41d4-a716-446655440000",
+              "type": "usage"
+            }
+          ]
+        }
       },
-      "ValidationError": {
+      "UsageResource": {
         "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
+          "id": {
             "type": "string",
-            "title": "Message"
+            "title": "Id"
           },
           "type": {
             "type": "string",
-            "title": "Error Type"
+            "const": "usage",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/UsageAttributes"
           }
         },
         "type": "object",
         "required": [
-          "loc",
-          "msg",
-          "type"
+          "id",
+          "type",
+          "attributes"
         ],
-        "title": "ValidationError"
+        "title": "UsageResource",
+        "example": {
+          "attributes": {
+            "limit_key": "flags.items",
+            "period": "current",
+            "value": 5
+          },
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "usage"
+        }
       }
     },
     "securitySchemes": {
