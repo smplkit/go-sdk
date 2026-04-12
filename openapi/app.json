@@ -4202,6 +4202,73 @@
         ]
       }
     },
+    "/api/v1/invoices": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "List Invoices",
+        "description": "Return invoice history for the account from Stripe.",
+        "operationId": "list_invoices",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/functions/setup_intent/actions/execute": {
       "post": {
         "tags": [
@@ -5192,6 +5259,123 @@
           "data"
         ],
         "title": "InvitationResponse"
+      },
+      "Invoice": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "nullable": true,
+            "title": "Number"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "amount_due": {
+            "type": "integer",
+            "title": "Amount Due"
+          },
+          "amount_paid": {
+            "type": "integer",
+            "title": "Amount Paid"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "title": "Description"
+          },
+          "period_start": {
+            "type": "string",
+            "nullable": true,
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "nullable": true,
+            "title": "Period End"
+          },
+          "created_at": {
+            "type": "string",
+            "nullable": true,
+            "title": "Created At"
+          },
+          "paid_at": {
+            "type": "string",
+            "nullable": true,
+            "title": "Paid At"
+          },
+          "hosted_invoice_url": {
+            "type": "string",
+            "nullable": true,
+            "title": "Hosted Invoice Url"
+          },
+          "invoice_pdf": {
+            "type": "string",
+            "nullable": true,
+            "title": "Invoice Pdf"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "status",
+          "amount_due",
+          "amount_paid",
+          "currency",
+          "description",
+          "period_start",
+          "period_end",
+          "created_at",
+          "paid_at",
+          "hosted_invoice_url",
+          "invoice_pdf"
+        ],
+        "title": "Invoice"
+      },
+      "InvoiceListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/InvoiceResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "InvoiceListResponse"
+      },
+      "InvoiceResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "invoice"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Invoice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "InvoiceResource"
       },
       "LimitDefinition": {
         "properties": {

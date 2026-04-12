@@ -112,6 +112,21 @@ func (e InvitationResourceType) Valid() bool {
 	}
 }
 
+// Defines values for InvoiceResourceType.
+const (
+	InvoiceResourceTypeInvoice InvoiceResourceType = "invoice"
+)
+
+// Valid indicates whether the value is a known member of the InvoiceResourceType enum.
+func (e InvoiceResourceType) Valid() bool {
+	switch e {
+	case InvoiceResourceTypeInvoice:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MetricResourceType.
 const (
 	Metric MetricResourceType = "metric"
@@ -479,6 +494,37 @@ type InvitationResourceType string
 type InvitationResponse struct {
 	Data InvitationResource `json:"data"`
 }
+
+// Invoice defines model for Invoice.
+type Invoice struct {
+	AmountDue        int     `json:"amount_due"`
+	AmountPaid       int     `json:"amount_paid"`
+	CreatedAt        *string `json:"created_at"`
+	Currency         string  `json:"currency"`
+	Description      *string `json:"description"`
+	HostedInvoiceUrl *string `json:"hosted_invoice_url"`
+	InvoicePdf       *string `json:"invoice_pdf"`
+	Number           *string `json:"number"`
+	PaidAt           *string `json:"paid_at"`
+	PeriodEnd        *string `json:"period_end"`
+	PeriodStart      *string `json:"period_start"`
+	Status           string  `json:"status"`
+}
+
+// InvoiceListResponse defines model for InvoiceListResponse.
+type InvoiceListResponse struct {
+	Data []InvoiceResource `json:"data"`
+}
+
+// InvoiceResource defines model for InvoiceResource.
+type InvoiceResource struct {
+	Attributes Invoice             `json:"attributes"`
+	Id         *string             `json:"id,omitempty"`
+	Type       InvoiceResourceType `json:"type"`
+}
+
+// InvoiceResourceType defines model for InvoiceResource.Type.
+type InvoiceResourceType string
 
 // LimitDefinition defines model for LimitDefinition.
 type LimitDefinition struct {
@@ -1089,6 +1135,9 @@ type ClientInterface interface {
 
 	// RevokeInvitation request
 	RevokeInvitation(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListInvoices request
+	ListInvoices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListMetricNames request
 	ListMetricNames(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1737,6 +1786,18 @@ func (c *Client) ResendInvitation(ctx context.Context, id openapi_types.UUID, re
 
 func (c *Client) RevokeInvitation(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeInvitationRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListInvoices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInvoicesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -3495,6 +3556,33 @@ func NewRevokeInvitationRequest(server string, id openapi_types.UUID) (*http.Req
 	return req, nil
 }
 
+// NewListInvoicesRequest generates requests for ListInvoices
+func NewListInvoicesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/invoices")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListMetricNamesRequest generates requests for ListMetricNames
 func NewListMetricNamesRequest(server string) (*http.Request, error) {
 	var err error
@@ -4528,6 +4616,9 @@ type ClientWithResponsesInterface interface {
 	// RevokeInvitationWithResponse request
 	RevokeInvitationWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error)
 
+	// ListInvoicesWithResponse request
+	ListInvoicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListInvoicesResponse, error)
+
 	// ListMetricNamesWithResponse request
 	ListMetricNamesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error)
 
@@ -5507,6 +5598,32 @@ func (r RevokeInvitationResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r RevokeInvitationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListInvoicesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *InvoiceListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInvoicesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInvoicesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -6499,6 +6616,15 @@ func (c *ClientWithResponses) RevokeInvitationWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseRevokeInvitationResponse(rsp)
+}
+
+// ListInvoicesWithResponse request returning *ListInvoicesResponse
+func (c *ClientWithResponses) ListInvoicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListInvoicesResponse, error) {
+	rsp, err := c.ListInvoices(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInvoicesResponse(rsp)
 }
 
 // ListMetricNamesWithResponse request returning *ListMetricNamesResponse
@@ -8565,6 +8691,60 @@ func ParseRevokeInvitationResponse(rsp *http.Response) (*RevokeInvitationRespons
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest InvitationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListInvoicesResponse parses an HTTP response from a ListInvoicesWithResponse call
+func ParseListInvoicesResponse(rsp *http.Response) (*ListInvoicesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInvoicesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InvoiceListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
