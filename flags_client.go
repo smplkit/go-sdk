@@ -33,7 +33,7 @@ func (c *FlagsClient) Management() *FlagsManagement {
 func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
 	reqBody := buildFlagRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
 
-	resp, err := c.generated.CreateFlag(ctx, reqBody)
+	resp, err := c.generated.CreateFlagWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -61,7 +61,7 @@ func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
 func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
 	reqBody := buildFlagRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
 
-	resp, err := c.generated.UpdateFlag(ctx, flag.ID, reqBody)
+	resp, err := c.generated.UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx, flag.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -153,10 +153,8 @@ func extractFlagEnvironments(envs *map[string]genflags.FlagEnvironment) map[stri
 	return result
 }
 
-// buildFlagRequest constructs a ResponseFlag for create or update.
-func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.ResponseFlag {
-	flagT := "flag"
-
+// buildFlagRequest constructs a FlagResponse for create or update.
+func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.FlagResponse {
 	var genValues *[]genflags.FlagValue
 	if values != nil {
 		gv := make([]genflags.FlagValue, len(*values))
@@ -168,10 +166,10 @@ func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]Fla
 
 	genEnvs := buildGenFlagEnvironments(envs)
 
-	return genflags.ResponseFlag{
-		Data: genflags.ResourceFlag{
+	return genflags.FlagResponse{
+		Data: genflags.FlagResource{
 			Id:   &id,
-			Type: &flagT,
+			Type: genflags.FlagResourceTypeFlag,
 			Attributes: genflags.Flag{
 				Name:         name,
 				Type:         flagType,
