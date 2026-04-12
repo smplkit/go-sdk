@@ -51,6 +51,36 @@ func (e LoggerResourceType) Valid() bool {
 	}
 }
 
+// Defines values for LoggerSourceResourceType.
+const (
+	LoggerSourceResourceTypeLoggerSource LoggerSourceResourceType = "logger_source"
+)
+
+// Valid indicates whether the value is a known member of the LoggerSourceResourceType enum.
+func (e LoggerSourceResourceType) Valid() bool {
+	switch e {
+	case LoggerSourceResourceTypeLoggerSource:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UsageResourceType.
+const (
+	Usage UsageResourceType = "usage"
+)
+
+// Valid indicates whether the value is a known member of the UsageResourceType enum.
+func (e UsageResourceType) Valid() bool {
+	switch e {
+	case Usage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Error Single JSON:API error object.
 type Error struct {
 	Detail *string                 `json:"detail,omitempty"`
@@ -62,11 +92,6 @@ type Error struct {
 // ErrorResponse JSON:API error response envelope.
 type ErrorResponse struct {
 	Errors []Error `json:"errors"`
-}
-
-// HTTPValidationError defines model for HTTPValidationError.
-type HTTPValidationError struct {
-	Detail *[]ValidationError `json:"detail,omitempty"`
 }
 
 // LogGroup defines model for LogGroup.
@@ -101,18 +126,20 @@ type LogGroupResponse struct {
 
 // Logger defines model for Logger.
 type Logger struct {
-	CreatedAt    *time.Time                `json:"created_at,omitempty"`
-	Environments *map[string]interface{}   `json:"environments,omitempty"`
-	Group        *string                   `json:"group,omitempty"`
-	Level        *string                   `json:"level,omitempty"`
-	Managed      *bool                     `json:"managed,omitempty"`
-	Name         string                    `json:"name"`
-	Sources      *[]map[string]interface{} `json:"sources,omitempty"`
-	UpdatedAt    *time.Time                `json:"updated_at,omitempty"`
+	CreatedAt    *time.Time              `json:"created_at,omitempty"`
+	Environments *map[string]interface{} `json:"environments,omitempty"`
+	Group        *string                 `json:"group,omitempty"`
+	Level        *string                 `json:"level,omitempty"`
+	Managed      *bool                   `json:"managed,omitempty"`
+	Name         string                  `json:"name"`
+	UpdatedAt    *time.Time              `json:"updated_at,omitempty"`
 }
 
 // LoggerBulkItem defines model for LoggerBulkItem.
 type LoggerBulkItem struct {
+	// Environment Environment where this logger was observed
+	Environment *string `json:"environment,omitempty"`
+
 	// Id Normalized logger name
 	Id string `json:"id"`
 
@@ -153,46 +180,59 @@ type LoggerResponse struct {
 	Data LoggerResource `json:"data"`
 }
 
-// ResourceLogGroup defines model for Resource_LogGroup_.
-type ResourceLogGroup struct {
-	Attributes LogGroup `json:"attributes"`
-	Id         *string  `json:"id,omitempty"`
-	Type       *string  `json:"type,omitempty"`
+// LoggerSource defines model for LoggerSource.
+type LoggerSource struct {
+	CreatedAt     *time.Time `json:"created_at,omitempty"`
+	Environment   *string    `json:"environment,omitempty"`
+	FirstObserved *time.Time `json:"first_observed,omitempty"`
+	LastSeen      *time.Time `json:"last_seen,omitempty"`
+	Level         *string    `json:"level,omitempty"`
+	ResolvedLevel *string    `json:"resolved_level,omitempty"`
+	Service       *string    `json:"service,omitempty"`
+	UpdatedAt     *time.Time `json:"updated_at,omitempty"`
 }
 
-// ResourceLogger defines model for Resource_Logger_.
-type ResourceLogger struct {
-	Attributes Logger  `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       *string `json:"type,omitempty"`
+// LoggerSourceListResponse defines model for LoggerSourceListResponse.
+type LoggerSourceListResponse struct {
+	Data []LoggerSourceResource `json:"data"`
 }
 
-// ResponseLogGroup defines model for Response_LogGroup_.
-type ResponseLogGroup struct {
-	Data ResourceLogGroup `json:"data"`
+// LoggerSourceResource defines model for LoggerSourceResource.
+type LoggerSourceResource struct {
+	Attributes LoggerSource             `json:"attributes"`
+	Id         *string                  `json:"id,omitempty"`
+	Type       LoggerSourceResourceType `json:"type"`
 }
 
-// ResponseLogger defines model for Response_Logger_.
-type ResponseLogger struct {
-	Data ResourceLogger `json:"data"`
+// LoggerSourceResourceType defines model for LoggerSourceResource.Type.
+type LoggerSourceResourceType string
+
+// UsageAttributes defines model for UsageAttributes.
+type UsageAttributes struct {
+	LimitKey string `json:"limit_key"`
+	Period   string `json:"period"`
+	Value    int    `json:"value"`
 }
 
-// ValidationError defines model for ValidationError.
-type ValidationError struct {
-	Loc  []ValidationError_Loc_Item `json:"loc"`
-	Msg  string                     `json:"msg"`
-	Type string                     `json:"type"`
+// UsageListResponse defines model for UsageListResponse.
+type UsageListResponse struct {
+	Data []UsageResource `json:"data"`
 }
 
-// ValidationErrorLoc0 defines model for .
-type ValidationErrorLoc0 = string
+// UsageResource defines model for UsageResource.
+type UsageResource struct {
+	Attributes UsageAttributes   `json:"attributes"`
+	Id         string            `json:"id"`
+	Type       UsageResourceType `json:"type"`
+}
 
-// ValidationErrorLoc1 defines model for .
-type ValidationErrorLoc1 = int
+// UsageResourceType defines model for UsageResource.Type.
+type UsageResourceType string
 
-// ValidationError_Loc_Item defines model for ValidationError.loc.Item.
-type ValidationError_Loc_Item struct {
-	union json.RawMessage
+// ListAllLoggerSourcesParams defines parameters for ListAllLoggerSources.
+type ListAllLoggerSourcesParams struct {
+	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
+	FilterService     *string `form:"filter[service],omitempty" json:"filter[service],omitempty"`
 }
 
 // ListLoggersParams defines parameters for ListLoggers.
@@ -200,82 +240,25 @@ type ListLoggersParams struct {
 	FilterManaged *bool `form:"filter[managed],omitempty" json:"filter[managed],omitempty"`
 }
 
-// CreateLogGroupJSONRequestBody defines body for CreateLogGroup for application/json ContentType.
-type CreateLogGroupJSONRequestBody = ResponseLogGroup
-
-// UpdateLogGroupJSONRequestBody defines body for UpdateLogGroup for application/json ContentType.
-type UpdateLogGroupJSONRequestBody = ResponseLogGroup
-
-// CreateLoggerJSONRequestBody defines body for CreateLogger for application/json ContentType.
-type CreateLoggerJSONRequestBody = ResponseLogger
-
-// BulkRegisterLoggersJSONRequestBody defines body for BulkRegisterLoggers for application/json ContentType.
-type BulkRegisterLoggersJSONRequestBody = LoggerBulkRequest
-
-// UpdateLoggerJSONRequestBody defines body for UpdateLogger for application/json ContentType.
-type UpdateLoggerJSONRequestBody = ResponseLogger
-
-// AsValidationErrorLoc0 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc0
-func (t ValidationError_Loc_Item) AsValidationErrorLoc0() (ValidationErrorLoc0, error) {
-	var body ValidationErrorLoc0
-	err := json.Unmarshal(t.union, &body)
-	return body, err
+// ListLoggingUsageParams defines parameters for ListLoggingUsage.
+type ListLoggingUsageParams struct {
+	FilterPeriod *string `form:"filter[period],omitempty" json:"filter[period],omitempty"`
 }
 
-// FromValidationErrorLoc0 overwrites any union data inside the ValidationError_Loc_Item as the provided ValidationErrorLoc0
-func (t *ValidationError_Loc_Item) FromValidationErrorLoc0(v ValidationErrorLoc0) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
+// CreateLogGroupApplicationVndAPIPlusJSONRequestBody defines body for CreateLogGroup for application/vnd.api+json ContentType.
+type CreateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupResponse
 
-// MergeValidationErrorLoc0 performs a merge with any union data inside the ValidationError_Loc_Item, using the provided ValidationErrorLoc0
-func (t *ValidationError_Loc_Item) MergeValidationErrorLoc0(v ValidationErrorLoc0) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
+// UpdateLogGroupApplicationVndAPIPlusJSONRequestBody defines body for UpdateLogGroup for application/vnd.api+json ContentType.
+type UpdateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupResponse
 
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
+// CreateLoggerApplicationVndAPIPlusJSONRequestBody defines body for CreateLogger for application/vnd.api+json ContentType.
+type CreateLoggerApplicationVndAPIPlusJSONRequestBody = LoggerResponse
 
-// AsValidationErrorLoc1 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc1
-func (t ValidationError_Loc_Item) AsValidationErrorLoc1() (ValidationErrorLoc1, error) {
-	var body ValidationErrorLoc1
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
+// BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterLoggers for application/vnd.api+json ContentType.
+type BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody = LoggerBulkRequest
 
-// FromValidationErrorLoc1 overwrites any union data inside the ValidationError_Loc_Item as the provided ValidationErrorLoc1
-func (t *ValidationError_Loc_Item) FromValidationErrorLoc1(v ValidationErrorLoc1) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeValidationErrorLoc1 performs a merge with any union data inside the ValidationError_Loc_Item, using the provided ValidationErrorLoc1
-func (t *ValidationError_Loc_Item) MergeValidationErrorLoc1(v ValidationErrorLoc1) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ValidationError_Loc_Item) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ValidationError_Loc_Item) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
+// UpdateLoggerApplicationVndAPIPlusJSONRequestBody defines body for UpdateLogger for application/vnd.api+json ContentType.
+type UpdateLoggerApplicationVndAPIPlusJSONRequestBody = LoggerResponse
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -356,7 +339,7 @@ type ClientInterface interface {
 	// CreateLogGroupWithBody request with any body
 	CreateLogGroupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateLogGroup(ctx context.Context, body CreateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateLogGroupWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateLogGroupApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteLogGroup request
 	DeleteLogGroup(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -367,7 +350,10 @@ type ClientInterface interface {
 	// UpdateLogGroupWithBody request with any body
 	UpdateLogGroupWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateLogGroup(ctx context.Context, id string, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateLogGroupWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateLogGroupApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAllLoggerSources request
+	ListAllLoggerSources(ctx context.Context, params *ListAllLoggerSourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListLoggers request
 	ListLoggers(ctx context.Context, params *ListLoggersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -375,12 +361,12 @@ type ClientInterface interface {
 	// CreateLoggerWithBody request with any body
 	CreateLoggerWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateLogger(ctx context.Context, body CreateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateLoggerWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// BulkRegisterLoggersWithBody request with any body
 	BulkRegisterLoggersWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	BulkRegisterLoggers(ctx context.Context, body BulkRegisterLoggersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	BulkRegisterLoggersWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteLogger request
 	DeleteLogger(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -391,7 +377,13 @@ type ClientInterface interface {
 	// UpdateLoggerWithBody request with any body
 	UpdateLoggerWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateLogger(ctx context.Context, id string, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateLoggerWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListLoggerSources request
+	ListLoggerSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListLoggingUsage request
+	ListLoggingUsage(ctx context.Context, params *ListLoggingUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListLogGroups(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -418,8 +410,8 @@ func (c *Client) CreateLogGroupWithBody(ctx context.Context, contentType string,
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateLogGroup(ctx context.Context, body CreateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateLogGroupRequest(c.Server, body)
+func (c *Client) CreateLogGroupWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateLogGroupApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateLogGroupRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -466,8 +458,20 @@ func (c *Client) UpdateLogGroupWithBody(ctx context.Context, id string, contentT
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateLogGroup(ctx context.Context, id string, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateLogGroupRequest(c.Server, id, body)
+func (c *Client) UpdateLogGroupWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateLogGroupApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateLogGroupRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAllLoggerSources(ctx context.Context, params *ListAllLoggerSourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAllLoggerSourcesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -502,8 +506,8 @@ func (c *Client) CreateLoggerWithBody(ctx context.Context, contentType string, b
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateLogger(ctx context.Context, body CreateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateLoggerRequest(c.Server, body)
+func (c *Client) CreateLoggerWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateLoggerRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -526,8 +530,8 @@ func (c *Client) BulkRegisterLoggersWithBody(ctx context.Context, contentType st
 	return c.Client.Do(req)
 }
 
-func (c *Client) BulkRegisterLoggers(ctx context.Context, body BulkRegisterLoggersJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewBulkRegisterLoggersRequest(c.Server, body)
+func (c *Client) BulkRegisterLoggersWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkRegisterLoggersRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -574,8 +578,32 @@ func (c *Client) UpdateLoggerWithBody(ctx context.Context, id string, contentTyp
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateLogger(ctx context.Context, id string, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateLoggerRequest(c.Server, id, body)
+func (c *Client) UpdateLoggerWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateLoggerRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListLoggerSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLoggerSourcesRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListLoggingUsage(ctx context.Context, params *ListLoggingUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLoggingUsageRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -613,15 +641,15 @@ func NewListLogGroupsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewCreateLogGroupRequest calls the generic CreateLogGroup builder with application/json body
-func NewCreateLogGroupRequest(server string, body CreateLogGroupJSONRequestBody) (*http.Request, error) {
+// NewCreateLogGroupRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateLogGroup builder with application/vnd.api+json body
+func NewCreateLogGroupRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateLogGroupApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateLogGroupRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateLogGroupRequestWithBody(server, "application/vnd.api+json", bodyReader)
 }
 
 // NewCreateLogGroupRequestWithBody generates requests for CreateLogGroup with any type of body
@@ -721,15 +749,15 @@ func NewGetLogGroupRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewUpdateLogGroupRequest calls the generic UpdateLogGroup builder with application/json body
-func NewUpdateLogGroupRequest(server string, id string, body UpdateLogGroupJSONRequestBody) (*http.Request, error) {
+// NewUpdateLogGroupRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateLogGroup builder with application/vnd.api+json body
+func NewUpdateLogGroupRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateLogGroupApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateLogGroupRequestWithBody(server, id, "application/json", bodyReader)
+	return NewUpdateLogGroupRequestWithBody(server, id, "application/vnd.api+json", bodyReader)
 }
 
 // NewUpdateLogGroupRequestWithBody generates requests for UpdateLogGroup with any type of body
@@ -764,6 +792,71 @@ func NewUpdateLogGroupRequestWithBody(server string, id string, contentType stri
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAllLoggerSourcesRequest generates requests for ListAllLoggerSources
+func NewListAllLoggerSourcesRequest(server string, params *ListAllLoggerSourcesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/logger_sources")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FilterService != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[service]", *params.FilterService, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -817,15 +910,15 @@ func NewListLoggersRequest(server string, params *ListLoggersParams) (*http.Requ
 	return req, nil
 }
 
-// NewCreateLoggerRequest calls the generic CreateLogger builder with application/json body
-func NewCreateLoggerRequest(server string, body CreateLoggerJSONRequestBody) (*http.Request, error) {
+// NewCreateLoggerRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateLogger builder with application/vnd.api+json body
+func NewCreateLoggerRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateLoggerApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateLoggerRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateLoggerRequestWithBody(server, "application/vnd.api+json", bodyReader)
 }
 
 // NewCreateLoggerRequestWithBody generates requests for CreateLogger with any type of body
@@ -857,15 +950,15 @@ func NewCreateLoggerRequestWithBody(server string, contentType string, body io.R
 	return req, nil
 }
 
-// NewBulkRegisterLoggersRequest calls the generic BulkRegisterLoggers builder with application/json body
-func NewBulkRegisterLoggersRequest(server string, body BulkRegisterLoggersJSONRequestBody) (*http.Request, error) {
+// NewBulkRegisterLoggersRequestWithApplicationVndAPIPlusJSONBody calls the generic BulkRegisterLoggers builder with application/vnd.api+json body
+func NewBulkRegisterLoggersRequestWithApplicationVndAPIPlusJSONBody(server string, body BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewBulkRegisterLoggersRequestWithBody(server, "application/json", bodyReader)
+	return NewBulkRegisterLoggersRequestWithBody(server, "application/vnd.api+json", bodyReader)
 }
 
 // NewBulkRegisterLoggersRequestWithBody generates requests for BulkRegisterLoggers with any type of body
@@ -965,15 +1058,15 @@ func NewGetLoggerRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewUpdateLoggerRequest calls the generic UpdateLogger builder with application/json body
-func NewUpdateLoggerRequest(server string, id string, body UpdateLoggerJSONRequestBody) (*http.Request, error) {
+// NewUpdateLoggerRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateLogger builder with application/vnd.api+json body
+func NewUpdateLoggerRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateLoggerApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateLoggerRequestWithBody(server, id, "application/json", bodyReader)
+	return NewUpdateLoggerRequestWithBody(server, id, "application/vnd.api+json", bodyReader)
 }
 
 // NewUpdateLoggerRequestWithBody generates requests for UpdateLogger with any type of body
@@ -1008,6 +1101,89 @@ func NewUpdateLoggerRequestWithBody(server string, id string, contentType string
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListLoggerSourcesRequest generates requests for ListLoggerSources
+func NewListLoggerSourcesRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/loggers/%s/sources", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListLoggingUsageRequest generates requests for ListLoggingUsage
+func NewListLoggingUsageRequest(server string, params *ListLoggingUsageParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/usage")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.FilterPeriod != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[period]", *params.FilterPeriod, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -1061,7 +1237,7 @@ type ClientWithResponsesInterface interface {
 	// CreateLogGroupWithBodyWithResponse request with any body
 	CreateLogGroupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLogGroupResponse, error)
 
-	CreateLogGroupWithResponse(ctx context.Context, body CreateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLogGroupResponse, error)
+	CreateLogGroupWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateLogGroupApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLogGroupResponse, error)
 
 	// DeleteLogGroupWithResponse request
 	DeleteLogGroupWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteLogGroupResponse, error)
@@ -1072,7 +1248,10 @@ type ClientWithResponsesInterface interface {
 	// UpdateLogGroupWithBodyWithResponse request with any body
 	UpdateLogGroupWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error)
 
-	UpdateLogGroupWithResponse(ctx context.Context, id string, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error)
+	UpdateLogGroupWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateLogGroupApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error)
+
+	// ListAllLoggerSourcesWithResponse request
+	ListAllLoggerSourcesWithResponse(ctx context.Context, params *ListAllLoggerSourcesParams, reqEditors ...RequestEditorFn) (*ListAllLoggerSourcesResponse, error)
 
 	// ListLoggersWithResponse request
 	ListLoggersWithResponse(ctx context.Context, params *ListLoggersParams, reqEditors ...RequestEditorFn) (*ListLoggersResponse, error)
@@ -1080,12 +1259,12 @@ type ClientWithResponsesInterface interface {
 	// CreateLoggerWithBodyWithResponse request with any body
 	CreateLoggerWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error)
 
-	CreateLoggerWithResponse(ctx context.Context, body CreateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error)
+	CreateLoggerWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error)
 
 	// BulkRegisterLoggersWithBodyWithResponse request with any body
 	BulkRegisterLoggersWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkRegisterLoggersResponse, error)
 
-	BulkRegisterLoggersWithResponse(ctx context.Context, body BulkRegisterLoggersJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterLoggersResponse, error)
+	BulkRegisterLoggersWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterLoggersResponse, error)
 
 	// DeleteLoggerWithResponse request
 	DeleteLoggerWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteLoggerResponse, error)
@@ -1096,7 +1275,13 @@ type ClientWithResponsesInterface interface {
 	// UpdateLoggerWithBodyWithResponse request with any body
 	UpdateLoggerWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error)
 
-	UpdateLoggerWithResponse(ctx context.Context, id string, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error)
+	UpdateLoggerWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error)
+
+	// ListLoggerSourcesWithResponse request
+	ListLoggerSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListLoggerSourcesResponse, error)
+
+	// ListLoggingUsageWithResponse request
+	ListLoggingUsageWithResponse(ctx context.Context, params *ListLoggingUsageParams, reqEditors ...RequestEditorFn) (*ListLoggingUsageResponse, error)
 }
 
 type ListLogGroupsResponse struct {
@@ -1132,7 +1317,6 @@ type CreateLogGroupResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1158,7 +1342,6 @@ type DeleteLogGroupResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1185,7 +1368,6 @@ type GetLogGroupResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1212,7 +1394,6 @@ type UpdateLogGroupResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1232,6 +1413,32 @@ func (r UpdateLogGroupResponse) StatusCode() int {
 	return 0
 }
 
+type ListAllLoggerSourcesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *LoggerSourceListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAllLoggerSourcesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAllLoggerSourcesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListLoggersResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -1239,7 +1446,6 @@ type ListLoggersResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1266,7 +1472,6 @@ type CreateLoggerResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1293,7 +1498,6 @@ type BulkRegisterLoggersResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1319,7 +1523,6 @@ type DeleteLoggerResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1346,7 +1549,6 @@ type GetLoggerResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1373,7 +1575,6 @@ type UpdateLoggerResponse struct {
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 	ApplicationvndApiJSON429 *ErrorResponse
 }
 
@@ -1387,6 +1588,58 @@ func (r UpdateLoggerResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateLoggerResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListLoggerSourcesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *LoggerSourceListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListLoggerSourcesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListLoggerSourcesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListLoggingUsageResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *UsageListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListLoggingUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListLoggingUsageResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1411,8 +1664,8 @@ func (c *ClientWithResponses) CreateLogGroupWithBodyWithResponse(ctx context.Con
 	return ParseCreateLogGroupResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateLogGroupWithResponse(ctx context.Context, body CreateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLogGroupResponse, error) {
-	rsp, err := c.CreateLogGroup(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateLogGroupWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateLogGroupApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLogGroupResponse, error) {
+	rsp, err := c.CreateLogGroupWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -1446,12 +1699,21 @@ func (c *ClientWithResponses) UpdateLogGroupWithBodyWithResponse(ctx context.Con
 	return ParseUpdateLogGroupResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateLogGroupWithResponse(ctx context.Context, id string, body UpdateLogGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error) {
-	rsp, err := c.UpdateLogGroup(ctx, id, body, reqEditors...)
+func (c *ClientWithResponses) UpdateLogGroupWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateLogGroupApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLogGroupResponse, error) {
+	rsp, err := c.UpdateLogGroupWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateLogGroupResponse(rsp)
+}
+
+// ListAllLoggerSourcesWithResponse request returning *ListAllLoggerSourcesResponse
+func (c *ClientWithResponses) ListAllLoggerSourcesWithResponse(ctx context.Context, params *ListAllLoggerSourcesParams, reqEditors ...RequestEditorFn) (*ListAllLoggerSourcesResponse, error) {
+	rsp, err := c.ListAllLoggerSources(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAllLoggerSourcesResponse(rsp)
 }
 
 // ListLoggersWithResponse request returning *ListLoggersResponse
@@ -1472,8 +1734,8 @@ func (c *ClientWithResponses) CreateLoggerWithBodyWithResponse(ctx context.Conte
 	return ParseCreateLoggerResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateLoggerWithResponse(ctx context.Context, body CreateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error) {
-	rsp, err := c.CreateLogger(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateLoggerWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error) {
+	rsp, err := c.CreateLoggerWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -1489,8 +1751,8 @@ func (c *ClientWithResponses) BulkRegisterLoggersWithBodyWithResponse(ctx contex
 	return ParseBulkRegisterLoggersResponse(rsp)
 }
 
-func (c *ClientWithResponses) BulkRegisterLoggersWithResponse(ctx context.Context, body BulkRegisterLoggersJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterLoggersResponse, error) {
-	rsp, err := c.BulkRegisterLoggers(ctx, body, reqEditors...)
+func (c *ClientWithResponses) BulkRegisterLoggersWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterLoggersResponse, error) {
+	rsp, err := c.BulkRegisterLoggersWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -1524,12 +1786,30 @@ func (c *ClientWithResponses) UpdateLoggerWithBodyWithResponse(ctx context.Conte
 	return ParseUpdateLoggerResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateLoggerWithResponse(ctx context.Context, id string, body UpdateLoggerJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error) {
-	rsp, err := c.UpdateLogger(ctx, id, body, reqEditors...)
+func (c *ClientWithResponses) UpdateLoggerWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error) {
+	rsp, err := c.UpdateLoggerWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateLoggerResponse(rsp)
+}
+
+// ListLoggerSourcesWithResponse request returning *ListLoggerSourcesResponse
+func (c *ClientWithResponses) ListLoggerSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListLoggerSourcesResponse, error) {
+	rsp, err := c.ListLoggerSources(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListLoggerSourcesResponse(rsp)
+}
+
+// ListLoggingUsageWithResponse request returning *ListLoggingUsageResponse
+func (c *ClientWithResponses) ListLoggingUsageWithResponse(ctx context.Context, params *ListLoggingUsageParams, reqEditors ...RequestEditorFn) (*ListLoggingUsageResponse, error) {
+	rsp, err := c.ListLoggingUsage(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListLoggingUsageResponse(rsp)
 }
 
 // ParseListLogGroupsResponse parses an HTTP response from a ListLogGroupsWithResponse call
@@ -1628,13 +1908,6 @@ func ParseCreateLogGroupResponse(rsp *http.Response) (*CreateLogGroupResponse, e
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -1681,13 +1954,6 @@ func ParseDeleteLogGroupResponse(rsp *http.Response) (*DeleteLogGroupResponse, e
 			return nil, err
 		}
 		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
@@ -1743,13 +2009,6 @@ func ParseGetLogGroupResponse(rsp *http.Response) (*GetLogGroupResponse, error) 
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -1804,12 +2063,59 @@ func ParseUpdateLogGroupResponse(rsp *http.Response) (*UpdateLogGroupResponse, e
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.ApplicationvndApiJSON422 = &dest
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAllLoggerSourcesResponse parses an HTTP response from a ListAllLoggerSourcesWithResponse call
+func ParseListAllLoggerSourcesResponse(rsp *http.Response) (*ListAllLoggerSourcesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAllLoggerSourcesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LoggerSourceListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
@@ -1865,13 +2171,6 @@ func ParseListLoggersResponse(rsp *http.Response) (*ListLoggersResponse, error) 
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -1925,13 +2224,6 @@ func ParseCreateLoggerResponse(rsp *http.Response) (*CreateLoggerResponse, error
 			return nil, err
 		}
 		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
@@ -1987,13 +2279,6 @@ func ParseBulkRegisterLoggersResponse(rsp *http.Response) (*BulkRegisterLoggersR
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -2040,13 +2325,6 @@ func ParseDeleteLoggerResponse(rsp *http.Response) (*DeleteLoggerResponse, error
 			return nil, err
 		}
 		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
@@ -2102,13 +2380,6 @@ func ParseGetLoggerResponse(rsp *http.Response) (*GetLoggerResponse, error) {
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -2163,12 +2434,113 @@ func ParseUpdateLoggerResponse(rsp *http.Response) (*UpdateLoggerResponse, error
 		}
 		response.ApplicationvndApiJSON404 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.ApplicationvndApiJSON422 = &dest
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListLoggerSourcesResponse parses an HTTP response from a ListLoggerSourcesWithResponse call
+func ParseListLoggerSourcesResponse(rsp *http.Response) (*ListLoggerSourcesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListLoggerSourcesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LoggerSourceListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListLoggingUsageResponse parses an HTTP response from a ListLoggingUsageWithResponse call
+func ParseListLoggingUsageResponse(rsp *http.Response) (*ListLoggingUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListLoggingUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UsageListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
