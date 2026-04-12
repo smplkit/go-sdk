@@ -136,6 +136,11 @@ type ListFlagsParams struct {
 	FilterType *string `form:"filter[type],omitempty" json:"filter[type],omitempty"`
 }
 
+// ListFlagsUsageParams defines parameters for ListFlagsUsage.
+type ListFlagsUsageParams struct {
+	FilterPeriod *string `form:"filter[period],omitempty" json:"filter[period],omitempty"`
+}
+
 // CreateFlagJSONRequestBody defines body for CreateFlag for application/json ContentType.
 type CreateFlagJSONRequestBody = ResponseFlag
 
@@ -295,6 +300,9 @@ type ClientInterface interface {
 	UpdateFlagWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateFlag(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListFlagsUsage request
+	ListFlagsUsage(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListFlags(ctx context.Context, params *ListFlagsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -371,6 +379,18 @@ func (c *Client) UpdateFlagWithBody(ctx context.Context, id string, contentType 
 
 func (c *Client) UpdateFlag(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateFlagRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListFlagsUsage(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListFlagsUsageRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -585,6 +605,55 @@ func NewUpdateFlagRequestWithBody(server string, id string, contentType string, 
 	return req, nil
 }
 
+// NewListFlagsUsageRequest generates requests for ListFlagsUsage
+func NewListFlagsUsageRequest(server string, params *ListFlagsUsageParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/usage")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.FilterPeriod != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[period]", *params.FilterPeriod, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -646,6 +715,9 @@ type ClientWithResponsesInterface interface {
 	UpdateFlagWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
 
 	UpdateFlagWithResponse(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
+
+	// ListFlagsUsageWithResponse request
+	ListFlagsUsageWithResponse(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*ListFlagsUsageResponse, error)
 }
 
 type ListFlagsResponse struct {
@@ -762,6 +834,29 @@ func (r UpdateFlagResponse) StatusCode() int {
 	return 0
 }
 
+type ListFlagsUsageResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON422 *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListFlagsUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListFlagsUsageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // ListFlagsWithResponse request returning *ListFlagsResponse
 func (c *ClientWithResponses) ListFlagsWithResponse(ctx context.Context, params *ListFlagsParams, reqEditors ...RequestEditorFn) (*ListFlagsResponse, error) {
 	rsp, err := c.ListFlags(ctx, params, reqEditors...)
@@ -821,6 +916,15 @@ func (c *ClientWithResponses) UpdateFlagWithResponse(ctx context.Context, id str
 		return nil, err
 	}
 	return ParseUpdateFlagResponse(rsp)
+}
+
+// ListFlagsUsageWithResponse request returning *ListFlagsUsageResponse
+func (c *ClientWithResponses) ListFlagsUsageWithResponse(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*ListFlagsUsageResponse, error) {
+	rsp, err := c.ListFlagsUsage(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListFlagsUsageResponse(rsp)
 }
 
 // ParseListFlagsResponse parses an HTTP response from a ListFlagsWithResponse call
@@ -964,6 +1068,39 @@ func ParseUpdateFlagResponse(rsp *http.Response) (*UpdateFlagResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest FlagResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListFlagsUsageResponse parses an HTTP response from a ListFlagsUsageWithResponse call
+func ParseListFlagsUsageResponse(rsp *http.Response) (*ListFlagsUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListFlagsUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest interface{}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
