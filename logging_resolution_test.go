@@ -654,7 +654,6 @@ func TestBuildLoggerAttributes_NilEnvironments(t *testing.T) {
 	assert.Nil(t, attrs.Environments)
 }
 
-
 // --- buildLogGroupAttributes tests ---
 
 func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
