@@ -67,6 +67,21 @@ func (e BundleResourceType) Valid() bool {
 	}
 }
 
+// Defines values for CatalogBundleResourceType.
+const (
+	CatalogBundleResourceTypeBundle CatalogBundleResourceType = "bundle"
+)
+
+// Valid indicates whether the value is a known member of the CatalogBundleResourceType enum.
+func (e CatalogBundleResourceType) Valid() bool {
+	switch e {
+	case CatalogBundleResourceTypeBundle:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContextResourceType.
 const (
 	ContextResourceTypeContext ContextResourceType = "context"
@@ -99,13 +114,13 @@ func (e ContextTypeResourceType) Valid() bool {
 
 // Defines values for CreateBundleDataType.
 const (
-	CreateBundleDataTypeBundle CreateBundleDataType = "bundle"
+	Bundle CreateBundleDataType = "bundle"
 )
 
 // Valid indicates whether the value is a known member of the CreateBundleDataType enum.
 func (e CreateBundleDataType) Valid() bool {
 	switch e {
-	case CreateBundleDataTypeBundle:
+	case Bundle:
 		return true
 	default:
 		return false
@@ -399,6 +414,11 @@ type BundleAttributes struct {
 	Subscriptions []string `json:"subscriptions"`
 }
 
+// BundleListResponse defines model for BundleListResponse.
+type BundleListResponse struct {
+	Data []CatalogBundleResource `json:"data"`
+}
+
 // BundleResource defines model for BundleResource.
 type BundleResource struct {
 	Attributes BundleAttributes   `json:"attributes"`
@@ -413,6 +433,24 @@ type BundleResourceType string
 type BundleResponse struct {
 	Data BundleResource `json:"data"`
 }
+
+// CatalogBundleAttributes defines model for CatalogBundleAttributes.
+type CatalogBundleAttributes struct {
+	DisplayName       string   `json:"display_name"`
+	Plan              string   `json:"plan"`
+	PriceMonthlyCents int      `json:"price_monthly_cents"`
+	Products          []string `json:"products"`
+}
+
+// CatalogBundleResource defines model for CatalogBundleResource.
+type CatalogBundleResource struct {
+	Attributes CatalogBundleAttributes   `json:"attributes"`
+	Id         *string                   `json:"id,omitempty"`
+	Type       CatalogBundleResourceType `json:"type"`
+}
+
+// CatalogBundleResourceType defines model for CatalogBundleResource.Type.
+type CatalogBundleResourceType string
 
 // Context defines model for Context.
 type Context struct {
@@ -1287,6 +1325,9 @@ type ClientInterface interface {
 
 	VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListBundles request
+	ListBundles(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateBundleWithBody request with any body
 	CreateBundleWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1702,6 +1743,18 @@ func (c *Client) VerifyEmailWithBody(ctx context.Context, contentType string, bo
 
 func (c *Client) VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewVerifyEmailRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListBundles(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBundlesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -3119,6 +3172,33 @@ func NewVerifyEmailRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListBundlesRequest generates requests for ListBundles
+func NewListBundlesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/bundles")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -4981,6 +5061,9 @@ type ClientWithResponsesInterface interface {
 
 	VerifyEmailWithResponse(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyEmailResponse, error)
 
+	// ListBundlesWithResponse request
+	ListBundlesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBundlesResponse, error)
+
 	// CreateBundleWithBodyWithResponse request with any body
 	CreateBundleWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error)
 
@@ -5533,6 +5616,32 @@ func (r VerifyEmailResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r VerifyEmailResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListBundlesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *BundleListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListBundlesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListBundlesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -6912,6 +7021,15 @@ func (c *ClientWithResponses) VerifyEmailWithResponse(ctx context.Context, body 
 	return ParseVerifyEmailResponse(rsp)
 }
 
+// ListBundlesWithResponse request returning *ListBundlesResponse
+func (c *ClientWithResponses) ListBundlesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBundlesResponse, error) {
+	rsp, err := c.ListBundles(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListBundlesResponse(rsp)
+}
+
 // CreateBundleWithBodyWithResponse request with arbitrary body returning *CreateBundleResponse
 func (c *ClientWithResponses) CreateBundleWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error) {
 	rsp, err := c.CreateBundleWithBody(ctx, contentType, body, reqEditors...)
@@ -8231,6 +8349,60 @@ func ParseVerifyEmailResponse(rsp *http.Response) (*VerifyEmailResponse, error) 
 			return nil, err
 		}
 		response.JSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListBundlesResponse parses an HTTP response from a ListBundlesWithResponse call
+func ParseListBundlesResponse(rsp *http.Response) (*ListBundlesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListBundlesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BundleListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
 
 	}
 

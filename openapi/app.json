@@ -4272,6 +4272,66 @@
       }
     },
     "/api/v1/bundles": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "List Bundles",
+        "description": "Return all bundle definitions as JSON:API resources. Public, unauthenticated.",
+        "operationId": "list_bundles",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "Billing"
@@ -4936,6 +4996,22 @@
         ],
         "title": "BundleAttributes"
       },
+      "BundleListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogBundleResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "BundleListResponse"
+      },
       "BundleResource": {
         "properties": {
           "id": {
@@ -4990,6 +5066,76 @@
           "data"
         ],
         "title": "BundleResponse"
+      },
+      "CatalogBundleAttributes": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "plan": {
+            "type": "string",
+            "title": "Plan"
+          },
+          "products": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "price_monthly_cents": {
+            "type": "integer",
+            "title": "Price Monthly Cents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "plan",
+          "products",
+          "price_monthly_cents"
+        ],
+        "title": "CatalogBundleAttributes"
+      },
+      "CatalogBundleResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "bundle"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/CatalogBundleAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "CatalogBundleResource",
+        "example": {
+          "attributes": {
+            "display_name": "Standard Bundle",
+            "plan": "standard",
+            "price_monthly_cents": 14900,
+            "products": [
+              "config",
+              "flags",
+              "logging"
+            ]
+          },
+          "id": "standard",
+          "type": "bundle"
+        }
       },
       "Context": {
         "properties": {
