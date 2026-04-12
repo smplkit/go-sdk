@@ -12,6 +12,7 @@
           "Configs"
         ],
         "summary": "Create Config",
+        "description": "Create a new configuration. The caller provides the id (key) in the request body.",
         "operationId": "create_config",
         "security": [
           {
@@ -21,9 +22,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_Config_"
+                "$ref": "#/components/schemas/ConfigResponse"
               }
             }
           }
@@ -38,16 +39,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -56,6 +47,7 @@
           "Configs"
         ],
         "summary": "List Configs",
+        "description": "List all configurations for the authenticated account.",
         "operationId": "list_configs",
         "security": [
           {
@@ -90,16 +82,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
@@ -110,6 +92,7 @@
           "Configs"
         ],
         "summary": "Get Config",
+        "description": "Return a configuration by its key.",
         "operationId": "get_config",
         "security": [
           {
@@ -137,16 +120,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -155,6 +128,7 @@
           "Configs"
         ],
         "summary": "Update Config",
+        "description": "Replace a configuration entirely.",
         "operationId": "update_config",
         "security": [
           {
@@ -175,9 +149,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_Config_"
+                "$ref": "#/components/schemas/ConfigResponse"
               }
             }
           }
@@ -192,16 +166,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -210,6 +174,7 @@
           "Configs"
         ],
         "summary": "Delete Config",
+        "description": "Delete a configuration by its key.",
         "operationId": "delete_config",
         "security": [
           {
@@ -230,16 +195,54 @@
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
+          }
+        }
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "tags": [
+          "Usage"
+        ],
+        "summary": "List Config Usage",
+        "description": "Return current resource usage counts for the authenticated account.",
+        "operationId": "list_config_usage",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[period]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Period]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current usage for the authenticated account",
             "content": {
               "application/vnd.api+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/UsageListResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Missing or invalid filter[period] parameter"
           }
         }
       }
@@ -528,91 +531,98 @@
         "title": "EnvironmentOverride",
         "description": "Schema for per-environment overrides."
       },
-      "HTTPValidationError": {
+      "UsageAttributes": {
         "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
-      "Resource_Config_": {
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "type": {
+          "limit_key": {
             "type": "string",
-            "title": "Type",
-            "default": ""
+            "title": "Limit Key"
           },
-          "attributes": {
-            "$ref": "#/components/schemas/Config"
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "value": {
+            "type": "integer",
+            "title": "Value"
           }
         },
         "type": "object",
         "required": [
-          "attributes"
+          "limit_key",
+          "period",
+          "value"
         ],
-        "title": "Resource[Config]"
+        "title": "UsageAttributes"
       },
-      "Response_Config_": {
+      "UsageListResponse": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/Resource_Config_"
+            "items": {
+              "$ref": "#/components/schemas/UsageResource"
+            },
+            "type": "array",
+            "title": "Data"
           }
         },
         "type": "object",
         "required": [
           "data"
         ],
-        "title": "Response[Config]"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
+        "title": "UsageListResponse",
+        "example": {
+          "data": [
+            {
+              "attributes": {
+                "limit_key": "config.items",
+                "period": "current",
+                "value": 3
+              },
+              "id": "550e8400-e29b-41d4-a716-446655440000",
+              "type": "usage"
             },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
+            {
+              "attributes": {
+                "limit_key": "config.inheritance_depth",
+                "period": "current",
+                "value": 2
+              },
+              "id": "660e8400-e29b-41d4-a716-446655440001",
+              "type": "usage"
+            }
+          ]
+        }
+      },
+      "UsageResource": {
+        "properties": {
+          "id": {
             "type": "string",
-            "title": "Message"
+            "title": "Id"
           },
           "type": {
             "type": "string",
-            "title": "Error Type"
+            "const": "usage",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/UsageAttributes"
           }
         },
         "type": "object",
         "required": [
-          "loc",
-          "msg",
-          "type"
+          "id",
+          "type",
+          "attributes"
         ],
-        "title": "ValidationError"
+        "title": "UsageResource",
+        "example": {
+          "attributes": {
+            "limit_key": "config.items",
+            "period": "current",
+            "value": 3
+          },
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "usage"
+        }
       }
     },
     "securitySchemes": {
