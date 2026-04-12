@@ -36,6 +36,21 @@ func (e FlagResourceType) Valid() bool {
 	}
 }
 
+// Defines values for UsageResourceType.
+const (
+	Usage UsageResourceType = "usage"
+)
+
+// Valid indicates whether the value is a known member of the UsageResourceType enum.
+func (e UsageResourceType) Valid() bool {
+	switch e {
+	case Usage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Flag defines model for Flag.
 type Flag struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
@@ -96,40 +111,27 @@ type FlagValue struct {
 	Value interface{} `json:"value"`
 }
 
-// HTTPValidationError defines model for HTTPValidationError.
-type HTTPValidationError struct {
-	Detail *[]ValidationError `json:"detail,omitempty"`
+// UsageAttributes defines model for UsageAttributes.
+type UsageAttributes struct {
+	LimitKey string `json:"limit_key"`
+	Period   string `json:"period"`
+	Value    int    `json:"value"`
 }
 
-// ResourceFlag defines model for Resource_Flag_.
-type ResourceFlag struct {
-	Attributes Flag    `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       *string `json:"type,omitempty"`
+// UsageListResponse defines model for UsageListResponse.
+type UsageListResponse struct {
+	Data []UsageResource `json:"data"`
 }
 
-// ResponseFlag defines model for Response_Flag_.
-type ResponseFlag struct {
-	Data ResourceFlag `json:"data"`
+// UsageResource defines model for UsageResource.
+type UsageResource struct {
+	Attributes UsageAttributes   `json:"attributes"`
+	Id         string            `json:"id"`
+	Type       UsageResourceType `json:"type"`
 }
 
-// ValidationError defines model for ValidationError.
-type ValidationError struct {
-	Loc  []ValidationError_Loc_Item `json:"loc"`
-	Msg  string                     `json:"msg"`
-	Type string                     `json:"type"`
-}
-
-// ValidationErrorLoc0 defines model for .
-type ValidationErrorLoc0 = string
-
-// ValidationErrorLoc1 defines model for .
-type ValidationErrorLoc1 = int
-
-// ValidationError_Loc_Item defines model for ValidationError.loc.Item.
-type ValidationError_Loc_Item struct {
-	union json.RawMessage
-}
+// UsageResourceType defines model for UsageResource.Type.
+type UsageResourceType string
 
 // ListFlagsParams defines parameters for ListFlags.
 type ListFlagsParams struct {
@@ -141,73 +143,11 @@ type ListFlagsUsageParams struct {
 	FilterPeriod *string `form:"filter[period],omitempty" json:"filter[period],omitempty"`
 }
 
-// CreateFlagJSONRequestBody defines body for CreateFlag for application/json ContentType.
-type CreateFlagJSONRequestBody = ResponseFlag
+// CreateFlagApplicationVndAPIPlusJSONRequestBody defines body for CreateFlag for application/vnd.api+json ContentType.
+type CreateFlagApplicationVndAPIPlusJSONRequestBody = FlagResponse
 
-// UpdateFlagJSONRequestBody defines body for UpdateFlag for application/json ContentType.
-type UpdateFlagJSONRequestBody = ResponseFlag
-
-// AsValidationErrorLoc0 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc0
-func (t ValidationError_Loc_Item) AsValidationErrorLoc0() (ValidationErrorLoc0, error) {
-	var body ValidationErrorLoc0
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromValidationErrorLoc0 overwrites any union data inside the ValidationError_Loc_Item as the provided ValidationErrorLoc0
-func (t *ValidationError_Loc_Item) FromValidationErrorLoc0(v ValidationErrorLoc0) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeValidationErrorLoc0 performs a merge with any union data inside the ValidationError_Loc_Item, using the provided ValidationErrorLoc0
-func (t *ValidationError_Loc_Item) MergeValidationErrorLoc0(v ValidationErrorLoc0) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsValidationErrorLoc1 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc1
-func (t ValidationError_Loc_Item) AsValidationErrorLoc1() (ValidationErrorLoc1, error) {
-	var body ValidationErrorLoc1
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromValidationErrorLoc1 overwrites any union data inside the ValidationError_Loc_Item as the provided ValidationErrorLoc1
-func (t *ValidationError_Loc_Item) FromValidationErrorLoc1(v ValidationErrorLoc1) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeValidationErrorLoc1 performs a merge with any union data inside the ValidationError_Loc_Item, using the provided ValidationErrorLoc1
-func (t *ValidationError_Loc_Item) MergeValidationErrorLoc1(v ValidationErrorLoc1) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ValidationError_Loc_Item) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ValidationError_Loc_Item) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
+// UpdateFlagApplicationVndAPIPlusJSONRequestBody defines body for UpdateFlag for application/vnd.api+json ContentType.
+type UpdateFlagApplicationVndAPIPlusJSONRequestBody = FlagResponse
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -288,7 +228,7 @@ type ClientInterface interface {
 	// CreateFlagWithBody request with any body
 	CreateFlagWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateFlag(ctx context.Context, body CreateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteFlag request
 	DeleteFlag(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -299,7 +239,7 @@ type ClientInterface interface {
 	// UpdateFlagWithBody request with any body
 	UpdateFlagWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateFlag(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListFlagsUsage request
 	ListFlagsUsage(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -329,8 +269,8 @@ func (c *Client) CreateFlagWithBody(ctx context.Context, contentType string, bod
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateFlag(ctx context.Context, body CreateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateFlagRequest(c.Server, body)
+func (c *Client) CreateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateFlagRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -377,8 +317,8 @@ func (c *Client) UpdateFlagWithBody(ctx context.Context, id string, contentType 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateFlag(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateFlagRequest(c.Server, id, body)
+func (c *Client) UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateFlagRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -450,15 +390,15 @@ func NewListFlagsRequest(server string, params *ListFlagsParams) (*http.Request,
 	return req, nil
 }
 
-// NewCreateFlagRequest calls the generic CreateFlag builder with application/json body
-func NewCreateFlagRequest(server string, body CreateFlagJSONRequestBody) (*http.Request, error) {
+// NewCreateFlagRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateFlag builder with application/vnd.api+json body
+func NewCreateFlagRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateFlagApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateFlagRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateFlagRequestWithBody(server, "application/vnd.api+json", bodyReader)
 }
 
 // NewCreateFlagRequestWithBody generates requests for CreateFlag with any type of body
@@ -558,15 +498,15 @@ func NewGetFlagRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewUpdateFlagRequest calls the generic UpdateFlag builder with application/json body
-func NewUpdateFlagRequest(server string, id string, body UpdateFlagJSONRequestBody) (*http.Request, error) {
+// NewUpdateFlagRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateFlag builder with application/vnd.api+json body
+func NewUpdateFlagRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateFlagRequestWithBody(server, id, "application/json", bodyReader)
+	return NewUpdateFlagRequestWithBody(server, id, "application/vnd.api+json", bodyReader)
 }
 
 // NewUpdateFlagRequestWithBody generates requests for UpdateFlag with any type of body
@@ -703,7 +643,7 @@ type ClientWithResponsesInterface interface {
 	// CreateFlagWithBodyWithResponse request with any body
 	CreateFlagWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateFlagResponse, error)
 
-	CreateFlagWithResponse(ctx context.Context, body CreateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateFlagResponse, error)
+	CreateFlagWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateFlagResponse, error)
 
 	// DeleteFlagWithResponse request
 	DeleteFlagWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteFlagResponse, error)
@@ -714,7 +654,7 @@ type ClientWithResponsesInterface interface {
 	// UpdateFlagWithBodyWithResponse request with any body
 	UpdateFlagWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
 
-	UpdateFlagWithResponse(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
+	UpdateFlagWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
 
 	// ListFlagsUsageWithResponse request
 	ListFlagsUsageWithResponse(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*ListFlagsUsageResponse, error)
@@ -724,7 +664,6 @@ type ListFlagsResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *FlagListResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -747,7 +686,6 @@ type CreateFlagResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON201 *FlagResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -767,9 +705,8 @@ func (r CreateFlagResponse) StatusCode() int {
 }
 
 type DeleteFlagResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON422 *HTTPValidationError
+	Body         []byte
+	HTTPResponse *http.Response
 }
 
 // Status returns HTTPResponse.Status
@@ -792,7 +729,6 @@ type GetFlagResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *FlagResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -815,7 +751,6 @@ type UpdateFlagResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *FlagResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -837,8 +772,7 @@ func (r UpdateFlagResponse) StatusCode() int {
 type ListFlagsUsageResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *interface{}
-	ApplicationvndApiJSON422 *HTTPValidationError
+	ApplicationvndApiJSON200 *UsageListResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -875,8 +809,8 @@ func (c *ClientWithResponses) CreateFlagWithBodyWithResponse(ctx context.Context
 	return ParseCreateFlagResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateFlagWithResponse(ctx context.Context, body CreateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateFlagResponse, error) {
-	rsp, err := c.CreateFlag(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateFlagWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateFlagResponse, error) {
+	rsp, err := c.CreateFlagWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -910,8 +844,8 @@ func (c *ClientWithResponses) UpdateFlagWithBodyWithResponse(ctx context.Context
 	return ParseUpdateFlagResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateFlagWithResponse(ctx context.Context, id string, body UpdateFlagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error) {
-	rsp, err := c.UpdateFlag(ctx, id, body, reqEditors...)
+func (c *ClientWithResponses) UpdateFlagWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error) {
+	rsp, err := c.UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -948,13 +882,6 @@ func ParseListFlagsResponse(rsp *http.Response) (*ListFlagsResponse, error) {
 		}
 		response.ApplicationvndApiJSON200 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	}
 
 	return response, nil
@@ -981,13 +908,6 @@ func ParseCreateFlagResponse(rsp *http.Response) (*CreateFlagResponse, error) {
 		}
 		response.ApplicationvndApiJSON201 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	}
 
 	return response, nil
@@ -1004,16 +924,6 @@ func ParseDeleteFlagResponse(rsp *http.Response) (*DeleteFlagResponse, error) {
 	response := &DeleteFlagResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	}
 
 	return response, nil
@@ -1039,13 +949,6 @@ func ParseGetFlagResponse(rsp *http.Response) (*GetFlagResponse, error) {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
 
 	}
 
@@ -1073,13 +976,6 @@ func ParseUpdateFlagResponse(rsp *http.Response) (*UpdateFlagResponse, error) {
 		}
 		response.ApplicationvndApiJSON200 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	}
 
 	return response, nil
@@ -1100,18 +996,11 @@ func ParseListFlagsUsageResponse(rsp *http.Response) (*ListFlagsUsageResponse, e
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
+		var dest UsageListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
 
 	}
 
