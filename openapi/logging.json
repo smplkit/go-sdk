@@ -12,6 +12,7 @@
           "Loggers"
         ],
         "summary": "Create Logger",
+        "description": "Create a new logger. The caller provides the id (key) in the request body.",
         "operationId": "create_logger",
         "security": [
           {
@@ -21,9 +22,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_Logger_"
+                "$ref": "#/components/schemas/LoggerResponse"
               }
             }
           }
@@ -78,16 +79,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -96,6 +87,7 @@
           "Loggers"
         ],
         "summary": "List Loggers",
+        "description": "List all loggers for the authenticated account. Optionally filter by managed status.",
         "operationId": "list_loggers",
         "security": [
           {
@@ -170,16 +162,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
@@ -190,6 +172,7 @@
           "Loggers"
         ],
         "summary": "Get Logger",
+        "description": "Return a logger by its key.",
         "operationId": "get_logger",
         "security": [
           {
@@ -257,16 +240,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -275,6 +248,7 @@
           "Loggers"
         ],
         "summary": "Update Logger",
+        "description": "Replace a logger entirely.",
         "operationId": "update_logger",
         "security": [
           {
@@ -295,9 +269,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_Logger_"
+                "$ref": "#/components/schemas/LoggerResponse"
               }
             }
           }
@@ -352,16 +326,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -370,6 +334,7 @@
           "Loggers"
         ],
         "summary": "Delete Logger",
+        "description": "Delete a logger by its key.",
         "operationId": "delete_logger",
         "security": [
           {
@@ -430,16 +395,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
@@ -450,10 +405,11 @@
           "Loggers"
         ],
         "summary": "Bulk Register Loggers",
+        "description": "Register loggers discovered by an SDK. Creates new loggers or updates source observations on existing ones.",
         "operationId": "bulk_register_loggers",
         "requestBody": {
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/LoggerBulkRequest"
               }
@@ -511,16 +467,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -536,6 +482,7 @@
           "Log Groups"
         ],
         "summary": "List Log Groups",
+        "description": "List all log groups for the authenticated account.",
         "operationId": "list_log_groups",
         "responses": {
           "200": {
@@ -600,12 +547,13 @@
           "Log Groups"
         ],
         "summary": "Create Log Group",
+        "description": "Create a new log group. The caller provides the id (key) in the request body.",
         "operationId": "create_log_group",
         "requestBody": {
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_LogGroup_"
+                "$ref": "#/components/schemas/LogGroupResponse"
               }
             }
           },
@@ -661,16 +609,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -686,6 +624,7 @@
           "Log Groups"
         ],
         "summary": "Get Log Group",
+        "description": "Return a log group by its key.",
         "operationId": "get_log_group",
         "security": [
           {
@@ -753,16 +692,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -771,6 +700,7 @@
           "Log Groups"
         ],
         "summary": "Update Log Group",
+        "description": "Replace a log group entirely.",
         "operationId": "update_log_group",
         "security": [
           {
@@ -791,9 +721,9 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_LogGroup_"
+                "$ref": "#/components/schemas/LogGroupResponse"
               }
             }
           }
@@ -848,16 +778,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       },
@@ -866,6 +786,7 @@
           "Log Groups"
         ],
         "summary": "Delete Log Group",
+        "description": "Delete a log group by its key.",
         "operationId": "delete_log_group",
         "security": [
           {
@@ -926,13 +847,267 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
+          }
+        }
+      }
+    },
+    "/api/v1/loggers/{id}/sources": {
+      "get": {
+        "tags": [
+          "Logger Sources"
+        ],
+        "summary": "List Logger Sources",
+        "description": "List all sources (service/environment observations) for a specific logger.",
+        "operationId": "list_logger_sources",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/LoggerSourceListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/logger_sources": {
+      "get": {
+        "tags": [
+          "Logger Sources"
+        ],
+        "summary": "List All Logger Sources",
+        "description": "List all logger sources across all loggers. Optionally filter by environment or service.",
+        "operationId": "list_all_logger_sources",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Environment]"
+            }
+          },
+          {
+            "name": "filter[service]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Service]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggerSourceListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "tags": [
+          "Usage"
+        ],
+        "summary": "List Logging Usage",
+        "description": "Return current resource usage counts for the authenticated account.",
+        "operationId": "list_logging_usage",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[period]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Period]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1001,19 +1176,6 @@
         ],
         "title": "ErrorResponse",
         "description": "JSON:API error response envelope."
-      },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
       },
       "LogGroup": {
         "properties": {
@@ -1214,22 +1376,6 @@
             ],
             "title": "Managed"
           },
-          "sources": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": true,
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sources",
-            "readOnly": true
-          },
           "environments": {
             "anyOf": [
               {
@@ -1288,12 +1434,6 @@
           "level": "DEBUG",
           "managed": true,
           "name": "SQL Logger",
-          "sources": [
-            {
-              "first_observed": "2026-04-01T10:00:00Z",
-              "service": "api-gateway"
-            }
-          ],
           "updated_at": "2026-04-01T10:00:00Z"
         }
       },
@@ -1320,6 +1460,18 @@
             ],
             "title": "Service",
             "description": "Service name that discovered this logger"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "Environment where this logger was observed"
           }
         },
         "type": "object",
@@ -1327,7 +1479,13 @@
           "id",
           "level"
         ],
-        "title": "LoggerBulkItem"
+        "title": "LoggerBulkItem",
+        "example": {
+          "environment": "production",
+          "id": "sqlalchemy.engine",
+          "level": "WARN",
+          "service": "api-gateway"
+        }
       },
       "LoggerBulkRequest": {
         "properties": {
@@ -1343,7 +1501,23 @@
         "required": [
           "loggers"
         ],
-        "title": "LoggerBulkRequest"
+        "title": "LoggerBulkRequest",
+        "example": {
+          "loggers": [
+            {
+              "environment": "production",
+              "id": "sqlalchemy.engine",
+              "level": "WARN",
+              "service": "api-gateway"
+            },
+            {
+              "environment": "production",
+              "id": "stripe",
+              "level": "INFO",
+              "service": "api-gateway"
+            }
+          ]
+        }
       },
       "LoggerBulkResponse": {
         "properties": {
@@ -1356,7 +1530,10 @@
         "required": [
           "registered"
         ],
-        "title": "LoggerBulkResponse"
+        "title": "LoggerBulkResponse",
+        "example": {
+          "registered": 5
+        }
       },
       "LoggerListResponse": {
         "properties": {
@@ -1417,12 +1594,6 @@
             "level": "DEBUG",
             "managed": true,
             "name": "SQL Logger",
-            "sources": [
-              {
-                "first_observed": "2026-04-01T10:00:00Z",
-                "service": "api-gateway"
-              }
-            ],
             "updated_at": "2026-04-01T10:00:00Z"
           },
           "id": "com.example.sql",
@@ -1441,9 +1612,19 @@
         ],
         "title": "LoggerResponse"
       },
-      "Resource_LogGroup_": {
+      "LoggerSource": {
         "properties": {
-          "id": {
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "readOnly": true
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment",
+            "readOnly": true
+          },
+          "level": {
             "anyOf": [
               {
                 "type": "string"
@@ -1452,107 +1633,238 @@
                 "type": "null"
               }
             ],
-            "title": "Id"
+            "title": "Level",
+            "readOnly": true
           },
-          "type": {
+          "resolved_level": {
             "type": "string",
-            "title": "Type",
-            "default": ""
+            "title": "Resolved Level",
+            "readOnly": true
           },
-          "attributes": {
-            "$ref": "#/components/schemas/LogGroup"
-          }
-        },
-        "type": "object",
-        "required": [
-          "attributes"
-        ],
-        "title": "Resource[LogGroup]"
-      },
-      "Resource_Logger_": {
-        "properties": {
-          "id": {
+          "first_observed": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "date-time"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Id"
+            "title": "First Observed",
+            "readOnly": true
           },
-          "type": {
-            "type": "string",
-            "title": "Type",
-            "default": ""
+          "last_seen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen",
+            "readOnly": true
           },
-          "attributes": {
-            "$ref": "#/components/schemas/Logger"
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "readOnly": true
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "readOnly": true
           }
         },
         "type": "object",
-        "required": [
-          "attributes"
-        ],
-        "title": "Resource[Logger]"
+        "title": "LoggerSource",
+        "example": {
+          "created_at": "2026-04-01T10:00:00Z",
+          "environment": "production",
+          "first_observed": "2026-04-01T10:00:00Z",
+          "last_seen": "2026-04-11T15:30:00Z",
+          "resolved_level": "WARN",
+          "service": "api-gateway",
+          "updated_at": "2026-04-11T15:30:00Z"
+        }
       },
-      "Response_LogGroup_": {
+      "LoggerSourceListResponse": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/Resource_LogGroup_"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "Response[LogGroup]"
-      },
-      "Response_Logger_": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/Resource_Logger_"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "Response[Logger]"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
             "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
+              "$ref": "#/components/schemas/LoggerSourceResource"
             },
             "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
+            "title": "Data"
           }
         },
         "type": "object",
         "required": [
-          "loc",
-          "msg",
-          "type"
+          "data"
         ],
-        "title": "ValidationError"
+        "title": "LoggerSourceListResponse"
+      },
+      "LoggerSourceResource": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "logger_source",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/LoggerSource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "LoggerSourceResource",
+        "example": {
+          "attributes": {
+            "created_at": "2026-04-01T10:00:00Z",
+            "environment": "production",
+            "first_observed": "2026-04-01T10:00:00Z",
+            "last_seen": "2026-04-11T15:30:00Z",
+            "resolved_level": "WARN",
+            "service": "api-gateway",
+            "updated_at": "2026-04-11T15:30:00Z"
+          },
+          "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "type": "logger_source"
+        }
+      },
+      "UsageAttributes": {
+        "properties": {
+          "limit_key": {
+            "type": "string",
+            "title": "Limit Key"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "value": {
+            "type": "integer",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "limit_key",
+          "period",
+          "value"
+        ],
+        "title": "UsageAttributes"
+      },
+      "UsageListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/UsageResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "UsageListResponse",
+        "example": {
+          "data": [
+            {
+              "attributes": {
+                "limit_key": "logging.items",
+                "period": "current",
+                "value": 8
+              },
+              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "type": "usage"
+            },
+            {
+              "attributes": {
+                "limit_key": "logging.groups",
+                "period": "current",
+                "value": 2
+              },
+              "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+              "type": "usage"
+            },
+            {
+              "attributes": {
+                "limit_key": "logging.group_nesting_depth",
+                "period": "current",
+                "value": 2
+              },
+              "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+              "type": "usage"
+            }
+          ]
+        }
+      },
+      "UsageResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "usage",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/UsageAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "attributes"
+        ],
+        "title": "UsageResource",
+        "example": {
+          "attributes": {
+            "limit_key": "logging.items",
+            "period": "current",
+            "value": 8
+          },
+          "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "type": "usage"
+        }
       }
     },
     "securitySchemes": {
@@ -1565,6 +1877,9 @@
   "tags": [
     {
       "name": "Log Groups"
+    },
+    {
+      "name": "Logger Sources"
     },
     {
       "name": "Loggers"
