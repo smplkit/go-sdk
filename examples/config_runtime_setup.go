@@ -27,13 +27,13 @@ type demoConfigs struct {
 func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs, error) {
 	// Pre-flight: delete any configs left over from a previous run.
 	for _, key := range []string{"auth_module", "user_service"} {
-		_ = client.Config().Delete(ctx, key)
+		_ = client.Config().Management().Delete(ctx, key)
 	}
 
 	// ----------------------------------------------------------------
 	// Common config — update with base values + environment overrides
 	// ----------------------------------------------------------------
-	common, err := client.Config().Get(ctx, "common")
+	common, err := client.Config().Management().Get(ctx, "common")
 	if err != nil {
 		return nil, fmt.Errorf("fetch common config: %w", err)
 	}
@@ -63,7 +63,7 @@ func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs
 	// ----------------------------------------------------------------
 	// User Service config — new config with env overrides
 	// ----------------------------------------------------------------
-	userService := client.Config().New("user_service",
+	userService := client.Config().Management().New("user_service",
 		smplkit.WithConfigName("User Service"),
 		smplkit.WithConfigDescription("Configuration for the user microservice."),
 		smplkit.WithConfigItems(map[string]interface{}{
@@ -97,7 +97,7 @@ func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs
 	// ----------------------------------------------------------------
 	// Auth Module config — child of user_service with env overrides
 	// ----------------------------------------------------------------
-	authModule := client.Config().New("auth_module",
+	authModule := client.Config().Management().New("auth_module",
 		smplkit.WithConfigName("Auth Module"),
 		smplkit.WithConfigDescription("Authentication module within the user service."),
 		smplkit.WithConfigParent(userService.ID),
@@ -114,7 +114,7 @@ func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs
 	)
 	err = authModule.Save(ctx)
 	if err != nil {
-		_ = client.Config().Delete(ctx, "user_service")
+		_ = client.Config().Management().Delete(ctx, "user_service")
 		return nil, fmt.Errorf("create auth_module config: %w", err)
 	}
 
@@ -127,11 +127,11 @@ func setupDemoConfigs(ctx context.Context, client *smplkit.Client) (*demoConfigs
 
 // teardownDemoConfigs deletes the demo configs and resets common to empty.
 func teardownDemoConfigs(ctx context.Context, client *smplkit.Client, demo *demoConfigs) {
-	if err := client.Config().Delete(ctx, "auth_module"); err != nil {
+	if err := client.Config().Management().Delete(ctx, "auth_module"); err != nil {
 		fmt.Printf("  Warning: failed to delete auth_module: %v\n", err)
 	}
 
-	if err := client.Config().Delete(ctx, "user_service"); err != nil {
+	if err := client.Config().Management().Delete(ctx, "user_service"); err != nil {
 		fmt.Printf("  Warning: failed to delete user_service: %v\n", err)
 	}
 

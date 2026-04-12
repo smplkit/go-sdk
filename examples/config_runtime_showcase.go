@@ -5,7 +5,7 @@
 //
 // Demonstrates the full runtime surface:
 //   - Client initialization and config creation (via demo helpers)
-//   - Resolve / ResolveInto for reading config values
+//   - Get / GetInto for reading config values
 //   - Subscribe for live config updates
 //   - Multi-level inheritance (common -> user_service -> auth_module)
 //   - Change listeners (global + key-specific)
@@ -81,11 +81,11 @@ func main() {
 	step("Demo configs created (common, user_service, auth_module)")
 
 	// ====================================================================
-	// 2. RESOLVE — READ RESOLVED VALUES AS A MAP
+	// 2. GET — READ RESOLVED VALUES AS A MAP
 	// ====================================================================
-	section("2. Resolve — Read Resolved Values as a Map")
+	section("2. Get — Read Resolved Values as a Map")
 
-	resolved, err := client.Config().Resolve(ctx, "user_service")
+	resolved, err := client.Config().Get(ctx, "user_service")
 	if err != nil {
 		fatal("failed to resolve user_service", err)
 	}
@@ -100,12 +100,12 @@ func main() {
 	step(fmt.Sprintf("pagination_default_page_size = %v", resolved["pagination_default_page_size"]))
 
 	// ====================================================================
-	// 3. RESOLVE INTO — UNMARSHAL INTO A STRUCT
+	// 3. GET INTO — UNMARSHAL INTO A STRUCT
 	// ====================================================================
-	section("3. ResolveInto — Unmarshal Into a Struct")
+	section("3. GetInto — Unmarshal Into a Struct")
 
 	var usCfg UserServiceConfig
-	err = client.Config().ResolveInto(ctx, "user_service", &usCfg)
+	err = client.Config().GetInto(ctx, "user_service", &usCfg)
 	if err != nil {
 		fatal("failed to resolve into struct", err)
 	}
@@ -119,7 +119,7 @@ func main() {
 	// ====================================================================
 	section("4. Multi-Level Inheritance (auth_module)")
 
-	authResolved, err := client.Config().Resolve(ctx, "auth_module")
+	authResolved, err := client.Config().Get(ctx, "auth_module")
 	if err != nil {
 		fatal("failed to resolve auth_module", err)
 	}
@@ -185,7 +185,7 @@ func main() {
 	}
 	step("client.Config().Refresh(ctx) completed")
 
-	refreshed, err := client.Config().Resolve(ctx, "user_service")
+	refreshed, err := client.Config().Get(ctx, "user_service")
 	if err != nil {
 		fatal("failed to resolve user_service after refresh", err)
 	}
@@ -211,8 +211,8 @@ func main() {
 	fmt.Println("Features exercised:")
 	fmt.Println("  [x] Client initialization")
 	fmt.Println("  [x] Config hierarchy setup (common, user_service, auth_module)")
-	fmt.Println("  [x] Resolve — read resolved values as a map")
-	fmt.Println("  [x] ResolveInto — unmarshal into a struct")
+	fmt.Println("  [x] Get — read resolved values as a map")
+	fmt.Println("  [x] GetInto — unmarshal into a struct")
 	fmt.Println("  [x] Multi-level inheritance")
 	fmt.Println("  [x] Subscribe — live config updates")
 	fmt.Println("  [x] Change listeners (global + key-specific)")

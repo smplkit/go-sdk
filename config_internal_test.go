@@ -478,7 +478,7 @@ func TestDelete_Config_CheckStatusError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	err := cc.Delete(context.Background(), "test-config")
+	err := cc.Management().Delete(context.Background(), "test-config")
 	require.Error(t, err)
 }
 
@@ -502,7 +502,7 @@ func TestDelete_Config_ReadBodyFailure(t *testing.T) {
 
 // ---------- Resolve ----------
 
-func TestResolve_Basic(t *testing.T) {
+func TestGet_Basic(t *testing.T) {
 	cc := &ConfigClient{
 		client: &Client{environment: "test"},
 		configCache: map[string]map[string]interface{}{
@@ -511,27 +511,27 @@ func TestResolve_Basic(t *testing.T) {
 	}
 	cc.initOnce.Do(func() {})
 
-	resolved, err := cc.Resolve(context.Background(), "app")
+	resolved, err := cc.Get(context.Background(), "app")
 	require.NoError(t, err)
 	assert.Equal(t, "localhost", resolved["host"])
 	assert.Equal(t, float64(3000), resolved["port"])
 }
 
-func TestResolve_NilWhenKeyNotFound(t *testing.T) {
+func TestGet_NilWhenKeyNotFound(t *testing.T) {
 	cc := &ConfigClient{
 		client:      &Client{environment: "test"},
 		configCache: map[string]map[string]interface{}{},
 	}
 	cc.initOnce.Do(func() {})
 
-	resolved, err := cc.Resolve(context.Background(), "nonexistent")
+	resolved, err := cc.Get(context.Background(), "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, resolved)
 }
 
 // ---------- ResolveInto ----------
 
-func TestResolveInto_Struct(t *testing.T) {
+func TestGetInto_Struct(t *testing.T) {
 	cc := &ConfigClient{
 		client: &Client{environment: "test"},
 		configCache: map[string]map[string]interface{}{
@@ -544,13 +544,13 @@ func TestResolveInto_Struct(t *testing.T) {
 		Host string  `json:"host"`
 		Port float64 `json:"port"`
 	}
-	err := cc.ResolveInto(context.Background(), "db", &target)
+	err := cc.GetInto(context.Background(), "db", &target)
 	require.NoError(t, err)
 	assert.Equal(t, "localhost", target.Host)
 	assert.Equal(t, float64(5432), target.Port)
 }
 
-func TestResolveInto_NilResolved(t *testing.T) {
+func TestGetInto_NilResolved(t *testing.T) {
 	cc := &ConfigClient{
 		client:      &Client{environment: "test"},
 		configCache: map[string]map[string]interface{}{},
@@ -558,7 +558,7 @@ func TestResolveInto_NilResolved(t *testing.T) {
 	cc.initOnce.Do(func() {})
 
 	var target struct{ Host string }
-	err := cc.ResolveInto(context.Background(), "missing", &target)
+	err := cc.GetInto(context.Background(), "missing", &target)
 	require.NoError(t, err)
 	assert.Equal(t, "", target.Host)
 }
@@ -726,7 +726,7 @@ func TestWrapItemValues_Nil(t *testing.T) {
 
 func TestWithConfigParent(t *testing.T) {
 	cc := &ConfigClient{client: &Client{environment: "test"}}
-	cfg := cc.New("child", WithConfigParent("parent-uuid"))
+	cfg := cc.Management().New("child", WithConfigParent("parent-uuid"))
 	require.NotNil(t, cfg.Parent)
 	assert.Equal(t, "parent-uuid", *cfg.Parent)
 }
@@ -736,7 +736,7 @@ func TestWithConfigParent(t *testing.T) {
 func TestWithConfigItems(t *testing.T) {
 	cc := &ConfigClient{client: &Client{environment: "test"}}
 	items := map[string]interface{}{"key1": "val1", "key2": 42}
-	cfg := cc.New("cfg", WithConfigItems(items))
+	cfg := cc.Management().New("cfg", WithConfigItems(items))
 	assert.Equal(t, items, cfg.Items)
 }
 
@@ -747,7 +747,7 @@ func TestWithConfigEnvironments(t *testing.T) {
 	envs := map[string]map[string]interface{}{
 		"production": {"key1": "prod-val"},
 	}
-	cfg := cc.New("cfg", WithConfigEnvironments(envs))
+	cfg := cc.Management().New("cfg", WithConfigEnvironments(envs))
 	assert.Equal(t, envs, cfg.Environments)
 }
 
@@ -863,7 +863,7 @@ func TestDelete_Config_ConnectionError(t *testing.T) {
 		generated: genConfigClient,
 	}
 
-	err := cc.Delete(context.Background(), "test-config")
+	err := cc.Management().Delete(context.Background(), "test-config")
 	require.Error(t, err)
 }
 
@@ -883,7 +883,7 @@ func TestRefEnvs_ValsNotMap(t *testing.T) {
 
 // ---------- Resolve ensureInit error ----------
 
-func TestResolve_EnsureInitError(t *testing.T) {
+func TestGet_EnsureInitError(t *testing.T) {
 	cc := &ConfigClient{
 		client: &Client{environment: "test"},
 	}
@@ -892,14 +892,14 @@ func TestResolve_EnsureInitError(t *testing.T) {
 		cc.initErr = &SmplError{Message: "init failed"}
 	})
 
-	_, err := cc.Resolve(context.Background(), "app")
+	_, err := cc.Get(context.Background(), "app")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "init failed")
 }
 
 // ---------- ResolveInto ensureInit error ----------
 
-func TestResolveInto_EnsureInitError(t *testing.T) {
+func TestGetInto_EnsureInitError(t *testing.T) {
 	cc := &ConfigClient{
 		client: &Client{environment: "test"},
 	}
@@ -908,7 +908,7 @@ func TestResolveInto_EnsureInitError(t *testing.T) {
 	})
 
 	var target struct{ Host string }
-	err := cc.ResolveInto(context.Background(), "db", &target)
+	err := cc.GetInto(context.Background(), "db", &target)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "init failed")
 }
@@ -1014,7 +1014,7 @@ func TestDelete_Config_BodyReadFailure_CustomTransport(t *testing.T) {
 		generated: genConfigClient,
 	}
 
-	err := cc.Delete(context.Background(), "test-config")
+	err := cc.Management().Delete(context.Background(), "test-config")
 	require.Error(t, err)
 	var connErr *SmplConnectionError
 	assert.True(t, errors.As(err, &connErr))

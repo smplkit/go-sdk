@@ -873,7 +873,7 @@ func TestFlagsRuntime_NoMetricsWhenDisabled(t *testing.T) {
 // Integration: ConfigClient instrumentation
 // ===================================================================
 
-func TestConfigClient_ResolveRecordsMetric(t *testing.T) {
+func TestConfigClient_GetRecordsMetric(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
@@ -888,7 +888,7 @@ func TestConfigClient_ResolveRecordsMetric(t *testing.T) {
 	}
 	cc.initOnce.Do(func() {}) // Mark init complete.
 
-	result, err := cc.Resolve(context.Background(), "my-config")
+	result, err := cc.Get(context.Background(), "my-config")
 	require.NoError(t, err)
 	assert.Equal(t, "localhost", result["host"])
 
@@ -905,7 +905,7 @@ func TestConfigClient_ResolveRecordsMetric(t *testing.T) {
 	assert.True(t, found, "expected config.resolutions metric")
 }
 
-func TestConfigClient_ResolveNoMetricsWhenDisabled(t *testing.T) {
+func TestConfigClient_GetNoMetricsWhenDisabled(t *testing.T) {
 	client := &Client{
 		environment: "test",
 		service:     "test-service",
@@ -917,7 +917,7 @@ func TestConfigClient_ResolveNoMetricsWhenDisabled(t *testing.T) {
 	}
 	cc.initOnce.Do(func() {})
 
-	result, err := cc.Resolve(context.Background(), "my-config")
+	result, err := cc.Get(context.Background(), "my-config")
 	require.NoError(t, err)
 	assert.Equal(t, "localhost", result["host"])
 }

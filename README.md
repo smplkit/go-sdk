@@ -20,6 +20,7 @@ go get github.com/smplkit/go-sdk
 package main
 
 import (
+    "context"
     "fmt"
     "log"
 
@@ -27,55 +28,61 @@ import (
 )
 
 func main() {
-    // Option 1: Explicit API key
-    client, err := smplkit.NewClient("sk_api_...")
+    ctx := context.Background()
 
-    // Option 2: Environment variable (SMPLKIT_API_KEY)
-    // export SMPLKIT_API_KEY=sk_api_...
-    client, err = smplkit.NewClient("")
-
-    // Option 3: Configuration file (~/.smplkit)
-    // [default]
-    // api_key = sk_api_...
-    client, err = smplkit.NewClient("")
-
+    // API key resolved from SMPLKIT_API_KEY env var or ~/.smplkit config file.
+    // Pass explicitly as the first argument to override:
+    //   smplkit.NewClient("sk_api_...", "production", "my-service")
+    client, err := smplkit.NewClient("", "production", "my-service")
     if err != nil {
         log.Fatal(err)
     }
+    defer client.Close()
 
-    // Get a config by key
-    config, err := client.Config().GetByKey("user_service")
+    // ── Runtime: resolve config values ──────────────────────────────────
+    // Returns the merged map for the current environment.
+    values, err := client.Config().Get(ctx, "user_service")
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Println(config.Key)
+    fmt.Println(values["timeout"])
 
-    // List all configs
-    configs, err := client.Config().List()
+    // Or unmarshal directly into a typed struct.
+    type ServiceConfig struct {
+        Timeout int    `json:"timeout"`
+        Retries int    `json:"retries"`
+    }
+    var cfg ServiceConfig
+    if err := client.Config().GetInto(ctx, "user_service", &cfg); err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(cfg.Timeout)
+
+    // ── Management: CRUD operations ──────────────────────────────────────
+    mgmt := client.Config().Management()
+
+    configs, err := mgmt.List(ctx)
     if err != nil {
         log.Fatal(err)
     }
     fmt.Println(len(configs))
 
-    // Create a config
-    newConfig, err := client.Config().Create(smplkit.CreateConfigParams{
-        Name:        "My Service",
-        Key:         strPtr("my_service"),
-        Description: strPtr("Configuration for my service"),
-        Values:      map[string]any{"timeout": 30, "retries": 3},
-    })
+    raw, err := mgmt.Get(ctx, "user_service")
     if err != nil {
         log.Fatal(err)
     }
+    fmt.Println(raw.ID)
 
-    // Delete a config
-    err = client.Config().Delete(newConfig.ID)
-    if err != nil {
+    newConfig := mgmt.New("my_service", smplkit.WithConfigName("My Service"))
+    newConfig.Items = map[string]interface{}{"timeout": 30, "retries": 3}
+    if err := newConfig.Save(ctx); err != nil {
+        log.Fatal(err)
+    }
+
+    if err := mgmt.Delete(ctx, "my_service"); err != nil {
         log.Fatal(err)
     }
 }
-
-func strPtr(s string) *string { return &s }
 ```
 
 ## Configuration
@@ -109,7 +116,7 @@ All SDK errors extend `SmplError` and support `errors.Is()` / `errors.As()`:
 ```go
 import "errors"
 
-config, err := client.Config().GetByKey("nonexistent")
+config, err := client.Config().Management().Get(ctx, "nonexistent")
 if err != nil {
     var notFound *smplkit.SmplNotFoundError
     if errors.As(err, &notFound) {
@@ -137,35 +144,34 @@ The SDK includes a full-featured feature flags client with management API, presc
 
 ```go
 ctx := context.Background()
-flags := client.Flags()
+mgmt := client.Flags().Management()
 
-// Create a flag
-flag, err := flags.Create(ctx, smplkit.CreateFlagParams{
-    Key:     "checkout-v2",
-    Name:    "Checkout V2",
-    Type:    smplkit.FlagTypeBoolean,
-    Default: false,
-})
+// Create a flag using typed factories
+flag := mgmt.NewBooleanFlag("checkout-v2", false,
+    smplkit.WithFlagName("Checkout V2"),
+    smplkit.WithFlagDescription("Controls rollout of the new checkout experience."),
+)
+if err := flag.Save(ctx); err != nil {
+    log.Fatal(err)
+}
 
-// Update with environment rules
-err = flag.Update(ctx, smplkit.UpdateFlagParams{
-    Environments: map[string]interface{}{
-        "staging": map[string]interface{}{
-            "enabled": true,
-            "rules": []interface{}{
-                smplkit.NewRule("Enable for enterprise").
-                    When("user.plan", "==", "enterprise").
-                    Serve(true).
-                    Build(),
-            },
-        },
-    },
-})
+// Configure environments and rules, then save again
+flag.SetEnvironmentEnabled("staging", true)
+flag.AddRule(smplkit.NewRule("Enable for enterprise").
+    Environment("staging").
+    When("user.plan", "==", "enterprise").
+    Serve(true).
+    Build())
+if err := flag.Save(ctx); err != nil {
+    log.Fatal(err)
+}
 
 // List, get, delete
-allFlags, _ := flags.List(ctx)
-fetched, _ := flags.Get(ctx, flag.ID)
-err = flags.Delete(ctx, flag.ID)
+allFlags, _ := mgmt.List(ctx)
+fetched, _ := mgmt.Get(ctx, "checkout-v2")
+_ = allFlags
+_ = fetched
+err := mgmt.Delete(ctx, "checkout-v2")
 ```
 
 ### Runtime Evaluation

@@ -13,7 +13,7 @@ import (
 // Returns [checkoutFlag, bannerFlag, retryFlag].
 func setupDemoFlags(ctx context.Context, client *smplkit.Client) ([]*smplkit.Flag, error) {
 	// 1. checkout-v2 — boolean
-	checkoutFlag := client.Flags().NewBooleanFlag("checkout-v2", false,
+	checkoutFlag := client.Flags().Management().NewBooleanFlag("checkout-v2", false,
 		smplkit.WithFlagName("Checkout V2"),
 		smplkit.WithFlagDescription("Controls rollout of the new checkout experience."),
 	)
@@ -40,7 +40,7 @@ func setupDemoFlags(ctx context.Context, client *smplkit.Client) ([]*smplkit.Fla
 	}
 
 	// 2. banner-color — string
-	bannerFlag := client.Flags().NewStringFlag("banner-color", "red",
+	bannerFlag := client.Flags().Management().NewStringFlag("banner-color", "red",
 		smplkit.WithFlagName("Banner Color"),
 		smplkit.WithFlagDescription("Controls the banner color shown to users."),
 		smplkit.WithFlagValues([]smplkit.FlagValue{
@@ -71,7 +71,7 @@ func setupDemoFlags(ctx context.Context, client *smplkit.Client) ([]*smplkit.Fla
 	}
 
 	// 3. max-retries — numeric (unconstrained)
-	retryFlag := client.Flags().NewNumberFlag("max-retries", 3,
+	retryFlag := client.Flags().Management().NewNumberFlag("max-retries", 3,
 		smplkit.WithFlagName("Max Retries"),
 		smplkit.WithFlagDescription("Maximum number of API retries before failing."),
 	)
@@ -96,11 +96,11 @@ func setupDemoFlags(ctx context.Context, client *smplkit.Client) ([]*smplkit.Fla
 // teardownDemoFlags deletes the demo flags and any auto-created context types.
 func teardownDemoFlags(ctx context.Context, client *smplkit.Client, flags []*smplkit.Flag) {
 	for _, f := range flags {
-		_ = client.Flags().Delete(ctx, f.ID)
+		_ = client.Flags().Management().Delete(ctx, f.ID)
 	}
-	if cts, err := client.Flags().ListContextTypes(ctx); err == nil {
+	if cts, err := client.Flags().Management().ListContextTypes(ctx); err == nil {
 		for _, ct := range cts {
-			_ = client.Flags().DeleteContextType(ctx, ct.ID)
+			_ = client.Flags().Management().DeleteContextType(ctx, ct.ID)
 		}
 	}
 }

@@ -23,7 +23,7 @@ const (
 // Create one with NewClient and access sub-clients via accessor methods:
 //
 //	client, err := smplkit.NewClient("sk_api_...", "production", "my-service")
-//	cfgs, err := client.Config().List(ctx)
+//	cfgs, err := client.Config().Management().List(ctx)
 type Client struct {
 	apiKey       string
 	environment  string

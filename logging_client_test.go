@@ -123,7 +123,7 @@ func TestLoggingClient_New(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	logger := client.Logging().New("my.logger")
+	logger := client.Logging().Management().New("my.logger")
 	assert.Equal(t, "my.logger", logger.ID)
 	assert.Equal(t, "My.logger", logger.Name) // keyToDisplayName does not split on "."
 	assert.True(t, logger.Managed)
@@ -134,7 +134,7 @@ func TestLoggingClient_New_WithOptions(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	logger := client.Logging().New("checkout-v2",
+	logger := client.Logging().Management().New("checkout-v2",
 		smplkit.WithLoggerName("Checkout Logger"),
 		smplkit.WithLoggerManaged(false),
 	)
@@ -147,7 +147,7 @@ func TestLoggingClient_NewGroup(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	group := client.Logging().NewGroup("infra")
+	group := client.Logging().Management().NewGroup("infra")
 	assert.Equal(t, "infra", group.ID)
 	assert.Equal(t, "Infra", group.Name)
 	assert.NotNil(t, group.Environments)
@@ -158,7 +158,7 @@ func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
 	require.NoError(t, err)
 
 	parentID := logID1
-	group := client.Logging().NewGroup("database",
+	group := client.Logging().Management().NewGroup("database",
 		smplkit.WithLogGroupName("Database Group"),
 		smplkit.WithLogGroupParent(parentID),
 	)
@@ -188,7 +188,7 @@ func TestLogger_Save_Create(t *testing.T) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}))
 
-	logger := client.Logging().New("my.logger", smplkit.WithLoggerName("My Logger"))
+	logger := client.Logging().Management().New("my.logger", smplkit.WithLoggerName("My Logger"))
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "my.logger", logger.ID)
@@ -204,7 +204,7 @@ func TestLogger_Save_CreatePath_EmptyID(t *testing.T) {
 		_, _ = w.Write([]byte(sampleLoggerJSON("server-assigned", "My Logger", "INFO", true)))
 	}))
 
-	logger := client.Logging().New("temp-id", smplkit.WithLoggerName("My Logger"))
+	logger := client.Logging().Management().New("temp-id", smplkit.WithLoggerName("My Logger"))
 	logger.ID = "" // Clear ID to trigger create (POST) path
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestLogger_Save_Update(t *testing.T) {
 	client := newLoggingTestClient(t, mux)
 
 	// Fetch the logger first.
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	assert.Equal(t, "my.logger", logger.ID)
 
@@ -255,7 +255,7 @@ func TestLogger_Save_Update(t *testing.T) {
 func TestLogger_SetLevel(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 
 	assert.Nil(t, logger.Level)
 	logger.SetLevel(smplkit.LogLevelDebug)
@@ -266,7 +266,7 @@ func TestLogger_SetLevel(t *testing.T) {
 func TestLogger_ClearLevel(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 
 	logger.SetLevel(smplkit.LogLevelWarn)
 	require.NotNil(t, logger.Level)
@@ -278,7 +278,7 @@ func TestLogger_ClearLevel(t *testing.T) {
 func TestLogger_SetEnvironmentLevel(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 
 	logger.SetEnvironmentLevel("production", smplkit.LogLevelError)
 
@@ -290,7 +290,7 @@ func TestLogger_SetEnvironmentLevel(t *testing.T) {
 func TestLogger_ClearEnvironmentLevel(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 
 	logger.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
 	require.Contains(t, logger.Environments, "staging")
@@ -308,7 +308,7 @@ func TestLogger_ClearEnvironmentLevel_NilEnvironments(t *testing.T) {
 func TestLogger_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 	// Set a non-map entry to exercise the type assertion branch.
 	logger.Environments["staging"] = "not-a-map"
 	logger.ClearEnvironmentLevel("staging")
@@ -319,7 +319,7 @@ func TestLogger_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
 func TestLogger_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 
 	logger.Environments["staging"] = map[string]interface{}{
 		"level": "DEBUG",
@@ -335,7 +335,7 @@ func TestLogger_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
 func TestLogger_ClearAllEnvironmentLevels(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 
 	logger.SetEnvironmentLevel("production", smplkit.LogLevelError)
 	logger.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
@@ -365,7 +365,7 @@ func TestLogGroup_Save_Create(t *testing.T) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}))
 
-	group := client.Logging().NewGroup("infra", smplkit.WithLogGroupName("Infra"))
+	group := client.Logging().Management().NewGroup("infra", smplkit.WithLogGroupName("Infra"))
 	err := group.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "infra", group.ID)
@@ -380,7 +380,7 @@ func TestLogGroup_Save_CreatePath_EmptyID(t *testing.T) {
 		_, _ = w.Write([]byte(sampleLogGroupJSON("server-assigned", "Infra", "WARN")))
 	}))
 
-	group := client.Logging().NewGroup("temp-id", smplkit.WithLogGroupName("Infra"))
+	group := client.Logging().Management().NewGroup("temp-id", smplkit.WithLogGroupName("Infra"))
 	group.ID = "" // Clear ID to trigger create (POST) path
 	err := group.Save(context.Background())
 	require.NoError(t, err)
@@ -410,7 +410,7 @@ func TestLogGroup_Save_Update(t *testing.T) {
 
 	client := newLoggingTestClient(t, mux)
 
-	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	group, err := client.Logging().Management().GetGroup(context.Background(), "infra")
 	require.NoError(t, err)
 	assert.Equal(t, "infra", group.ID)
 
@@ -425,7 +425,7 @@ func TestLogGroup_Save_Update(t *testing.T) {
 func TestLogGroup_SetLevel(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	group := client.Logging().NewGroup("infra")
+	group := client.Logging().Management().NewGroup("infra")
 
 	group.SetLevel(smplkit.LogLevelWarn)
 	require.NotNil(t, group.Level)
@@ -435,7 +435,7 @@ func TestLogGroup_SetLevel(t *testing.T) {
 func TestLogGroup_ClearLevel(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	group := client.Logging().NewGroup("infra")
+	group := client.Logging().Management().NewGroup("infra")
 
 	group.SetLevel(smplkit.LogLevelError)
 	group.ClearLevel()
@@ -445,7 +445,7 @@ func TestLogGroup_ClearLevel(t *testing.T) {
 func TestLogGroup_SetEnvironmentLevel(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	group := client.Logging().NewGroup("infra")
+	group := client.Logging().Management().NewGroup("infra")
 
 	group.SetEnvironmentLevel("production", smplkit.LogLevelError)
 
@@ -457,7 +457,7 @@ func TestLogGroup_SetEnvironmentLevel(t *testing.T) {
 func TestLogGroup_ClearEnvironmentLevel(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	group := client.Logging().NewGroup("infra")
+	group := client.Logging().Management().NewGroup("infra")
 
 	group.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
 	group.ClearEnvironmentLevel("staging")
@@ -473,7 +473,7 @@ func TestLogGroup_ClearEnvironmentLevel_NilEnvironments(t *testing.T) {
 func TestLogGroup_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	group := client.Logging().NewGroup("infra")
+	group := client.Logging().Management().NewGroup("infra")
 	group.Environments["staging"] = "not-a-map"
 	group.ClearEnvironmentLevel("staging")
 	assert.Equal(t, "not-a-map", group.Environments["staging"])
@@ -482,7 +482,7 @@ func TestLogGroup_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
 func TestLogGroup_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	group := client.Logging().NewGroup("infra")
+	group := client.Logging().Management().NewGroup("infra")
 
 	group.Environments["staging"] = map[string]interface{}{
 		"level": "DEBUG",
@@ -498,7 +498,7 @@ func TestLogGroup_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
 func TestLogGroup_ClearAllEnvironmentLevels(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
-	group := client.Logging().NewGroup("infra")
+	group := client.Logging().Management().NewGroup("infra")
 
 	group.SetEnvironmentLevel("production", smplkit.LogLevelError)
 	group.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
@@ -522,7 +522,7 @@ func TestLoggingClient_Get(t *testing.T) {
 		_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
 	}))
 
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	assert.Equal(t, "my.logger", logger.ID)
 	assert.Equal(t, "My Logger", logger.Name)
@@ -537,7 +537,7 @@ func TestLoggingClient_Get_NotFound(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
-	_, err := client.Logging().Get(context.Background(), "nonexistent")
+	_, err := client.Logging().Management().Get(context.Background(), "nonexistent")
 	require.Error(t, err)
 
 	var notFound *smplkit.SmplNotFoundError
@@ -550,7 +550,7 @@ func TestLoggingClient_Get_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	_, err := client.Logging().Get(context.Background(), "my.logger")
+	_, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.Error(t, err)
 
 	var smplErr *smplkit.SmplError
@@ -565,7 +565,7 @@ func TestLoggingClient_Get_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	_, err = client.Logging().Get(context.Background(), "some-key")
+	_, err = client.Logging().Management().Get(context.Background(), "some-key")
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -581,7 +581,7 @@ func TestLoggingClient_Get_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Logging().Get(context.Background(), "some-key")
+	_, err = client.Logging().Management().Get(context.Background(), "some-key")
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -595,7 +595,7 @@ func TestLoggingClient_Get_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	}))
 
-	_, err := client.Logging().Get(context.Background(), "some-key")
+	_, err := client.Logging().Management().Get(context.Background(), "some-key")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
 }
@@ -616,7 +616,7 @@ func TestLoggingClient_List(t *testing.T) {
 		}`))
 	}))
 
-	loggers, err := client.Logging().List(context.Background())
+	loggers, err := client.Logging().Management().List(context.Background())
 	require.NoError(t, err)
 	require.Len(t, loggers, 2)
 	assert.Equal(t, "A", loggers[0].Name)
@@ -629,7 +629,7 @@ func TestLoggingClient_List_Empty(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data": []}`))
 	}))
 
-	loggers, err := client.Logging().List(context.Background())
+	loggers, err := client.Logging().Management().List(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, loggers)
 }
@@ -640,7 +640,7 @@ func TestLoggingClient_List_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	_, err = client.Logging().List(context.Background())
+	_, err = client.Logging().Management().List(context.Background())
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -656,7 +656,7 @@ func TestLoggingClient_List_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Logging().List(context.Background())
+	_, err = client.Logging().Management().List(context.Background())
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -669,7 +669,7 @@ func TestLoggingClient_List_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{invalid}`))
 	}))
 
-	_, err := client.Logging().List(context.Background())
+	_, err := client.Logging().Management().List(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
 }
@@ -680,7 +680,7 @@ func TestLoggingClient_List_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	_, err := client.Logging().List(context.Background())
+	_, err := client.Logging().Management().List(context.Background())
 	require.Error(t, err)
 
 	var smplErr *smplkit.SmplError
@@ -697,7 +697,7 @@ func TestLoggingClient_Delete(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	err := client.Logging().Delete(context.Background(), "my.logger")
+	err := client.Logging().Management().Delete(context.Background(), "my.logger")
 	require.NoError(t, err)
 }
 
@@ -707,7 +707,7 @@ func TestLoggingClient_Delete_NotFound(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
-	err := client.Logging().Delete(context.Background(), "nonexistent")
+	err := client.Logging().Management().Delete(context.Background(), "nonexistent")
 	require.Error(t, err)
 
 	var notFound *smplkit.SmplNotFoundError
@@ -720,7 +720,7 @@ func TestLoggingClient_Delete_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	err = client.Logging().Delete(context.Background(), "some-id")
+	err = client.Logging().Management().Delete(context.Background(), "some-id")
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -738,7 +738,7 @@ func TestLoggingClient_GetGroup(t *testing.T) {
 		_, _ = w.Write([]byte(sampleLogGroupListJSON("infra", "Infra", "WARN")))
 	}))
 
-	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	group, err := client.Logging().Management().GetGroup(context.Background(), "infra")
 	require.NoError(t, err)
 	assert.Equal(t, "infra", group.ID)
 	assert.Equal(t, "Infra", group.Name)
@@ -750,7 +750,7 @@ func TestLoggingClient_GetGroup_NotFound(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data": []}`))
 	}))
 
-	_, err := client.Logging().GetGroup(context.Background(), "nonexistent")
+	_, err := client.Logging().Management().GetGroup(context.Background(), "nonexistent")
 	require.Error(t, err)
 
 	var notFound *smplkit.SmplNotFoundError
@@ -764,7 +764,7 @@ func TestLoggingClient_GetGroup_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	_, err = client.Logging().GetGroup(context.Background(), "infra")
+	_, err = client.Logging().Management().GetGroup(context.Background(), "infra")
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -787,7 +787,7 @@ func TestLoggingClient_ListGroups(t *testing.T) {
 		}`))
 	}))
 
-	groups, err := client.Logging().ListGroups(context.Background())
+	groups, err := client.Logging().Management().ListGroups(context.Background())
 	require.NoError(t, err)
 	require.Len(t, groups, 2)
 	assert.Equal(t, "Infra", groups[0].Name)
@@ -803,7 +803,7 @@ func TestLoggingClient_ListGroups_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Logging().ListGroups(context.Background())
+	_, err = client.Logging().Management().ListGroups(context.Background())
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -816,7 +816,7 @@ func TestLoggingClient_ListGroups_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{invalid}`))
 	}))
 
-	_, err := client.Logging().ListGroups(context.Background())
+	_, err := client.Logging().Management().ListGroups(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
 }
@@ -827,7 +827,7 @@ func TestLoggingClient_ListGroups_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	_, err := client.Logging().ListGroups(context.Background())
+	_, err := client.Logging().Management().ListGroups(context.Background())
 	require.Error(t, err)
 
 	var smplErr *smplkit.SmplError
@@ -849,7 +849,7 @@ func TestLoggingClient_DeleteGroup(t *testing.T) {
 
 	client := newLoggingTestClient(t, mux)
 
-	err := client.Logging().DeleteGroup(context.Background(), "infra")
+	err := client.Logging().Management().DeleteGroup(context.Background(), "infra")
 	require.NoError(t, err)
 }
 
@@ -859,7 +859,7 @@ func TestLoggingClient_DeleteGroup_NotFound(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
-	err := client.Logging().DeleteGroup(context.Background(), "nonexistent")
+	err := client.Logging().Management().DeleteGroup(context.Background(), "nonexistent")
 	require.Error(t, err)
 
 	var notFound *smplkit.SmplNotFoundError
@@ -874,7 +874,7 @@ func TestLogger_Save_Create_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 	err = logger.Save(context.Background())
 	require.Error(t, err)
 
@@ -891,7 +891,7 @@ func TestLogger_Save_Create_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 	err = logger.Save(context.Background())
 	require.Error(t, err)
 
@@ -905,7 +905,7 @@ func TestLogger_Save_Create_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	}))
 
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 	err := logger.Save(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
@@ -917,7 +917,7 @@ func TestLogger_Save_Create_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
 	}))
 
-	logger := client.Logging().New("test-logger")
+	logger := client.Logging().Management().New("test-logger")
 	err := logger.Save(context.Background())
 	require.Error(t, err)
 
@@ -933,7 +933,7 @@ func TestLogger_Save_CreatePath_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	logger := client.Logging().New("temp")
+	logger := client.Logging().Management().New("temp")
 	logger.ID = ""
 	err = logger.Save(context.Background())
 	require.Error(t, err)
@@ -950,7 +950,7 @@ func TestLogger_Save_CreatePath_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	logger := client.Logging().New("temp")
+	logger := client.Logging().Management().New("temp")
 	logger.ID = ""
 	err = logger.Save(context.Background())
 	require.Error(t, err)
@@ -964,7 +964,7 @@ func TestLogger_Save_CreatePath_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
 	}))
 
-	logger := client.Logging().New("temp")
+	logger := client.Logging().Management().New("temp")
 	logger.ID = ""
 	err := logger.Save(context.Background())
 	require.Error(t, err)
@@ -978,7 +978,7 @@ func TestLogger_Save_CreatePath_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	}))
 
-	logger := client.Logging().New("temp")
+	logger := client.Logging().Management().New("temp")
 	logger.ID = ""
 	err := logger.Save(context.Background())
 	require.Error(t, err)
@@ -1004,7 +1004,7 @@ func TestLogger_Save_Update_NetworkError(t *testing.T) {
 
 	client := newLoggingTestClient(t, mux)
 
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 
 	err = logger.Save(context.Background())
@@ -1035,7 +1035,7 @@ func TestLogger_Save_Update_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 
 	err = logger.Save(context.Background())
@@ -1058,7 +1058,7 @@ func TestLogger_Save_Update_MalformedJSON(t *testing.T) {
 	})
 
 	client := newLoggingTestClient(t, mux)
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 
 	err = logger.Save(context.Background())
@@ -1079,7 +1079,7 @@ func TestLogger_Save_Update_HTTPError(t *testing.T) {
 	})
 
 	client := newLoggingTestClient(t, mux)
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 
 	err = logger.Save(context.Background())
@@ -1097,7 +1097,7 @@ func TestLogGroup_Save_Create_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	group := client.Logging().NewGroup("test-group")
+	group := client.Logging().Management().NewGroup("test-group")
 	err = group.Save(context.Background())
 	require.Error(t, err)
 
@@ -1114,7 +1114,7 @@ func TestLogGroup_Save_Create_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	group := client.Logging().NewGroup("test-group")
+	group := client.Logging().Management().NewGroup("test-group")
 	err = group.Save(context.Background())
 	require.Error(t, err)
 
@@ -1128,7 +1128,7 @@ func TestLogGroup_Save_Create_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	}))
 
-	group := client.Logging().NewGroup("test-group")
+	group := client.Logging().Management().NewGroup("test-group")
 	err := group.Save(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
@@ -1140,7 +1140,7 @@ func TestLogGroup_Save_Create_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
 	}))
 
-	group := client.Logging().NewGroup("test-group")
+	group := client.Logging().Management().NewGroup("test-group")
 	err := group.Save(context.Background())
 	require.Error(t, err)
 
@@ -1156,7 +1156,7 @@ func TestLogGroup_Save_CreatePath_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	group := client.Logging().NewGroup("temp")
+	group := client.Logging().Management().NewGroup("temp")
 	group.ID = ""
 	err = group.Save(context.Background())
 	require.Error(t, err)
@@ -1173,7 +1173,7 @@ func TestLogGroup_Save_CreatePath_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	group := client.Logging().NewGroup("temp")
+	group := client.Logging().Management().NewGroup("temp")
 	group.ID = ""
 	err = group.Save(context.Background())
 	require.Error(t, err)
@@ -1187,7 +1187,7 @@ func TestLogGroup_Save_CreatePath_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
 	}))
 
-	group := client.Logging().NewGroup("temp")
+	group := client.Logging().Management().NewGroup("temp")
 	group.ID = ""
 	err := group.Save(context.Background())
 	require.Error(t, err)
@@ -1201,7 +1201,7 @@ func TestLogGroup_Save_CreatePath_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	}))
 
-	group := client.Logging().NewGroup("temp")
+	group := client.Logging().Management().NewGroup("temp")
 	group.ID = ""
 	err := group.Save(context.Background())
 	require.Error(t, err)
@@ -1224,7 +1224,7 @@ func TestLogGroup_Save_Update_NetworkError(t *testing.T) {
 	})
 
 	client := newLoggingTestClient(t, mux)
-	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	group, err := client.Logging().Management().GetGroup(context.Background(), "infra")
 	require.NoError(t, err)
 
 	err = group.Save(context.Background())
@@ -1255,7 +1255,7 @@ func TestLogGroup_Save_Update_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	group, err := client.Logging().Management().GetGroup(context.Background(), "infra")
 	require.NoError(t, err)
 
 	err = group.Save(context.Background())
@@ -1277,7 +1277,7 @@ func TestLogGroup_Save_Update_MalformedJSON(t *testing.T) {
 	})
 
 	client := newLoggingTestClient(t, mux)
-	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	group, err := client.Logging().Management().GetGroup(context.Background(), "infra")
 	require.NoError(t, err)
 
 	err = group.Save(context.Background())
@@ -1297,7 +1297,7 @@ func TestLogGroup_Save_Update_HTTPError(t *testing.T) {
 	})
 
 	client := newLoggingTestClient(t, mux)
-	group, err := client.Logging().GetGroup(context.Background(), "infra")
+	group, err := client.Logging().Management().GetGroup(context.Background(), "infra")
 	require.NoError(t, err)
 
 	err = group.Save(context.Background())
@@ -1315,7 +1315,7 @@ func TestLoggingClient_DeleteLogger_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	err := client.Logging().Delete(context.Background(), "my.logger")
+	err := client.Logging().Management().Delete(context.Background(), "my.logger")
 	require.Error(t, err)
 }
 
@@ -1331,7 +1331,7 @@ func TestLoggingClient_DeleteGroup_HTTPError(t *testing.T) {
 	})
 
 	client := newLoggingTestClient(t, mux)
-	err := client.Logging().DeleteGroup(context.Background(), "infra")
+	err := client.Logging().Management().DeleteGroup(context.Background(), "infra")
 	require.Error(t, err)
 }
 
@@ -1398,7 +1398,7 @@ func TestLoggingClient_Get_WithEnvironments(t *testing.T) {
 		}}`))
 	}))
 
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	assert.Contains(t, logger.Environments, "production")
 	require.Len(t, logger.Sources, 1)
@@ -1421,7 +1421,7 @@ func TestLoggingClient_Get_NilLevel(t *testing.T) {
 		}}`))
 	}))
 
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	assert.Nil(t, logger.Level)
 }
@@ -1444,7 +1444,7 @@ func TestLoggingClient_Get_EmptyLevel(t *testing.T) {
 		}}`))
 	}))
 
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	assert.Nil(t, logger.Level)
 }
@@ -1457,7 +1457,7 @@ func TestLoggingClient_Get_ManagedFalse(t *testing.T) {
 		_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", false)))
 	}))
 
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	assert.False(t, logger.Managed)
 }
@@ -1482,7 +1482,7 @@ func TestLoggingClient_GetGroup_WithParent(t *testing.T) {
 		}]}`))
 	}))
 
-	group, err := client.Logging().GetGroup(context.Background(), "database")
+	group, err := client.Logging().Management().GetGroup(context.Background(), "database")
 	require.NoError(t, err)
 	require.NotNil(t, group.Group)
 	assert.Equal(t, "infra", *group.Group)
@@ -1509,7 +1509,7 @@ func TestLoggingClient_Get_WithGroup(t *testing.T) {
 		}}`))
 	}))
 
-	logger, err := client.Logging().Get(context.Background(), "my.logger")
+	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	require.NotNil(t, logger.Group)
 	assert.Equal(t, "infra", *logger.Group)
@@ -1573,7 +1573,7 @@ func TestStartWithNoAdaptersWarns(t *testing.T) {
 	require.NoError(t, err)
 
 	// Management methods still work.
-	loggers, err := client.Logging().List(context.Background())
+	loggers, err := client.Logging().Management().List(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, loggers)
 }

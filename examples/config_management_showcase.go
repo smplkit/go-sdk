@@ -64,7 +64,7 @@ func main() {
 
 	// Pre-flight: delete any configs left over from a previous run.
 	for _, key := range []string{"auth_module", "user_service"} {
-		_ = client.Config().Delete(ctx, key)
+		_ = client.Config().Management().Delete(ctx, key)
 	}
 
 	// ====================================================================
@@ -72,7 +72,7 @@ func main() {
 	// ====================================================================
 	section("2a. Update the Common Config")
 
-	common, err := client.Config().Get(ctx, "common")
+	common, err := client.Config().Management().Get(ctx, "common")
 	if err != nil {
 		fatal("failed to fetch common config", err)
 	}
@@ -118,7 +118,7 @@ func main() {
 	// ====================================================================
 	section("3a. Create User Service Config")
 
-	userService := client.Config().New("user_service",
+	userService := client.Config().Management().New("user_service",
 		smplkit.WithConfigName("User Service"),
 		smplkit.WithConfigDescription("Configuration for the user microservice."),
 		smplkit.WithConfigItems(map[string]interface{}{
@@ -155,7 +155,7 @@ func main() {
 	// ====================================================================
 	section("3b. Create Auth Module Config (child of User Service)")
 
-	authModule := client.Config().New("auth_module",
+	authModule := client.Config().Management().New("auth_module",
 		smplkit.WithConfigName("Auth Module"),
 		smplkit.WithConfigDescription("Authentication module within the user service."),
 		smplkit.WithConfigParent(userService.ID),
@@ -172,7 +172,7 @@ func main() {
 	)
 	err = authModule.Save(ctx)
 	if err != nil {
-		_ = client.Config().Delete(ctx, "user_service")
+		_ = client.Config().Management().Delete(ctx, "user_service")
 		fatal("failed to create auth_module config", err)
 	}
 	step(fmt.Sprintf("Created auth_module config: id=%s (parent=%s)", authModule.ID, userService.ID))
@@ -182,7 +182,7 @@ func main() {
 	// ====================================================================
 	section("4a. List All Configs")
 
-	configs, err := client.Config().List(ctx)
+	configs, err := client.Config().Management().List(ctx)
 	if err != nil {
 		fatal("failed to list configs", err)
 	}
@@ -200,7 +200,7 @@ func main() {
 	// ====================================================================
 	section("4b. Get Config by Key")
 
-	fetched, err := client.Config().Get(ctx, "user_service")
+	fetched, err := client.Config().Management().Get(ctx, "user_service")
 	if err != nil {
 		fatal("failed to get user_service by key", err)
 	}
@@ -234,13 +234,13 @@ func main() {
 	// ====================================================================
 	section("6. Cleanup")
 
-	if err := client.Config().Delete(ctx, "auth_module"); err != nil {
+	if err := client.Config().Management().Delete(ctx, "auth_module"); err != nil {
 		fmt.Printf("  Warning: failed to delete auth_module: %v\n", err)
 	} else {
 		step(fmt.Sprintf("Deleted auth_module (%s)", authModule.ID))
 	}
 
-	if err := client.Config().Delete(ctx, "user_service"); err != nil {
+	if err := client.Config().Management().Delete(ctx, "user_service"); err != nil {
 		fmt.Printf("  Warning: failed to delete user_service: %v\n", err)
 	} else {
 		step(fmt.Sprintf("Deleted user_service (%s)", userService.ID))

@@ -106,7 +106,7 @@ func main() {
 	section("6. Trigger a Change (via management API)")
 
 	step("Updating payments logger level to ERROR")
-	paymentsLogger, err := logging.Get(ctx, "com.acme.payments")
+	paymentsLogger, err := logging.Management().Get(ctx, "com.acme.payments")
 	if err != nil {
 		fatal("Failed to get payments logger", err)
 	}

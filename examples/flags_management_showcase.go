@@ -96,14 +96,14 @@ func main() {
 	section("3. Get & List Flags")
 
 	// Get by key.
-	fetched, err := flags.Get(ctx, "checkout-v2")
+	fetched, err := flags.Management().Get(ctx, "checkout-v2")
 	if err != nil {
 		fatal("failed to get flag", err)
 	}
 	step(fmt.Sprintf("Get(id=%q): name=%q type=%s", fetched.ID, fetched.Name, fetched.Type))
 
 	// List all.
-	allFlags, err := flags.List(ctx)
+	allFlags, err := flags.Management().List(ctx)
 	if err != nil {
 		fatal("failed to list flags", err)
 	}
@@ -147,7 +147,7 @@ func main() {
 	step("Appended 'healthcare' rule to banner-color staging")
 
 	// Verify: re-fetch and count rules.
-	bannerRefreshed, err := flags.Get(ctx, "banner-color")
+	bannerRefreshed, err := flags.Management().Get(ctx, "banner-color")
 	if err != nil {
 		fatal("failed to re-fetch banner-color", err)
 	}
@@ -163,14 +163,14 @@ func main() {
 	section("6. Context Type Management")
 
 	// Create context types.
-	userCT, err := flags.CreateContextType(ctx, "user", "User")
+	userCT, err := flags.Management().CreateContextType(ctx, "user", "User")
 	if err != nil {
 		step(fmt.Sprintf("CreateContextType('user') returned error (may already exist): %v", err))
 	} else {
 		step(fmt.Sprintf("Created context type: id=%s name=%q", userCT.ID, userCT.Name))
 	}
 
-	accountCT, err := flags.CreateContextType(ctx, "account", "Account")
+	accountCT, err := flags.Management().CreateContextType(ctx, "account", "Account")
 	if err != nil {
 		step(fmt.Sprintf("CreateContextType('account') returned error (may already exist): %v", err))
 	} else {
@@ -178,7 +178,7 @@ func main() {
 	}
 
 	// List context types.
-	ctList, err := flags.ListContextTypes(ctx)
+	ctList, err := flags.Management().ListContextTypes(ctx)
 	if err != nil {
 		fatal("failed to list context types", err)
 	}

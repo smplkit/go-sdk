@@ -38,6 +38,16 @@ type LoggingClient struct {
 
 	// Pluggable adapters
 	adapters []adapters.LoggingAdapter
+
+	management *LoggingManagement
+}
+
+// Management returns the sub-object for logger and log group CRUD operations.
+func (c *LoggingClient) Management() *LoggingManagement {
+	if c.management == nil {
+		c.management = &LoggingManagement{client: c}
+	}
+	return c.management
 }
 
 // newLoggingClient creates a new LoggingClient.
@@ -61,153 +71,6 @@ func (c *LoggingClient) close() {
 		close(c.flushDone)
 		c.flushDone = nil
 	}
-}
-
-// New creates an unsaved Logger with the given ID. Call Save(ctx) to persist.
-// If name is not provided via WithLoggerName, it is auto-generated from the ID.
-func (c *LoggingClient) New(id string, opts ...LoggerOption) *Logger {
-	l := &Logger{
-		ID:           id,
-		Name:         keyToDisplayName(id),
-		Managed:      true,
-		Environments: map[string]interface{}{},
-		client:       c,
-	}
-	for _, opt := range opts {
-		opt(l)
-	}
-	return l
-}
-
-// NewGroup creates an unsaved LogGroup with the given ID. Call Save(ctx) to persist.
-func (c *LoggingClient) NewGroup(id string, opts ...LogGroupOption) *LogGroup {
-	g := &LogGroup{
-		ID:           id,
-		Name:         keyToDisplayName(id),
-		Environments: map[string]interface{}{},
-		client:       c,
-	}
-	for _, opt := range opts {
-		opt(g)
-	}
-	return g
-}
-
-// Get retrieves a logger by its ID.
-func (c *LoggingClient) Get(ctx context.Context, id string) (*Logger, error) {
-	resp, err := c.generated.GetLogger(ctx, id)
-	if err != nil {
-		return nil, classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	var result genlogging.LoggerResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-
-	return resourceToLogger(result.Data, c), nil
-}
-
-// List returns all loggers for the account.
-func (c *LoggingClient) List(ctx context.Context) ([]*Logger, error) {
-	resp, err := c.generated.ListLoggers(ctx, nil)
-	if err != nil {
-		return nil, classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	var result genlogging.LoggerListResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-
-	loggers := make([]*Logger, len(result.Data))
-	for i := range result.Data {
-		loggers[i] = resourceToLogger(result.Data[i], c)
-	}
-	return loggers, nil
-}
-
-// Delete removes a logger by its ID.
-func (c *LoggingClient) Delete(ctx context.Context, id string) error {
-	return c.deleteLoggerByID(ctx, id)
-}
-
-// GetGroup retrieves a log group by its ID.
-func (c *LoggingClient) GetGroup(ctx context.Context, id string) (*LogGroup, error) {
-	// The generated client doesn't have a direct get-by-id for groups,
-	// so we list all and filter client-side.
-	groups, err := c.ListGroups(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, g := range groups {
-		if g.ID == id {
-			return g, nil
-		}
-	}
-	return nil, &SmplNotFoundError{
-		SmplError: SmplError{
-			Message:    fmt.Sprintf("log group with id %q not found", id),
-			StatusCode: 404,
-		},
-	}
-}
-
-// ListGroups returns all log groups for the account.
-func (c *LoggingClient) ListGroups(ctx context.Context) ([]*LogGroup, error) {
-	resp, err := c.generated.ListLogGroups(ctx)
-	if err != nil {
-		return nil, classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	var result genlogging.LogGroupListResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-
-	groups := make([]*LogGroup, len(result.Data))
-	for i := range result.Data {
-		groups[i] = resourceToLogGroup(result.Data[i], c)
-	}
-	return groups, nil
-}
-
-// DeleteGroup removes a log group by its ID.
-func (c *LoggingClient) DeleteGroup(ctx context.Context, id string) error {
-	return c.deleteGroupByID(ctx, id)
 }
 
 // RegisterAdapter registers a logging adapter. Must be called before Start().
@@ -622,11 +485,11 @@ func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
 }
 
 func (c *LoggingClient) fetchAndCache(ctx context.Context) error {
-	loggers, err := c.List(ctx)
+	loggers, err := c.Management().List(ctx)
 	if err != nil {
 		return err
 	}
-	groups, err := c.ListGroups(ctx)
+	groups, err := c.Management().ListGroups(ctx)
 	if err != nil {
 		return err
 	}

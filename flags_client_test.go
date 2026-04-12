@@ -73,7 +73,7 @@ func TestFlagsClient_Get_ByID_Error(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get by ID will fail because the real server is unreachable
-	_, err = client.Flags().Get(context.Background(), "some-flag")
+	_, err = client.Flags().Management().Get(context.Background(), "some-flag")
 	assert.Error(t, err)
 }
 
@@ -82,7 +82,7 @@ func TestFlagsClient_Delete_ByID_Error(t *testing.T) {
 	require.NoError(t, err)
 
 	// Delete by ID will fail because the real server is unreachable
-	err = client.Flags().Delete(context.Background(), "some-flag")
+	err = client.Flags().Management().Delete(context.Background(), "some-flag")
 	assert.Error(t, err)
 }
 
@@ -91,7 +91,7 @@ func TestFlagsClient_NewBooleanFlag_AutoValues(t *testing.T) {
 	require.NoError(t, err)
 
 	// NewBooleanFlag auto-generates True/False values.
-	flag := client.Flags().NewBooleanFlag("feature-x", false)
+	flag := client.Flags().Management().NewBooleanFlag("feature-x", false)
 	assert.Equal(t, "feature-x", flag.ID)
 	require.NotNil(t, flag.Values)
 	assert.Len(t, *flag.Values, 2)
@@ -102,7 +102,7 @@ func TestFlagsClient_NewStringFlag_Unconstrained(t *testing.T) {
 	require.NoError(t, err)
 
 	// NewStringFlag without WithFlagValues creates an unconstrained flag (Values=nil).
-	flag := client.Flags().NewStringFlag("greeting", "hello")
+	flag := client.Flags().Management().NewStringFlag("greeting", "hello")
 	assert.Equal(t, "greeting", flag.ID)
 	assert.Equal(t, "hello", flag.Default)
 	assert.Nil(t, flag.Values)
@@ -112,7 +112,7 @@ func TestFlagsClient_NewNumberFlag_Unconstrained(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	flag := client.Flags().NewNumberFlag("max-retries", 3.0)
+	flag := client.Flags().Management().NewNumberFlag("max-retries", 3.0)
 	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values)
 }
@@ -121,7 +121,7 @@ func TestFlagsClient_NewJsonFlag_Unconstrained(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	flag := client.Flags().NewJsonFlag("config", map[string]interface{}{"key": "value"})
+	flag := client.Flags().Management().NewJsonFlag("config", map[string]interface{}{"key": "value"})
 	assert.Equal(t, "config", flag.ID)
 	assert.Nil(t, flag.Values)
 }
@@ -130,7 +130,7 @@ func TestFlagsClient_NewStringFlag_Constrained(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	flag := client.Flags().NewStringFlag("theme", "light",
+	flag := client.Flags().Management().NewStringFlag("theme", "light",
 		smplkit.WithFlagValues([]smplkit.FlagValue{
 			{Name: "Light", Value: "light"},
 			{Name: "Dark", Value: "dark"},
@@ -187,7 +187,7 @@ func TestFlagsClient_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	_, err = client.Flags().Get(context.Background(), "feature-x")
+	_, err = client.Flags().Management().Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -207,7 +207,7 @@ func TestNewBooleanFlag_Fields(t *testing.T) {
 	require.NoError(t, err)
 
 	desc := "A feature flag"
-	flag := client.Flags().NewBooleanFlag("feature-x", true,
+	flag := client.Flags().Management().NewBooleanFlag("feature-x", true,
 		smplkit.WithFlagName("Feature X"),
 		smplkit.WithFlagDescription(desc),
 		smplkit.WithFlagValues([]smplkit.FlagValue{

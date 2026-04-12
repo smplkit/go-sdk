@@ -45,49 +45,16 @@ type ConfigClient struct {
 
 	listenersMu sync.Mutex
 	listeners   []configChangeListener
+
+	management *ConfigManagement
 }
 
-// New creates an unsaved Config with the given ID. Call Save(ctx) to persist.
-// If name is not provided via WithConfigName, it is auto-generated from the ID.
-func (c *ConfigClient) New(id string, opts ...ConfigOption) *Config {
-	cfg := &Config{
-		ID:           id,
-		Name:         keyToDisplayName(id),
-		Items:        map[string]interface{}{},
-		Environments: map[string]map[string]interface{}{},
-		client:       c,
+// Management returns the sub-object for config CRUD operations.
+func (c *ConfigClient) Management() *ConfigManagement {
+	if c.management == nil {
+		c.management = &ConfigManagement{client: c}
 	}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-	return cfg
-}
-
-// Get retrieves a config by its ID.
-// Returns SmplNotFoundError if no match.
-func (c *ConfigClient) Get(ctx context.Context, id string) (*Config, error) {
-	resp, err := c.generated.GetConfig(ctx, id)
-	if err != nil {
-		return nil, classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	var result genconfig.ConfigResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-
-	return resourceToConfig(result.Data, c), nil
+	return c.management
 }
 
 // getByID retrieves a config by its ID (internal use for chain walking).
@@ -113,53 +80,6 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*Config, error) 
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 	return resourceToConfig(result.Data, c), nil
-}
-
-// List returns all configs for the account.
-func (c *ConfigClient) List(ctx context.Context) ([]*Config, error) {
-	resp, err := c.generated.ListConfigs(ctx, nil)
-	if err != nil {
-		return nil, classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	var result genconfig.ConfigListResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-
-	configs := make([]*Config, len(result.Data))
-	for i := range result.Data {
-		configs[i] = resourceToConfig(result.Data[i], c)
-	}
-	return configs, nil
-}
-
-// Delete removes a config by its ID.
-func (c *ConfigClient) Delete(ctx context.Context, id string) error {
-	resp, err := c.generated.DeleteConfig(ctx, id)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	return checkStatus(resp.StatusCode, body)
 }
 
 // createConfig creates the config on the server and updates the local instance.
@@ -218,8 +138,8 @@ func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
-// Resolve returns the resolved config values for the given ID.
-func (c *ConfigClient) Resolve(ctx context.Context, id string) (map[string]interface{}, error) {
+// Get returns the resolved config values for the given ID.
+func (c *ConfigClient) Get(ctx context.Context, id string) (map[string]interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
 	}
@@ -238,11 +158,11 @@ func (c *ConfigClient) Resolve(ctx context.Context, id string) (map[string]inter
 	return cp, nil
 }
 
-// ResolveInto resolves the config and unmarshals it into the target struct.
+// GetInto resolves the config and unmarshals it into the target struct.
 // The target must be a pointer to a struct. Dot-notation keys (e.g. "database.host")
 // are expanded into nested structures before unmarshaling.
-func (c *ConfigClient) ResolveInto(ctx context.Context, id string, target interface{}) error {
-	resolved, err := c.Resolve(ctx, id)
+func (c *ConfigClient) GetInto(ctx context.Context, id string, target interface{}) error {
+	resolved, err := c.Get(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -262,7 +182,7 @@ func (c *ConfigClient) Subscribe(ctx context.Context, id string) (*LiveConfig, e
 func (c *ConfigClient) ensureInit(ctx context.Context) error {
 	c.initOnce.Do(func() {
 		environment := c.client.environment
-		configs, err := c.List(ctx)
+		configs, err := c.Management().List(ctx)
 		if err != nil {
 			c.initErr = err
 			return
@@ -293,7 +213,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 		return &SmplError{Message: "No environment set."}
 	}
 
-	configs, err := c.List(ctx)
+	configs, err := c.Management().List(ctx)
 	if err != nil {
 		return err
 	}

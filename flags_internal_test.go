@@ -1239,7 +1239,7 @@ func TestFlagsClient_Get_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flag, err := fc.Get(context.Background(), "feature-x")
+	flag, err := fc.Management().Get(context.Background(), "feature-x")
 	require.NoError(t, err)
 	assert.Equal(t, "feature-x", flag.ID)
 	assert.Equal(t, "Feature X", flag.Name)
@@ -1253,7 +1253,7 @@ func TestFlagsClient_Get_NotFound(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
-	_, err := fc.Get(context.Background(), "nonexistent-flag")
+	_, err := fc.Management().Get(context.Background(), "nonexistent-flag")
 	assert.Error(t, err)
 }
 
@@ -1274,7 +1274,7 @@ func TestFlagsClient_Create_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flag := fc.NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
+	flag := fc.Management().NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "feature-x", flag.ID)
@@ -1290,7 +1290,7 @@ func TestFlagsClient_Create_EmptyID_PostPath(t *testing.T) {
 		_, _ = w.Write([]byte(sampleFlagResponseJSON("server-id", "Feature X", "BOOLEAN")))
 	}))
 
-	flag := fc.NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
+	flag := fc.Management().NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
 	flag.ID = "" // Clear ID to trigger create (POST) path
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
@@ -1304,7 +1304,7 @@ func TestFlagsClient_Create_NonBooleanNoAutoValues(t *testing.T) {
 		_, _ = w.Write([]byte(sampleFlagResponseJSON("color", "Color", "STRING")))
 	}))
 
-	flag := fc.NewStringFlag("color", "red",
+	flag := fc.Management().NewStringFlag("color", "red",
 		WithFlagName("Color"),
 		WithFlagValues([]FlagValue{{Name: "Red", Value: "red"}, {Name: "Blue", Value: "blue"}}),
 	)
@@ -1347,7 +1347,7 @@ func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flag := fc.NewNumberFlag("max-retries", 3, WithFlagName("Max Retries"))
+	flag := fc.Management().NewNumberFlag("max-retries", 3, WithFlagName("Max Retries"))
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "max-retries", flag.ID)
@@ -1378,7 +1378,7 @@ func TestFlagsClient_Get_Unconstrained(t *testing.T) {
 		_, _ = w.Write([]byte(unconstrainedResp))
 	}))
 
-	flag, err := fc.Get(context.Background(), "max-retries")
+	flag, err := fc.Management().Get(context.Background(), "max-retries")
 	require.NoError(t, err)
 	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values, "unconstrained flag should have nil Values")
@@ -1396,7 +1396,7 @@ func TestFlagsClient_List_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flags, err := fc.List(context.Background())
+	flags, err := fc.Management().List(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, flags, 1)
 	assert.Equal(t, "feature-x", flags[0].ID)
@@ -1411,7 +1411,7 @@ func TestFlagsClient_Delete_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	err := fc.Delete(context.Background(), "feature-x")
+	err := fc.Management().Delete(context.Background(), "feature-x")
 	assert.NoError(t, err)
 }
 
@@ -1420,7 +1420,7 @@ func TestFlagsClient_Delete_NotFound(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
-	err := fc.Delete(context.Background(), "nonexistent-flag")
+	err := fc.Management().Delete(context.Background(), "nonexistent-flag")
 	assert.Error(t, err)
 }
 
@@ -1524,7 +1524,7 @@ func TestFlagsClient_CreateContextType_FullMethod(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	ct, err := fc.CreateContextType(context.Background(), "user", "User")
+	ct, err := fc.Management().CreateContextType(context.Background(), "user", "User")
 	require.NoError(t, err)
 	assert.Equal(t, "user", ct.ID)
 }
@@ -1540,7 +1540,7 @@ func TestFlagsClient_UpdateContextType_FullMethod(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	ct, err := fc.UpdateContextType(context.Background(), ctID, map[string]interface{}{"plan": "string"})
+	ct, err := fc.Management().UpdateContextType(context.Background(), ctID, map[string]interface{}{"plan": "string"})
 	require.NoError(t, err)
 	assert.Equal(t, "string", ct.Attributes["plan"])
 }
@@ -1558,7 +1558,7 @@ func TestFlagsClient_ListContextTypes_FullMethod(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	types, err := fc.ListContextTypes(context.Background())
+	types, err := fc.Management().ListContextTypes(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, types, 2)
 	assert.Equal(t, "user", types[0].ID)
@@ -1574,7 +1574,7 @@ func TestFlagsClient_DeleteContextType_FullMethod(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	err := fc.DeleteContextType(context.Background(), ctID)
+	err := fc.Management().DeleteContextType(context.Background(), ctID)
 	assert.NoError(t, err)
 }
 
@@ -1589,7 +1589,7 @@ func TestFlagsClient_ListContexts_FullMethod(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	contexts, err := fc.ListContexts(context.Background(), "user")
+	contexts, err := fc.Management().ListContexts(context.Background(), "user")
 	require.NoError(t, err)
 	assert.Len(t, contexts, 1)
 }
@@ -2022,7 +2022,7 @@ func TestFlagsClient_Get_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"internal error"}]}`))
 	}))
 
-	_, err := fc.Get(context.Background(), "feature-x")
+	_, err := fc.Management().Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -2032,7 +2032,7 @@ func TestFlagsClient_Get_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	_, err := fc.Get(context.Background(), "feature-x")
+	_, err := fc.Management().Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -2042,7 +2042,7 @@ func TestFlagsClient_Create_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
@@ -2053,7 +2053,7 @@ func TestFlagsClient_Create_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
@@ -2064,7 +2064,7 @@ func TestFlagsClient_List_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	_, err := fc.List(context.Background())
+	_, err := fc.Management().List(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2074,7 +2074,7 @@ func TestFlagsClient_List_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	_, err := fc.List(context.Background())
+	_, err := fc.Management().List(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2084,7 +2084,7 @@ func TestFlagsClient_Delete_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	err := fc.Delete(context.Background(), "feature-x")
+	err := fc.Management().Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -2116,7 +2116,7 @@ func TestFlagsClient_CreateContextType_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	_, err := fc.CreateContextType(context.Background(), "user", "User")
+	_, err := fc.Management().CreateContextType(context.Background(), "user", "User")
 	assert.Error(t, err)
 }
 
@@ -2126,7 +2126,7 @@ func TestFlagsClient_UpdateContextType_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	_, err := fc.UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
+	_, err := fc.Management().UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
 	assert.Error(t, err)
 }
 
@@ -2136,7 +2136,7 @@ func TestFlagsClient_ListContextTypes_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	_, err := fc.ListContextTypes(context.Background())
+	_, err := fc.Management().ListContextTypes(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2146,7 +2146,7 @@ func TestFlagsClient_ListContextTypes_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	_, err := fc.ListContextTypes(context.Background())
+	_, err := fc.Management().ListContextTypes(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2156,7 +2156,7 @@ func TestFlagsClient_DeleteContextType_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	err := fc.DeleteContextType(context.Background(), "user-type")
+	err := fc.Management().DeleteContextType(context.Background(), "user-type")
 	assert.Error(t, err)
 }
 
@@ -2166,7 +2166,7 @@ func TestFlagsClient_ListContexts_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	_, err := fc.ListContexts(context.Background(), "user")
+	_, err := fc.Management().ListContexts(context.Background(), "user")
 	assert.Error(t, err)
 }
 
@@ -2176,7 +2176,7 @@ func TestFlagsClient_ListContexts_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	_, err := fc.ListContexts(context.Background(), "user")
+	_, err := fc.Management().ListContexts(context.Background(), "user")
 	assert.Error(t, err)
 }
 
@@ -2673,26 +2673,26 @@ func newFlagsClientWithTransport(t *testing.T, transport http.RoundTripper) *Fla
 
 func TestFlagsClient_Get_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Get(context.Background(), "feature-x")
+	_, err := fc.Management().Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Create_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_List_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.List(context.Background())
+	_, err := fc.Management().List(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Delete_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	err := fc.Delete(context.Background(), "feature-x")
+	err := fc.Management().Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -2713,26 +2713,26 @@ func TestFlagsClient_FetchFlagsList_NetworkError(t *testing.T) {
 
 func TestFlagsClient_Get_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Get(context.Background(), "feature-x")
+	_, err := fc.Management().Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Create_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_List_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.List(context.Background())
+	_, err := fc.Management().List(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Delete_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	err := fc.Delete(context.Background(), "feature-x")
+	err := fc.Management().Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -2753,31 +2753,31 @@ func TestFlagsClient_FetchFlagsList_ReadBodyError(t *testing.T) {
 
 func TestFlagsClient_CreateContextType_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.CreateContextType(context.Background(), "user", "User")
+	_, err := fc.Management().CreateContextType(context.Background(), "user", "User")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_UpdateContextType_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
+	_, err := fc.Management().UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_ListContextTypes_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.ListContextTypes(context.Background())
+	_, err := fc.Management().ListContextTypes(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_DeleteContextType_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	err := fc.DeleteContextType(context.Background(), "user-type")
+	err := fc.Management().DeleteContextType(context.Background(), "user-type")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_ListContexts_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.ListContexts(context.Background(), "user")
+	_, err := fc.Management().ListContexts(context.Background(), "user")
 	assert.Error(t, err)
 }
 
@@ -2785,31 +2785,31 @@ func TestFlagsClient_ListContexts_NetworkError(t *testing.T) {
 
 func TestFlagsClient_CreateContextType_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.CreateContextType(context.Background(), "user", "User")
+	_, err := fc.Management().CreateContextType(context.Background(), "user", "User")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_UpdateContextType_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
+	_, err := fc.Management().UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_ListContextTypes_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.ListContextTypes(context.Background())
+	_, err := fc.Management().ListContextTypes(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_DeleteContextType_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	err := fc.DeleteContextType(context.Background(), "user-type")
+	err := fc.Management().DeleteContextType(context.Background(), "user-type")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_ListContexts_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.ListContexts(context.Background(), "user")
+	_, err := fc.Management().ListContexts(context.Background(), "user")
 	assert.Error(t, err)
 }
 
@@ -3035,7 +3035,7 @@ func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
 
 func TestNewNumberFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	flag := fc.NewNumberFlag("price_multiplier", 1.5)
+	flag := fc.Management().NewNumberFlag("price_multiplier", 1.5)
 	assert.Equal(t, "price_multiplier", flag.ID)
 	assert.Equal(t, "Price Multiplier", flag.Name)
 	assert.Equal(t, string(FlagTypeNumeric), flag.Type)
@@ -3046,7 +3046,7 @@ func TestNewNumberFlag(t *testing.T) {
 func TestNewNumberFlag_WithOptions(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	desc := "A number flag"
-	flag := fc.NewNumberFlag("rate", 0.5, WithFlagName("Rate"), WithFlagDescription(desc))
+	flag := fc.Management().NewNumberFlag("rate", 0.5, WithFlagName("Rate"), WithFlagDescription(desc))
 	assert.Equal(t, "Rate", flag.Name)
 	require.NotNil(t, flag.Description)
 	assert.Equal(t, desc, *flag.Description)
@@ -3057,7 +3057,7 @@ func TestNewNumberFlag_WithOptions(t *testing.T) {
 func TestNewJsonFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	defaultVal := map[string]interface{}{"theme": "dark"}
-	flag := fc.NewJsonFlag("ui_config", defaultVal)
+	flag := fc.Management().NewJsonFlag("ui_config", defaultVal)
 	assert.Equal(t, "ui_config", flag.ID)
 	assert.Equal(t, "Ui Config", flag.Name)
 	assert.Equal(t, string(FlagTypeJSON), flag.Type)
@@ -3068,7 +3068,7 @@ func TestNewJsonFlag(t *testing.T) {
 func TestNewJsonFlag_WithOptions(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	defaultVal := map[string]interface{}{"key": "val"}
-	flag := fc.NewJsonFlag("config", defaultVal, WithFlagName("JSON Config"))
+	flag := fc.Management().NewJsonFlag("config", defaultVal, WithFlagName("JSON Config"))
 	assert.Equal(t, "JSON Config", flag.Name)
 }
 
@@ -3343,7 +3343,7 @@ func TestHandleFlagChanged(t *testing.T) {
 
 func TestFlagsClient_CreateFlag_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
 	flag.ID = "" // trigger create (POST) path
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
@@ -3351,7 +3351,7 @@ func TestFlagsClient_CreateFlag_NetworkError(t *testing.T) {
 
 func TestFlagsClient_CreateFlag_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
 	flag.ID = ""
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
@@ -3363,7 +3363,7 @@ func TestFlagsClient_CreateFlag_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
 	}))
 
-	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
 	flag.ID = ""
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
@@ -3375,7 +3375,7 @@ func TestFlagsClient_CreateFlag_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	}))
 
-	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
 	flag.ID = ""
 	err := flag.Save(context.Background())
 	assert.Error(t, err)

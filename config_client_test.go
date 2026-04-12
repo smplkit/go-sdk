@@ -73,7 +73,7 @@ func TestConfigClient_Get(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON("my-service", "My Service")))
 	})
 
-	cfg, err := client.Config().Get(context.Background(), "my-service")
+	cfg, err := client.Config().Management().Get(context.Background(), "my-service")
 	require.NoError(t, err)
 	assert.Equal(t, "my-service", cfg.ID)
 	assert.Equal(t, "My Service", cfg.Name)
@@ -86,7 +86,7 @@ func TestConfigClient_Get_NotFound(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	})
 
-	_, err := client.Config().Get(context.Background(), "nonexistent")
+	_, err := client.Config().Management().Get(context.Background(), "nonexistent")
 	require.Error(t, err)
 
 	var notFound *smplkit.SmplNotFoundError
@@ -107,7 +107,7 @@ func TestConfigClient_List(t *testing.T) {
 		}`))
 	})
 
-	configs, err := client.Config().List(context.Background())
+	configs, err := client.Config().Management().List(context.Background())
 	require.NoError(t, err)
 	require.Len(t, configs, 2)
 	assert.Equal(t, "A", configs[0].Name)
@@ -120,7 +120,7 @@ func TestConfigClient_List_Empty(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data": []}`))
 	})
 
-	configs, err := client.Config().List(context.Background())
+	configs, err := client.Config().Management().List(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, configs)
 }
@@ -145,7 +145,7 @@ func TestConfigClient_New_Save(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON("new-config", "New Config")))
 	})
 
-	cfg := client.Config().New("new-config",
+	cfg := client.Config().Management().New("new-config",
 		smplkit.WithConfigName("New Config"),
 		smplkit.WithConfigDescription("A new config"),
 	)
@@ -165,7 +165,7 @@ func TestConfigClient_Save_CreatePath(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON("server-assigned-id", "New Config")))
 	})
 
-	cfg := client.Config().New("temp-id", smplkit.WithConfigName("New Config"))
+	cfg := client.Config().Management().New("temp-id", smplkit.WithConfigName("New Config"))
 	cfg.ID = "" // Clear ID to trigger create path
 	err := cfg.Save(context.Background())
 	require.NoError(t, err)
@@ -182,7 +182,7 @@ func TestConfigClient_Save_CreatePath_NetworkError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cfg := client.Config().New("temp", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("temp", smplkit.WithConfigName("Test"))
 	cfg.ID = ""
 	err = cfg.Save(context.Background())
 	require.Error(t, err)
@@ -199,7 +199,7 @@ func TestConfigClient_Save_CreatePath_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cfg := client.Config().New("temp", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("temp", smplkit.WithConfigName("Test"))
 	cfg.ID = ""
 	err = cfg.Save(context.Background())
 	require.Error(t, err)
@@ -213,7 +213,7 @@ func TestConfigClient_Save_CreatePath_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
 	})
 
-	cfg := client.Config().New("temp", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("temp", smplkit.WithConfigName("Test"))
 	cfg.ID = ""
 	err := cfg.Save(context.Background())
 	require.Error(t, err)
@@ -227,7 +227,7 @@ func TestConfigClient_Save_CreatePath_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	})
 
-	cfg := client.Config().New("temp", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("temp", smplkit.WithConfigName("Test"))
 	cfg.ID = ""
 	err := cfg.Save(context.Background())
 	require.Error(t, err)
@@ -247,7 +247,7 @@ func TestConfigClient_New_Save_WithEnvironments(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON("new-config", "New Config")))
 	})
 
-	cfg := client.Config().New("new-config", smplkit.WithConfigName("New Config"))
+	cfg := client.Config().Management().New("new-config", smplkit.WithConfigName("New Config"))
 	cfg.Environments = map[string]map[string]interface{}{
 		"production": {"values": map[string]interface{}{"debug": false}},
 	}
@@ -263,7 +263,7 @@ func TestConfigClient_Delete(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	err := client.Config().Delete(context.Background(), "my-config")
+	err := client.Config().Management().Delete(context.Background(), "my-config")
 	require.NoError(t, err)
 }
 
@@ -291,7 +291,7 @@ func TestConfigClient_Save_Update(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	cfg.Name = "Updated Name"
@@ -316,7 +316,7 @@ func TestConfigClient_Save_NotFound(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	err = cfg.Save(context.Background())
@@ -347,7 +347,7 @@ func TestConfig_MutateItems_Save(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	cfg.Items["log_level"] = "debug"
@@ -379,7 +379,7 @@ func TestConfig_MutateEnvironment_Save(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	cfg.Environments["production"] = map[string]interface{}{
@@ -412,7 +412,7 @@ func TestConfig_MutateAddItem_Save(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	cfg.Items["debug"] = true
@@ -426,7 +426,7 @@ func TestConfigClient_404_NotFoundError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	})
 
-	_, err := client.Config().Get(context.Background(), "nonexistent")
+	_, err := client.Config().Management().Get(context.Background(), "nonexistent")
 	require.Error(t, err)
 
 	var notFound *smplkit.SmplNotFoundError
@@ -444,7 +444,7 @@ func TestConfigClient_409_ConflictError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"has children"}]}`))
 	})
 
-	err := client.Config().Delete(context.Background(), "has-children")
+	err := client.Config().Management().Delete(context.Background(), "has-children")
 	require.Error(t, err)
 
 	var conflict *smplkit.SmplConflictError
@@ -458,7 +458,7 @@ func TestConfigClient_422_ValidationError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"name is required"}]}`))
 	})
 
-	cfg := client.Config().New("bad-config", smplkit.WithConfigName(""))
+	cfg := client.Config().Management().New("bad-config", smplkit.WithConfigName(""))
 	err := cfg.Save(context.Background())
 	require.Error(t, err)
 
@@ -479,7 +479,7 @@ func TestConfigClient_NetworkError_ConnectionError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, listErr := client.Config().List(context.Background())
+	_, listErr := client.Config().Management().List(context.Background())
 	require.Error(t, listErr)
 
 	var connErr *smplkit.SmplConnectionError
@@ -500,7 +500,7 @@ func TestConfigClient_ContextTimeout_TimeoutError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	_, err = client.Config().List(ctx)
+	_, err = client.Config().Management().List(ctx)
 	require.Error(t, err)
 
 	var timeoutErr *smplkit.SmplTimeoutError
@@ -517,7 +517,7 @@ func TestConfigClient_AuthHeader(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data": []}`))
 	})
 
-	_, err := client.Config().List(context.Background())
+	_, err := client.Config().Management().List(context.Background())
 	require.NoError(t, err)
 }
 
@@ -530,7 +530,7 @@ func TestConfigClient_UserAgent(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data": []}`))
 	})
 
-	_, err := client.Config().List(context.Background())
+	_, err := client.Config().Management().List(context.Background())
 	require.NoError(t, err)
 }
 
@@ -542,7 +542,7 @@ func TestConfigClient_ContentType(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON("test-key", "Name")))
 	})
 
-	cfg := client.Config().New("test-key", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("test-key", smplkit.WithConfigName("Test"))
 	err := cfg.Save(context.Background())
 	require.NoError(t, err)
 }
@@ -560,7 +560,7 @@ func TestConfigClient_ContextCanceled_TimeoutError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	_, err = client.Config().List(ctx)
+	_, err = client.Config().Management().List(ctx)
 	require.Error(t, err)
 
 	var timeoutErr *smplkit.SmplTimeoutError
@@ -573,7 +573,7 @@ func TestConfigClient_GenericHTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"internal server error"}`))
 	})
 
-	_, err := client.Config().List(context.Background())
+	_, err := client.Config().Management().List(context.Background())
 	require.Error(t, err)
 
 	var smplErr *smplkit.SmplError
@@ -591,7 +591,7 @@ func TestConfigClient_GenericError_FallsBackToConnectionError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().List(context.Background())
+	_, err = client.Config().Management().List(context.Background())
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -627,7 +627,7 @@ func TestConfigClient_ParsesEnvironments(t *testing.T) {
 		}}`))
 	})
 
-	cfg, err := client.Config().Get(context.Background(), "env-test")
+	cfg, err := client.Config().Management().Get(context.Background(), "env-test")
 	require.NoError(t, err)
 	require.Contains(t, cfg.Environments, "production")
 	prodEnv := cfg.Environments["production"]
@@ -642,7 +642,7 @@ func TestConfigClient_Get_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	})
 
-	_, err := client.Config().Get(context.Background(), "some-key")
+	_, err := client.Config().Management().Get(context.Background(), "some-key")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
 }
@@ -656,7 +656,7 @@ func TestConfigClient_Get_NetworkError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().Get(context.Background(), "some-key")
+	_, err = client.Config().Management().Get(context.Background(), "some-key")
 	require.Error(t, err)
 }
 
@@ -665,7 +665,7 @@ func TestConfigClient_New_Save_UnmarshalableValues(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service")
 	require.NoError(t, err)
 
-	cfg := client.Config().New("test", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("test", smplkit.WithConfigName("Test"))
 	cfg.Items = map[string]interface{}{"ch": make(chan int)}
 	err = cfg.Save(context.Background())
 	require.Error(t, err)
@@ -678,7 +678,7 @@ func TestConfigClient_New_Save_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	})
 
-	cfg := client.Config().New("test", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("test", smplkit.WithConfigName("Test"))
 	err := cfg.Save(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
@@ -690,7 +690,7 @@ func TestConfigClient_List_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	})
 
-	_, err := client.Config().List(context.Background())
+	_, err := client.Config().Management().List(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")
 }
@@ -704,7 +704,7 @@ func TestConfigClient_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().List(context.Background())
+	_, err = client.Config().Management().List(context.Background())
 	require.Error(t, err)
 
 	var connErr *smplkit.SmplConnectionError
@@ -719,7 +719,7 @@ func TestConfigClient_InvalidURL_RequestCreateError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().List(context.Background())
+	_, err = client.Config().Management().List(context.Background())
 	require.Error(t, err)
 }
 
@@ -732,7 +732,7 @@ func TestClassifyError_NetErrorTimeout(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().List(context.Background())
+	_, err = client.Config().Management().List(context.Background())
 	require.Error(t, err)
 
 	var timeoutErr *smplkit.SmplTimeoutError
@@ -778,7 +778,7 @@ func TestConfigClient_Get_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = client.Config().Get(context.Background(), "some-key")
+	_, err = client.Config().Management().Get(context.Background(), "some-key")
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -791,7 +791,7 @@ func TestConfigClient_Get_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"server error"}`))
 	})
 
-	_, err := client.Config().Get(context.Background(), "some-key")
+	_, err := client.Config().Management().Get(context.Background(), "some-key")
 	require.Error(t, err)
 	var smplErr *smplkit.SmplError
 	require.True(t, errors.As(err, &smplErr))
@@ -807,7 +807,7 @@ func TestConfigClient_New_Save_NetworkError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cfg := client.Config().New("test", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("test", smplkit.WithConfigName("Test"))
 	err = cfg.Save(context.Background())
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
@@ -823,7 +823,7 @@ func TestConfigClient_New_Save_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cfg := client.Config().New("test", smplkit.WithConfigName("Test"))
+	cfg := client.Config().Management().New("test", smplkit.WithConfigName("Test"))
 	err = cfg.Save(context.Background())
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
@@ -838,7 +838,7 @@ func TestConfigClient_Delete_NotFound(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	})
 
-	err := client.Config().Delete(context.Background(), "nonexistent")
+	err := client.Config().Management().Delete(context.Background(), "nonexistent")
 	require.Error(t, err)
 	var notFound *smplkit.SmplNotFoundError
 	require.True(t, errors.As(err, &notFound))
@@ -853,7 +853,7 @@ func TestConfigClient_Delete_NetworkError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = client.Config().Delete(context.Background(), "some-key")
+	err = client.Config().Management().Delete(context.Background(), "some-key")
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -868,7 +868,7 @@ func TestConfigClient_Delete_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = client.Config().Delete(context.Background(), "some-key")
+	err = client.Config().Management().Delete(context.Background(), "some-key")
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
@@ -884,7 +884,7 @@ func TestConfigClient_Save_MarshalError(t *testing.T) {
 		_, _ = w.Write([]byte(sampleConfigJSON(configID, "Svc")))
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	// Set items with an unmarshalable type (channel).
@@ -921,7 +921,7 @@ func TestConfigClient_Save_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	err = cfg.Save(context.Background())
@@ -955,7 +955,7 @@ func TestConfigClient_Save_ReadBodyError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	err = cfg.Save(context.Background())
@@ -982,7 +982,7 @@ func TestConfigClient_Save_MalformedResponse(t *testing.T) {
 
 	updateClient, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(updateServer.URL))
 	require.NoError(t, err)
-	cfg, err := updateClient.Config().Get(context.Background(), configID)
+	cfg, err := updateClient.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	err = cfg.Save(context.Background())
@@ -1049,7 +1049,7 @@ func TestConfig_MutateEnvItem_Save(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	// Mutate environment values directly.
@@ -1075,7 +1075,7 @@ func TestConfig_MutateNewEnv_Save(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	// Add a new environment.
@@ -1101,7 +1101,7 @@ func TestConfig_MutateExistingEnvMerge_Save(t *testing.T) {
 		}
 	})
 
-	cfg, err := client.Config().Get(context.Background(), configID)
+	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
 	// Add a new key to the existing environment values.

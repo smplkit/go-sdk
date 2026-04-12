@@ -42,10 +42,10 @@ func main() {
 	// Pre-flight cleanup.
 	step("Cleaning up leftover resources from previous runs")
 	for _, key := range []string{"showcase.api", "showcase.worker", "showcase.db"} {
-		_ = logging.Delete(ctx, key)
+		_ = logging.Management().Delete(ctx, key)
 	}
 	for _, key := range []string{"showcase-infra", "showcase-backend"} {
-		_ = logging.DeleteGroup(ctx, key)
+		_ = logging.Management().DeleteGroup(ctx, key)
 	}
 	fmt.Println("  Cleanup complete")
 
@@ -53,7 +53,7 @@ func main() {
 	section("2. Create Log Groups")
 
 	step("Creating parent group: showcase-infra")
-	infraGroup := logging.NewGroup("showcase-infra", smplkit.WithLogGroupName("Infrastructure"))
+	infraGroup := logging.Management().NewGroup("showcase-infra", smplkit.WithLogGroupName("Infrastructure"))
 	infraGroup.SetLevel(smplkit.LogLevelWarn)
 	if err := infraGroup.Save(ctx); err != nil {
 		fatal("Failed to create infra group", err)
@@ -61,7 +61,7 @@ func main() {
 	fmt.Printf("  Created: id=%s, name=%s, level=%s\n", infraGroup.ID, infraGroup.Name, *infraGroup.Level)
 
 	step("Creating child group: showcase-backend (parent=showcase-infra)")
-	backendGroup := logging.NewGroup("showcase-backend", smplkit.WithLogGroupName("Backend Services"),
+	backendGroup := logging.Management().NewGroup("showcase-backend", smplkit.WithLogGroupName("Backend Services"),
 		smplkit.WithLogGroupParent(infraGroup.ID))
 	backendGroup.SetLevel(smplkit.LogLevelInfo)
 	if err := backendGroup.Save(ctx); err != nil {
@@ -74,7 +74,7 @@ func main() {
 	section("3. Create Loggers")
 
 	step("Creating logger: showcase.api (in backend group)")
-	apiLogger := logging.New("showcase.api", smplkit.WithLoggerName("API Service"))
+	apiLogger := logging.Management().New("showcase.api", smplkit.WithLoggerName("API Service"))
 	apiLogger.Group = &backendGroup.ID
 	apiLogger.SetLevel(smplkit.LogLevelDebug)
 	if err := apiLogger.Save(ctx); err != nil {
@@ -83,7 +83,7 @@ func main() {
 	fmt.Printf("  Created: id=%s, level=%s, group=%s\n", apiLogger.ID, *apiLogger.Level, *apiLogger.Group)
 
 	step("Creating logger: showcase.worker (no group, environment-specific levels)")
-	workerLogger := logging.New("showcase.worker", smplkit.WithLoggerName("Worker"))
+	workerLogger := logging.Management().New("showcase.worker", smplkit.WithLoggerName("Worker"))
 	workerLogger.SetLevel(smplkit.LogLevelInfo)
 	workerLogger.SetEnvironmentLevel("production", smplkit.LogLevelWarn)
 	workerLogger.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
@@ -93,7 +93,7 @@ func main() {
 	fmt.Printf("  Created: id=%s, level=%s\n", workerLogger.ID, *workerLogger.Level)
 
 	step("Creating logger: showcase.db (unmanaged — level inherited from group/platform)")
-	dbLogger := logging.New("showcase.db", smplkit.WithLoggerName("Database"), smplkit.WithLoggerManaged(false))
+	dbLogger := logging.Management().New("showcase.db", smplkit.WithLoggerName("Database"), smplkit.WithLoggerManaged(false))
 	if err := dbLogger.Save(ctx); err != nil {
 		fatal("Failed to create DB logger", err)
 	}
@@ -107,7 +107,7 @@ func main() {
 	section("4. List and Get")
 
 	step("Listing all loggers")
-	loggers, err := logging.List(ctx)
+	loggers, err := logging.Management().List(ctx)
 	if err != nil {
 		fatal("Failed to list loggers", err)
 	}
@@ -121,14 +121,14 @@ func main() {
 	}
 
 	step("Getting logger by key: showcase.api")
-	fetched, err := logging.Get(ctx, "showcase.api")
+	fetched, err := logging.Management().Get(ctx, "showcase.api")
 	if err != nil {
 		fatal("Failed to get logger", err)
 	}
 	fmt.Printf("  Got: id=%s, name=%s\n", fetched.ID, fetched.Name)
 
 	step("Listing all log groups")
-	groups, err := logging.ListGroups(ctx)
+	groups, err := logging.Management().ListGroups(ctx)
 	if err != nil {
 		fatal("Failed to list groups", err)
 	}
@@ -142,7 +142,7 @@ func main() {
 	}
 
 	step("Getting group by key: showcase-backend")
-	fetchedGroup, err := logging.GetGroup(ctx, "showcase-backend")
+	fetchedGroup, err := logging.Management().GetGroup(ctx, "showcase-backend")
 	if err != nil {
 		fatal("Failed to get group", err)
 	}
@@ -177,7 +177,7 @@ func main() {
 
 	step("Deleting loggers")
 	for _, key := range []string{"showcase.api", "showcase.worker", "showcase.db"} {
-		if err := logging.Delete(ctx, key); err != nil {
+		if err := logging.Management().Delete(ctx, key); err != nil {
 			fmt.Printf("  Warning: failed to delete %s: %v\n", key, err)
 		} else {
 			fmt.Printf("  Deleted: %s\n", key)
@@ -186,7 +186,7 @@ func main() {
 
 	step("Deleting groups (child first)")
 	for _, key := range []string{"showcase-backend", "showcase-infra"} {
-		if err := logging.DeleteGroup(ctx, key); err != nil {
+		if err := logging.Management().DeleteGroup(ctx, key); err != nil {
 			fmt.Printf("  Warning: failed to delete %s: %v\n", key, err)
 		} else {
 			fmt.Printf("  Deleted: %s\n", key)
