@@ -101,7 +101,7 @@ func newLoggingTestClient(t *testing.T, handler http.Handler) *smplkit.Client {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 	return client
 }
