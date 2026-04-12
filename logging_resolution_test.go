@@ -630,7 +630,6 @@ func TestBuildLoggerAttributes_WithLevel(t *testing.T) {
 	require.NotNil(t, attrs.Managed)
 	assert.True(t, *attrs.Managed)
 	require.NotNil(t, attrs.Environments)
-	require.NotNil(t, attrs.Sources)
 }
 
 func TestBuildLoggerAttributes_NilLevel(t *testing.T) {
@@ -655,16 +654,6 @@ func TestBuildLoggerAttributes_NilEnvironments(t *testing.T) {
 	assert.Nil(t, attrs.Environments)
 }
 
-func TestBuildLoggerAttributes_NilSources(t *testing.T) {
-	logger := &Logger{
-		ID:      "test",
-		Name:    "Test",
-		Managed: true,
-	}
-
-	attrs := buildLoggerAttributes(logger)
-	assert.Nil(t, attrs.Sources)
-}
 
 // --- buildLogGroupAttributes tests ---
 

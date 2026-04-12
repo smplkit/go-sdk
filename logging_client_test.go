@@ -1391,7 +1391,6 @@ func TestLoggingClient_Get_WithEnvironments(t *testing.T) {
 				"level": "INFO",
 				"managed": true,
 				"environments": {"production": {"level": "ERROR"}},
-				"sources": [{"service": "test-service"}],
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": "2024-06-15T12:00:00Z"
 			}
@@ -1401,7 +1400,7 @@ func TestLoggingClient_Get_WithEnvironments(t *testing.T) {
 	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
 	require.NoError(t, err)
 	assert.Contains(t, logger.Environments, "production")
-	require.Len(t, logger.Sources, 1)
+	assert.Nil(t, logger.Sources)
 }
 
 // --- Logger response with nil level ---
