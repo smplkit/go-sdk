@@ -52,6 +52,21 @@ func (e ApiKeyResourceType) Valid() bool {
 	}
 }
 
+// Defines values for BundleResourceType.
+const (
+	BundleResourceTypeBundle BundleResourceType = "bundle"
+)
+
+// Valid indicates whether the value is a known member of the BundleResourceType enum.
+func (e BundleResourceType) Valid() bool {
+	switch e {
+	case BundleResourceTypeBundle:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContextResourceType.
 const (
 	ContextResourceTypeContext ContextResourceType = "context"
@@ -76,6 +91,21 @@ const (
 func (e ContextTypeResourceType) Valid() bool {
 	switch e {
 	case ContextTypeResourceTypeContextType:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateBundleDataType.
+const (
+	CreateBundleDataTypeBundle CreateBundleDataType = "bundle"
+)
+
+// Valid indicates whether the value is a known member of the CreateBundleDataType enum.
+func (e CreateBundleDataType) Valid() bool {
+	switch e {
+	case CreateBundleDataTypeBundle:
 		return true
 	default:
 		return false
@@ -346,6 +376,29 @@ type AuthTokenResponse struct {
 	Token     string `json:"token"`
 }
 
+// BundleAttributes defines model for BundleAttributes.
+type BundleAttributes struct {
+	Bundle        string   `json:"bundle"`
+	Plan          string   `json:"plan"`
+	Products      []string `json:"products"`
+	Subscriptions []string `json:"subscriptions"`
+}
+
+// BundleResource defines model for BundleResource.
+type BundleResource struct {
+	Attributes BundleAttributes   `json:"attributes"`
+	Id         *string            `json:"id,omitempty"`
+	Type       BundleResourceType `json:"type"`
+}
+
+// BundleResourceType defines model for BundleResource.Type.
+type BundleResourceType string
+
+// BundleResponse defines model for BundleResponse.
+type BundleResponse struct {
+	Data BundleResource `json:"data"`
+}
+
 // Context defines model for Context.
 type Context struct {
 	// Attributes Observed attributes
@@ -432,6 +485,26 @@ type ContextTypeResourceType string
 type ContextTypeResponse struct {
 	Data ContextTypeResource `json:"data"`
 }
+
+// CreateBundleAttributes defines model for CreateBundleAttributes.
+type CreateBundleAttributes struct {
+	Bundle        string `json:"bundle"`
+	PaymentMethod string `json:"payment_method"`
+}
+
+// CreateBundleBody defines model for CreateBundleBody.
+type CreateBundleBody struct {
+	Data CreateBundleData `json:"data"`
+}
+
+// CreateBundleData defines model for CreateBundleData.
+type CreateBundleData struct {
+	Attributes CreateBundleAttributes `json:"attributes"`
+	Type       CreateBundleDataType   `json:"type"`
+}
+
+// CreateBundleDataType defines model for CreateBundleData.Type.
+type CreateBundleDataType string
 
 // CreateSubscriptionAttributes defines model for CreateSubscriptionAttributes.
 type CreateSubscriptionAttributes struct {
@@ -799,6 +872,7 @@ type SetupIntentResponse struct {
 
 // SubscriptionAttributes defines model for SubscriptionAttributes.
 type SubscriptionAttributes struct {
+	Bundle           *string `json:"bundle,omitempty"`
 	ClientSecret     *string `json:"client_secret,omitempty"`
 	Comped           bool    `json:"comped"`
 	CurrentPeriodEnd *string `json:"current_period_end,omitempty"`
@@ -935,6 +1009,9 @@ type RegisterJSONRequestBody = RegisterRequest
 
 // VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
 type VerifyEmailJSONRequestBody = VerifyEmailRequest
+
+// CreateBundleApplicationVndAPIPlusJSONRequestBody defines body for CreateBundle for application/vnd.api+json ContentType.
+type CreateBundleApplicationVndAPIPlusJSONRequestBody = CreateBundleBody
 
 // CreateContextTypeApplicationVndAPIPlusJSONRequestBody defines body for CreateContextType for application/vnd.api+json ContentType.
 type CreateContextTypeApplicationVndAPIPlusJSONRequestBody = ContextTypeResponse
@@ -1172,6 +1249,11 @@ type ClientInterface interface {
 	VerifyEmailWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateBundleWithBody request with any body
+	CreateBundleWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateBundleWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateBundleApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListContextTypes request
 	ListContextTypes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1578,6 +1660,30 @@ func (c *Client) VerifyEmailWithBody(ctx context.Context, contentType string, bo
 
 func (c *Client) VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewVerifyEmailRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateBundleWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateBundleRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateBundleWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateBundleApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateBundleRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2932,6 +3038,46 @@ func NewVerifyEmailRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/auth/verify-email")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateBundleRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateBundle builder with application/vnd.api+json body
+func NewCreateBundleRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateBundleApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateBundleRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateBundleRequestWithBody generates requests for CreateBundle with any type of body
+func NewCreateBundleRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/bundles")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4729,6 +4875,11 @@ type ClientWithResponsesInterface interface {
 
 	VerifyEmailWithResponse(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyEmailResponse, error)
 
+	// CreateBundleWithBodyWithResponse request with any body
+	CreateBundleWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error)
+
+	CreateBundleWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateBundleApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error)
+
 	// ListContextTypesWithResponse request
 	ListContextTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListContextTypesResponse, error)
 
@@ -5271,6 +5422,32 @@ func (r VerifyEmailResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r VerifyEmailResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateBundleResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *BundleResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateBundleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateBundleResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -6598,6 +6775,23 @@ func (c *ClientWithResponses) VerifyEmailWithResponse(ctx context.Context, body 
 	return ParseVerifyEmailResponse(rsp)
 }
 
+// CreateBundleWithBodyWithResponse request with arbitrary body returning *CreateBundleResponse
+func (c *ClientWithResponses) CreateBundleWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error) {
+	rsp, err := c.CreateBundleWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateBundleResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateBundleWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateBundleApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateBundleResponse, error) {
+	rsp, err := c.CreateBundleWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateBundleResponse(rsp)
+}
+
 // ListContextTypesWithResponse request returning *ListContextTypesResponse
 func (c *ClientWithResponses) ListContextTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListContextTypesResponse, error) {
 	rsp, err := c.ListContextTypes(ctx, reqEditors...)
@@ -7883,6 +8077,60 @@ func ParseVerifyEmailResponse(rsp *http.Response) (*VerifyEmailResponse, error) 
 			return nil, err
 		}
 		response.JSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateBundleResponse parses an HTTP response from a CreateBundleWithResponse call
+func ParseCreateBundleResponse(rsp *http.Response) (*CreateBundleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateBundleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest BundleResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
 
 	}
 

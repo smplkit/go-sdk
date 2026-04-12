@@ -4271,6 +4271,83 @@
         }
       }
     },
+    "/api/v1/bundles": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Create Bundle Subscription",
+        "description": "Create a bundle subscription covering all three products at a shared plan tier.",
+        "operationId": "create_bundle",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBundleBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/payment_methods": {
       "get": {
         "tags": [
@@ -4750,6 +4827,95 @@
         ],
         "title": "AuthTokenResponse"
       },
+      "BundleAttributes": {
+        "properties": {
+          "bundle": {
+            "type": "string",
+            "title": "Bundle"
+          },
+          "plan": {
+            "type": "string",
+            "title": "Plan"
+          },
+          "products": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "subscriptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Subscriptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bundle",
+          "plan",
+          "products",
+          "subscriptions"
+        ],
+        "title": "BundleAttributes"
+      },
+      "BundleResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "bundle"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/BundleAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "BundleResource",
+        "example": {
+          "attributes": {
+            "bundle": "standard",
+            "plan": "standard",
+            "products": [
+              "config",
+              "flags",
+              "logging"
+            ],
+            "subscriptions": [
+              "sub-uuid-config",
+              "sub-uuid-flags",
+              "sub-uuid-logging"
+            ]
+          },
+          "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "type": "bundle"
+        }
+      },
+      "BundleResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/BundleResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "BundleResponse"
+      },
       "Context": {
         "properties": {
           "name": {
@@ -5046,6 +5212,60 @@
           "data"
         ],
         "title": "ContextTypeResponse"
+      },
+      "CreateBundleAttributes": {
+        "properties": {
+          "bundle": {
+            "type": "string",
+            "title": "Bundle"
+          },
+          "payment_method": {
+            "type": "string",
+            "title": "Payment Method"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bundle",
+          "payment_method"
+        ],
+        "title": "CreateBundleAttributes",
+        "example": {
+          "bundle": "standard",
+          "payment_method": "pm_1234567890abcdef"
+        }
+      },
+      "CreateBundleBody": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CreateBundleData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "CreateBundleBody"
+      },
+      "CreateBundleData": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "bundle"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/CreateBundleAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "CreateBundleData"
       },
       "CreateSubscriptionAttributes": {
         "properties": {
@@ -6479,6 +6699,11 @@
           "stripe_managed": {
             "type": "boolean",
             "title": "Stripe Managed"
+          },
+          "bundle": {
+            "type": "string",
+            "nullable": true,
+            "title": "Bundle"
           },
           "current_period_end": {
             "type": "string",
