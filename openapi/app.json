@@ -39,19 +39,14 @@
             "required": false,
             "schema": {
               "type": "string",
-              "default": "",
+              "nullable": true,
               "title": "Source"
             }
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "302": {
+            "description": "Redirect to OAuth provider login page"
           },
           "400": {
             "description": "Validation error or malformed request",
@@ -155,13 +150,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "302": {
+            "description": "Redirect to frontend with auth token in fragment"
           },
           "400": {
             "description": "Validation error or malformed request",
@@ -488,6 +478,7 @@
           "Users"
         ],
         "summary": "Get Current User",
+        "description": "Return the currently authenticated user.",
         "operationId": "get_current_user",
         "responses": {
           "200": {
@@ -552,6 +543,7 @@
           "Users"
         ],
         "summary": "Update Current User",
+        "description": "Update the currently authenticated user's profile.",
         "operationId": "update_current_user",
         "requestBody": {
           "content": {
@@ -628,6 +620,7 @@
           "Account"
         ],
         "summary": "Get Current Account",
+        "description": "Return the account for the currently authenticated user.",
         "operationId": "get_account",
         "responses": {
           "200": {
@@ -692,6 +685,7 @@
           "Account"
         ],
         "summary": "Update Current Account",
+        "description": "Update the current account's settings.",
         "operationId": "update_account",
         "requestBody": {
           "content": {
@@ -766,6 +760,7 @@
           "Account"
         ],
         "summary": "Delete Current Account",
+        "description": "Permanently delete the current account and all associated data.",
         "operationId": "delete_account",
         "responses": {
           "204": {
@@ -825,6 +820,7 @@
           "Environments"
         ],
         "summary": "List Environments",
+        "description": "List all environments for the authenticated account.",
         "operationId": "list_environments",
         "responses": {
           "200": {
@@ -889,6 +885,7 @@
           "Environments"
         ],
         "summary": "Create Environment",
+        "description": "Create a new environment. The caller provides the id (key) in the request body.",
         "operationId": "create_environment",
         "requestBody": {
           "content": {
@@ -965,6 +962,7 @@
           "Environments"
         ],
         "summary": "Get Environment",
+        "description": "Return an environment by id.",
         "operationId": "get_environment",
         "security": [
           {
@@ -1040,6 +1038,7 @@
           "Environments"
         ],
         "summary": "Update Environment",
+        "description": "Update an environment by id.",
         "operationId": "update_environment",
         "security": [
           {
@@ -1125,6 +1124,7 @@
           "Environments"
         ],
         "summary": "Delete Environment",
+        "description": "Delete an environment by id.",
         "operationId": "delete_environment",
         "security": [
           {
@@ -1195,6 +1195,7 @@
           "API Keys"
         ],
         "summary": "Create API Key",
+        "description": "Create a new API key. The id and key value are server-generated.",
         "operationId": "create_api_key",
         "security": [
           {
@@ -1269,6 +1270,7 @@
           "API Keys"
         ],
         "summary": "List API Keys",
+        "description": "List all API keys for the authenticated account.",
         "operationId": "list_api_keys",
         "security": [
           {
@@ -1347,6 +1349,7 @@
           "API Keys"
         ],
         "summary": "Get API Key",
+        "description": "Return an API key by id.",
         "operationId": "get_api_key",
         "security": [
           {
@@ -1423,6 +1426,7 @@
           "API Keys"
         ],
         "summary": "Update API Key",
+        "description": "Update an API key by id.",
         "operationId": "update_api_key",
         "security": [
           {
@@ -1509,6 +1513,7 @@
           "API Keys"
         ],
         "summary": "Delete API Key",
+        "description": "Delete an API key by id.",
         "operationId": "delete_api_key",
         "security": [
           {
@@ -1580,6 +1585,7 @@
           "API Keys"
         ],
         "summary": "Revoke API Key",
+        "description": "Permanently revoke an API key.",
         "operationId": "revoke_api_key",
         "security": [
           {
@@ -1658,6 +1664,7 @@
           "Context Types"
         ],
         "summary": "List Context Types",
+        "description": "List all context types for the authenticated account.",
         "operationId": "list_context_types",
         "responses": {
           "200": {
@@ -1722,6 +1729,7 @@
           "Context Types"
         ],
         "summary": "Create Context Type",
+        "description": "Create a new context type. The caller provides the id (key) in the request body.",
         "operationId": "create_context_type",
         "requestBody": {
           "content": {
@@ -1798,6 +1806,7 @@
           "Context Types"
         ],
         "summary": "Get Context Type",
+        "description": "Return a context type by id.",
         "operationId": "get_context_type",
         "security": [
           {
@@ -1873,6 +1882,7 @@
           "Context Types"
         ],
         "summary": "Update Context Type",
+        "description": "Update a context type by id.",
         "operationId": "update_context_type",
         "security": [
           {
@@ -1958,6 +1968,7 @@
           "Context Types"
         ],
         "summary": "Delete Context Type",
+        "description": "Delete a context type and all its associated context instances by id.",
         "operationId": "delete_context_type",
         "security": [
           {
@@ -2028,6 +2039,7 @@
           "Contexts"
         ],
         "summary": "Bulk Register Contexts",
+        "description": "Register context instances in bulk. Creates context types automatically if they don't exist.",
         "operationId": "bulk_register_contexts",
         "requestBody": {
           "content": {
@@ -2104,6 +2116,7 @@
           "Contexts"
         ],
         "summary": "List Contexts",
+        "description": "List all context instances for the authenticated account.",
         "operationId": "list_contexts",
         "security": [
           {
@@ -2182,6 +2195,7 @@
           "Contexts"
         ],
         "summary": "Get Context",
+        "description": "Return a context instance by composite id (type:key).",
         "operationId": "get_context",
         "security": [
           {
@@ -2257,6 +2271,7 @@
           "Contexts"
         ],
         "summary": "Delete Context",
+        "description": "Delete a context instance by composite id (type:key).",
         "operationId": "delete_context",
         "security": [
           {
@@ -2327,6 +2342,7 @@
           "Services"
         ],
         "summary": "List Services",
+        "description": "List all services for the authenticated account.",
         "operationId": "list_services",
         "responses": {
           "200": {
@@ -2391,6 +2407,7 @@
           "Services"
         ],
         "summary": "Create Service",
+        "description": "Create a new service. The caller provides the id (key) in the request body.",
         "operationId": "create_service",
         "requestBody": {
           "content": {
@@ -2467,6 +2484,7 @@
           "Services"
         ],
         "summary": "Get Service",
+        "description": "Return a service by id.",
         "operationId": "get_service",
         "security": [
           {
@@ -2542,6 +2560,7 @@
           "Services"
         ],
         "summary": "Update Service",
+        "description": "Update a service by id.",
         "operationId": "update_service",
         "security": [
           {
@@ -2627,6 +2646,7 @@
           "Services"
         ],
         "summary": "Delete Service",
+        "description": "Delete a service by id.",
         "operationId": "delete_service",
         "security": [
           {
@@ -2697,6 +2717,7 @@
           "Invitations"
         ],
         "summary": "Bulk Create Invitations",
+        "description": "Send one or more invitations to join the account.",
         "operationId": "create_invitations",
         "security": [
           {
@@ -2771,6 +2792,7 @@
           "Invitations"
         ],
         "summary": "List Invitations",
+        "description": "List all invitations for the authenticated account.",
         "operationId": "list_invitations",
         "security": [
           {
@@ -2849,6 +2871,7 @@
           "Invitations"
         ],
         "summary": "Revoke Invitation",
+        "description": "Revoke a pending invitation by id.",
         "operationId": "revoke_invitation",
         "security": [
           {
@@ -2927,6 +2950,7 @@
           "Invitations"
         ],
         "summary": "Resend Invitation",
+        "description": "Resend a pending invitation email by id.",
         "operationId": "resend_invitation",
         "security": [
           {
@@ -3005,6 +3029,7 @@
           "Invitations"
         ],
         "summary": "Accept Invitation",
+        "description": "Accept an invitation using a token from the invitation email.",
         "operationId": "accept_invitation",
         "requestBody": {
           "content": {
@@ -3148,6 +3173,7 @@
           "Metrics"
         ],
         "summary": "Bulk Ingest Metrics",
+        "description": "Ingest pre-aggregated metric data points. Returns 202 Accepted with no response body.",
         "operationId": "bulk_ingest_metrics",
         "requestBody": {
           "content": {
@@ -3161,12 +3187,8 @@
         },
         "responses": {
           "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {}
-              }
-            }
+            "description": "Accepted",
+            "content": {}
           },
           "400": {
             "description": "Validation error or malformed request",
@@ -3222,6 +3244,7 @@
           "Metrics"
         ],
         "summary": "List Metrics",
+        "description": "Query raw metric rows with filtering by name, time range, and dimensions.",
         "operationId": "list_metrics",
         "security": [
           {
@@ -3309,6 +3332,7 @@
           "Metrics"
         ],
         "summary": "List Metric Rollups",
+        "description": "Query aggregated metric rollups. Requires filter[rollup] for the aggregation interval.",
         "operationId": "list_metric_rollups",
         "security": [
           {
@@ -3405,6 +3429,7 @@
           "Users"
         ],
         "summary": "List Users",
+        "description": "List users in the authenticated account.",
         "operationId": "list_users",
         "security": [
           {
@@ -3493,6 +3518,7 @@
           "Users"
         ],
         "summary": "Get User",
+        "description": "Return a user by id.",
         "operationId": "get_user",
         "security": [
           {
@@ -3569,6 +3595,7 @@
           "Users"
         ],
         "summary": "Update User Role",
+        "description": "Update a user's role in the account.",
         "operationId": "update_user_role",
         "security": [
           {
@@ -3655,6 +3682,7 @@
           "Users"
         ],
         "summary": "Remove User",
+        "description": "Remove a user from the account.",
         "operationId": "remove_user",
         "security": [
           {
@@ -3857,7 +3885,9 @@
             "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionListResponse"
+                }
               }
             }
           },
@@ -3930,7 +3960,9 @@
             "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
               }
             }
           },
@@ -4021,7 +4053,9 @@
             "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
               }
             }
           },
@@ -4150,7 +4184,9 @@
             "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentMethodListResponse"
+                }
               }
             }
           },
@@ -4282,7 +4318,9 @@
             "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SetupIntentResponse"
+                }
               }
             }
           },
@@ -4454,14 +4492,14 @@
           },
           "status": {
             "type": "string",
+            "nullable": true,
             "title": "Status",
-            "default": "",
             "readOnly": true
           },
           "key": {
             "type": "string",
+            "nullable": true,
             "title": "Key",
-            "default": "",
             "readOnly": true
           },
           "scopes": {
@@ -4471,8 +4509,8 @@
           },
           "created_by": {
             "type": "string",
+            "nullable": true,
             "title": "Created By",
-            "default": "",
             "readOnly": true
           },
           "expires_at": {
@@ -4616,9 +4654,9 @@
         "properties": {
           "name": {
             "type": "string",
+            "nullable": true,
             "title": "Name",
-            "description": "Human-readable display name",
-            "default": ""
+            "description": "Human-readable display name"
           },
           "context_type": {
             "type": "string",
@@ -4698,7 +4736,15 @@
           "type",
           "key"
         ],
-        "title": "ContextBulkItem"
+        "title": "ContextBulkItem",
+        "example": {
+          "attributes": {
+            "first_name": "Alice",
+            "plan": "enterprise"
+          },
+          "key": "user-123",
+          "type": "user"
+        }
       },
       "ContextBulkRegister": {
         "properties": {
@@ -4755,7 +4801,21 @@
           "type",
           "attributes"
         ],
-        "title": "ContextResource"
+        "title": "ContextResource",
+        "example": {
+          "attributes": {
+            "attributes": {
+              "first_name": "Alice",
+              "plan": "enterprise"
+            },
+            "context_type": "user",
+            "created_at": "2026-03-31T10:00:00Z",
+            "name": "Alice Smith",
+            "updated_at": "2026-03-31T10:00:00Z"
+          },
+          "id": "user:alice-123",
+          "type": "context"
+        }
       },
       "ContextResponse": {
         "properties": {
@@ -4859,7 +4919,21 @@
           "type",
           "attributes"
         ],
-        "title": "ContextTypeResource"
+        "title": "ContextTypeResource",
+        "example": {
+          "attributes": {
+            "attributes": {
+              "beta_tester": {},
+              "first_name": {},
+              "plan": {}
+            },
+            "created_at": "2026-03-31T10:00:00Z",
+            "name": "User",
+            "updated_at": "2026-03-31T10:00:00Z"
+          },
+          "id": "user",
+          "type": "context_type"
+        }
       },
       "ContextTypeResponse": {
         "properties": {
@@ -4894,7 +4968,12 @@
           "plan",
           "payment_method_id"
         ],
-        "title": "CreateSubscriptionAttributes"
+        "title": "CreateSubscriptionAttributes",
+        "example": {
+          "payment_method_id": "pm_1234567890abcdef",
+          "plan": "pro",
+          "product": "flags"
+        }
       },
       "CreateSubscriptionBody": {
         "properties": {
@@ -4906,7 +4985,17 @@
         "required": [
           "data"
         ],
-        "title": "CreateSubscriptionBody"
+        "title": "CreateSubscriptionBody",
+        "example": {
+          "data": {
+            "attributes": {
+              "payment_method_id": "pm_1234567890abcdef",
+              "plan": "pro",
+              "product": "flags"
+            },
+            "type": "subscription"
+          }
+        }
       },
       "CreateSubscriptionData": {
         "properties": {
@@ -4923,7 +5012,15 @@
           "type",
           "attributes"
         ],
-        "title": "CreateSubscriptionData"
+        "title": "CreateSubscriptionData",
+        "example": {
+          "attributes": {
+            "payment_method_id": "pm_1234567890abcdef",
+            "plan": "pro",
+            "product": "flags"
+          },
+          "type": "subscription"
+        }
       },
       "Environment": {
         "properties": {
@@ -5087,26 +5184,26 @@
         "properties": {
           "email": {
             "type": "string",
+            "nullable": true,
             "title": "Email",
-            "default": "",
             "readOnly": true
           },
           "role": {
             "type": "string",
+            "nullable": true,
             "title": "Role",
-            "default": "",
             "readOnly": true
           },
           "status": {
             "type": "string",
+            "nullable": true,
             "title": "Status",
-            "default": "",
             "readOnly": true
           },
           "invited_by": {
             "type": "string",
+            "nullable": true,
             "title": "Invited By",
-            "default": "",
             "readOnly": true
           },
           "expires_at": {
@@ -5155,7 +5252,10 @@
         "required": [
           "token"
         ],
-        "title": "InvitationAcceptRequest"
+        "title": "InvitationAcceptRequest",
+        "example": {
+          "token": "eyJhbGciOiJIUzI1NiJ9..."
+        }
       },
       "InvitationBulkCreateRequest": {
         "properties": {
@@ -5173,7 +5273,19 @@
         "required": [
           "invitations"
         ],
-        "title": "InvitationBulkCreateRequest"
+        "title": "InvitationBulkCreateRequest",
+        "example": {
+          "invitations": [
+            {
+              "email": "alice@example.com",
+              "role": "MEMBER"
+            },
+            {
+              "email": "bob@example.com",
+              "role": "MEMBER"
+            }
+          ]
+        }
       },
       "InvitationCreateItem": {
         "properties": {
@@ -5192,7 +5304,11 @@
         "required": [
           "email"
         ],
-        "title": "InvitationCreateItem"
+        "title": "InvitationCreateItem",
+        "example": {
+          "email": "alice@example.com",
+          "role": "MEMBER"
+        }
       },
       "InvitationListResponse": {
         "properties": {
@@ -5375,7 +5491,25 @@
           "type",
           "attributes"
         ],
-        "title": "InvoiceResource"
+        "title": "InvoiceResource",
+        "example": {
+          "attributes": {
+            "amount_due": 2900,
+            "amount_paid": 2900,
+            "created_at": "2026-03-01T00:00:00Z",
+            "currency": "usd",
+            "description": "Smpl Flags - Pro",
+            "hosted_invoice_url": "https://invoice.stripe.com/i/acct_xxx/inv_xxx",
+            "invoice_pdf": "https://pay.stripe.com/invoice/acct_xxx/inv_xxx/pdf",
+            "number": "INV-0001",
+            "paid_at": "2026-03-01T12:00:00Z",
+            "period_end": "2026-04-01T00:00:00Z",
+            "period_start": "2026-03-01T00:00:00Z",
+            "status": "paid"
+          },
+          "id": "in_1234567890abcdef",
+          "type": "invoice"
+        }
       },
       "LimitDefinition": {
         "properties": {
@@ -5424,7 +5558,11 @@
           "email",
           "password"
         ],
-        "title": "LoginRequest"
+        "title": "LoginRequest",
+        "example": {
+          "email": "jane@example.com",
+          "password": "correct-horse-battery-staple"
+        }
       },
       "MetricAttributes": {
         "properties": {
@@ -5496,7 +5634,24 @@
         "required": [
           "data"
         ],
-        "title": "MetricBulkRequest"
+        "title": "MetricBulkRequest",
+        "example": {
+          "data": [
+            {
+              "attributes": {
+                "dimensions": {
+                  "environment": "production"
+                },
+                "name": "flags.evaluations",
+                "period_seconds": 60,
+                "recorded_at": "2026-04-10T18:00:00Z",
+                "unit": "evaluations",
+                "value": 1482
+              },
+              "type": "metric"
+            }
+          ]
+        }
       },
       "MetricListResponse": {
         "properties": {
@@ -5571,7 +5726,23 @@
           "type",
           "attributes"
         ],
-        "title": "MetricResource"
+        "title": "MetricResource",
+        "example": {
+          "attributes": {
+            "created_at": "2026-04-10T18:00:01Z",
+            "dimensions": {
+              "environment": "production",
+              "service": "user-service"
+            },
+            "name": "flags.evaluations",
+            "period_seconds": 60,
+            "recorded_at": "2026-04-10T18:00:00Z",
+            "unit": "evaluations",
+            "value": 1482
+          },
+          "id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+          "type": "metric"
+        }
       },
       "MetricRollupAttributes": {
         "properties": {
@@ -5642,7 +5813,17 @@
           "type",
           "attributes"
         ],
-        "title": "MetricRollupResource"
+        "title": "MetricRollupResource",
+        "example": {
+          "attributes": {
+            "bucket": "2026-04-10T15:00:00Z",
+            "name": "flags.evaluations",
+            "rollup": "1h",
+            "unit": "evaluations",
+            "value": 87420
+          },
+          "type": "metric_rollup"
+        }
       },
       "OidcProvider": {
         "type": "string",
@@ -5651,6 +5832,91 @@
           "microsoft"
         ],
         "title": "OidcProvider"
+      },
+      "PaymentMethodAttributes": {
+        "properties": {
+          "brand": {
+            "type": "string",
+            "title": "Brand"
+          },
+          "last4": {
+            "type": "string",
+            "title": "Last4"
+          },
+          "exp_month": {
+            "type": "integer",
+            "title": "Exp Month"
+          },
+          "exp_year": {
+            "type": "integer",
+            "title": "Exp Year"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default"
+          }
+        },
+        "type": "object",
+        "required": [
+          "brand",
+          "last4",
+          "exp_month",
+          "exp_year",
+          "is_default"
+        ],
+        "title": "PaymentMethodAttributes"
+      },
+      "PaymentMethodListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PaymentMethodResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "PaymentMethodListResponse"
+      },
+      "PaymentMethodResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "payment_method"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/PaymentMethodAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "PaymentMethodResource",
+        "example": {
+          "attributes": {
+            "brand": "visa",
+            "exp_month": 12,
+            "exp_year": 2028,
+            "is_default": true,
+            "last4": "4242"
+          },
+          "id": "pm_1234567890abcdef",
+          "type": "payment_method"
+        }
       },
       "Plan": {
         "properties": {
@@ -5735,7 +6001,16 @@
           "type",
           "attributes"
         ],
-        "title": "PlanResource"
+        "title": "PlanResource",
+        "example": {
+          "attributes": {
+            "description": "Get started with essential features at no cost",
+            "display_name": "Free",
+            "sort_order": 0
+          },
+          "id": "free",
+          "type": "plan"
+        }
       },
       "Product": {
         "properties": {
@@ -5815,7 +6090,37 @@
           "type",
           "attributes"
         ],
-        "title": "ProductResource"
+        "title": "ProductResource",
+        "example": {
+          "attributes": {
+            "coming_soon": false,
+            "description": "Feature flags with targeting rules and real-time updates",
+            "display_name": "Smpl Flags",
+            "limits": {
+              "flags": {
+                "description": "Maximum number of feature flags",
+                "display_name": "Feature Flags",
+                "unit": "flags"
+              }
+            },
+            "plans": {
+              "free": {
+                "limits": {
+                  "flags": 10
+                },
+                "price_monthly_cents": 0
+              },
+              "pro": {
+                "limits": {
+                  "flags": -1
+                },
+                "price_monthly_cents": 2900
+              }
+            }
+          },
+          "id": "flags",
+          "type": "product"
+        }
       },
       "RegisterRequest": {
         "properties": {
@@ -5836,7 +6141,11 @@
           "email",
           "password"
         ],
-        "title": "RegisterRequest"
+        "title": "RegisterRequest",
+        "example": {
+          "email": "jane@example.com",
+          "password": "correct-horse-battery-staple"
+        }
       },
       "ServiceResource": {
         "properties": {
@@ -5984,6 +6293,159 @@
         ],
         "title": "ServiceListResponse"
       },
+      "SetupIntentAttributes": {
+        "properties": {
+          "client_secret": {
+            "type": "string",
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_secret"
+        ],
+        "title": "SetupIntentAttributes"
+      },
+      "SetupIntentResource": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "setup_intent"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/SetupIntentAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "SetupIntentResource",
+        "example": {
+          "attributes": {
+            "client_secret": "seti_1234567890abcdef_secret_xyz"
+          },
+          "type": "setup_intent"
+        }
+      },
+      "SetupIntentResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SetupIntentResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SetupIntentResponse"
+      },
+      "SubscriptionAttributes": {
+        "properties": {
+          "product": {
+            "type": "string",
+            "title": "Product"
+          },
+          "plan": {
+            "type": "string",
+            "title": "Plan"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "stripe_managed": {
+            "type": "boolean",
+            "title": "Stripe Managed"
+          },
+          "current_period_end": {
+            "type": "string",
+            "nullable": true,
+            "title": "Current Period End"
+          },
+          "client_secret": {
+            "type": "string",
+            "nullable": true,
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product",
+          "plan",
+          "status",
+          "stripe_managed"
+        ],
+        "title": "SubscriptionAttributes"
+      },
+      "SubscriptionListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SubscriptionListResponse"
+      },
+      "SubscriptionResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "subscription"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/SubscriptionAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "SubscriptionResource",
+        "example": {
+          "attributes": {
+            "current_period_end": "2026-05-01T00:00:00Z",
+            "plan": "pro",
+            "product": "flags",
+            "status": "active",
+            "stripe_managed": true
+          },
+          "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "type": "subscription"
+        }
+      },
+      "SubscriptionResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SubscriptionResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SubscriptionResponse"
+      },
       "UpdateSubscriptionAttributes": {
         "properties": {
           "plan": {
@@ -5995,7 +6457,10 @@
         "required": [
           "plan"
         ],
-        "title": "UpdateSubscriptionAttributes"
+        "title": "UpdateSubscriptionAttributes",
+        "example": {
+          "plan": "pro"
+        }
       },
       "UpdateSubscriptionBody": {
         "properties": {
@@ -6007,7 +6472,15 @@
         "required": [
           "data"
         ],
-        "title": "UpdateSubscriptionBody"
+        "title": "UpdateSubscriptionBody",
+        "example": {
+          "data": {
+            "attributes": {
+              "plan": "pro"
+            },
+            "type": "subscription"
+          }
+        }
       },
       "UpdateSubscriptionData": {
         "properties": {
@@ -6024,7 +6497,13 @@
           "type",
           "attributes"
         ],
-        "title": "UpdateSubscriptionData"
+        "title": "UpdateSubscriptionData",
+        "example": {
+          "attributes": {
+            "plan": "pro"
+          },
+          "type": "subscription"
+        }
       },
       "User": {
         "properties": {
@@ -6048,8 +6527,8 @@
           },
           "auth_provider": {
             "type": "string",
+            "nullable": true,
             "title": "Auth Provider",
-            "default": "",
             "readOnly": true
           },
           "email_verified": {
@@ -6066,9 +6545,9 @@
           },
           "account": {
             "type": "string",
+            "nullable": true,
             "title": "Account",
             "description": "Account UUID",
-            "default": "",
             "readOnly": true
           },
           "created_at": {
@@ -6123,7 +6602,10 @@
         "required": [
           "token"
         ],
-        "title": "VerifyEmailRequest"
+        "title": "VerifyEmailRequest",
+        "example": {
+          "token": "eyJhbGciOiJIUzI1NiJ9..."
+        }
       }
     },
     "securitySchemes": {
