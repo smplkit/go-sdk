@@ -175,6 +175,21 @@ func (e OidcProvider) Valid() bool {
 	}
 }
 
+// Defines values for PaymentMethodResourceType.
+const (
+	PaymentMethod PaymentMethodResourceType = "payment_method"
+)
+
+// Valid indicates whether the value is a known member of the PaymentMethodResourceType enum.
+func (e PaymentMethodResourceType) Valid() bool {
+	switch e {
+	case PaymentMethod:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PlanResourceType.
 const (
 	PlanResourceTypePlan PlanResourceType = "plan"
@@ -214,6 +229,36 @@ const (
 func (e ServiceResourceType) Valid() bool {
 	switch e {
 	case ServiceResourceTypeService:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SetupIntentResourceType.
+const (
+	SetupIntent SetupIntentResourceType = "setup_intent"
+)
+
+// Valid indicates whether the value is a known member of the SetupIntentResourceType enum.
+func (e SetupIntentResourceType) Valid() bool {
+	switch e {
+	case SetupIntent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubscriptionResourceType.
+const (
+	Subscription SubscriptionResourceType = "subscription"
+)
+
+// Valid indicates whether the value is a known member of the SubscriptionResourceType enum.
+func (e SubscriptionResourceType) Valid() bool {
+	switch e {
+	case Subscription:
 		return true
 	default:
 		return false
@@ -619,6 +664,30 @@ type MetricRollupResourceType string
 // OidcProvider defines model for OidcProvider.
 type OidcProvider string
 
+// PaymentMethodAttributes defines model for PaymentMethodAttributes.
+type PaymentMethodAttributes struct {
+	Brand     string `json:"brand"`
+	ExpMonth  int    `json:"exp_month"`
+	ExpYear   int    `json:"exp_year"`
+	IsDefault bool   `json:"is_default"`
+	Last4     string `json:"last4"`
+}
+
+// PaymentMethodListResponse defines model for PaymentMethodListResponse.
+type PaymentMethodListResponse struct {
+	Data []PaymentMethodResource `json:"data"`
+}
+
+// PaymentMethodResource defines model for PaymentMethodResource.
+type PaymentMethodResource struct {
+	Attributes PaymentMethodAttributes   `json:"attributes"`
+	Id         *string                   `json:"id,omitempty"`
+	Type       PaymentMethodResourceType `json:"type"`
+}
+
+// PaymentMethodResourceType defines model for PaymentMethodResource.Type.
+type PaymentMethodResourceType string
+
 // Plan defines model for Plan.
 type Plan struct {
 	Description string `json:"description"`
@@ -702,6 +771,55 @@ type ServiceResourceType string
 // ServiceResponse defines model for ServiceResponse.
 type ServiceResponse struct {
 	Data ServiceResource `json:"data"`
+}
+
+// SetupIntentAttributes defines model for SetupIntentAttributes.
+type SetupIntentAttributes struct {
+	ClientSecret string `json:"client_secret"`
+}
+
+// SetupIntentResource defines model for SetupIntentResource.
+type SetupIntentResource struct {
+	Attributes SetupIntentAttributes   `json:"attributes"`
+	Type       SetupIntentResourceType `json:"type"`
+}
+
+// SetupIntentResourceType defines model for SetupIntentResource.Type.
+type SetupIntentResourceType string
+
+// SetupIntentResponse defines model for SetupIntentResponse.
+type SetupIntentResponse struct {
+	Data SetupIntentResource `json:"data"`
+}
+
+// SubscriptionAttributes defines model for SubscriptionAttributes.
+type SubscriptionAttributes struct {
+	ClientSecret     *string `json:"client_secret,omitempty"`
+	CurrentPeriodEnd *string `json:"current_period_end,omitempty"`
+	Plan             string  `json:"plan"`
+	Product          string  `json:"product"`
+	Status           string  `json:"status"`
+	StripeManaged    bool    `json:"stripe_managed"`
+}
+
+// SubscriptionListResponse defines model for SubscriptionListResponse.
+type SubscriptionListResponse struct {
+	Data []SubscriptionResource `json:"data"`
+}
+
+// SubscriptionResource defines model for SubscriptionResource.
+type SubscriptionResource struct {
+	Attributes SubscriptionAttributes   `json:"attributes"`
+	Id         *string                  `json:"id,omitempty"`
+	Type       SubscriptionResourceType `json:"type"`
+}
+
+// SubscriptionResourceType defines model for SubscriptionResource.Type.
+type SubscriptionResourceType string
+
+// SubscriptionResponse defines model for SubscriptionResponse.
+type SubscriptionResponse struct {
+	Data SubscriptionResource `json:"data"`
 }
 
 // UpdateSubscriptionAttributes defines model for UpdateSubscriptionAttributes.
@@ -4935,7 +5053,6 @@ func (r RevokeApiKeyResponse) StatusCode() int {
 type HandleOidcCallbackResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *interface{}
 	JSON400      *ErrorResponse
 	JSON401      *ErrorResponse
 	JSON404      *ErrorResponse
@@ -4987,7 +5104,6 @@ func (r LoginResponse) StatusCode() int {
 type BeginOidcLoginResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *interface{}
 	JSON400      *ErrorResponse
 	JSON401      *ErrorResponse
 	JSON404      *ErrorResponse
@@ -5451,7 +5567,7 @@ func (r UpdateEnvironmentResponse) StatusCode() int {
 type ExecuteSetupIntentResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON200 *SetupIntentResponse
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -5711,7 +5827,6 @@ func (r ListMetricsResponse) StatusCode() int {
 type BulkIngestMetricsResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON202 *interface{}
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -5737,7 +5852,7 @@ func (r BulkIngestMetricsResponse) StatusCode() int {
 type ListPaymentMethodsResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON200 *PaymentMethodListResponse
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -5944,7 +6059,7 @@ func (r UpdateServiceResponse) StatusCode() int {
 type ListSubscriptionsResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON200 *SubscriptionListResponse
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -5970,7 +6085,7 @@ func (r ListSubscriptionsResponse) StatusCode() int {
 type CreateSubscriptionResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON201 *interface{}
+	ApplicationvndApiJSON201 *SubscriptionResponse
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -6021,7 +6136,7 @@ func (r CancelSubscriptionResponse) StatusCode() int {
 type UpdateSubscriptionResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON200 *SubscriptionResponse
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -7367,13 +7482,6 @@ func ParseHandleOidcCallbackResponse(rsp *http.Response) (*HandleOidcCallbackRes
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -7475,13 +7583,6 @@ func ParseBeginOidcLoginResponse(rsp *http.Response) (*BeginOidcLoginResponse, e
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -8420,7 +8521,7 @@ func ParseExecuteSetupIntentResponse(rsp *http.Response) (*ExecuteSetupIntentRes
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
+		var dest SetupIntentResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -8959,13 +9060,6 @@ func ParseBulkIngestMetricsResponse(rsp *http.Response) (*BulkIngestMetricsRespo
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest interface{}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON202 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -9014,7 +9108,7 @@ func ParseListPaymentMethodsResponse(rsp *http.Response) (*ListPaymentMethodsRes
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
+		var dest PaymentMethodListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -9439,7 +9533,7 @@ func ParseListSubscriptionsResponse(rsp *http.Response) (*ListSubscriptionsRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
+		var dest SubscriptionListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -9493,7 +9587,7 @@ func ParseCreateSubscriptionResponse(rsp *http.Response) (*CreateSubscriptionRes
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest interface{}
+		var dest SubscriptionResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -9594,7 +9688,7 @@ func ParseUpdateSubscriptionResponse(rsp *http.Response) (*UpdateSubscriptionRes
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
+		var dest SubscriptionResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
