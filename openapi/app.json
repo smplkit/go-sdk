@@ -4413,6 +4413,81 @@
             "HTTPBearer": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Set Default Payment Method",
+        "description": "Attach a payment method to the account's Stripe Customer and set it as the default.\n\nCalled by the frontend after ``stripe.confirmSetup()`` to persist the new card\nas the customer's ``invoice_settings.default_payment_method``.",
+        "operationId": "set_default_payment_method",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDefaultPaymentMethodRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentMethodListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/invoices": {
@@ -6625,6 +6700,51 @@
           "data"
         ],
         "title": "ServiceListResponse"
+      },
+      "SetDefaultPaymentMethodAttributes": {
+        "properties": {
+          "payment_method_id": {
+            "type": "string",
+            "title": "Payment Method Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "payment_method_id"
+        ],
+        "title": "SetDefaultPaymentMethodAttributes"
+      },
+      "SetDefaultPaymentMethodData": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "payment_method"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/SetDefaultPaymentMethodAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "SetDefaultPaymentMethodData"
+      },
+      "SetDefaultPaymentMethodRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SetDefaultPaymentMethodData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SetDefaultPaymentMethodRequest"
       },
       "SetupIntentAttributes": {
         "properties": {
