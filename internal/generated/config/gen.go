@@ -151,6 +151,11 @@ type ListConfigsParams struct {
 	FilterParent *string `form:"filter[parent],omitempty" json:"filter[parent],omitempty"`
 }
 
+// ListConfigUsageParams defines parameters for ListConfigUsage.
+type ListConfigUsageParams struct {
+	FilterPeriod *string `form:"filter[period],omitempty" json:"filter[period],omitempty"`
+}
+
 // CreateConfigJSONRequestBody defines body for CreateConfig for application/json ContentType.
 type CreateConfigJSONRequestBody = ResponseConfig
 
@@ -310,6 +315,9 @@ type ClientInterface interface {
 	UpdateConfigWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateConfig(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListConfigUsage request
+	ListConfigUsage(ctx context.Context, params *ListConfigUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListConfigs(ctx context.Context, params *ListConfigsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -386,6 +394,18 @@ func (c *Client) UpdateConfigWithBody(ctx context.Context, id string, contentTyp
 
 func (c *Client) UpdateConfig(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateConfigRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListConfigUsage(ctx context.Context, params *ListConfigUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListConfigUsageRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -600,6 +620,55 @@ func NewUpdateConfigRequestWithBody(server string, id string, contentType string
 	return req, nil
 }
 
+// NewListConfigUsageRequest generates requests for ListConfigUsage
+func NewListConfigUsageRequest(server string, params *ListConfigUsageParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/usage")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.FilterPeriod != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[period]", *params.FilterPeriod, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -661,6 +730,9 @@ type ClientWithResponsesInterface interface {
 	UpdateConfigWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
 
 	UpdateConfigWithResponse(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
+
+	// ListConfigUsageWithResponse request
+	ListConfigUsageWithResponse(ctx context.Context, params *ListConfigUsageParams, reqEditors ...RequestEditorFn) (*ListConfigUsageResponse, error)
 }
 
 type ListConfigsResponse struct {
@@ -777,6 +849,29 @@ func (r UpdateConfigResponse) StatusCode() int {
 	return 0
 }
 
+type ListConfigUsageResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *interface{}
+	ApplicationvndApiJSON422 *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListConfigUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListConfigUsageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // ListConfigsWithResponse request returning *ListConfigsResponse
 func (c *ClientWithResponses) ListConfigsWithResponse(ctx context.Context, params *ListConfigsParams, reqEditors ...RequestEditorFn) (*ListConfigsResponse, error) {
 	rsp, err := c.ListConfigs(ctx, params, reqEditors...)
@@ -836,6 +931,15 @@ func (c *ClientWithResponses) UpdateConfigWithResponse(ctx context.Context, id s
 		return nil, err
 	}
 	return ParseUpdateConfigResponse(rsp)
+}
+
+// ListConfigUsageWithResponse request returning *ListConfigUsageResponse
+func (c *ClientWithResponses) ListConfigUsageWithResponse(ctx context.Context, params *ListConfigUsageParams, reqEditors ...RequestEditorFn) (*ListConfigUsageResponse, error) {
+	rsp, err := c.ListConfigUsage(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListConfigUsageResponse(rsp)
 }
 
 // ParseListConfigsResponse parses an HTTP response from a ListConfigsWithResponse call
@@ -979,6 +1083,39 @@ func ParseUpdateConfigResponse(rsp *http.Response) (*UpdateConfigResponse, error
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListConfigUsageResponse parses an HTTP response from a ListConfigUsageWithResponse call
+func ParseListConfigUsageResponse(rsp *http.Response) (*ListConfigUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListConfigUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest interface{}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
