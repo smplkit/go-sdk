@@ -3878,7 +3878,7 @@
           "Billing"
         ],
         "summary": "List Subscriptions",
-        "description": "Return per-product subscription state for the authenticated account.",
+        "description": "Return subscription rows for the authenticated account.",
         "operationId": "list_subscriptions",
         "responses": {
           "200": {
@@ -4014,14 +4014,14 @@
         ]
       }
     },
-    "/api/v1/subscriptions/{product}": {
-      "patch": {
+    "/api/v1/subscriptions/{id}/actions/upgrade": {
+      "post": {
         "tags": [
           "Billing"
         ],
-        "summary": "Update Subscription",
-        "description": "Change the plan for an existing paid subscription (upgrade or downgrade).",
-        "operationId": "update_subscription",
+        "summary": "Upgrade Subscription",
+        "description": "Upgrade an existing paid subscription to a higher plan.",
+        "operationId": "upgrade_subscription",
         "security": [
           {
             "HTTPBearer": []
@@ -4029,12 +4029,13 @@
         ],
         "parameters": [
           {
-            "name": "product",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Product"
+              "format": "uuid",
+              "title": "Id"
             }
           }
         ],
@@ -4043,7 +4044,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateSubscriptionBody"
+                "$ref": "#/components/schemas/PlanChangeRequest"
               }
             }
           }
@@ -4100,8 +4101,99 @@
             }
           }
         }
-      },
-      "delete": {
+      }
+    },
+    "/api/v1/subscriptions/{id}/actions/downgrade": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Downgrade Subscription",
+        "description": "Downgrade an existing paid subscription to a lower plan.",
+        "operationId": "downgrade_subscription",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subscriptions/{id}/actions/cancel": {
+      "post": {
         "tags": [
           "Billing"
         ],
@@ -4115,18 +4207,26 @@
         ],
         "parameters": [
           {
-            "name": "product",
+            "name": "id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Product"
+              "format": "uuid",
+              "title": "Id"
             }
           }
         ],
         "responses": {
-          "204": {
-            "description": "Successful Response"
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error or malformed request",
@@ -5941,6 +6041,19 @@
         ],
         "title": "Plan"
       },
+      "PlanChangeRequest": {
+        "properties": {
+          "plan": {
+            "type": "string",
+            "title": "Plan"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan"
+        ],
+        "title": "PlanChangeRequest"
+      },
       "PlanDefinition": {
         "properties": {
           "price_monthly_cents": {
@@ -6356,7 +6469,12 @@
           },
           "status": {
             "type": "string",
+            "nullable": true,
             "title": "Status"
+          },
+          "comped": {
+            "type": "boolean",
+            "title": "Comped"
           },
           "stripe_managed": {
             "type": "boolean",
@@ -6377,7 +6495,7 @@
         "required": [
           "product",
           "plan",
-          "status",
+          "comped",
           "stripe_managed"
         ],
         "title": "SubscriptionAttributes"
@@ -6424,6 +6542,7 @@
         "title": "SubscriptionResource",
         "example": {
           "attributes": {
+            "comped": false,
             "current_period_end": "2026-05-01T00:00:00Z",
             "plan": "pro",
             "product": "flags",
@@ -6445,65 +6564,6 @@
           "data"
         ],
         "title": "SubscriptionResponse"
-      },
-      "UpdateSubscriptionAttributes": {
-        "properties": {
-          "plan": {
-            "type": "string",
-            "title": "Plan"
-          }
-        },
-        "type": "object",
-        "required": [
-          "plan"
-        ],
-        "title": "UpdateSubscriptionAttributes",
-        "example": {
-          "plan": "pro"
-        }
-      },
-      "UpdateSubscriptionBody": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/UpdateSubscriptionData"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "UpdateSubscriptionBody",
-        "example": {
-          "data": {
-            "attributes": {
-              "plan": "pro"
-            },
-            "type": "subscription"
-          }
-        }
-      },
-      "UpdateSubscriptionData": {
-        "properties": {
-          "type": {
-            "type": "string",
-            "title": "Type"
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/UpdateSubscriptionAttributes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "type",
-          "attributes"
-        ],
-        "title": "UpdateSubscriptionData",
-        "example": {
-          "attributes": {
-            "plan": "pro"
-          },
-          "type": "subscription"
-        }
       },
       "User": {
         "properties": {
