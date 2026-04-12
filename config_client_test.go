@@ -129,7 +129,7 @@ func TestConfigClient_New_Save(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "/api/v1/configs", r.URL.Path)
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Content-Type"))
 
 		var body map[string]interface{}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
@@ -276,7 +276,7 @@ func TestConfigClient_Save_Update(t *testing.T) {
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "My Service")))
 		} else {
 			assert.Equal(t, "PUT", r.Method)
-			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+			assert.Equal(t, "application/vnd.api+json", r.Header.Get("Content-Type"))
 
 			var body map[string]interface{}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
@@ -533,7 +533,7 @@ func TestConfigClient_UserAgent(t *testing.T) {
 
 func TestConfigClient_ContentType(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Content-Type"))
 
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleConfigJSON("test-key", "Name")))

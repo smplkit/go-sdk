@@ -86,7 +86,7 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*Config, error) 
 func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
 	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
-	resp, err := c.generated.CreateConfig(ctx, reqBody)
+	resp, err := c.generated.CreateConfigWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -114,7 +114,7 @@ func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
 func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
 	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
-	resp, err := c.generated.UpdateConfig(ctx, cfg.ID, reqBody)
+	resp, err := c.generated.UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx, cfg.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -455,13 +455,12 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
 	}
 }
 
-// buildConfigRequest constructs a ResponseConfig for create or update.
-func buildConfigRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ResponseConfig {
-	configType := "config"
-	return genconfig.ResponseConfig{
-		Data: genconfig.ResourceConfig{
+// buildConfigRequest constructs a ConfigResponse for create or update.
+func buildConfigRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigResponse {
+	return genconfig.ConfigResponse{
+		Data: genconfig.ConfigResource{
 			Id:   &id,
-			Type: &configType,
+			Type: genconfig.ConfigResourceTypeConfig,
 			Attributes: genconfig.Config{
 				Name:         name,
 				Description:  desc,
