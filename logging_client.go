@@ -207,16 +207,15 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 }
 
 func (c *LoggingClient) createLogger(ctx context.Context, l *Logger) error {
-	loggerType := "logger"
-	reqBody := genlogging.ResponseLogger{
-		Data: genlogging.ResourceLogger{
+	reqBody := genlogging.LoggerResponse{
+		Data: genlogging.LoggerResource{
 			Id:         &l.ID,
-			Type:       &loggerType,
+			Type:       genlogging.LoggerResourceTypeLogger,
 			Attributes: buildLoggerAttributes(l),
 		},
 	}
 
-	resp, err := c.generated.CreateLogger(ctx, reqBody)
+	resp, err := c.generated.CreateLoggerWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -241,16 +240,15 @@ func (c *LoggingClient) createLogger(ctx context.Context, l *Logger) error {
 }
 
 func (c *LoggingClient) updateLogger(ctx context.Context, l *Logger) error {
-	loggerType := "logger"
-	reqBody := genlogging.ResponseLogger{
-		Data: genlogging.ResourceLogger{
+	reqBody := genlogging.LoggerResponse{
+		Data: genlogging.LoggerResource{
 			Id:         &l.ID,
-			Type:       &loggerType,
+			Type:       genlogging.LoggerResourceTypeLogger,
 			Attributes: buildLoggerAttributes(l),
 		},
 	}
 
-	resp, err := c.generated.UpdateLogger(ctx, l.ID, reqBody)
+	resp, err := c.generated.UpdateLoggerWithApplicationVndAPIPlusJSONBody(ctx, l.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -290,16 +288,15 @@ func (c *LoggingClient) deleteLoggerByID(ctx context.Context, id string) error {
 }
 
 func (c *LoggingClient) createGroup(ctx context.Context, g *LogGroup) error {
-	groupType := "log_group"
-	reqBody := genlogging.ResponseLogGroup{
-		Data: genlogging.ResourceLogGroup{
+	reqBody := genlogging.LogGroupResponse{
+		Data: genlogging.LogGroupResource{
 			Id:         &g.ID,
-			Type:       &groupType,
+			Type:       genlogging.LogGroupResourceTypeLogGroup,
 			Attributes: buildLogGroupAttributes(g),
 		},
 	}
 
-	resp, err := c.generated.CreateLogGroup(ctx, reqBody)
+	resp, err := c.generated.CreateLogGroupWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -324,16 +321,15 @@ func (c *LoggingClient) createGroup(ctx context.Context, g *LogGroup) error {
 }
 
 func (c *LoggingClient) updateGroup(ctx context.Context, g *LogGroup) error {
-	groupType := "log_group"
-	reqBody := genlogging.ResponseLogGroup{
-		Data: genlogging.ResourceLogGroup{
+	reqBody := genlogging.LogGroupResponse{
+		Data: genlogging.LogGroupResource{
 			Id:         &g.ID,
-			Type:       &groupType,
+			Type:       genlogging.LogGroupResourceTypeLogGroup,
 			Attributes: buildLogGroupAttributes(g),
 		},
 	}
 
-	resp, err := c.generated.UpdateLogGroup(ctx, g.ID, reqBody)
+	resp, err := c.generated.UpdateLogGroupWithApplicationVndAPIPlusJSONBody(ctx, g.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -549,7 +545,7 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 		items = append(items, item)
 	}
 	reqBody := genlogging.LoggerBulkRequest{Loggers: items}
-	resp, err := c.generated.BulkRegisterLoggers(ctx, reqBody)
+	resp, err := c.generated.BulkRegisterLoggersWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		log.Printf("smplkit: bulk logger registration failed: %v", err)
 		return
