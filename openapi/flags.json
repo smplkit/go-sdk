@@ -242,6 +242,62 @@
           }
         }
       }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "tags": [
+          "Usage"
+        ],
+        "summary": "List Flags Usage",
+        "description": "Return current resource usage counts for the authenticated account.",
+        "operationId": "list_flags_usage",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[period]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Period]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current usage for the authenticated account",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid filter[period] parameter"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
