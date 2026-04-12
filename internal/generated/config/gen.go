@@ -60,6 +60,21 @@ func (e ConfigResourceType) Valid() bool {
 	}
 }
 
+// Defines values for UsageResourceType.
+const (
+	Usage UsageResourceType = "usage"
+)
+
+// Valid indicates whether the value is a known member of the UsageResourceType enum.
+func (e UsageResourceType) Valid() bool {
+	switch e {
+	case Usage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Config defines model for Config.
 type Config struct {
 	CreatedAt    *time.Time                       `json:"created_at,omitempty"`
@@ -111,113 +126,43 @@ type EnvironmentOverride struct {
 	Values *map[string]ConfigItemOverride `json:"values,omitempty"`
 }
 
-// HTTPValidationError defines model for HTTPValidationError.
-type HTTPValidationError struct {
-	Detail *[]ValidationError `json:"detail,omitempty"`
+// UsageAttributes defines model for UsageAttributes.
+type UsageAttributes struct {
+	LimitKey string `json:"limit_key"`
+	Period   string `json:"period"`
+	Value    int    `json:"value"`
 }
 
-// ResourceConfig defines model for Resource_Config_.
-type ResourceConfig struct {
-	Attributes Config  `json:"attributes"`
-	Id         *string `json:"id,omitempty"`
-	Type       *string `json:"type,omitempty"`
+// UsageListResponse defines model for UsageListResponse.
+type UsageListResponse struct {
+	Data []UsageResource `json:"data"`
 }
 
-// ResponseConfig defines model for Response_Config_.
-type ResponseConfig struct {
-	Data ResourceConfig `json:"data"`
+// UsageResource defines model for UsageResource.
+type UsageResource struct {
+	Attributes UsageAttributes   `json:"attributes"`
+	Id         string            `json:"id"`
+	Type       UsageResourceType `json:"type"`
 }
 
-// ValidationError defines model for ValidationError.
-type ValidationError struct {
-	Loc  []ValidationError_Loc_Item `json:"loc"`
-	Msg  string                     `json:"msg"`
-	Type string                     `json:"type"`
-}
-
-// ValidationErrorLoc0 defines model for .
-type ValidationErrorLoc0 = string
-
-// ValidationErrorLoc1 defines model for .
-type ValidationErrorLoc1 = int
-
-// ValidationError_Loc_Item defines model for ValidationError.loc.Item.
-type ValidationError_Loc_Item struct {
-	union json.RawMessage
-}
+// UsageResourceType defines model for UsageResource.Type.
+type UsageResourceType string
 
 // ListConfigsParams defines parameters for ListConfigs.
 type ListConfigsParams struct {
 	FilterParent *string `form:"filter[parent],omitempty" json:"filter[parent],omitempty"`
 }
 
-// CreateConfigJSONRequestBody defines body for CreateConfig for application/json ContentType.
-type CreateConfigJSONRequestBody = ResponseConfig
-
-// UpdateConfigJSONRequestBody defines body for UpdateConfig for application/json ContentType.
-type UpdateConfigJSONRequestBody = ResponseConfig
-
-// AsValidationErrorLoc0 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc0
-func (t ValidationError_Loc_Item) AsValidationErrorLoc0() (ValidationErrorLoc0, error) {
-	var body ValidationErrorLoc0
-	err := json.Unmarshal(t.union, &body)
-	return body, err
+// ListConfigUsageParams defines parameters for ListConfigUsage.
+type ListConfigUsageParams struct {
+	FilterPeriod *string `form:"filter[period],omitempty" json:"filter[period],omitempty"`
 }
 
-// FromValidationErrorLoc0 overwrites any union data inside the ValidationError_Loc_Item as the provided ValidationErrorLoc0
-func (t *ValidationError_Loc_Item) FromValidationErrorLoc0(v ValidationErrorLoc0) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
+// CreateConfigApplicationVndAPIPlusJSONRequestBody defines body for CreateConfig for application/vnd.api+json ContentType.
+type CreateConfigApplicationVndAPIPlusJSONRequestBody = ConfigResponse
 
-// MergeValidationErrorLoc0 performs a merge with any union data inside the ValidationError_Loc_Item, using the provided ValidationErrorLoc0
-func (t *ValidationError_Loc_Item) MergeValidationErrorLoc0(v ValidationErrorLoc0) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsValidationErrorLoc1 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc1
-func (t ValidationError_Loc_Item) AsValidationErrorLoc1() (ValidationErrorLoc1, error) {
-	var body ValidationErrorLoc1
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromValidationErrorLoc1 overwrites any union data inside the ValidationError_Loc_Item as the provided ValidationErrorLoc1
-func (t *ValidationError_Loc_Item) FromValidationErrorLoc1(v ValidationErrorLoc1) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeValidationErrorLoc1 performs a merge with any union data inside the ValidationError_Loc_Item, using the provided ValidationErrorLoc1
-func (t *ValidationError_Loc_Item) MergeValidationErrorLoc1(v ValidationErrorLoc1) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ValidationError_Loc_Item) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ValidationError_Loc_Item) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
+// UpdateConfigApplicationVndAPIPlusJSONRequestBody defines body for UpdateConfig for application/vnd.api+json ContentType.
+type UpdateConfigApplicationVndAPIPlusJSONRequestBody = ConfigResponse
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -298,7 +243,7 @@ type ClientInterface interface {
 	// CreateConfigWithBody request with any body
 	CreateConfigWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateConfig(ctx context.Context, body CreateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteConfig request
 	DeleteConfig(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -309,7 +254,10 @@ type ClientInterface interface {
 	// UpdateConfigWithBody request with any body
 	UpdateConfigWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateConfig(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListConfigUsage request
+	ListConfigUsage(ctx context.Context, params *ListConfigUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListConfigs(ctx context.Context, params *ListConfigsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -336,8 +284,8 @@ func (c *Client) CreateConfigWithBody(ctx context.Context, contentType string, b
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateConfig(ctx context.Context, body CreateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateConfigRequest(c.Server, body)
+func (c *Client) CreateConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateConfigRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -384,8 +332,20 @@ func (c *Client) UpdateConfigWithBody(ctx context.Context, id string, contentTyp
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateConfig(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateConfigRequest(c.Server, id, body)
+func (c *Client) UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateConfigRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListConfigUsage(ctx context.Context, params *ListConfigUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListConfigUsageRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -445,15 +405,15 @@ func NewListConfigsRequest(server string, params *ListConfigsParams) (*http.Requ
 	return req, nil
 }
 
-// NewCreateConfigRequest calls the generic CreateConfig builder with application/json body
-func NewCreateConfigRequest(server string, body CreateConfigJSONRequestBody) (*http.Request, error) {
+// NewCreateConfigRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateConfig builder with application/vnd.api+json body
+func NewCreateConfigRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateConfigApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateConfigRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateConfigRequestWithBody(server, "application/vnd.api+json", bodyReader)
 }
 
 // NewCreateConfigRequestWithBody generates requests for CreateConfig with any type of body
@@ -553,15 +513,15 @@ func NewGetConfigRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewUpdateConfigRequest calls the generic UpdateConfig builder with application/json body
-func NewUpdateConfigRequest(server string, id string, body UpdateConfigJSONRequestBody) (*http.Request, error) {
+// NewUpdateConfigRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateConfig builder with application/vnd.api+json body
+func NewUpdateConfigRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateConfigApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateConfigRequestWithBody(server, id, "application/json", bodyReader)
+	return NewUpdateConfigRequestWithBody(server, id, "application/vnd.api+json", bodyReader)
 }
 
 // NewUpdateConfigRequestWithBody generates requests for UpdateConfig with any type of body
@@ -596,6 +556,55 @@ func NewUpdateConfigRequestWithBody(server string, id string, contentType string
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListConfigUsageRequest generates requests for ListConfigUsage
+func NewListConfigUsageRequest(server string, params *ListConfigUsageParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/usage")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.FilterPeriod != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[period]", *params.FilterPeriod, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -649,7 +658,7 @@ type ClientWithResponsesInterface interface {
 	// CreateConfigWithBodyWithResponse request with any body
 	CreateConfigWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateConfigResponse, error)
 
-	CreateConfigWithResponse(ctx context.Context, body CreateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConfigResponse, error)
+	CreateConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConfigResponse, error)
 
 	// DeleteConfigWithResponse request
 	DeleteConfigWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteConfigResponse, error)
@@ -660,14 +669,16 @@ type ClientWithResponsesInterface interface {
 	// UpdateConfigWithBodyWithResponse request with any body
 	UpdateConfigWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
 
-	UpdateConfigWithResponse(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
+	UpdateConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error)
+
+	// ListConfigUsageWithResponse request
+	ListConfigUsageWithResponse(ctx context.Context, params *ListConfigUsageParams, reqEditors ...RequestEditorFn) (*ListConfigUsageResponse, error)
 }
 
 type ListConfigsResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *ConfigListResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -690,7 +701,6 @@ type CreateConfigResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON201 *ConfigResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -710,9 +720,8 @@ func (r CreateConfigResponse) StatusCode() int {
 }
 
 type DeleteConfigResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON422 *HTTPValidationError
+	Body         []byte
+	HTTPResponse *http.Response
 }
 
 // Status returns HTTPResponse.Status
@@ -735,7 +744,6 @@ type GetConfigResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *ConfigResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -758,7 +766,6 @@ type UpdateConfigResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *ConfigResponse
-	ApplicationvndApiJSON422 *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -771,6 +778,28 @@ func (r UpdateConfigResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateConfigResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListConfigUsageResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *UsageListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListConfigUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListConfigUsageResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -795,8 +824,8 @@ func (c *ClientWithResponses) CreateConfigWithBodyWithResponse(ctx context.Conte
 	return ParseCreateConfigResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateConfigWithResponse(ctx context.Context, body CreateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConfigResponse, error) {
-	rsp, err := c.CreateConfig(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConfigResponse, error) {
+	rsp, err := c.CreateConfigWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -830,12 +859,21 @@ func (c *ClientWithResponses) UpdateConfigWithBodyWithResponse(ctx context.Conte
 	return ParseUpdateConfigResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateConfigWithResponse(ctx context.Context, id string, body UpdateConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error) {
-	rsp, err := c.UpdateConfig(ctx, id, body, reqEditors...)
+func (c *ClientWithResponses) UpdateConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateConfigResponse, error) {
+	rsp, err := c.UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateConfigResponse(rsp)
+}
+
+// ListConfigUsageWithResponse request returning *ListConfigUsageResponse
+func (c *ClientWithResponses) ListConfigUsageWithResponse(ctx context.Context, params *ListConfigUsageParams, reqEditors ...RequestEditorFn) (*ListConfigUsageResponse, error) {
+	rsp, err := c.ListConfigUsage(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListConfigUsageResponse(rsp)
 }
 
 // ParseListConfigsResponse parses an HTTP response from a ListConfigsWithResponse call
@@ -858,13 +896,6 @@ func ParseListConfigsResponse(rsp *http.Response) (*ListConfigsResponse, error) 
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
 
 	}
 
@@ -892,13 +923,6 @@ func ParseCreateConfigResponse(rsp *http.Response) (*CreateConfigResponse, error
 		}
 		response.ApplicationvndApiJSON201 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	}
 
 	return response, nil
@@ -915,16 +939,6 @@ func ParseDeleteConfigResponse(rsp *http.Response) (*DeleteConfigResponse, error
 	response := &DeleteConfigResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
-
 	}
 
 	return response, nil
@@ -950,13 +964,6 @@ func ParseGetConfigResponse(rsp *http.Response) (*GetConfigResponse, error) {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON422 = &dest
 
 	}
 
@@ -984,12 +991,31 @@ func ParseUpdateConfigResponse(rsp *http.Response) (*UpdateConfigResponse, error
 		}
 		response.ApplicationvndApiJSON200 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
+	}
+
+	return response, nil
+}
+
+// ParseListConfigUsageResponse parses an HTTP response from a ListConfigUsageWithResponse call
+func ParseListConfigUsageResponse(rsp *http.Response) (*ListConfigUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListConfigUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UsageListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.ApplicationvndApiJSON422 = &dest
+		response.ApplicationvndApiJSON200 = &dest
 
 	}
 
