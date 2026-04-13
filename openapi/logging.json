@@ -7,81 +7,6 @@
   },
   "paths": {
     "/api/v1/loggers": {
-      "post": {
-        "tags": [
-          "Loggers"
-        ],
-        "summary": "Create Logger",
-        "description": "Create a new logger. The caller provides the id (key) in the request body.",
-        "operationId": "create_logger",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/vnd.api+json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoggerResponse"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoggerResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "get": {
         "tags": [
           "Loggers"
@@ -248,7 +173,7 @@
           "Loggers"
         ],
         "summary": "Update Logger",
-        "description": "Replace a logger entirely.",
+        "description": "Update a logger. Fields absent from the body are preserved; explicit null clears them.",
         "operationId": "update_logger",
         "security": [
           {
@@ -547,7 +472,7 @@
           "Log Groups"
         ],
         "summary": "Create Log Group",
-        "description": "Create a new log group. The caller provides the id (key) in the request body.",
+        "description": "Create a new log group. The caller provides the key in data.id or attributes.key.",
         "operationId": "create_log_group",
         "requestBody": {
           "content": {
@@ -1184,6 +1109,18 @@
             "maxLength": 255,
             "title": "Name"
           },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
           "level": {
             "anyOf": [
               {
@@ -1196,7 +1133,7 @@
             ],
             "title": "Level"
           },
-          "group": {
+          "parent_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -1205,7 +1142,7 @@
                 "type": "null"
               }
             ],
-            "title": "Group"
+            "title": "Parent Id"
           },
           "environments": {
             "anyOf": [
@@ -1258,6 +1195,7 @@
               "level": "ERROR"
             }
           },
+          "key": "database-loggers",
           "level": "WARN",
           "name": "Database Loggers",
           "updated_at": "2026-04-01T10:00:00Z"
@@ -1315,6 +1253,7 @@
                 "level": "ERROR"
               }
             },
+            "key": "database-loggers",
             "level": "WARN",
             "name": "Database Loggers",
             "updated_at": "2026-04-01T10:00:00Z"
@@ -1403,6 +1342,19 @@
               }
             ],
             "title": "Environments"
+          },
+          "effective_levels": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Levels",
+            "readOnly": true
           },
           "created_at": {
             "anyOf": [

@@ -98,9 +98,10 @@ type ErrorResponse struct {
 type LogGroup struct {
 	CreatedAt    *time.Time              `json:"created_at,omitempty"`
 	Environments *map[string]interface{} `json:"environments,omitempty"`
-	Group        *string                 `json:"group,omitempty"`
+	Key          *string                 `json:"key,omitempty"`
 	Level        *string                 `json:"level,omitempty"`
 	Name         string                  `json:"name"`
+	ParentId     *string                 `json:"parent_id,omitempty"`
 	UpdatedAt    *time.Time              `json:"updated_at,omitempty"`
 }
 
@@ -126,14 +127,15 @@ type LogGroupResponse struct {
 
 // Logger defines model for Logger.
 type Logger struct {
-	CreatedAt    *time.Time                `json:"created_at,omitempty"`
-	Environments *map[string]interface{}   `json:"environments,omitempty"`
-	Group        *string                   `json:"group,omitempty"`
-	Level        *string                   `json:"level,omitempty"`
-	Managed      *bool                     `json:"managed,omitempty"`
-	Name         string                    `json:"name"`
-	Sources      *[]map[string]interface{} `json:"sources,omitempty"`
-	UpdatedAt    *time.Time                `json:"updated_at,omitempty"`
+	CreatedAt       *time.Time                `json:"created_at,omitempty"`
+	EffectiveLevels *map[string]interface{}   `json:"effective_levels,omitempty"`
+	Environments    *map[string]interface{}   `json:"environments,omitempty"`
+	Group           *string                   `json:"group,omitempty"`
+	Level           *string                   `json:"level,omitempty"`
+	Managed         *bool                     `json:"managed,omitempty"`
+	Name            string                    `json:"name"`
+	Sources         *[]map[string]interface{} `json:"sources,omitempty"`
+	UpdatedAt       *time.Time                `json:"updated_at,omitempty"`
 }
 
 // LoggerBulkItem defines model for LoggerBulkItem.
@@ -252,9 +254,6 @@ type CreateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupResponse
 // UpdateLogGroupApplicationVndAPIPlusJSONRequestBody defines body for UpdateLogGroup for application/vnd.api+json ContentType.
 type UpdateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupResponse
 
-// CreateLoggerApplicationVndAPIPlusJSONRequestBody defines body for CreateLogger for application/vnd.api+json ContentType.
-type CreateLoggerApplicationVndAPIPlusJSONRequestBody = LoggerResponse
-
 // BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterLoggers for application/vnd.api+json ContentType.
 type BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody = LoggerBulkRequest
 
@@ -358,11 +357,6 @@ type ClientInterface interface {
 
 	// ListLoggers request
 	ListLoggers(ctx context.Context, params *ListLoggersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateLoggerWithBody request with any body
-	CreateLoggerWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	CreateLoggerWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// BulkRegisterLoggersWithBody request with any body
 	BulkRegisterLoggersWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -485,30 +479,6 @@ func (c *Client) ListAllLoggerSources(ctx context.Context, params *ListAllLogger
 
 func (c *Client) ListLoggers(ctx context.Context, params *ListLoggersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListLoggersRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CreateLoggerWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateLoggerRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CreateLoggerWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateLoggerRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -911,46 +881,6 @@ func NewListLoggersRequest(server string, params *ListLoggersParams) (*http.Requ
 	return req, nil
 }
 
-// NewCreateLoggerRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateLogger builder with application/vnd.api+json body
-func NewCreateLoggerRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateLoggerApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateLoggerRequestWithBody(server, "application/vnd.api+json", bodyReader)
-}
-
-// NewCreateLoggerRequestWithBody generates requests for CreateLogger with any type of body
-func NewCreateLoggerRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/loggers")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewBulkRegisterLoggersRequestWithApplicationVndAPIPlusJSONBody calls the generic BulkRegisterLoggers builder with application/vnd.api+json body
 func NewBulkRegisterLoggersRequestWithApplicationVndAPIPlusJSONBody(server string, body BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -1257,11 +1187,6 @@ type ClientWithResponsesInterface interface {
 	// ListLoggersWithResponse request
 	ListLoggersWithResponse(ctx context.Context, params *ListLoggersParams, reqEditors ...RequestEditorFn) (*ListLoggersResponse, error)
 
-	// CreateLoggerWithBodyWithResponse request with any body
-	CreateLoggerWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error)
-
-	CreateLoggerWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error)
-
 	// BulkRegisterLoggersWithBodyWithResponse request with any body
 	BulkRegisterLoggersWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkRegisterLoggersResponse, error)
 
@@ -1460,32 +1385,6 @@ func (r ListLoggersResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListLoggersResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type CreateLoggerResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON201 *LoggerResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateLoggerResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateLoggerResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1724,23 +1623,6 @@ func (c *ClientWithResponses) ListLoggersWithResponse(ctx context.Context, param
 		return nil, err
 	}
 	return ParseListLoggersResponse(rsp)
-}
-
-// CreateLoggerWithBodyWithResponse request with arbitrary body returning *CreateLoggerResponse
-func (c *ClientWithResponses) CreateLoggerWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error) {
-	rsp, err := c.CreateLoggerWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateLoggerResponse(rsp)
-}
-
-func (c *ClientWithResponses) CreateLoggerWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLoggerResponse, error) {
-	rsp, err := c.CreateLoggerWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateLoggerResponse(rsp)
 }
 
 // BulkRegisterLoggersWithBodyWithResponse request with arbitrary body returning *BulkRegisterLoggersResponse
@@ -2150,60 +2032,6 @@ func ParseListLoggersResponse(rsp *http.Response) (*ListLoggersResponse, error) 
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreateLoggerResponse parses an HTTP response from a CreateLoggerWithResponse call
-func ParseCreateLoggerResponse(rsp *http.Response) (*CreateLoggerResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateLoggerResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest LoggerResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorResponse
