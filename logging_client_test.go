@@ -171,9 +171,11 @@ func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
 // --- Logger Save tests ---
 
 func TestLogger_Save_Create(t *testing.T) {
+	// The logging service uses PUT (upsert) for both create and update; there is
+	// no separate POST /loggers endpoint.
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			assert.Equal(t, "/api/v1/loggers", r.URL.Path)
+		if r.Method == "PUT" {
+			assert.Equal(t, "/api/v1/loggers/my.logger", r.URL.Path)
 
 			var body map[string]interface{}
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
@@ -181,7 +183,7 @@ func TestLogger_Save_Create(t *testing.T) {
 			assert.Equal(t, "logger", data["type"])
 			assert.Equal(t, "my.logger", data["id"])
 
-			w.WriteHeader(http.StatusCreated)
+			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
 			return
 		}
@@ -196,16 +198,18 @@ func TestLogger_Save_Create(t *testing.T) {
 }
 
 func TestLogger_Save_CreatePath_EmptyID(t *testing.T) {
+	// The logging service uses PUT (upsert) for both create and update; there is
+	// no separate POST /loggers endpoint. A new logger (CreatedAt == nil) is
+	// saved via PUT to /api/v1/loggers/{id}.
 	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/api/v1/loggers", r.URL.Path)
+		assert.Equal(t, "PUT", r.Method)
 
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleLoggerJSON("server-assigned", "My Logger", "INFO", true)))
 	}))
 
 	logger := client.Logging().Management().New("temp-id", smplkit.WithLoggerName("My Logger"))
-	logger.ID = "" // Clear ID to trigger create (POST) path
+	logger.ID = "" // Clear ID to simulate a new logger with no ID yet
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "server-assigned", logger.ID)
@@ -1465,7 +1469,7 @@ func TestLoggingClient_GetGroup_WithParent(t *testing.T) {
 				"id": "database",
 				"name": "Database",
 				"level": "WARN",
-				"group": "infra",
+				"parent_id": "infra",
 				"environments": {},
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": "2024-06-15T12:00:00Z"

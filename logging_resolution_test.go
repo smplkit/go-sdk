@@ -589,10 +589,10 @@ func TestLogGroup_Apply(t *testing.T) {
 func TestLoggerRegistrationBuffer_AddAndDrain(t *testing.T) {
 	buf := newLoggerRegistrationBuffer()
 
-	buf.add("logger-a", "INFO", "my-service")
-	buf.add("logger-b", "DEBUG", "my-service")
+	buf.add("logger-a", "INFO", "INFO", "my-service")
+	buf.add("logger-b", "DEBUG", "DEBUG", "my-service")
 	// Duplicate should be ignored.
-	buf.add("logger-a", "WARN", "other-service")
+	buf.add("logger-a", "WARN", "WARN", "other-service")
 
 	batch := buf.drain()
 	require.Len(t, batch, 2)
@@ -682,8 +682,8 @@ func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
 	attrs := buildLogGroupAttributes(group)
 	require.NotNil(t, attrs.Level)
 	assert.Equal(t, "WARN", *attrs.Level)
-	require.NotNil(t, attrs.Group)
-	assert.Equal(t, "parent-id", *attrs.Group)
+	require.NotNil(t, attrs.ParentId)
+	assert.Equal(t, "parent-id", *attrs.ParentId)
 	require.NotNil(t, attrs.Environments)
 }
 
@@ -887,7 +887,7 @@ func TestFetchAndCache(t *testing.T) {
 				"id": "infra",
 				"name": "Infra",
 				"level": "ERROR",
-				"group": "parent-group-id",
+				"parent_id": "parent-group-id",
 				"environments": {"staging": {"level": "DEBUG"}}
 			}
 		}]}`))
@@ -1302,8 +1302,8 @@ func TestFlushBuffer_WithEntries(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	lc.buffer.add("app.logger", "INFO", "my-service")
-	lc.buffer.add("db.logger", "DEBUG", "")
+	lc.buffer.add("app.logger", "INFO", "INFO", "my-service")
+	lc.buffer.add("db.logger", "DEBUG", "DEBUG", "")
 
 	lc.flushBuffer(context.Background())
 
@@ -1327,13 +1327,112 @@ func TestFlushBuffer_WithService(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	lc.buffer.add("app.logger", "INFO", "my-service")
+	lc.buffer.add("app.logger", "INFO", "INFO", "my-service")
 	lc.flushBuffer(context.Background())
 
 	require.NotNil(t, receivedBody)
 	loggers := receivedBody["loggers"].([]interface{})
 	first := loggers[0].(map[string]interface{})
 	assert.Equal(t, "my-service", first["service"])
+}
+
+func TestFlushBuffer_SendsBothLevelAndResolvedLevel(t *testing.T) {
+	// When level and resolved_level are both set to the same value (e.g. from
+	// slog/zap adapters that have no parent inheritance), both fields must be
+	// present in the bulk payload.
+	var receivedBody map[string]interface{}
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			b := make([]byte, 4096)
+			n, _ := r.Body.Read(b)
+			_ = json.Unmarshal(b[:n], &receivedBody)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	lc.buffer.add("app.logger", "DEBUG", "DEBUG", "my-service")
+	lc.flushBuffer(context.Background())
+
+	require.NotNil(t, receivedBody)
+	loggers := receivedBody["loggers"].([]interface{})
+	require.Len(t, loggers, 1)
+	item := loggers[0].(map[string]interface{})
+	assert.Equal(t, "DEBUG", item["level"])
+	assert.Equal(t, "DEBUG", item["resolved_level"])
+}
+
+func TestFlushBuffer_OmitsLevelWhenEmpty(t *testing.T) {
+	// When the explicit level is empty (e.g. inherited), the level field must be
+	// omitted from the payload while resolved_level is still sent.
+	var receivedBody map[string]interface{}
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			b := make([]byte, 4096)
+			n, _ := r.Body.Read(b)
+			_ = json.Unmarshal(b[:n], &receivedBody)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Empty explicit level, non-empty resolved level.
+	lc.buffer.add("inherited.logger", "", "INFO", "")
+	lc.flushBuffer(context.Background())
+
+	require.NotNil(t, receivedBody)
+	loggers := receivedBody["loggers"].([]interface{})
+	require.Len(t, loggers, 1)
+	item := loggers[0].(map[string]interface{})
+	assert.Nil(t, item["level"], "level should be absent when not explicitly set")
+	assert.Equal(t, "INFO", item["resolved_level"])
+}
+
+func TestFlushBuffer_ResolvedLevelDifferentFromLevel(t *testing.T) {
+	// Verify that level and resolved_level are sent as independent values when
+	// they differ (e.g. a logger with an explicitly-set level that differs from
+	// its effective resolved level after group inheritance).
+	var receivedBody map[string]interface{}
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			b := make([]byte, 4096)
+			n, _ := r.Body.Read(b)
+			_ = json.Unmarshal(b[:n], &receivedBody)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	lc.buffer.add("grp.logger", "WARN", "ERROR", "svc")
+	lc.flushBuffer(context.Background())
+
+	require.NotNil(t, receivedBody)
+	loggers := receivedBody["loggers"].([]interface{})
+	require.Len(t, loggers, 1)
+	item := loggers[0].(map[string]interface{})
+	assert.Equal(t, "WARN", item["level"])
+	assert.Equal(t, "ERROR", item["resolved_level"])
+}
+
+func TestLoggerRegistrationBuffer_StoresResolvedLevel(t *testing.T) {
+	buf := newLoggerRegistrationBuffer()
+
+	buf.add("my-logger", "DEBUG", "INFO", "svc")
+	batch := buf.drain()
+	require.Len(t, batch, 1)
+	assert.Equal(t, "my-logger", batch[0].key)
+	assert.Equal(t, "DEBUG", batch[0].level)
+	assert.Equal(t, "INFO", batch[0].resolvedLevel)
+	assert.Equal(t, "svc", batch[0].service)
 }
 
 // --- periodicFlush ---
@@ -1374,7 +1473,7 @@ func TestPeriodicFlush_TickerFires(t *testing.T) {
 	lc := newTestLoggingClient(t, mux)
 
 	// Add loggers to the buffer so the flush has something to send
-	lc.buffer.add("ticker.logger", "INFO", "my-service")
+	lc.buffer.add("ticker.logger", "INFO", "INFO", "my-service")
 
 	done := make(chan struct{})
 	go lc.periodicFlush(done)

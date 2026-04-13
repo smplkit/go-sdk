@@ -100,7 +100,7 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 				if normalized == "" {
 					continue
 				}
-				c.buffer.add(normalized, dl.Level, c.client.service)
+				c.buffer.add(normalized, dl.Level, dl.Level, c.client.service)
 			}
 		}
 
@@ -139,7 +139,7 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 // Call before or after Start().
 func (c *LoggingClient) RegisterLogger(name string, level LogLevel) {
 	normalized := NormalizeLoggerName(name)
-	c.buffer.add(normalized, string(level), c.client.service)
+	c.buffer.add(normalized, string(level), string(level), c.client.service)
 }
 
 // OnChange registers a global change listener that fires for any logger change.
@@ -192,7 +192,7 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 	if normalized == "" {
 		return
 	}
-	c.buffer.add(normalized, level, c.client.service)
+	c.buffer.add(normalized, level, level, c.client.service)
 
 	// If already started, resolve and apply the level immediately.
 	if c.started {
@@ -206,37 +206,11 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 	}
 }
 
+// createLogger saves a new logger using the PUT (upsert) endpoint.
+// The logging service uses PUT for both create and update; there is no
+// separate POST /loggers endpoint.
 func (c *LoggingClient) createLogger(ctx context.Context, l *Logger) error {
-	reqBody := genlogging.LoggerResponse{
-		Data: genlogging.LoggerResource{
-			Id:         &l.ID,
-			Type:       genlogging.LoggerResourceTypeLogger,
-			Attributes: buildLoggerAttributes(l),
-		},
-	}
-
-	resp, err := c.generated.CreateLoggerWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var result genlogging.LoggerResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	l.apply(resourceToLogger(result.Data, c))
-	return nil
+	return c.updateLogger(ctx, l)
 }
 
 func (c *LoggingClient) updateLogger(ctx context.Context, l *Logger) error {
@@ -430,7 +404,7 @@ func resourceToLogGroup(r genlogging.LogGroupResource, c *LoggingClient) *LogGro
 		ID:           id,
 		Name:         attrs.Name,
 		Level:        level,
-		Group:        attrs.Group,
+		Group:        attrs.ParentId,
 		Environments: envs,
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
@@ -475,7 +449,7 @@ func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
 	return genlogging.LogGroup{
 		Name:         g.Name,
 		Level:        level,
-		Group:        g.Group,
+		ParentId:     g.Group,
 		Environments: envs,
 	}
 }
@@ -536,8 +510,13 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 	items := make([]genlogging.LoggerBulkItem, 0, len(batch))
 	for _, entry := range batch {
 		item := genlogging.LoggerBulkItem{
-			Id:    entry.key,
-			Level: entry.level,
+			Id: entry.key,
+		}
+		if entry.level != "" {
+			item.Level = &entry.level
+		}
+		if entry.resolvedLevel != "" {
+			item.ResolvedLevel = &entry.resolvedLevel
 		}
 		if entry.service != "" {
 			item.Service = &entry.service
@@ -631,9 +610,10 @@ func (c *LoggingClient) fireChangeListeners(loggerID string, source string) { //
 }
 
 type loggerRegistrationEntry struct {
-	key     string
-	level   string
-	service string
+	key           string
+	level         string // explicitly-set level; empty string means inherited/not set
+	resolvedLevel string // effective level after framework inheritance; always non-empty
+	service       string
 }
 
 type loggerRegistrationBuffer struct {
@@ -648,7 +628,10 @@ func newLoggerRegistrationBuffer() *loggerRegistrationBuffer {
 	}
 }
 
-func (b *loggerRegistrationBuffer) add(key, level, service string) {
+// add buffers a logger for bulk registration. level is the explicitly-set level
+// (empty string means inherited/not explicitly set). resolvedLevel is the
+// effective level after framework inheritance and must be non-empty.
+func (b *loggerRegistrationBuffer) add(key, level, resolvedLevel, service string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if _, ok := b.seen[key]; ok {
@@ -656,9 +639,10 @@ func (b *loggerRegistrationBuffer) add(key, level, service string) {
 	}
 	b.seen[key] = struct{}{}
 	b.pending = append(b.pending, loggerRegistrationEntry{
-		key:     key,
-		level:   level,
-		service: service,
+		key:           key,
+		level:         level,
+		resolvedLevel: resolvedLevel,
+		service:       service,
 	})
 }
 
