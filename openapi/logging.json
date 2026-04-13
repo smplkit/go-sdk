@@ -7,87 +7,12 @@
   },
   "paths": {
     "/api/v1/loggers": {
-      "post": {
-        "tags": [
-          "Loggers"
-        ],
-        "summary": "Create Logger",
-        "description": "Create a new logger. The caller provides the id (key) in the request body.",
-        "operationId": "create_logger",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/vnd.api+json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoggerResponse"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoggerResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "get": {
         "tags": [
           "Loggers"
         ],
         "summary": "List Loggers",
-        "description": "List all loggers for the authenticated account. Optionally filter by managed status.",
+        "description": "List all loggers for the authenticated account. Optionally filter by managed status,\nservice, or last-seen time window.",
         "operationId": "list_loggers",
         "security": [
           {
@@ -109,6 +34,38 @@
                 }
               ],
               "title": "Filter[Managed]"
+            }
+          },
+          {
+            "name": "filter[service]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Service]"
+            }
+          },
+          {
+            "name": "filter[last_seen]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Last Seen]"
             }
           }
         ],
@@ -248,7 +205,7 @@
           "Loggers"
         ],
         "summary": "Update Logger",
-        "description": "Replace a logger entirely.",
+        "description": "Update a logger. Fields absent from the body are preserved; explicit null clears them.",
         "operationId": "update_logger",
         "security": [
           {
@@ -547,7 +504,7 @@
           "Log Groups"
         ],
         "summary": "Create Log Group",
-        "description": "Create a new log group. The caller provides the id (key) in the request body.",
+        "description": "Create a new log group. The caller provides the key in data.id or attributes.key.",
         "operationId": "create_log_group",
         "requestBody": {
           "content": {
@@ -1030,6 +987,73 @@
         }
       }
     },
+    "/api/v1/logger_sources/services": {
+      "get": {
+        "tags": [
+          "Logger Sources"
+        ],
+        "summary": "List Logger Source Services",
+        "description": "Return the distinct service names observed across all logger sources for the account.",
+        "operationId": "list_logger_source_services",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggerSourceServicesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/usage": {
       "get": {
         "tags": [
@@ -1184,6 +1208,18 @@
             "maxLength": 255,
             "title": "Name"
           },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
           "level": {
             "anyOf": [
               {
@@ -1196,7 +1232,7 @@
             ],
             "title": "Level"
           },
-          "group": {
+          "parent_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -1205,7 +1241,7 @@
                 "type": "null"
               }
             ],
-            "title": "Group"
+            "title": "Parent Id"
           },
           "environments": {
             "anyOf": [
@@ -1258,6 +1294,7 @@
               "level": "ERROR"
             }
           },
+          "key": "database-loggers",
           "level": "WARN",
           "name": "Database Loggers",
           "updated_at": "2026-04-01T10:00:00Z"
@@ -1315,6 +1352,7 @@
                 "level": "ERROR"
               }
             },
+            "key": "database-loggers",
             "level": "WARN",
             "name": "Database Loggers",
             "updated_at": "2026-04-01T10:00:00Z"
@@ -1404,6 +1442,19 @@
             ],
             "title": "Environments"
           },
+          "effective_levels": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Levels",
+            "readOnly": true
+          },
           "created_at": {
             "anyOf": [
               {
@@ -1461,9 +1512,28 @@
             "description": "Normalized logger name"
           },
           "level": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Level",
-            "description": "Observed log level in smplkit canonical format"
+            "description": "The explicitly-set level on this logger. Null if inherited."
+          },
+          "resolved_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Level",
+            "description": "The effective level after framework inheritance. Never null in compliant SDKs."
           },
           "service": {
             "anyOf": [
@@ -1492,14 +1562,14 @@
         },
         "type": "object",
         "required": [
-          "id",
-          "level"
+          "id"
         ],
         "title": "LoggerBulkItem",
         "example": {
           "environment": "production",
           "id": "sqlalchemy.engine",
           "level": "WARN",
+          "resolved_level": "WARN",
           "service": "api-gateway"
         }
       },
@@ -1779,6 +1849,22 @@
           "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
           "type": "logger_source"
         }
+      },
+      "LoggerSourceServicesResponse": {
+        "properties": {
+          "services": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Services"
+          }
+        },
+        "type": "object",
+        "required": [
+          "services"
+        ],
+        "title": "LoggerSourceServicesResponse"
       },
       "UsageAttributes": {
         "properties": {
