@@ -814,6 +814,292 @@
         ]
       }
     },
+    "/api/v1/me/environment-columns": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get Environment Columns",
+        "description": "Return the resolved ordered list of environment columns for the current user.",
+        "operationId": "get_environment_columns",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentColumnsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/environment-order": {
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Set Personal Environment Order",
+        "description": "Set the current user's personal environment column order and visibility.",
+        "operationId": "put_environment_order",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentOrderBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentColumnsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Reset Personal Environment Order",
+        "description": "Reset the current user's personal environment order to the account default.",
+        "operationId": "delete_environment_order",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentColumnsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/environment-order/add": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Add Environment Column",
+        "description": "Append an environment to the current user's personal column list.",
+        "operationId": "add_environment_column",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentAddBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentColumnsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/environments": {
       "get": {
         "tags": [
@@ -5610,6 +5896,63 @@
           "updated_at": "2026-03-20T11:02:16.616Z"
         }
       },
+      "EnvironmentAddBody": {
+        "properties": {
+          "environment_key": {
+            "type": "string",
+            "title": "Environment Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "environment_key"
+        ],
+        "title": "EnvironmentAddBody"
+      },
+      "EnvironmentColumnItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "color": {
+            "type": "string",
+            "nullable": true,
+            "title": "Color"
+          },
+          "classification": {
+            "type": "string",
+            "title": "Classification"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "classification"
+        ],
+        "title": "EnvironmentColumnItem"
+      },
+      "EnvironmentColumnsResponse": {
+        "properties": {
+          "environment_columns": {
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentColumnItem"
+            },
+            "type": "array",
+            "title": "Environment Columns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "environment_columns"
+        ],
+        "title": "EnvironmentColumnsResponse"
+      },
       "EnvironmentListResponse": {
         "properties": {
           "data": {
@@ -5625,6 +5968,22 @@
           "data"
         ],
         "title": "EnvironmentListResponse"
+      },
+      "EnvironmentOrderBody": {
+        "properties": {
+          "environment_order": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Environment Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "environment_order"
+        ],
+        "title": "EnvironmentOrderBody"
       },
       "EnvironmentResource": {
         "properties": {
