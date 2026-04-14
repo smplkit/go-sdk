@@ -171,49 +171,60 @@ func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
 // --- Logger Save tests ---
 
 func TestLogger_Save_Create(t *testing.T) {
-	// The logging service uses PUT (upsert) for both create and update; there is
-	// no separate POST /loggers endpoint.
-	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" {
-			assert.Equal(t, "/api/v1/loggers/my.logger", r.URL.Path)
-
-			var body map[string]interface{}
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			data := body["data"].(map[string]interface{})
-			assert.Equal(t, "logger", data["type"])
-			assert.Equal(t, "my.logger", data["id"])
-
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
-			return
-		}
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}))
+	// A new logger (CreatedAt == nil) is bulk-registered first, then promoted via PUT.
+	mux := http.NewServeMux()
+	var bulkCalled bool
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		bulkCalled = true
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "PUT", r.Method)
+		var body map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		data := body["data"].(map[string]interface{})
+		assert.Equal(t, "logger", data["type"])
+		assert.Equal(t, "my.logger", data["id"])
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
+	})
+	client := newLoggingTestClient(t, mux)
 
 	logger := client.Logging().Management().New("my.logger", smplkit.WithLoggerName("My Logger"))
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
+	assert.True(t, bulkCalled, "expected bulk register to be called first")
 	assert.Equal(t, "my.logger", logger.ID)
 	assert.Equal(t, "My Logger", logger.Name)
 }
 
-func TestLogger_Save_CreatePath_EmptyID(t *testing.T) {
-	// The logging service uses PUT (upsert) for both create and update; there is
-	// no separate POST /loggers endpoint. A new logger (CreatedAt == nil) is
-	// saved via PUT to /api/v1/loggers/{id}.
-	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "PUT", r.Method)
-
+func TestLogger_Save_Create_WithLevel(t *testing.T) {
+	// Bulk item should carry the logger level when set.
+	mux := http.NewServeMux()
+	var bulkLevel string
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		var reqBody map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
+		loggers := reqBody["loggers"].([]interface{})
+		item := loggers[0].(map[string]interface{})
+		bulkLevel, _ = item["level"].(string)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerJSON("server-assigned", "My Logger", "INFO", true)))
-	}))
+		_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "DEBUG", true)))
+	})
+	client := newLoggingTestClient(t, mux)
 
-	logger := client.Logging().Management().New("temp-id", smplkit.WithLoggerName("My Logger"))
-	logger.ID = "" // Clear ID to simulate a new logger with no ID yet
+	logger := client.Logging().Management().New("my.logger")
+	debugLevel := smplkit.LogLevelDebug
+	logger.Level = &debugLevel
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "server-assigned", logger.ID)
-	assert.Equal(t, "My Logger", logger.Name)
+	assert.Equal(t, "DEBUG", bulkLevel)
 }
 
 func TestLogger_Save_Update(t *testing.T) {
