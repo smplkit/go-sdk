@@ -171,15 +171,8 @@ func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
 // --- Logger Save tests ---
 
 func TestLogger_Save_Create(t *testing.T) {
-	// A new logger (CreatedAt == nil) is bulk-registered first, then promoted via PUT.
+	// A new logger (CreatedAt == nil) is saved via a single PUT (upsert semantics).
 	mux := http.NewServeMux()
-	var bulkCalled bool
-	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		bulkCalled = true
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
 	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "PUT", r.Method)
 		var body map[string]interface{}
@@ -195,36 +188,30 @@ func TestLogger_Save_Create(t *testing.T) {
 	logger := client.Logging().Management().New("my.logger", smplkit.WithLoggerName("My Logger"))
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
-	assert.True(t, bulkCalled, "expected bulk register to be called first")
 	assert.Equal(t, "my.logger", logger.ID)
 	assert.Equal(t, "My Logger", logger.Name)
 }
 
-func TestLogger_Save_Create_WithLevel(t *testing.T) {
-	// Bulk item should carry the logger level when set.
+func TestLogger_Save_Create_WithNullLevel(t *testing.T) {
+	// A new logger without a level sends null level in the PUT body.
+	var putLevel interface{}
 	mux := http.NewServeMux()
-	var bulkLevel string
-	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
-		var reqBody map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
-		loggers := reqBody["loggers"].([]interface{})
-		item := loggers[0].(map[string]interface{})
-		bulkLevel, _ = item["level"].(string)
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/loggers/app.payments", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "PUT", r.Method)
+		var body map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		attrs := body["data"].(map[string]interface{})["attributes"].(map[string]interface{})
+		putLevel = attrs["level"]
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "DEBUG", true)))
+		_, _ = w.Write([]byte(sampleLoggerJSON("app.payments", "Payments", "", true)))
 	})
 	client := newLoggingTestClient(t, mux)
 
-	logger := client.Logging().Management().New("my.logger")
-	debugLevel := smplkit.LogLevelDebug
-	logger.Level = &debugLevel
+	logger := client.Logging().Management().New("app.payments")
+	require.Nil(t, logger.Level)
 	err := logger.Save(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "DEBUG", bulkLevel)
+	assert.Nil(t, putLevel, "expected null level in PUT body")
 }
 
 func TestLogger_Save_Update(t *testing.T) {
@@ -936,7 +923,7 @@ func TestLogger_Save_Create_HTTPError(t *testing.T) {
 	require.True(t, errors.As(err, &valErr))
 }
 
-// --- createLogger (POST) error paths — ID cleared to trigger create branch ---
+// --- Save error paths (new logger, single PUT) ---
 
 func TestLogger_Save_CreatePath_NetworkError(t *testing.T) {
 	transport := &failTransport{}
@@ -945,7 +932,6 @@ func TestLogger_Save_CreatePath_NetworkError(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := client.Logging().Management().New("temp")
-	logger.ID = ""
 	err = logger.Save(context.Background())
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
@@ -961,7 +947,6 @@ func TestLogger_Save_CreatePath_ReadBodyError(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := client.Logging().Management().New("temp")
-	logger.ID = ""
 	err = logger.Save(context.Background())
 	require.Error(t, err)
 	var connErr *smplkit.SmplConnectionError
@@ -975,7 +960,6 @@ func TestLogger_Save_CreatePath_HTTPError(t *testing.T) {
 	}))
 
 	logger := client.Logging().Management().New("temp")
-	logger.ID = ""
 	err := logger.Save(context.Background())
 	require.Error(t, err)
 	var valErr *smplkit.SmplValidationError
@@ -989,7 +973,6 @@ func TestLogger_Save_CreatePath_MalformedJSON(t *testing.T) {
 	}))
 
 	logger := client.Logging().Management().New("temp")
-	logger.ID = ""
 	err := logger.Save(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse response")

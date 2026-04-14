@@ -56,11 +56,9 @@ func WithLoggerManaged(managed bool) LoggerOption {
 }
 
 // Save persists the logger to the server.
+// PUT has upsert semantics: the server creates the logger if it does not exist.
 // The Logger instance is updated with the server response.
 func (l *Logger) Save(ctx context.Context) error {
-	if l.CreatedAt == nil {
-		return l.client.createLogger(ctx, l)
-	}
 	return l.client.updateLogger(ctx, l)
 }
 

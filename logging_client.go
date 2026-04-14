@@ -206,36 +206,6 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 	}
 }
 
-// createLogger bulk-registers a new logger to create the record, then
-// promotes it via PUT to apply name, level, managed, group, and environments.
-func (c *LoggingClient) createLogger(ctx context.Context, l *Logger) error {
-	var levelPtr *string
-	if l.Level != nil {
-		s := string(*l.Level)
-		levelPtr = &s
-	}
-	reqBody := genlogging.LoggerBulkRequest{
-		Loggers: []genlogging.LoggerBulkItem{{
-			Id:            l.ID,
-			Level:         levelPtr,
-			ResolvedLevel: levelPtr,
-		}},
-	}
-	resp, err := c.generated.BulkRegisterLoggersWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-	bulkBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
-	}
-	if err := checkStatus(resp.StatusCode, bulkBody); err != nil {
-		return err
-	}
-	return c.updateLogger(ctx, l)
-}
-
 func (c *LoggingClient) updateLogger(ctx context.Context, l *Logger) error {
 	reqBody := genlogging.LoggerResponse{
 		Data: genlogging.LoggerResource{
