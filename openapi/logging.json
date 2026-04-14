@@ -987,21 +987,21 @@
         }
       }
     },
-    "/api/v1/logger_sources/services": {
+    "/api/v1/services": {
       "get": {
         "tags": [
-          "Logger Sources"
+          "Services"
         ],
-        "summary": "List Logger Source Services",
+        "summary": "List Services",
         "description": "Return the distinct service names observed across all logger sources for the account.",
-        "operationId": "list_logger_source_services",
+        "operationId": "list_services",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LoggerSourceServicesResponse"
+                  "$ref": "#/components/schemas/ServiceListResponse"
                 }
               }
             }
@@ -1850,21 +1850,54 @@
           "type": "logger_source"
         }
       },
-      "LoggerSourceServicesResponse": {
+      "ServiceAttributes": {
+        "properties": {},
+        "type": "object",
+        "title": "ServiceAttributes"
+      },
+      "ServiceListResponse": {
         "properties": {
-          "services": {
+          "data": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ServiceResource"
             },
             "type": "array",
-            "title": "Services"
+            "title": "Data"
           }
         },
         "type": "object",
         "required": [
-          "services"
+          "data"
         ],
-        "title": "LoggerSourceServicesResponse"
+        "title": "ServiceListResponse"
+      },
+      "ServiceResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "service",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/ServiceAttributes",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type"
+        ],
+        "title": "ServiceResource",
+        "example": {
+          "attributes": {},
+          "id": "api-gateway",
+          "type": "service"
+        }
       },
       "UsageAttributes": {
         "properties": {
@@ -1985,6 +2018,9 @@
     },
     {
       "name": "Loggers"
+    },
+    {
+      "name": "Services"
     }
   ]
 }
