@@ -100,7 +100,7 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 				if normalized == "" {
 					continue
 				}
-				c.buffer.add(normalized, dl.Level, dl.Level, c.client.service)
+				c.buffer.add(normalized, dl.Level, dl.Level, c.client.service, c.client.environment)
 			}
 		}
 
@@ -139,7 +139,7 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 // Call before or after Start().
 func (c *LoggingClient) RegisterLogger(name string, level LogLevel) {
 	normalized := NormalizeLoggerName(name)
-	c.buffer.add(normalized, string(level), string(level), c.client.service)
+	c.buffer.add(normalized, string(level), string(level), c.client.service, c.client.environment)
 }
 
 // OnChange registers a global change listener that fires for any logger change.
@@ -192,7 +192,7 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 	if normalized == "" {
 		return
 	}
-	c.buffer.add(normalized, level, level, c.client.service)
+	c.buffer.add(normalized, level, level, c.client.service, c.client.environment)
 
 	// If already started, resolve and apply the level immediately.
 	if c.started {
@@ -521,6 +521,9 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 		if entry.service != "" {
 			item.Service = &entry.service
 		}
+		if entry.environment != "" {
+			item.Environment = &entry.environment
+		}
 		items = append(items, item)
 	}
 	reqBody := genlogging.LoggerBulkRequest{Loggers: items}
@@ -614,6 +617,7 @@ type loggerRegistrationEntry struct {
 	level         string // explicitly-set level; empty string means inherited/not set
 	resolvedLevel string // effective level after framework inheritance; always non-empty
 	service       string
+	environment   string
 }
 
 type loggerRegistrationBuffer struct {
@@ -631,7 +635,7 @@ func newLoggerRegistrationBuffer() *loggerRegistrationBuffer {
 // add buffers a logger for bulk registration. level is the explicitly-set level
 // (empty string means inherited/not explicitly set). resolvedLevel is the
 // effective level after framework inheritance and must be non-empty.
-func (b *loggerRegistrationBuffer) add(key, level, resolvedLevel, service string) {
+func (b *loggerRegistrationBuffer) add(key, level, resolvedLevel, service, environment string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if _, ok := b.seen[key]; ok {
@@ -643,6 +647,7 @@ func (b *loggerRegistrationBuffer) add(key, level, resolvedLevel, service string
 		level:         level,
 		resolvedLevel: resolvedLevel,
 		service:       service,
+		environment:   environment,
 	})
 }
 

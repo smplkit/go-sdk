@@ -589,10 +589,10 @@ func TestLogGroup_Apply(t *testing.T) {
 func TestLoggerRegistrationBuffer_AddAndDrain(t *testing.T) {
 	buf := newLoggerRegistrationBuffer()
 
-	buf.add("logger-a", "INFO", "INFO", "my-service")
-	buf.add("logger-b", "DEBUG", "DEBUG", "my-service")
+	buf.add("logger-a", "INFO", "INFO", "my-service", "production")
+	buf.add("logger-b", "DEBUG", "DEBUG", "my-service", "production")
 	// Duplicate should be ignored.
-	buf.add("logger-a", "WARN", "WARN", "other-service")
+	buf.add("logger-a", "WARN", "WARN", "other-service", "staging")
 
 	batch := buf.drain()
 	require.Len(t, batch, 2)
@@ -1302,8 +1302,8 @@ func TestFlushBuffer_WithEntries(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	lc.buffer.add("app.logger", "INFO", "INFO", "my-service")
-	lc.buffer.add("db.logger", "DEBUG", "DEBUG", "")
+	lc.buffer.add("app.logger", "INFO", "INFO", "my-service", "production")
+	lc.buffer.add("db.logger", "DEBUG", "DEBUG", "", "")
 
 	lc.flushBuffer(context.Background())
 
@@ -1327,13 +1327,14 @@ func TestFlushBuffer_WithService(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	lc.buffer.add("app.logger", "INFO", "INFO", "my-service")
+	lc.buffer.add("app.logger", "INFO", "INFO", "my-service", "production")
 	lc.flushBuffer(context.Background())
 
 	require.NotNil(t, receivedBody)
 	loggers := receivedBody["loggers"].([]interface{})
 	first := loggers[0].(map[string]interface{})
 	assert.Equal(t, "my-service", first["service"])
+	assert.Equal(t, "production", first["environment"])
 }
 
 func TestFlushBuffer_SendsBothLevelAndResolvedLevel(t *testing.T) {
@@ -1354,7 +1355,7 @@ func TestFlushBuffer_SendsBothLevelAndResolvedLevel(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	lc.buffer.add("app.logger", "DEBUG", "DEBUG", "my-service")
+	lc.buffer.add("app.logger", "DEBUG", "DEBUG", "my-service", "production")
 	lc.flushBuffer(context.Background())
 
 	require.NotNil(t, receivedBody)
@@ -1383,7 +1384,7 @@ func TestFlushBuffer_OmitsLevelWhenEmpty(t *testing.T) {
 	}))
 
 	// Empty explicit level, non-empty resolved level.
-	lc.buffer.add("inherited.logger", "", "INFO", "")
+	lc.buffer.add("inherited.logger", "", "INFO", "", "")
 	lc.flushBuffer(context.Background())
 
 	require.NotNil(t, receivedBody)
@@ -1412,7 +1413,7 @@ func TestFlushBuffer_ResolvedLevelDifferentFromLevel(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	lc.buffer.add("grp.logger", "WARN", "ERROR", "svc")
+	lc.buffer.add("grp.logger", "WARN", "ERROR", "svc", "production")
 	lc.flushBuffer(context.Background())
 
 	require.NotNil(t, receivedBody)
@@ -1426,7 +1427,7 @@ func TestFlushBuffer_ResolvedLevelDifferentFromLevel(t *testing.T) {
 func TestLoggerRegistrationBuffer_StoresResolvedLevel(t *testing.T) {
 	buf := newLoggerRegistrationBuffer()
 
-	buf.add("my-logger", "DEBUG", "INFO", "svc")
+	buf.add("my-logger", "DEBUG", "INFO", "svc", "production")
 	batch := buf.drain()
 	require.Len(t, batch, 1)
 	assert.Equal(t, "my-logger", batch[0].key)
@@ -1473,7 +1474,7 @@ func TestPeriodicFlush_TickerFires(t *testing.T) {
 	lc := newTestLoggingClient(t, mux)
 
 	// Add loggers to the buffer so the flush has something to send
-	lc.buffer.add("ticker.logger", "INFO", "INFO", "my-service")
+	lc.buffer.add("ticker.logger", "INFO", "INFO", "my-service", "production")
 
 	done := make(chan struct{})
 	go lc.periodicFlush(done)
