@@ -222,16 +222,20 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// registerServiceContext sends a service context registration to the app service.
+// registerServiceContext sends environment and service context registrations to the app service.
 // Errors are logged but not returned.
 func (c *Client) registerServiceContext(ctx context.Context) {
-	attrs := map[string]interface{}{"name": c.service}
+	svcAttrs := map[string]interface{}{"name": c.service}
 	reqBody := genapp.ContextBulkRegister{
 		Contexts: []genapp.ContextBulkItem{
 			{
+				Type: "environment",
+				Key:  c.environment,
+			},
+			{
 				Type:       "service",
 				Key:        c.service,
-				Attributes: &attrs,
+				Attributes: &svcAttrs,
 			},
 		},
 	}
