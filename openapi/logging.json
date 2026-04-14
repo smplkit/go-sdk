@@ -204,8 +204,8 @@
         "tags": [
           "Loggers"
         ],
-        "summary": "Update Logger",
-        "description": "Update a logger. Fields absent from the body are preserved; explicit null clears them.",
+        "summary": "Update or Create Logger",
+        "description": "Create or update a logger (upsert). If the logger does not exist it is created.\nFields absent from the body are preserved on update; explicit null clears them.",
         "operationId": "update_logger",
         "security": [
           {
