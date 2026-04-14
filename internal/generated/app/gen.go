@@ -586,32 +586,9 @@ type Environment struct {
 	UpdatedAt      *time.Time `json:"updated_at,omitempty"`
 }
 
-// EnvironmentAddBody defines model for EnvironmentAddBody.
-type EnvironmentAddBody struct {
-	EnvironmentKey string `json:"environment_key"`
-}
-
-// EnvironmentColumnItem defines model for EnvironmentColumnItem.
-type EnvironmentColumnItem struct {
-	Classification string  `json:"classification"`
-	Color          *string `json:"color,omitempty"`
-	Key            string  `json:"key"`
-	Name           string  `json:"name"`
-}
-
-// EnvironmentColumnsResponse defines model for EnvironmentColumnsResponse.
-type EnvironmentColumnsResponse struct {
-	EnvironmentColumns []EnvironmentColumnItem `json:"environment_columns"`
-}
-
 // EnvironmentListResponse defines model for EnvironmentListResponse.
 type EnvironmentListResponse struct {
 	Data []EnvironmentResource `json:"data"`
-}
-
-// EnvironmentOrderBody defines model for EnvironmentOrderBody.
-type EnvironmentOrderBody struct {
-	EnvironmentOrder []string `json:"environment_order"`
 }
 
 // EnvironmentResource defines model for EnvironmentResource.
@@ -1129,12 +1106,6 @@ type CreateInvitationsApplicationVndAPIPlusJSONRequestBody = InvitationBulkCreat
 // AcceptInvitationApplicationVndAPIPlusJSONRequestBody defines body for AcceptInvitation for application/vnd.api+json ContentType.
 type AcceptInvitationApplicationVndAPIPlusJSONRequestBody = InvitationAcceptRequest
 
-// PutEnvironmentOrderApplicationVndAPIPlusJSONRequestBody defines body for PutEnvironmentOrder for application/vnd.api+json ContentType.
-type PutEnvironmentOrderApplicationVndAPIPlusJSONRequestBody = EnvironmentOrderBody
-
-// AddEnvironmentColumnApplicationVndAPIPlusJSONRequestBody defines body for AddEnvironmentColumn for application/vnd.api+json ContentType.
-type AddEnvironmentColumnApplicationVndAPIPlusJSONRequestBody = EnvironmentAddBody
-
 // BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody defines body for BulkIngestMetrics for application/vnd.api+json ContentType.
 type BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody = MetricBulkRequest
 
@@ -1308,6 +1279,12 @@ type ClientInterface interface {
 
 	UpdateAccountWithApplicationVndAPIPlusJSONBody(ctx context.Context, body UpdateAccountApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetAccountSettings request
+	GetAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutAccountSettings request
+	PutAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListApiKeys request
 	ListApiKeys(ctx context.Context, params *ListApiKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1439,22 +1416,6 @@ type ClientInterface interface {
 	// ListInvoices request
 	ListInvoices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetEnvironmentColumns request
-	GetEnvironmentColumns(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteEnvironmentOrder request
-	DeleteEnvironmentOrder(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PutEnvironmentOrderWithBody request with any body
-	PutEnvironmentOrderWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	PutEnvironmentOrderWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutEnvironmentOrderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// AddEnvironmentColumnWithBody request with any body
-	AddEnvironmentColumnWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	AddEnvironmentColumnWithApplicationVndAPIPlusJSONBody(ctx context.Context, body AddEnvironmentColumnApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListMetricNames request
 	ListMetricNames(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1534,6 +1495,12 @@ type ClientInterface interface {
 
 	UpdateCurrentUserWithApplicationVndAPIPlusJSONBody(ctx context.Context, body UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetUserSettings request
+	GetUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutUserSettings request
+	PutUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RemoveUser request
 	RemoveUser(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1584,6 +1551,30 @@ func (c *Client) UpdateAccountWithBody(ctx context.Context, contentType string, 
 
 func (c *Client) UpdateAccountWithApplicationVndAPIPlusJSONBody(ctx context.Context, body UpdateAccountApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAccountRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAccountSettingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutAccountSettingsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -2170,78 +2161,6 @@ func (c *Client) ListInvoices(ctx context.Context, reqEditors ...RequestEditorFn
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetEnvironmentColumns(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetEnvironmentColumnsRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) DeleteEnvironmentOrder(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteEnvironmentOrderRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PutEnvironmentOrderWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutEnvironmentOrderRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PutEnvironmentOrderWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutEnvironmentOrderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutEnvironmentOrderRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) AddEnvironmentColumnWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddEnvironmentColumnRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) AddEnvironmentColumnWithApplicationVndAPIPlusJSONBody(ctx context.Context, body AddEnvironmentColumnApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddEnvironmentColumnRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 func (c *Client) ListMetricNames(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListMetricNamesRequest(c.Server)
 	if err != nil {
@@ -2590,6 +2509,30 @@ func (c *Client) UpdateCurrentUserWithApplicationVndAPIPlusJSONBody(ctx context.
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserSettingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) RemoveUser(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRemoveUserRequest(c.Server, id)
 	if err != nil {
@@ -2728,6 +2671,60 @@ func NewUpdateAccountRequestWithBody(server string, contentType string, body io.
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAccountSettingsRequest generates requests for GetAccountSettings
+func NewGetAccountSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutAccountSettingsRequest generates requests for PutAccountSettings
+func NewPutAccountSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -4132,140 +4129,6 @@ func NewListInvoicesRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewGetEnvironmentColumnsRequest generates requests for GetEnvironmentColumns
-func NewGetEnvironmentColumnsRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/me/environment-columns")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewDeleteEnvironmentOrderRequest generates requests for DeleteEnvironmentOrder
-func NewDeleteEnvironmentOrderRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/me/environment-order")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewPutEnvironmentOrderRequestWithApplicationVndAPIPlusJSONBody calls the generic PutEnvironmentOrder builder with application/vnd.api+json body
-func NewPutEnvironmentOrderRequestWithApplicationVndAPIPlusJSONBody(server string, body PutEnvironmentOrderApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewPutEnvironmentOrderRequestWithBody(server, "application/vnd.api+json", bodyReader)
-}
-
-// NewPutEnvironmentOrderRequestWithBody generates requests for PutEnvironmentOrder with any type of body
-func NewPutEnvironmentOrderRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/me/environment-order")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("PUT", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewAddEnvironmentColumnRequestWithApplicationVndAPIPlusJSONBody calls the generic AddEnvironmentColumn builder with application/vnd.api+json body
-func NewAddEnvironmentColumnRequestWithApplicationVndAPIPlusJSONBody(server string, body AddEnvironmentColumnApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewAddEnvironmentColumnRequestWithBody(server, "application/vnd.api+json", bodyReader)
-}
-
-// NewAddEnvironmentColumnRequestWithBody generates requests for AddEnvironmentColumn with any type of body
-func NewAddEnvironmentColumnRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/me/environment-order/add")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewListMetricNamesRequest generates requests for ListMetricNames
 func NewListMetricNamesRequest(server string) (*http.Request, error) {
 	var err error
@@ -5039,7 +4902,7 @@ func NewGetCurrentUserRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v1/users/me")
+	operationPath := fmt.Sprintf("/api/v1/users/current")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5077,7 +4940,7 @@ func NewUpdateCurrentUserRequestWithBody(server string, contentType string, body
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v1/users/me")
+	operationPath := fmt.Sprintf("/api/v1/users/current")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5093,6 +4956,60 @@ func NewUpdateCurrentUserRequestWithBody(server string, contentType string, body
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetUserSettingsRequest generates requests for GetUserSettings
+func NewGetUserSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/users/current/settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutUserSettingsRequest generates requests for PutUserSettings
+func NewPutUserSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/users/current/settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -5266,6 +5183,12 @@ type ClientWithResponsesInterface interface {
 
 	UpdateAccountWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body UpdateAccountApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAccountResponse, error)
 
+	// GetAccountSettingsWithResponse request
+	GetAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountSettingsResponse, error)
+
+	// PutAccountSettingsWithResponse request
+	PutAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
+
 	// ListApiKeysWithResponse request
 	ListApiKeysWithResponse(ctx context.Context, params *ListApiKeysParams, reqEditors ...RequestEditorFn) (*ListApiKeysResponse, error)
 
@@ -5397,22 +5320,6 @@ type ClientWithResponsesInterface interface {
 	// ListInvoicesWithResponse request
 	ListInvoicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListInvoicesResponse, error)
 
-	// GetEnvironmentColumnsWithResponse request
-	GetEnvironmentColumnsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetEnvironmentColumnsResponse, error)
-
-	// DeleteEnvironmentOrderWithResponse request
-	DeleteEnvironmentOrderWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteEnvironmentOrderResponse, error)
-
-	// PutEnvironmentOrderWithBodyWithResponse request with any body
-	PutEnvironmentOrderWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutEnvironmentOrderResponse, error)
-
-	PutEnvironmentOrderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutEnvironmentOrderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutEnvironmentOrderResponse, error)
-
-	// AddEnvironmentColumnWithBodyWithResponse request with any body
-	AddEnvironmentColumnWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddEnvironmentColumnResponse, error)
-
-	AddEnvironmentColumnWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body AddEnvironmentColumnApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*AddEnvironmentColumnResponse, error)
-
 	// ListMetricNamesWithResponse request
 	ListMetricNamesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error)
 
@@ -5491,6 +5398,12 @@ type ClientWithResponsesInterface interface {
 	UpdateCurrentUserWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCurrentUserResponse, error)
 
 	UpdateCurrentUserWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCurrentUserResponse, error)
+
+	// GetUserSettingsWithResponse request
+	GetUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserSettingsResponse, error)
+
+	// PutUserSettingsWithResponse request
+	PutUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error)
 
 	// RemoveUserWithResponse request
 	RemoveUserWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveUserResponse, error)
@@ -5575,6 +5488,58 @@ func (r UpdateAccountResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateAccountResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAccountSettingsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *map[string]interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAccountSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAccountSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PutAccountSettingsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *map[string]interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r PutAccountSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutAccountSettingsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -6484,110 +6449,6 @@ func (r ListInvoicesResponse) StatusCode() int {
 	return 0
 }
 
-type GetEnvironmentColumnsResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *EnvironmentColumnsResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r GetEnvironmentColumnsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetEnvironmentColumnsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type DeleteEnvironmentOrderResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *EnvironmentColumnsResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteEnvironmentOrderResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteEnvironmentOrderResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type PutEnvironmentOrderResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *EnvironmentColumnsResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r PutEnvironmentOrderResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PutEnvironmentOrderResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type AddEnvironmentColumnResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *EnvironmentColumnsResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r AddEnvironmentColumnResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r AddEnvironmentColumnResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 type ListMetricNamesResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -7132,6 +6993,58 @@ func (r UpdateCurrentUserResponse) StatusCode() int {
 	return 0
 }
 
+type GetUserSettingsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *map[string]interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PutUserSettingsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *map[string]interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r PutUserSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutUserSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type RemoveUserResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -7242,6 +7155,24 @@ func (c *ClientWithResponses) UpdateAccountWithApplicationVndAPIPlusJSONBodyWith
 		return nil, err
 	}
 	return ParseUpdateAccountResponse(rsp)
+}
+
+// GetAccountSettingsWithResponse request returning *GetAccountSettingsResponse
+func (c *ClientWithResponses) GetAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountSettingsResponse, error) {
+	rsp, err := c.GetAccountSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAccountSettingsResponse(rsp)
+}
+
+// PutAccountSettingsWithResponse request returning *PutAccountSettingsResponse
+func (c *ClientWithResponses) PutAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error) {
+	rsp, err := c.PutAccountSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutAccountSettingsResponse(rsp)
 }
 
 // ListApiKeysWithResponse request returning *ListApiKeysResponse
@@ -7663,58 +7594,6 @@ func (c *ClientWithResponses) ListInvoicesWithResponse(ctx context.Context, reqE
 	return ParseListInvoicesResponse(rsp)
 }
 
-// GetEnvironmentColumnsWithResponse request returning *GetEnvironmentColumnsResponse
-func (c *ClientWithResponses) GetEnvironmentColumnsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetEnvironmentColumnsResponse, error) {
-	rsp, err := c.GetEnvironmentColumns(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetEnvironmentColumnsResponse(rsp)
-}
-
-// DeleteEnvironmentOrderWithResponse request returning *DeleteEnvironmentOrderResponse
-func (c *ClientWithResponses) DeleteEnvironmentOrderWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteEnvironmentOrderResponse, error) {
-	rsp, err := c.DeleteEnvironmentOrder(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteEnvironmentOrderResponse(rsp)
-}
-
-// PutEnvironmentOrderWithBodyWithResponse request with arbitrary body returning *PutEnvironmentOrderResponse
-func (c *ClientWithResponses) PutEnvironmentOrderWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutEnvironmentOrderResponse, error) {
-	rsp, err := c.PutEnvironmentOrderWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutEnvironmentOrderResponse(rsp)
-}
-
-func (c *ClientWithResponses) PutEnvironmentOrderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutEnvironmentOrderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutEnvironmentOrderResponse, error) {
-	rsp, err := c.PutEnvironmentOrderWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutEnvironmentOrderResponse(rsp)
-}
-
-// AddEnvironmentColumnWithBodyWithResponse request with arbitrary body returning *AddEnvironmentColumnResponse
-func (c *ClientWithResponses) AddEnvironmentColumnWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddEnvironmentColumnResponse, error) {
-	rsp, err := c.AddEnvironmentColumnWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAddEnvironmentColumnResponse(rsp)
-}
-
-func (c *ClientWithResponses) AddEnvironmentColumnWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body AddEnvironmentColumnApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*AddEnvironmentColumnResponse, error) {
-	rsp, err := c.AddEnvironmentColumnWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAddEnvironmentColumnResponse(rsp)
-}
-
 // ListMetricNamesWithResponse request returning *ListMetricNamesResponse
 func (c *ClientWithResponses) ListMetricNamesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error) {
 	rsp, err := c.ListMetricNames(ctx, reqEditors...)
@@ -7968,6 +7847,24 @@ func (c *ClientWithResponses) UpdateCurrentUserWithApplicationVndAPIPlusJSONBody
 	return ParseUpdateCurrentUserResponse(rsp)
 }
 
+// GetUserSettingsWithResponse request returning *GetUserSettingsResponse
+func (c *ClientWithResponses) GetUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserSettingsResponse, error) {
+	rsp, err := c.GetUserSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUserSettingsResponse(rsp)
+}
+
+// PutUserSettingsWithResponse request returning *PutUserSettingsResponse
+func (c *ClientWithResponses) PutUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error) {
+	rsp, err := c.PutUserSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserSettingsResponse(rsp)
+}
+
 // RemoveUserWithResponse request returning *RemoveUserResponse
 func (c *ClientWithResponses) RemoveUserWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveUserResponse, error) {
 	rsp, err := c.RemoveUser(ctx, id, reqEditors...)
@@ -8120,6 +8017,114 @@ func ParseUpdateAccountResponse(rsp *http.Response) (*UpdateAccountResponse, err
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest AccountResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAccountSettingsResponse parses an HTTP response from a GetAccountSettingsWithResponse call
+func ParseGetAccountSettingsResponse(rsp *http.Response) (*GetAccountSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAccountSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutAccountSettingsResponse parses an HTTP response from a PutAccountSettingsWithResponse call
+func ParsePutAccountSettingsResponse(rsp *http.Response) (*PutAccountSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutAccountSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -9999,222 +10004,6 @@ func ParseListInvoicesResponse(rsp *http.Response) (*ListInvoicesResponse, error
 	return response, nil
 }
 
-// ParseGetEnvironmentColumnsResponse parses an HTTP response from a GetEnvironmentColumnsWithResponse call
-func ParseGetEnvironmentColumnsResponse(rsp *http.Response) (*GetEnvironmentColumnsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetEnvironmentColumnsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest EnvironmentColumnsResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteEnvironmentOrderResponse parses an HTTP response from a DeleteEnvironmentOrderWithResponse call
-func ParseDeleteEnvironmentOrderResponse(rsp *http.Response) (*DeleteEnvironmentOrderResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteEnvironmentOrderResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest EnvironmentColumnsResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParsePutEnvironmentOrderResponse parses an HTTP response from a PutEnvironmentOrderWithResponse call
-func ParsePutEnvironmentOrderResponse(rsp *http.Response) (*PutEnvironmentOrderResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PutEnvironmentOrderResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest EnvironmentColumnsResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseAddEnvironmentColumnResponse parses an HTTP response from a AddEnvironmentColumnWithResponse call
-func ParseAddEnvironmentColumnResponse(rsp *http.Response) (*AddEnvironmentColumnResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &AddEnvironmentColumnResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest EnvironmentColumnsResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseListMetricNamesResponse parses an HTTP response from a ListMetricNamesWithResponse call
 func ParseListMetricNamesResponse(rsp *http.Response) (*ListMetricNamesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -11297,6 +11086,114 @@ func ParseUpdateCurrentUserResponse(rsp *http.Response) (*UpdateCurrentUserRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest UserResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUserSettingsResponse parses an HTTP response from a GetUserSettingsWithResponse call
+func ParseGetUserSettingsResponse(rsp *http.Response) (*GetUserSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUserSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutUserSettingsResponse parses an HTTP response from a PutUserSettingsWithResponse call
+func ParsePutUserSettingsResponse(rsp *http.Response) (*PutUserSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutUserSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
