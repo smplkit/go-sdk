@@ -1501,6 +1501,9 @@ type ClientInterface interface {
 	// PutUserSettings request
 	PutUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PutUserSettingsKey request
+	PutUserSettingsKey(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RemoveUser request
 	RemoveUser(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2523,6 +2526,18 @@ func (c *Client) GetUserSettings(ctx context.Context, reqEditors ...RequestEdito
 
 func (c *Client) PutUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutUserSettingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutUserSettingsKey(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsKeyRequest(c.Server, key)
 	if err != nil {
 		return nil, err
 	}
@@ -5014,6 +5029,40 @@ func NewPutUserSettingsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewPutUserSettingsKeyRequest generates requests for PutUserSettingsKey
+func NewPutUserSettingsKeyRequest(server string, key string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "key", key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/users/current/settings/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewRemoveUserRequest generates requests for RemoveUser
 func NewRemoveUserRequest(server string, id openapi_types.UUID) (*http.Request, error) {
 	var err error
@@ -5404,6 +5453,9 @@ type ClientWithResponsesInterface interface {
 
 	// PutUserSettingsWithResponse request
 	PutUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error)
+
+	// PutUserSettingsKeyWithResponse request
+	PutUserSettingsKeyWithResponse(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error)
 
 	// RemoveUserWithResponse request
 	RemoveUserWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveUserResponse, error)
@@ -7045,6 +7097,32 @@ func (r PutUserSettingsResponse) StatusCode() int {
 	return 0
 }
 
+type PutUserSettingsKeyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *map[string]interface{}
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r PutUserSettingsKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutUserSettingsKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type RemoveUserResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -7863,6 +7941,15 @@ func (c *ClientWithResponses) PutUserSettingsWithResponse(ctx context.Context, r
 		return nil, err
 	}
 	return ParsePutUserSettingsResponse(rsp)
+}
+
+// PutUserSettingsKeyWithResponse request returning *PutUserSettingsKeyResponse
+func (c *ClientWithResponses) PutUserSettingsKeyWithResponse(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error) {
+	rsp, err := c.PutUserSettingsKey(ctx, key, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserSettingsKeyResponse(rsp)
 }
 
 // RemoveUserWithResponse request returning *RemoveUserResponse
@@ -11187,6 +11274,60 @@ func ParsePutUserSettingsResponse(rsp *http.Response) (*PutUserSettingsResponse,
 	}
 
 	response := &PutUserSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutUserSettingsKeyResponse parses an HTTP response from a PutUserSettingsKeyWithResponse call
+func ParsePutUserSettingsKeyResponse(rsp *http.Response) (*PutUserSettingsKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutUserSettingsKeyResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
