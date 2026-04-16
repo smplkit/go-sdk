@@ -1529,7 +1529,7 @@ func TestHandleLoggerChanged_FetchError(t *testing.T) {
 	assert.False(t, called)
 }
 
-func TestHandleLoggerChanged_FallbackToKey(t *testing.T) {
+func TestHandleLoggerChanged_UsesIDField(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1547,8 +1547,7 @@ func TestHandleLoggerChanged_FallbackToKey(t *testing.T) {
 		received = evt
 	})
 
-	// No "id" key — should fall back to "key" field.
-	lc.handleLoggerChanged(map[string]interface{}{"key": "my.logger"})
+	lc.handleLoggerChanged(map[string]interface{}{"id": "my.logger"})
 
 	require.NotNil(t, received)
 	assert.Equal(t, "my.logger", received.ID)

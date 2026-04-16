@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/smplkit/go-sdk/internal/debug"
 )
 
 // sharedWebSocket manages the real-time event connection.
@@ -93,6 +95,12 @@ func (ws *sharedWebSocket) dispatch(eventName string, data map[string]interface{
 	copy(cbs, ws.listeners[eventName])
 	ws.listenersMu.Unlock()
 
+	if len(cbs) == 0 {
+		debug.Debug("websocket", "no handler registered for event: %q", eventName)
+		return
+	}
+	debug.Debug("websocket", "routing %q to %d handler(s)", eventName, len(cbs))
+
 	for _, cb := range cbs {
 		func() {
 			defer func() {
@@ -124,6 +132,7 @@ func defaultDialWS(wsURL string) (*websocket.Conn, error) {
 
 // start launches the background WebSocket goroutine.
 func (ws *sharedWebSocket) start() {
+	debug.Debug("websocket", "starting WebSocket connection")
 	go ws.run()
 }
 
@@ -177,6 +186,7 @@ func (ws *sharedWebSocket) run() {
 		}
 
 		// Back off then retry.
+		debug.Debug("websocket", "reconnecting in %s", backoff)
 		ws.setStatus("reconnecting")
 		select {
 		case <-ws.closeCh:
@@ -194,6 +204,12 @@ func (ws *sharedWebSocket) run() {
 
 func (ws *sharedWebSocket) connect() (closed bool) {
 	wsURL := ws.buildWSURL()
+	// Log a sanitized URL (strip api_key query param).
+	sanitizedURL := wsURL
+	if idx := strings.Index(wsURL, "?"); idx >= 0 {
+		sanitizedURL = wsURL[:idx]
+	}
+	debug.Debug("websocket", "connecting to %s", sanitizedURL)
 	ws.setStatus("connecting")
 
 	dial := ws.dialWS
@@ -203,6 +219,7 @@ func (ws *sharedWebSocket) connect() (closed bool) {
 
 	conn, dialErr := dial(wsURL)
 	if dialErr != nil {
+		debug.Debug("websocket", "dial error: %v", dialErr)
 		select {
 		case <-ws.closeCh:
 			return true
@@ -215,6 +232,7 @@ func (ws *sharedWebSocket) connect() (closed bool) {
 	// Wait for {"type": "connected"} confirmation.
 	var msg map[string]interface{}
 	if err := conn.ReadJSON(&msg); err != nil {
+		debug.Debug("websocket", "error reading connection confirmation: %v", err)
 		select {
 		case <-ws.closeCh:
 			return true
@@ -228,6 +246,7 @@ func (ws *sharedWebSocket) connect() (closed bool) {
 		return false
 	}
 
+	debug.Debug("websocket", "connected")
 	ws.setStatus("connected")
 	if ws.metrics != nil {
 		ws.metrics.RecordGauge("platform.websocket_connections", 1, "connections", nil)
@@ -261,6 +280,7 @@ func (ws *sharedWebSocket) connect() (closed bool) {
 
 		// Heartbeat: server sends "ping", client responds with "pong".
 		if string(message) == "ping" {
+			debug.Debug("websocket", "ping received, sending pong")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte("pong"))
 			continue
 		}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/smplkit/go-sdk/internal/debug"
 	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
 	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
@@ -186,6 +187,17 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	c.flags.runtime = newFlagsRuntime(c.flags)
 	c.logging = newLoggingClient(c, genLoggingClient)
+
+	maskedKey := resolved
+	if len(resolved) > 14 {
+		maskedKey = resolved[:10] + "..." + resolved[len(resolved)-4:]
+	} else if len(resolved) > 4 {
+		maskedKey = resolved[:4] + "..."
+	} else {
+		maskedKey = resolved + "..."
+	}
+	debug.Debug("lifecycle", "Client created (api_key=%s, environment=%s, service=%s)", maskedKey, resolvedEnv, resolvedService)
+
 	return c, nil
 }
 
@@ -212,6 +224,7 @@ func (c *Client) Logging() *LoggingClient {
 
 // Close releases all resources held by the client and its sub-clients.
 func (c *Client) Close() error {
+	debug.Debug("lifecycle", "Client.Close() called")
 	if c.logging != nil {
 		c.logging.close()
 	}

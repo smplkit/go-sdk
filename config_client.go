@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/smplkit/go-sdk/internal/debug"
 	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
 )
 
@@ -45,6 +46,8 @@ type ConfigClient struct {
 
 	listenersMu sync.Mutex
 	listeners   []configChangeListener
+
+	wsManager *sharedWebSocket
 
 	management *ConfigManagement
 }
@@ -182,11 +185,13 @@ func (c *ConfigClient) Subscribe(ctx context.Context, id string) (*LiveConfig, e
 func (c *ConfigClient) ensureInit(ctx context.Context) error {
 	c.initOnce.Do(func() {
 		environment := c.client.environment
+		debug.Debug("api", "fetching config definitions")
 		configs, err := c.Management().List(ctx)
 		if err != nil {
 			c.initErr = err
 			return
 		}
+		debug.Debug("api", "fetched %d configs", len(configs))
 
 		cache := make(map[string]map[string]interface{})
 		for _, cfg := range configs {
@@ -198,8 +203,20 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 			cache[cfg.ID] = resolveChain(chain, environment)
 		}
 		c.configCache = cache
+
+		// Register WebSocket listeners for real-time config updates.
+		ws := c.client.ensureWS()
+		c.wsManager = ws
+		ws.on("config_changed", c.handleConfigChanged)
+		ws.on("config_deleted", c.handleConfigChanged)
 	})
 	return c.initErr
+}
+
+func (c *ConfigClient) handleConfigChanged(data map[string]interface{}) {
+	configID, _ := data["id"].(string)
+	debug.Debug("websocket", "config event received, id=%q", configID)
+	_ = c.Refresh(context.Background())
 }
 
 // Refresh re-fetches all configs and resolves current values.

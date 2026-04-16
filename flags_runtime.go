@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	jsonlogic "github.com/diegoholiveira/jsonlogic/v3"
+
+	"github.com/smplkit/go-sdk/internal/debug"
 )
 
 // FlagChangeEvent describes a flag definition change.
@@ -619,7 +621,8 @@ func isTruthy(v interface{}) bool {
 }
 
 func (rt *FlagsRuntime) handleFlagChanged(data map[string]interface{}) {
-	flagKey, _ := data["key"].(string)
+	flagID, _ := data["id"].(string)
+	debug.Debug("websocket", "flag event received, id=%q", flagID)
 	store, err := rt.flagsClient.fetchAllFlags(context.Background())
 	if err != nil {
 		return
@@ -630,7 +633,7 @@ func (rt *FlagsRuntime) handleFlagChanged(data map[string]interface{}) {
 	rt.mu.Unlock()
 
 	rt.cache.clear()
-	rt.fireChangeListeners(flagKey, "websocket")
+	rt.fireChangeListeners(flagID, "websocket")
 }
 
 func (rt *FlagsRuntime) handleFlagDeleted(data map[string]interface{}) {

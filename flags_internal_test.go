@@ -1860,7 +1860,7 @@ func TestFlagsRuntime_HandleFlagChanged(t *testing.T) {
 		changeEvent = e
 	})
 
-	fc.runtime.handleFlagChanged(map[string]interface{}{"key": "feature-x"})
+	fc.runtime.handleFlagChanged(map[string]interface{}{"id": "feature-x"})
 
 	assert.NotNil(t, changeEvent)
 	assert.Equal(t, "feature-x", changeEvent.ID)
@@ -1874,7 +1874,7 @@ func TestFlagsRuntime_HandleFlagDeleted(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
 
-	fc.runtime.handleFlagDeleted(map[string]interface{}{"key": "deleted-flag"})
+	fc.runtime.handleFlagDeleted(map[string]interface{}{"id": "deleted-flag"})
 	// handleFlagDeleted delegates to handleFlagChanged
 }
 
@@ -2436,7 +2436,7 @@ func TestFlagsRuntime_HandleFlagChanged_FetchError(t *testing.T) {
 	}))
 
 	// Should not panic
-	fc.runtime.handleFlagChanged(map[string]interface{}{"key": "feature-x"})
+	fc.runtime.handleFlagChanged(map[string]interface{}{"id": "feature-x"})
 }
 
 // --- FlagsRuntime evaluateHandle provider flush threshold ---
@@ -3332,7 +3332,7 @@ func TestHandleFlagChanged(t *testing.T) {
 		received = evt
 	})
 
-	rt.handleFlagChanged(map[string]interface{}{"key": "my-flag"})
+	rt.handleFlagChanged(map[string]interface{}{"id": "my-flag"})
 
 	require.NotNil(t, received)
 	assert.Equal(t, "my-flag", received.ID)
@@ -3395,6 +3395,6 @@ func TestHandleFlagChanged_FetchError(t *testing.T) {
 	})
 
 	// Should not panic; error causes early return
-	rt.handleFlagChanged(map[string]interface{}{"key": "my-flag"})
+	rt.handleFlagChanged(map[string]interface{}{"id": "my-flag"})
 	assert.False(t, called)
 }

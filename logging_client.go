@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smplkit/go-sdk/internal/debug"
 	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
 	"github.com/smplkit/go-sdk/logging/adapters"
 )
@@ -64,6 +65,13 @@ func newLoggingClient(c *Client, gen genlogging.ClientInterface) *LoggingClient 
 
 // close cleans up the logging client resources.
 func (c *LoggingClient) close() {
+	debug.Debug("lifecycle", "LoggingClient.close() called")
+	if c.wsManager != nil {
+		c.wsManager.off("logger_changed", c.handleLoggerChanged)
+		c.wsManager.off("logger_deleted", c.handleLoggerChanged)
+		c.wsManager.off("group_changed", c.handleGroupChanged)
+		c.wsManager.off("group_deleted", c.handleGroupChanged)
+	}
 	for _, adapter := range c.adapters {
 		adapter.UninstallHook()
 	}
@@ -93,6 +101,7 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 		}
 
 		// Discover loggers from all adapters and buffer them for bulk registration.
+		var discoveredCount int
 		for _, adapter := range c.adapters {
 			discovered := adapter.Discover()
 			for _, dl := range discovered {
@@ -100,31 +109,42 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 				if normalized == "" {
 					continue
 				}
+				debug.Debug("discovery", "discovered logger: %s (level=%s)", normalized, dl.Level)
 				c.buffer.add(normalized, dl.Level, dl.Level, c.client.service, c.client.environment)
+				discoveredCount++
 			}
 		}
+		debug.Debug("lifecycle", "discovered %d loggers from adapters", discoveredCount)
 
 		// Install hooks on all adapters.
 		for _, adapter := range c.adapters {
 			adapter.InstallHook(c.onNewLogger)
 		}
+		debug.Debug("registration", "installed hooks on %d adapters", len(c.adapters))
 
 		// Flush any loggers registered before Start (including discovered ones).
 		c.flushBuffer(ctx)
+		debug.Debug("registration", "initial registration flush complete")
 
 		// Fetch definitions.
+		debug.Debug("api", "fetching logger and group definitions")
 		if err := c.fetchAndCache(ctx); err != nil {
 			startErr = err
 			return
 		}
+		debug.Debug("api", "fetched %d loggers and %d groups", len(c.loggersCache), len(c.groupsCache))
 
 		// Apply resolved levels to all adapters.
+		debug.Debug("resolution", "starting initial level resolution pass")
 		c.applyLevels()
 
 		// Open WebSocket and register listeners.
 		ws := c.client.ensureWS()
 		c.wsManager = ws
 		ws.on("logger_changed", c.handleLoggerChanged)
+		ws.on("logger_deleted", c.handleLoggerChanged)
+		ws.on("group_changed", c.handleGroupChanged)
+		ws.on("group_deleted", c.handleGroupChanged)
 
 		// Start periodic flush timer.
 		c.flushDone = make(chan struct{})
@@ -179,7 +199,9 @@ func (c *LoggingClient) applyLevels() {
 	for _, t := range targets {
 		normalized := NormalizeLoggerName(t.loggerName)
 		resolved := resolveLoggerLevel(normalized, c.client.environment, c.loggersCache, c.groupsCache)
+		debug.Debug("resolution", "resolved %s → %s", normalized, resolved)
 		t.adapter.ApplyLevel(t.loggerName, string(resolved))
+		debug.Debug("adapter", "applied level %s to logger %s", resolved, t.loggerName)
 		if metrics := c.client.metrics; metrics != nil {
 			metrics.Record("logging.level_changes", 1, "changes", map[string]string{"logger": normalized})
 		}
@@ -192,6 +214,7 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 	if normalized == "" {
 		return
 	}
+	debug.Debug("discovery", "new logger from hook: %s (level=%s)", normalized, level)
 	c.buffer.add(normalized, level, level, c.client.service, c.client.environment)
 
 	// If already started, resolve and apply the level immediately.
@@ -551,14 +574,21 @@ func (c *LoggingClient) periodicFlush(done chan struct{}) {
 
 func (c *LoggingClient) handleLoggerChanged(data map[string]interface{}) {
 	loggerID, _ := data["id"].(string)
-	if loggerID == "" {
-		loggerID, _ = data["key"].(string)
-	}
+	debug.Debug("websocket", "logger event received, id=%q", loggerID)
 	if err := c.fetchAndCache(context.Background()); err != nil {
 		return
 	}
 	c.applyLevels()
 	c.fireChangeListeners(loggerID, "websocket")
+}
+
+func (c *LoggingClient) handleGroupChanged(data map[string]interface{}) {
+	groupID, _ := data["id"].(string)
+	debug.Debug("websocket", "group event received, id=%q", groupID)
+	if err := c.fetchAndCache(context.Background()); err != nil {
+		return
+	}
+	c.applyLevels()
 }
 
 func (c *LoggingClient) fireChangeListeners(loggerID string, source string) { //nolint:unparam // "refresh" source will be used when Refresh() is implemented

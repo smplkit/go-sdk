@@ -1,6 +1,8 @@
 # Test and coverage artifacts
 coverage.out
 coverage.html
+cov*.out
+cover.out
 *.test
 *.prof
 
