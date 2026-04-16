@@ -188,14 +188,8 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 	c.flags.runtime = newFlagsRuntime(c.flags)
 	c.logging = newLoggingClient(c, genLoggingClient)
 
-	var maskedKey string
-	if len(resolved) > 14 {
-		maskedKey = resolved[:10] + "..." + resolved[len(resolved)-4:]
-	} else if len(resolved) > 4 {
-		maskedKey = resolved[:4] + "..."
-	} else {
-		maskedKey = resolved + "..."
-	}
+	prefixLen := min(10, len(resolved))
+	maskedKey := resolved[:prefixLen] + "..."
 	debug.Debug("lifecycle", "Client created (api_key=%s, environment=%s, service=%s)", maskedKey, resolvedEnv, resolvedService)
 
 	return c, nil
