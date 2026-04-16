@@ -60,15 +60,14 @@ func main() {
 	}
 	fmt.Printf("  Created: id=%s, name=%s, level=%s\n", infraGroup.ID, infraGroup.Name, *infraGroup.Level)
 
-	step("Creating child group: showcase-backend (parent=showcase-infra)")
-	backendGroup := logging.Management().NewGroup("showcase-backend", smplkit.WithLogGroupName("Backend Services"),
-		smplkit.WithLogGroupParent(infraGroup.ID))
+	step("Creating group: showcase-backend")
+	backendGroup := logging.Management().NewGroup("showcase-backend", smplkit.WithLogGroupName("Backend Services"))
 	backendGroup.SetLevel(smplkit.LogLevelInfo)
 	if err := backendGroup.Save(ctx); err != nil {
 		fatal("Failed to create backend group", err)
 	}
-	fmt.Printf("  Created: id=%s, name=%s, level=%s, parent=%s\n",
-		backendGroup.ID, backendGroup.Name, *backendGroup.Level, *backendGroup.Group)
+	fmt.Printf("  Created: id=%s, name=%s, level=%s\n",
+		backendGroup.ID, backendGroup.Name, *backendGroup.Level)
 
 	// ── Section 3: Create Loggers ────────────────────────────────────
 	section("3. Create Loggers")
@@ -200,7 +199,7 @@ func main() {
 	fmt.Println("  [x] NewGroup() + Save() — create log groups")
 	fmt.Println("  [x] SetLevel / ClearLevel — base level management")
 	fmt.Println("  [x] SetEnvironmentLevel / ClearAllEnvironmentLevels — env levels")
-	fmt.Println("  [x] Group assignment and hierarchy")
+	fmt.Println("  [x] Group assignment (flat groups — no nesting in v1)")
 	fmt.Println("  [x] Get(key) / List() — retrieve loggers")
 	fmt.Println("  [x] GetGroup(key) / ListGroups() — retrieve groups")
 	fmt.Println("  [x] Delete(key) / DeleteGroup(key) — cleanup")
