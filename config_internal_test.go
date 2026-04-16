@@ -1019,3 +1019,17 @@ func TestDelete_Config_BodyReadFailure_CustomTransport(t *testing.T) {
 	var connErr *SmplConnectionError
 	assert.True(t, errors.As(err, &connErr))
 }
+
+// --- handleConfigChanged ---
+
+func TestHandleConfigChanged(t *testing.T) {
+	configJSON := `{"data":[{"id":"svc","type":"config","attributes":{"id":"svc","name":"Svc","items":{},"environments":{}}}]}`
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(configJSON))
+	}))
+
+	// Should not panic.
+	cc.handleConfigChanged(map[string]interface{}{"id": "svc"})
+}

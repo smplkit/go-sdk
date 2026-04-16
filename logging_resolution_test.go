@@ -1554,6 +1554,35 @@ func TestHandleLoggerChanged_UsesIDField(t *testing.T) {
 	assert.Equal(t, "websocket", received.Source)
 }
 
+// --- handleGroupChanged ---
+
+func TestHandleGroupChanged(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}]}`))
+	})
+
+	lc := newTestLoggingClient(t, mux)
+
+	// handleGroupChanged should not panic and should trigger re-fetch + applyLevels.
+	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
+}
+
+func TestHandleGroupChanged_FetchError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
+	}))
+
+	// Should not panic; error causes early return.
+	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
+}
+
 // --- Logger.SetEnvironmentLevel with nil Environments ---
 
 func TestLoggerSetEnvironmentLevel_NilEnvironments(t *testing.T) {
