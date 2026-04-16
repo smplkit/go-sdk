@@ -188,7 +188,7 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 	c.flags.runtime = newFlagsRuntime(c.flags)
 	c.logging = newLoggingClient(c, genLoggingClient)
 
-	maskedKey := resolved
+	var maskedKey string
 	if len(resolved) > 14 {
 		maskedKey = resolved[:10] + "..." + resolved[len(resolved)-4:]
 	} else if len(resolved) > 4 {

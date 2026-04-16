@@ -86,7 +86,7 @@ func TestDebug_NoOpWhenDisabled(t *testing.T) {
 
 	w.Close()
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 
 	if buf.Len() > 0 {
 		t.Errorf("Debug wrote to stderr when disabled: %q", buf.String())
@@ -112,7 +112,7 @@ func captureStderr(t *testing.T, fn func()) string {
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	return buf.String()
 }
 
