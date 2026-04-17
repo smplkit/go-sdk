@@ -36,6 +36,21 @@ func (e FlagResourceType) Valid() bool {
 	}
 }
 
+// Defines values for FlagSourceResourceType.
+const (
+	FlagSourceResourceTypeFlagSource FlagSourceResourceType = "flag_source"
+)
+
+// Valid indicates whether the value is a known member of the FlagSourceResourceType enum.
+func (e FlagSourceResourceType) Valid() bool {
+	switch e {
+	case FlagSourceResourceTypeFlagSource:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UsageResourceType.
 const (
 	Usage UsageResourceType = "usage"
@@ -60,8 +75,12 @@ type Flag struct {
 	Description  *string                     `json:"description,omitempty"`
 	Environments *map[string]FlagEnvironment `json:"environments,omitempty"`
 
+	// Managed True if admin-managed, false if auto-discovered
+	Managed *bool `json:"managed,omitempty"`
+
 	// Name Human-readable display name
-	Name string `json:"name"`
+	Name    string                    `json:"name"`
+	Sources *[]map[string]interface{} `json:"sources,omitempty"`
 
 	// Type Value type: STRING, BOOLEAN, NUMERIC, or JSON
 	Type      string     `json:"type"`
@@ -69,6 +88,34 @@ type Flag struct {
 
 	// Values Ordered set of allowed values (constrained), or null (unconstrained)
 	Values *[]FlagValue `json:"values,omitempty"`
+}
+
+// FlagBulkItem defines model for FlagBulkItem.
+type FlagBulkItem struct {
+	// Default Default value declared in code
+	Default interface{} `json:"default"`
+
+	// Environment Environment where observed
+	Environment *string `json:"environment,omitempty"`
+
+	// Id Flag key as declared in code
+	Id string `json:"id"`
+
+	// Service Service that declared this flag
+	Service *string `json:"service,omitempty"`
+
+	// Type Flag type: BOOLEAN, STRING, NUMERIC, or JSON
+	Type string `json:"type"`
+}
+
+// FlagBulkRequest defines model for FlagBulkRequest.
+type FlagBulkRequest struct {
+	Flags []FlagBulkItem `json:"flags"`
+}
+
+// FlagBulkResponse defines model for FlagBulkResponse.
+type FlagBulkResponse struct {
+	Registered int `json:"registered"`
 }
 
 // FlagEnvironment defines model for FlagEnvironment.
@@ -105,6 +152,32 @@ type FlagRule struct {
 	Value       interface{}            `json:"value"`
 }
 
+// FlagSource defines model for FlagSource.
+type FlagSource struct {
+	CreatedAt     *time.Time              `json:"created_at,omitempty"`
+	Data          *map[string]interface{} `json:"data,omitempty"`
+	Environment   *string                 `json:"environment,omitempty"`
+	FirstObserved *time.Time              `json:"first_observed,omitempty"`
+	LastSeen      *time.Time              `json:"last_seen,omitempty"`
+	Service       *string                 `json:"service,omitempty"`
+	UpdatedAt     *time.Time              `json:"updated_at,omitempty"`
+}
+
+// FlagSourceListResponse defines model for FlagSourceListResponse.
+type FlagSourceListResponse struct {
+	Data []FlagSourceResource `json:"data"`
+}
+
+// FlagSourceResource defines model for FlagSourceResource.
+type FlagSourceResource struct {
+	Attributes FlagSource             `json:"attributes"`
+	Id         *string                `json:"id,omitempty"`
+	Type       FlagSourceResourceType `json:"type"`
+}
+
+// FlagSourceResourceType defines model for FlagSourceResource.Type.
+type FlagSourceResourceType string
+
 // FlagValue defines model for FlagValue.
 type FlagValue struct {
 	Name  string      `json:"name"`
@@ -133,9 +206,16 @@ type UsageResource struct {
 // UsageResourceType defines model for UsageResource.Type.
 type UsageResourceType string
 
+// ListAllFlagSourcesParams defines parameters for ListAllFlagSources.
+type ListAllFlagSourcesParams struct {
+	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
+	FilterService     *string `form:"filter[service],omitempty" json:"filter[service],omitempty"`
+}
+
 // ListFlagsParams defines parameters for ListFlags.
 type ListFlagsParams struct {
-	FilterType *string `form:"filter[type],omitempty" json:"filter[type],omitempty"`
+	FilterType    *string `form:"filter[type],omitempty" json:"filter[type],omitempty"`
+	FilterManaged *bool   `form:"filter[managed],omitempty" json:"filter[managed],omitempty"`
 }
 
 // ListFlagsUsageParams defines parameters for ListFlagsUsage.
@@ -145,6 +225,9 @@ type ListFlagsUsageParams struct {
 
 // CreateFlagApplicationVndAPIPlusJSONRequestBody defines body for CreateFlag for application/vnd.api+json ContentType.
 type CreateFlagApplicationVndAPIPlusJSONRequestBody = FlagResponse
+
+// BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterFlags for application/vnd.api+json ContentType.
+type BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody = FlagBulkRequest
 
 // UpdateFlagApplicationVndAPIPlusJSONRequestBody defines body for UpdateFlag for application/vnd.api+json ContentType.
 type UpdateFlagApplicationVndAPIPlusJSONRequestBody = FlagResponse
@@ -222,6 +305,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// ListAllFlagSources request
+	ListAllFlagSources(ctx context.Context, params *ListAllFlagSourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListFlags request
 	ListFlags(ctx context.Context, params *ListFlagsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -229,6 +315,11 @@ type ClientInterface interface {
 	CreateFlagWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BulkRegisterFlagsWithBody request with any body
+	BulkRegisterFlagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	BulkRegisterFlagsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteFlag request
 	DeleteFlag(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -241,8 +332,23 @@ type ClientInterface interface {
 
 	UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListFlagSources request
+	ListFlagSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListFlagsUsage request
 	ListFlagsUsage(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ListAllFlagSources(ctx context.Context, params *ListAllFlagSourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAllFlagSourcesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListFlags(ctx context.Context, params *ListFlagsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -271,6 +377,30 @@ func (c *Client) CreateFlagWithBody(ctx context.Context, contentType string, bod
 
 func (c *Client) CreateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateFlagRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkRegisterFlagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkRegisterFlagsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkRegisterFlagsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkRegisterFlagsRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -329,6 +459,18 @@ func (c *Client) UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListFlagSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListFlagSourcesRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListFlagsUsage(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListFlagsUsageRequest(c.Server, params)
 	if err != nil {
@@ -339,6 +481,71 @@ func (c *Client) ListFlagsUsage(ctx context.Context, params *ListFlagsUsageParam
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListAllFlagSourcesRequest generates requests for ListAllFlagSources
+func NewListAllFlagSourcesRequest(server string, params *ListAllFlagSourcesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/flag_sources")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FilterService != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[service]", *params.FilterService, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListFlagsRequest generates requests for ListFlags
@@ -366,6 +573,22 @@ func NewListFlagsRequest(server string, params *ListFlagsParams) (*http.Request,
 		if params.FilterType != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[type]", *params.FilterType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FilterManaged != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[managed]", *params.FilterManaged, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -411,6 +634,46 @@ func NewCreateFlagRequestWithBody(server string, contentType string, body io.Rea
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/flags")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewBulkRegisterFlagsRequestWithApplicationVndAPIPlusJSONBody calls the generic BulkRegisterFlags builder with application/vnd.api+json body
+func NewBulkRegisterFlagsRequestWithApplicationVndAPIPlusJSONBody(server string, body BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBulkRegisterFlagsRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewBulkRegisterFlagsRequestWithBody generates requests for BulkRegisterFlags with any type of body
+func NewBulkRegisterFlagsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/flags/bulk")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -545,6 +808,40 @@ func NewUpdateFlagRequestWithBody(server string, id string, contentType string, 
 	return req, nil
 }
 
+// NewListFlagSourcesRequest generates requests for ListFlagSources
+func NewListFlagSourcesRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/flags/%s/sources", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListFlagsUsageRequest generates requests for ListFlagsUsage
 func NewListFlagsUsageRequest(server string, params *ListFlagsUsageParams) (*http.Request, error) {
 	var err error
@@ -637,6 +934,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// ListAllFlagSourcesWithResponse request
+	ListAllFlagSourcesWithResponse(ctx context.Context, params *ListAllFlagSourcesParams, reqEditors ...RequestEditorFn) (*ListAllFlagSourcesResponse, error)
+
 	// ListFlagsWithResponse request
 	ListFlagsWithResponse(ctx context.Context, params *ListFlagsParams, reqEditors ...RequestEditorFn) (*ListFlagsResponse, error)
 
@@ -644,6 +944,11 @@ type ClientWithResponsesInterface interface {
 	CreateFlagWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateFlagResponse, error)
 
 	CreateFlagWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateFlagResponse, error)
+
+	// BulkRegisterFlagsWithBodyWithResponse request with any body
+	BulkRegisterFlagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkRegisterFlagsResponse, error)
+
+	BulkRegisterFlagsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterFlagsResponse, error)
 
 	// DeleteFlagWithResponse request
 	DeleteFlagWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteFlagResponse, error)
@@ -656,8 +961,33 @@ type ClientWithResponsesInterface interface {
 
 	UpdateFlagWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
 
+	// ListFlagSourcesWithResponse request
+	ListFlagSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListFlagSourcesResponse, error)
+
 	// ListFlagsUsageWithResponse request
 	ListFlagsUsageWithResponse(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*ListFlagsUsageResponse, error)
+}
+
+type ListAllFlagSourcesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *FlagSourceListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAllFlagSourcesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAllFlagSourcesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ListFlagsResponse struct {
@@ -698,6 +1028,28 @@ func (r CreateFlagResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateFlagResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type BulkRegisterFlagsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *FlagBulkResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r BulkRegisterFlagsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BulkRegisterFlagsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -769,6 +1121,28 @@ func (r UpdateFlagResponse) StatusCode() int {
 	return 0
 }
 
+type ListFlagSourcesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *FlagSourceListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListFlagSourcesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListFlagSourcesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListFlagsUsageResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -789,6 +1163,15 @@ func (r ListFlagsUsageResponse) StatusCode() int {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
+}
+
+// ListAllFlagSourcesWithResponse request returning *ListAllFlagSourcesResponse
+func (c *ClientWithResponses) ListAllFlagSourcesWithResponse(ctx context.Context, params *ListAllFlagSourcesParams, reqEditors ...RequestEditorFn) (*ListAllFlagSourcesResponse, error) {
+	rsp, err := c.ListAllFlagSources(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAllFlagSourcesResponse(rsp)
 }
 
 // ListFlagsWithResponse request returning *ListFlagsResponse
@@ -815,6 +1198,23 @@ func (c *ClientWithResponses) CreateFlagWithApplicationVndAPIPlusJSONBodyWithRes
 		return nil, err
 	}
 	return ParseCreateFlagResponse(rsp)
+}
+
+// BulkRegisterFlagsWithBodyWithResponse request with arbitrary body returning *BulkRegisterFlagsResponse
+func (c *ClientWithResponses) BulkRegisterFlagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkRegisterFlagsResponse, error) {
+	rsp, err := c.BulkRegisterFlagsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkRegisterFlagsResponse(rsp)
+}
+
+func (c *ClientWithResponses) BulkRegisterFlagsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterFlagsResponse, error) {
+	rsp, err := c.BulkRegisterFlagsWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkRegisterFlagsResponse(rsp)
 }
 
 // DeleteFlagWithResponse request returning *DeleteFlagResponse
@@ -852,6 +1252,15 @@ func (c *ClientWithResponses) UpdateFlagWithApplicationVndAPIPlusJSONBodyWithRes
 	return ParseUpdateFlagResponse(rsp)
 }
 
+// ListFlagSourcesWithResponse request returning *ListFlagSourcesResponse
+func (c *ClientWithResponses) ListFlagSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListFlagSourcesResponse, error) {
+	rsp, err := c.ListFlagSources(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListFlagSourcesResponse(rsp)
+}
+
 // ListFlagsUsageWithResponse request returning *ListFlagsUsageResponse
 func (c *ClientWithResponses) ListFlagsUsageWithResponse(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*ListFlagsUsageResponse, error) {
 	rsp, err := c.ListFlagsUsage(ctx, params, reqEditors...)
@@ -859,6 +1268,32 @@ func (c *ClientWithResponses) ListFlagsUsageWithResponse(ctx context.Context, pa
 		return nil, err
 	}
 	return ParseListFlagsUsageResponse(rsp)
+}
+
+// ParseListAllFlagSourcesResponse parses an HTTP response from a ListAllFlagSourcesWithResponse call
+func ParseListAllFlagSourcesResponse(rsp *http.Response) (*ListAllFlagSourcesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAllFlagSourcesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest FlagSourceListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListFlagsResponse parses an HTTP response from a ListFlagsWithResponse call
@@ -907,6 +1342,32 @@ func ParseCreateFlagResponse(rsp *http.Response) (*CreateFlagResponse, error) {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON201 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBulkRegisterFlagsResponse parses an HTTP response from a BulkRegisterFlagsWithResponse call
+func ParseBulkRegisterFlagsResponse(rsp *http.Response) (*BulkRegisterFlagsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BulkRegisterFlagsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest FlagBulkResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
 
 	}
 
@@ -971,6 +1432,32 @@ func ParseUpdateFlagResponse(rsp *http.Response) (*UpdateFlagResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest FlagResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListFlagSourcesResponse parses an HTTP response from a ListFlagSourcesWithResponse call
+func ParseListFlagSourcesResponse(rsp *http.Response) (*ListFlagSourcesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListFlagSourcesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest FlagSourceListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
