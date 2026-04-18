@@ -2,6 +2,8 @@ package smplkit_test
 
 import (
 	"errors"
+	"fmt"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,6 +57,31 @@ func TestParseJSONAPIErrors_FallbackToDefault(t *testing.T) {
 	var base *smplkit.SmplError
 	require.True(t, errors.As(err, &base))
 	assert.Equal(t, "An API error occurred", base.Message)
+}
+
+func TestClassifyError_URLErrorIncludesURL(t *testing.T) {
+	urlErr := &url.Error{
+		Op:  "Get",
+		URL: "http://config.localhost/api/v1/configs",
+		Err: fmt.Errorf("dial tcp: lookup config.localhost: no such host"),
+	}
+	err := smplkit.ClassifyErrorForTest(urlErr)
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr), "expected SmplConnectionError, got %T: %v", err, err)
+	assert.Contains(t, connErr.Message, "http://config.localhost/api/v1/configs")
+	assert.Contains(t, connErr.Message, "no such host")
+}
+
+func TestClassifyError_NonURLErrorFallback(t *testing.T) {
+	plain := fmt.Errorf("some generic error")
+	err := smplkit.ClassifyErrorForTest(plain)
+	require.Error(t, err)
+
+	var connErr *smplkit.SmplConnectionError
+	require.True(t, errors.As(err, &connErr))
+	assert.Contains(t, connErr.Message, "some generic error")
 }
 
 func TestParseJSONAPIErrors_PluralMoreErrors(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 )
 
 const userAgent = "smplkit-go-sdk/0.0.0"
@@ -94,6 +95,13 @@ func classifyError(err error) error {
 	}
 
 	// All remaining errors are connection failures.
+	// If the error is a *url.Error, extract the URL for a cleaner message.
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("Cannot connect to %s: %s", urlErr.URL, urlErr.Err)},
+		}
+	}
 	return &SmplConnectionError{
 		SmplError: SmplError{Message: fmt.Sprintf("connection error: %s", err)},
 	}

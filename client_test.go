@@ -236,6 +236,7 @@ func TestNewClient_DefaultSectionWithoutApiKey(t *testing.T) {
 
 func TestNewClient_MissingEnvironment(t *testing.T) {
 	t.Setenv("SMPLKIT_ENVIRONMENT", "")
+	t.Setenv("HOME", t.TempDir())
 	_, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", DisableTelemetry: true})
 	require.Error(t, err)
 	var smplErr *smplkit.SmplError
@@ -297,6 +298,7 @@ func TestNewClient_ResolutionOrder_EnvironmentBeforeService(t *testing.T) {
 	// If environment is missing, error should mention environment, not service.
 	t.Setenv("SMPLKIT_ENVIRONMENT", "")
 	t.Setenv("SMPLKIT_SERVICE", "")
+	t.Setenv("HOME", t.TempDir())
 	_, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", DisableTelemetry: true})
 	require.Error(t, err)
 	var smplErr *smplkit.SmplError
