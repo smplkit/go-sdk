@@ -87,27 +87,48 @@ func main() {
 
 ## Configuration
 
-The API key is resolved using the following priority:
+All settings are resolved from three sources, in order of precedence:
 
-1. **Explicit argument:** Pass `apiKey` to `NewClient()`.
-2. **Environment variable:** Set `SMPLKIT_API_KEY`.
-3. **Configuration file:** Add `api_key` under `[default]` in `~/.smplkit`:
+1. **Constructor arguments** — highest priority, always wins.
+2. **Environment variables** — e.g. `SMPLKIT_API_KEY`, `SMPLKIT_ENVIRONMENT`.
+3. **Configuration file** (`~/.smplkit`) — INI-format with profile support.
+4. **Defaults** — built-in SDK defaults.
+
+### Configuration File
+
+The `~/.smplkit` file supports a `[common]` section (applied to all profiles) and named profiles:
 
 ```ini
-# ~/.smplkit
+[common]
+environment = production
+service = my-app
 
 [default]
-api_key = sk_api_your_key_here
+api_key = sk_api_abc123
+
+[local]
+base_domain = localhost
+scheme = http
+api_key = sk_api_local_xyz
+environment = development
+debug = true
 ```
 
-If none of these are set, `NewClient` returns a `SmplError` listing all three methods.
+### Constructor Examples
 
 ```go
-client, err := smplkit.NewClient("sk_api_...",
-    smplkit.WithTimeout(30 * time.Second),   // default
-    smplkit.WithHTTPClient(customHTTPClient),
-)
+// Use a named profile
+client, err := smplkit.NewClient(smplkit.Config{Profile: "local"})
+
+// Or configure explicitly
+client, err := smplkit.NewClient(smplkit.Config{
+    APIKey:      "sk_api_...",
+    Environment: "production",
+    Service:     "my-service",
+})
 ```
+
+For the complete configuration reference, see the [Configuration Guide](https://docs.smplkit.com/getting-started/configuration).
 
 ## Error Handling
 
