@@ -7,7 +7,9 @@ import (
 
 // clientConfig holds configuration for the Client.
 type clientConfig struct {
-	baseURL          string
+	baseDomain       string
+	scheme           string
+	baseURLOverride  string // test-only: if set, all service URLs use this value
 	timeout          time.Duration
 	httpClient       *http.Client
 	disableTelemetry bool
@@ -16,18 +18,38 @@ type clientConfig struct {
 // defaultConfig returns sensible defaults for a new Client.
 func defaultConfig() clientConfig {
 	return clientConfig{
-		baseURL: "https://config.smplkit.com",
-		timeout: 30 * time.Second,
+		baseDomain: "smplkit.com",
+		scheme:     "https",
+		timeout:    30 * time.Second,
 	}
 }
 
 // ClientOption configures the Client. Pass options to NewClient.
 type ClientOption func(*clientConfig)
 
-// WithBaseURL overrides the default API base URL.
-func WithBaseURL(url string) ClientOption {
+// WithBaseDomain overrides the base domain used to compute per-service URLs.
+// URLs are computed as {scheme}://{service}.{domain}, e.g. https://config.smplkit.com.
+// The default domain is "smplkit.com".
+func WithBaseDomain(domain string) ClientOption {
 	return func(c *clientConfig) {
-		c.baseURL = url
+		c.baseDomain = domain
+	}
+}
+
+// WithScheme overrides the URL scheme used to compute per-service URLs.
+// The default scheme is "https".
+func WithScheme(scheme string) ClientOption {
+	return func(c *clientConfig) {
+		c.scheme = scheme
+	}
+}
+
+// withBaseURLOverride is an unexported test helper that routes all four service
+// clients to the same base URL. It exists solely to support test servers;
+// production callers should use WithBaseDomain and WithScheme instead.
+func withBaseURLOverride(url string) ClientOption {
+	return func(c *clientConfig) {
+		c.baseURLOverride = url
 	}
 }
 

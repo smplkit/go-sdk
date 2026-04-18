@@ -21,8 +21,14 @@ func TestNewClient_Defaults(t *testing.T) {
 	require.NotNil(t, client.Config())
 }
 
-func TestNewClient_WithBaseURL(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL("https://custom.example.com"), smplkit.DisableTelemetry())
+func TestNewClient_WithBaseDomain(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseDomain("custom.example.com"), smplkit.DisableTelemetry())
+	require.NoError(t, err)
+	require.NotNil(t, client)
+}
+
+func TestNewClient_WithScheme(t *testing.T) {
+	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithScheme("http"), smplkit.DisableTelemetry())
 	require.NoError(t, err)
 	require.NotNil(t, client)
 }
@@ -42,7 +48,8 @@ func TestNewClient_WithHTTPClient(t *testing.T) {
 
 func TestNewClient_MultipleOptions(t *testing.T) {
 	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
-		smplkit.WithBaseURL("https://custom.example.com"),
+		smplkit.WithBaseDomain("custom.example.com"),
+		smplkit.WithScheme("https"),
 		smplkit.WithTimeout(10*time.Second), smplkit.DisableTelemetry())
 	require.NoError(t, err)
 	require.NotNil(t, client)

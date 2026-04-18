@@ -2,6 +2,7 @@ package smplkit
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,11 +15,6 @@ import (
 	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
 )
 
-const (
-	appBaseURL     = "https://app.smplkit.com"
-	loggingBaseURL = "https://logging.smplkit.com"
-)
-
 // Client is the top-level entry point for the smplkit SDK.
 //
 // Create one with NewClient and access sub-clients via accessor methods:
@@ -29,7 +25,7 @@ type Client struct {
 	apiKey       string
 	environment  string
 	service      string
-	baseURL      string
+	appURL       string
 	httpClient   *http.Client
 	appGenerated genapp.ClientInterface
 
@@ -41,6 +37,16 @@ type Client struct {
 
 	wsMu sync.Mutex
 	ws   *sharedWebSocket
+}
+
+// serviceURL builds a per-service URL from the client configuration.
+// If baseURLOverride is set (test mode), all services share that URL.
+// Otherwise the URL is {scheme}://{subdomain}.{baseDomain}.
+func serviceURL(cfg clientConfig, subdomain string) string {
+	if cfg.baseURLOverride != "" {
+		return cfg.baseURLOverride
+	}
+	return fmt.Sprintf("%s://%s.%s", cfg.scheme, subdomain, cfg.baseDomain)
 }
 
 // NewClient creates a new smplkit API client.
@@ -55,7 +61,7 @@ type Client struct {
 // The service is required; pass an empty string to resolve from
 // SMPLKIT_SERVICE.
 //
-// Use ClientOption functions to customize the base URL, timeout, or HTTP client.
+// Use ClientOption functions to customize the base domain, scheme, timeout, or HTTP client.
 func NewClient(apiKey string, environment string, service string, opts ...ClientOption) (*Client, error) {
 	// 1. Resolve environment first.
 	resolvedEnv := environment
@@ -113,6 +119,11 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 		base:  base,
 	}
 
+	configURL := serviceURL(cfg, "config")
+	flagsURL := serviceURL(cfg, "flags")
+	appURL := serviceURL(cfg, "app")
+	logURL := serviceURL(cfg, "logging")
+
 	// Build the generated config client, passing the auth-wrapped httpClient
 	// and a request editor that injects Accept + User-Agent headers.
 	headerEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
@@ -120,7 +131,7 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
-	genConfigClient, _ := genconfig.NewClient(cfg.baseURL,
+	genConfigClient, _ := genconfig.NewClient(configURL,
 		genconfig.WithHTTPClient(httpClient),
 		headerEditor,
 	)
@@ -131,11 +142,7 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
-	flagsBaseURL := "https://flags.smplkit.com"
-	if cfg.baseURL != "" && cfg.baseURL != defaultConfig().baseURL {
-		flagsBaseURL = cfg.baseURL
-	}
-	genFlagsClient, _ := genflags.NewClient(flagsBaseURL,
+	genFlagsClient, _ := genflags.NewClient(flagsURL,
 		genflags.WithHTTPClient(httpClient),
 		flagsHeaderEditor,
 	)
@@ -146,10 +153,6 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
-	appURL := appBaseURL
-	if cfg.baseURL != "" && cfg.baseURL != defaultConfig().baseURL {
-		appURL = cfg.baseURL
-	}
 	genAppClient, _ := genapp.NewClient(appURL,
 		genapp.WithHTTPClient(httpClient),
 		appHeaderEditor,
@@ -161,10 +164,6 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
-	logURL := loggingBaseURL
-	if cfg.baseURL != "" && cfg.baseURL != defaultConfig().baseURL {
-		logURL = cfg.baseURL
-	}
 	genLoggingClient, _ := genlogging.NewClient(logURL,
 		genlogging.WithHTTPClient(httpClient),
 		loggingHeaderEditor,
@@ -174,7 +173,7 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 		apiKey:       resolved,
 		environment:  resolvedEnv,
 		service:      resolvedService,
-		baseURL:      cfg.baseURL,
+		appURL:       appURL,
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
 	}
@@ -259,7 +258,7 @@ func (c *Client) ensureWS() *sharedWebSocket {
 	c.wsMu.Lock()
 	defer c.wsMu.Unlock()
 	if c.ws == nil {
-		c.ws = newSharedWebSocket(appBaseURL, c.apiKey, c.metrics)
+		c.ws = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
 		c.ws.start()
 	}
 	return c.ws

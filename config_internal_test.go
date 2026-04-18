@@ -431,7 +431,6 @@ func newTestConfigClient(t *testing.T, handler http.Handler) *ConfigClient {
 		apiKey:      "sk_test",
 		environment: "test",
 		service:     "test-service",
-		baseURL:     server.URL,
 		httpClient:  httpClient,
 	}
 	cc := &ConfigClient{client: c, generated: genConfigClient}

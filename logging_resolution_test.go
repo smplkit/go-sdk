@@ -520,7 +520,7 @@ func TestLoggingClient_Accessor(t *testing.T) {
 		apiKey:      "sk_test",
 		environment: "test",
 		service:     "test-service",
-		baseURL:     server.URL,
+		appURL:      server.URL,
 		httpClient:  httpClient,
 	}
 	c.logging = newLoggingClient(c, genLoggingClient)
@@ -1082,7 +1082,7 @@ func newTestLoggingClient(t *testing.T, handler http.Handler) *LoggingClient {
 		apiKey:      "sk_test",
 		environment: "test",
 		service:     "test-service",
-		baseURL:     server.URL,
+		appURL:      server.URL,
 		httpClient:  httpClient,
 	}
 	lc := newLoggingClient(c, genLoggingClient)
@@ -1668,7 +1668,7 @@ func TestStart_Basic(t *testing.T) {
 		apiKey:      "sk_test",
 		environment: "test",
 		service:     "test-service",
-		baseURL:     server.URL,
+		appURL:      server.URL,
 		httpClient:  httpClient,
 	}
 	lc := newLoggingClient(c, genLoggingClient)
@@ -1711,7 +1711,7 @@ func TestStart_FetchError(t *testing.T) {
 		apiKey:      "sk_test",
 		environment: "test",
 		service:     "test-service",
-		baseURL:     server.URL,
+		appURL:      server.URL,
 		httpClient:  httpClient,
 	}
 	lc := newLoggingClient(c, genLoggingClient)
@@ -1771,7 +1771,7 @@ func TestStart_Idempotent(t *testing.T) {
 		apiKey:      "sk_test",
 		environment: "test",
 		service:     "test-service",
-		baseURL:     server.URL,
+		appURL:      server.URL,
 		httpClient:  httpClient,
 	}
 	lc := newLoggingClient(c, genLoggingClient)

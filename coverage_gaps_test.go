@@ -60,7 +60,7 @@ func newTestFullClient(t *testing.T, server *httptest.Server, service string) *C
 		apiKey:       "sk_test",
 		environment:  "test",
 		service:      service,
-		baseURL:      server.URL,
+		appURL:       server.URL,
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
 	}
@@ -126,7 +126,6 @@ func TestRegisterServiceContext_HTTPDoError(t *testing.T) {
 	c := &Client{
 		apiKey:       "sk_test",
 		service:      "my-svc",
-		baseURL:      serverURL,
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
 	}
@@ -142,7 +141,6 @@ func TestRegisterServiceContext_InvalidURL(t *testing.T) {
 	c := &Client{
 		apiKey:       "sk_test",
 		service:      "my-svc",
-		baseURL:      "http://localhost:1",
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
 	}

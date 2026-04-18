@@ -64,7 +64,7 @@ func newTestFlagsClient(t *testing.T, handler http.HandlerFunc) (*FlagsClient, *
 
 	c := &Client{
 		apiKey:       "sk_test",
-		baseURL:      server.URL,
+		appURL:       server.URL,
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
 	}
@@ -811,8 +811,8 @@ func TestSharedWebSocket_Connect_WithMetrics(t *testing.T) {
 
 func TestClient_EnsureWS(t *testing.T) {
 	c := &Client{
-		apiKey:  "sk_test",
-		baseURL: "https://config.smplkit.com",
+		apiKey: "sk_test",
+		appURL: "https://app.smplkit.com",
 	}
 	// Note: ensureWS creates a real WS manager and starts a goroutine.
 	// We need to ensure it creates one and returns the same on subsequent calls.
@@ -2663,7 +2663,6 @@ func newFlagsClientWithTransport(t *testing.T, transport http.RoundTripper) *Fla
 
 	c := &Client{
 		apiKey:       "sk_test",
-		baseURL:      "http://localhost:1",
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
 	}
