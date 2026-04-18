@@ -1930,7 +1930,8 @@ func TestFlushBuffer_LogsWarningOnHTTPError(t *testing.T) {
 	logOutput := logBuf.String()
 	assert.Contains(t, logOutput, "smplkit: bulk logger registration failed")
 	assert.Contains(t, logOutput, "400")
-	assert.Contains(t, logOutput, "Invalid level value")
+	// Response body details are logged at debug level only (SMPLKIT_DEBUG=1),
+	// not in the standard warning output.
 }
 
 func TestFlushBuffer_LogsWarningOnNetworkError(t *testing.T) {

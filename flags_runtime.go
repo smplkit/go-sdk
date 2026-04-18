@@ -555,7 +555,8 @@ func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment st
 
 func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultVal interface{}, explicitContexts []Context) interface{} {
 	if err := rt.ensureInit(ctx); err != nil {
-		log.Printf("smplkit: flags init failed: %v", err)
+		log.Printf("smplkit: flags init failed: %s", err.Error())
+		debug.Debug("flags", "flags init error details: %+v", err)
 		return defaultVal
 	}
 
@@ -735,13 +736,15 @@ func (rt *FlagsRuntime) flushFlagBuffer(ctx context.Context) {
 	reqBody := genflags.FlagBulkRequest{Flags: items}
 	resp, err := rt.flagsClient.generated.BulkRegisterFlagsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
-		log.Printf("smplkit: bulk flag registration failed: %v", err)
+		log.Printf("smplkit: bulk flag registration failed: %s", err.Error())
+		debug.Debug("flags", "bulk flag registration error details: %+v", err)
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		log.Printf("smplkit: bulk flag registration failed: HTTP %d: %s", resp.StatusCode, string(snippet))
+		log.Printf("smplkit: bulk flag registration failed: HTTP %d", resp.StatusCode)
+		debug.Debug("flags", "bulk flag registration HTTP error: %d: %s", resp.StatusCode, string(snippet))
 	}
 }
 

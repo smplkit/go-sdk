@@ -215,7 +215,8 @@ func (c *Client) registerServiceContext(ctx context.Context) {
 	}
 	resp, err := c.appGenerated.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
-		log.Printf("smplkit: failed to register service context: %v", err)
+		log.Printf("smplkit: failed to register service context: %s", err.Error())
+		debug.Debug("api", "service context registration error details: %+v", err)
 		return
 	}
 	resp.Body.Close()

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/smplkit/go-sdk/internal/debug"
 )
 
 const (
@@ -188,7 +190,8 @@ func (r *metricsReporter) flush() {
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		log.Printf("smplkit: metrics flush failed: %v", err)
+		log.Printf("smplkit: metrics flush failed: %s", err.Error())
+		debug.Debug("metrics", "metrics flush error details: %+v", err)
 		return
 	}
 	resp.Body.Close()

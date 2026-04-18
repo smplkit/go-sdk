@@ -243,6 +243,7 @@ func (ws *sharedWebSocket) connect() (closed bool) {
 
 	if msgType, _ := msg["type"].(string); msgType == "error" {
 		log.Printf("smplkit: shared WebSocket connection error: %v", msg["message"])
+		debug.Debug("websocket", "connection error details: %+v", msg)
 		return false
 	}
 

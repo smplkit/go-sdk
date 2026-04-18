@@ -545,13 +545,15 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 	reqBody := genlogging.LoggerBulkRequest{Loggers: items}
 	resp, err := c.generated.BulkRegisterLoggersWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
-		log.Printf("smplkit: bulk logger registration failed: %v", err)
+		log.Printf("smplkit: bulk logger registration failed: %s", err.Error())
+		debug.Debug("logging", "bulk logger registration error details: %+v", err)
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		log.Printf("smplkit: bulk logger registration failed: HTTP %d: %s", resp.StatusCode, string(snippet))
+		log.Printf("smplkit: bulk logger registration failed: HTTP %d", resp.StatusCode)
+		debug.Debug("logging", "bulk logger registration HTTP error: %d: %s", resp.StatusCode, string(snippet))
 		return
 	}
 	if metrics := c.client.metrics; metrics != nil && len(batch) > 0 {
