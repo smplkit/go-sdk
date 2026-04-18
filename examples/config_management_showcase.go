@@ -39,23 +39,14 @@ func main() {
 	// ====================================================================
 	section("1. SDK Initialization")
 
-	// The SmplClient constructor resolves three required parameters:
+	// The Config struct resolves required parameters from multiple sources:
+	// defaults -> config file (~/.smplkit) -> env vars -> struct fields.
 	//
-	//   apiKey       — passed as "" here; resolved automatically from the
-	//                  SMPLKIT_API_KEY environment variable or the
-	//                  ~/.smplkit configuration file.
+	// To pass the API key explicitly:
 	//
-	//   environment  — the target environment. Falls back to
-	//                  SMPLKIT_ENVIRONMENT if empty.
+	//   client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_...", Environment: "production", Service: "showcase-service"})
 	//
-	//   service      — identifies this SDK instance. Can also be resolved
-	//                  from SMPLKIT_SERVICE if not passed as a positional arg.
-	//
-	// To pass the API key explicitly, pass it as the first arg:
-	//
-	//   client, err := smplkit.NewClient("sk_api_...", "production", "showcase-service")
-	//
-	client, err := smplkit.NewClient("", "production", "showcase-service")
+	client, err := smplkit.NewClient(smplkit.Config{Environment: "production", Service: "showcase-service"})
 	if err != nil {
 		fatal("failed to create client", err)
 	}

@@ -61,7 +61,7 @@ func (c *ConfigClient) Management() *ConfigManagement {
 }
 
 // getByID retrieves a config by its ID (internal use for chain walking).
-func (c *ConfigClient) getByID(ctx context.Context, id string) (*Config, error) {
+func (c *ConfigClient) getByID(ctx context.Context, id string) (*ConfigEntry, error) {
 	resp, err := c.generated.GetConfig(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
@@ -86,7 +86,7 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*Config, error) 
 }
 
 // createConfig creates the config on the server and updates the local instance.
-func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
+func (c *ConfigClient) createConfig(ctx context.Context, cfg *ConfigEntry) error {
 	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
 	resp, err := c.generated.CreateConfigWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
@@ -114,7 +114,7 @@ func (c *ConfigClient) createConfig(ctx context.Context, cfg *Config) error {
 }
 
 // updateConfig updates the config on the server and updates the local instance.
-func (c *ConfigClient) updateConfig(ctx context.Context, cfg *Config) error {
+func (c *ConfigClient) updateConfig(ctx context.Context, cfg *ConfigEntry) error {
 	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
 	resp, err := c.generated.UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx, cfg.ID, reqBody)
@@ -452,14 +452,14 @@ func (c *ConfigClient) fetchChain(ctx context.Context, rootID string) ([]chainEn
 	return chain, nil
 }
 
-// resourceToConfig converts a generated ConfigResource to the SDK Config type.
-func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *Config {
+// resourceToConfig converts a generated ConfigResource to the SDK ConfigEntry type.
+func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *ConfigEntry {
 	attrs := r.Attributes
 	id := ""
 	if r.Id != nil {
 		id = *r.Id
 	}
-	return &Config{
+	return &ConfigEntry{
 		ID:           id,
 		Name:         attrs.Name,
 		Description:  attrs.Description,

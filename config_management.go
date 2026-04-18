@@ -15,10 +15,10 @@ type ConfigManagement struct {
 	client *ConfigClient
 }
 
-// New creates an unsaved Config with the given ID. Call Save(ctx) to persist.
+// New creates an unsaved ConfigEntry with the given ID. Call Save(ctx) to persist.
 // If name is not provided via WithConfigName, it is auto-generated from the ID.
-func (m *ConfigManagement) New(id string, opts ...ConfigOption) *Config {
-	cfg := &Config{
+func (m *ConfigManagement) New(id string, opts ...ConfigOption) *ConfigEntry {
+	cfg := &ConfigEntry{
 		ID:           id,
 		Name:         keyToDisplayName(id),
 		Items:        map[string]interface{}{},
@@ -33,7 +33,7 @@ func (m *ConfigManagement) New(id string, opts ...ConfigOption) *Config {
 
 // Get retrieves a config by its ID.
 // Returns SmplNotFoundError if no match.
-func (m *ConfigManagement) Get(ctx context.Context, id string) (*Config, error) {
+func (m *ConfigManagement) Get(ctx context.Context, id string) (*ConfigEntry, error) {
 	resp, err := m.client.generated.GetConfig(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
@@ -59,7 +59,7 @@ func (m *ConfigManagement) Get(ctx context.Context, id string) (*Config, error) 
 }
 
 // List returns all configs for the account.
-func (m *ConfigManagement) List(ctx context.Context) ([]*Config, error) {
+func (m *ConfigManagement) List(ctx context.Context) ([]*ConfigEntry, error) {
 	resp, err := m.client.generated.ListConfigs(ctx, nil)
 	if err != nil {
 		return nil, classifyError(err)
@@ -81,7 +81,7 @@ func (m *ConfigManagement) List(ctx context.Context) ([]*Config, error) {
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 
-	configs := make([]*Config, len(result.Data))
+	configs := make([]*ConfigEntry, len(result.Data))
 	for i := range result.Data {
 		configs[i] = resourceToConfig(result.Data[i], m.client)
 	}

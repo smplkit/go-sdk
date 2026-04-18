@@ -30,7 +30,7 @@ func main() {
 	section("1. SDK Initialization")
 
 	step("Creating smplkit client")
-	client, err := smplkit.NewClient("", "production", "showcase-service")
+	client, err := smplkit.NewClient(smplkit.Config{Environment: "production", Service: "showcase-service"})
 	if err != nil {
 		fatal("NewClient failed", err)
 	}

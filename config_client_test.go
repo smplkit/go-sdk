@@ -55,7 +55,7 @@ func newTestClient(t *testing.T, handler http.HandlerFunc) *smplkit.Client {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 	return client
 }
@@ -176,9 +176,9 @@ func TestConfigClient_Save_CreatePath(t *testing.T) {
 func TestConfigClient_Save_CreatePath_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	cfg := client.Config().Management().New("temp", smplkit.WithConfigName("Test"))
@@ -192,9 +192,9 @@ func TestConfigClient_Save_CreatePath_NetworkError(t *testing.T) {
 func TestConfigClient_Save_CreatePath_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	cfg := client.Config().Management().New("temp", smplkit.WithConfigName("Test"))
@@ -472,8 +472,8 @@ func TestConfigClient_NetworkError_ConnectionError(t *testing.T) {
 	addr := listener.Addr().String()
 	listener.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
-		smplkit.WithBaseURL("http://"+addr), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL("http://"+addr))
 	require.NoError(t, err)
 
 	_, listErr := client.Config().Management().List(context.Background())
@@ -491,7 +491,7 @@ func TestConfigClient_ContextTimeout_TimeoutError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -551,7 +551,7 @@ func TestConfigClient_ContextCanceled_TimeoutError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -582,9 +582,9 @@ func TestConfigClient_GenericError_FallsBackToConnectionError(t *testing.T) {
 	// Use a custom RoundTripper that returns a generic (non-net, non-context) error.
 	transport := &errorRoundTripper{err: fmt.Errorf("some unknown error")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Config().Management().List(context.Background())
@@ -646,9 +646,9 @@ func TestConfigClient_Get_MalformedJSON(t *testing.T) {
 func TestConfigClient_Get_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("some network error")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Config().Management().Get(context.Background(), "some-key")
@@ -657,7 +657,7 @@ func TestConfigClient_Get_NetworkError(t *testing.T) {
 
 func TestConfigClient_New_Save_UnmarshalableValues(t *testing.T) {
 	// Channels cannot be JSON-marshaled — exercises the marshal error path.
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	cfg := client.Config().Management().New("test", smplkit.WithConfigName("Test"))
@@ -693,9 +693,9 @@ func TestConfigClient_List_MalformedJSON(t *testing.T) {
 func TestConfigClient_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Config().Management().List(context.Background())
@@ -708,8 +708,8 @@ func TestConfigClient_ReadBodyError(t *testing.T) {
 
 func TestConfigClient_InvalidURL_RequestCreateError(t *testing.T) {
 	// A URL containing a null byte causes request creation to fail.
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
-		smplkit.WithBaseURL("http://bad\x00host"), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL("http://bad\x00host"))
 	require.NoError(t, err)
 
 	_, err = client.Config().Management().List(context.Background())
@@ -719,9 +719,9 @@ func TestConfigClient_InvalidURL_RequestCreateError(t *testing.T) {
 func TestClassifyError_NetErrorTimeout(t *testing.T) {
 	transport := &timeoutNetErrorRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Config().Management().List(context.Background())
@@ -764,9 +764,9 @@ func (e *mockTimeoutNetError) Temporary() bool { return true }
 func TestConfigClient_Get_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Config().Management().Get(context.Background(), "some-key")
@@ -792,9 +792,9 @@ func TestConfigClient_Get_HTTPError(t *testing.T) {
 func TestConfigClient_New_Save_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	cfg := client.Config().Management().New("test", smplkit.WithConfigName("Test"))
@@ -807,9 +807,9 @@ func TestConfigClient_New_Save_NetworkError(t *testing.T) {
 func TestConfigClient_New_Save_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	cfg := client.Config().Management().New("test", smplkit.WithConfigName("Test"))
@@ -836,9 +836,9 @@ func TestConfigClient_Delete_NotFound(t *testing.T) {
 func TestConfigClient_Delete_NetworkError(t *testing.T) {
 	transport := &errorRoundTripper{err: fmt.Errorf("dial failed")}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	err = client.Config().Management().Delete(context.Background(), "some-key")
@@ -850,9 +850,9 @@ func TestConfigClient_Delete_NetworkError(t *testing.T) {
 func TestConfigClient_Delete_ReadBodyError(t *testing.T) {
 	transport := &brokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	err = client.Config().Management().Delete(context.Background(), "some-key")
@@ -905,7 +905,7 @@ func TestConfigClient_Save_NetworkError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	cfg, err := client.Config().Management().Get(context.Background(), configID)
@@ -936,9 +936,9 @@ func TestConfigClient_Save_ReadBodyError(t *testing.T) {
 		},
 	}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	cfg, err := client.Config().Management().Get(context.Background(), configID)
@@ -966,7 +966,7 @@ func TestConfigClient_Save_MalformedResponse(t *testing.T) {
 	}))
 	defer updateServer.Close()
 
-	updateClient, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(updateServer.URL), smplkit.DisableTelemetry())
+	updateClient, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithBaseURL(updateServer.URL))
 	require.NoError(t, err)
 	cfg, err := updateClient.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
@@ -1101,7 +1101,7 @@ func TestConfig_MutateExistingEnvMerge_Save(t *testing.T) {
 // --- Connect + GetValue tests ---
 
 func TestConfigClient_GetValue_NotConnected(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	_, err = client.Config().GetValue(context.Background(), "my-config")
@@ -1158,7 +1158,7 @@ func TestClient_Connect_And_GetValue(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx := context.Background()

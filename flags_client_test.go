@@ -34,7 +34,7 @@ func sampleFlagListJSON(id, name, flagType string) string {
 }
 
 func TestClient_FlagsReturnsSubClient(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	flags := client.Flags()
 	require.NotNil(t, flags)
@@ -59,7 +59,7 @@ func TestFlagsClient_Get(t *testing.T) {
 	// Use a client that routes flags requests to our test server.
 	// Since the flags client uses a hardcoded URL, we test via the generated client interface.
 	// Instead, let's test the Get method by constructing the client properly.
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	// The flags client uses https://flags.smplkit.com hardcoded.
@@ -69,7 +69,7 @@ func TestFlagsClient_Get(t *testing.T) {
 }
 
 func TestFlagsClient_Get_ByID_Error(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	// Get by ID will fail because the real server is unreachable
@@ -78,7 +78,7 @@ func TestFlagsClient_Get_ByID_Error(t *testing.T) {
 }
 
 func TestFlagsClient_Delete_ByID_Error(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	// Delete by ID will fail because the real server is unreachable
@@ -87,7 +87,7 @@ func TestFlagsClient_Delete_ByID_Error(t *testing.T) {
 }
 
 func TestFlagsClient_NewBooleanFlag_AutoValues(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	// NewBooleanFlag auto-generates True/False values.
@@ -98,7 +98,7 @@ func TestFlagsClient_NewBooleanFlag_AutoValues(t *testing.T) {
 }
 
 func TestFlagsClient_NewStringFlag_Unconstrained(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	// NewStringFlag without WithFlagValues creates an unconstrained flag (Values=nil).
@@ -109,7 +109,7 @@ func TestFlagsClient_NewStringFlag_Unconstrained(t *testing.T) {
 }
 
 func TestFlagsClient_NewNumberFlag_Unconstrained(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	flag := client.Flags().Management().NewNumberFlag("max-retries", 3.0)
@@ -118,7 +118,7 @@ func TestFlagsClient_NewNumberFlag_Unconstrained(t *testing.T) {
 }
 
 func TestFlagsClient_NewJsonFlag_Unconstrained(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	flag := client.Flags().Management().NewJsonFlag("config", map[string]interface{}{"key": "value"})
@@ -127,7 +127,7 @@ func TestFlagsClient_NewJsonFlag_Unconstrained(t *testing.T) {
 }
 
 func TestFlagsClient_NewStringFlag_Constrained(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	flag := client.Flags().Management().NewStringFlag("theme", "light",
@@ -184,7 +184,7 @@ func TestFlagsClient_NetworkError(t *testing.T) {
 		Transport: &failTransport{},
 	}
 
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Flags().Management().Get(context.Background(), "feature-x")
@@ -203,7 +203,7 @@ func (t *failTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // --- Factory method and Flag mutation tests ---
 
 func TestNewBooleanFlag_Fields(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	desc := "A feature flag"

@@ -101,7 +101,7 @@ func newLoggingTestClient(t *testing.T, handler http.Handler) *smplkit.Client {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithBaseURL(server.URL))
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service"}, smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 	return client
 }
@@ -109,7 +109,7 @@ func newLoggingTestClient(t *testing.T, handler http.Handler) *smplkit.Client {
 // --- Accessor test ---
 
 func TestLoggingClient_Accessor(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	logging := client.Logging()
 	require.NotNil(t, logging)
@@ -120,7 +120,7 @@ func TestLoggingClient_Accessor(t *testing.T) {
 // --- Factory method tests ---
 
 func TestLoggingClient_New(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	logger := client.Logging().Management().New("my.logger")
@@ -131,7 +131,7 @@ func TestLoggingClient_New(t *testing.T) {
 }
 
 func TestLoggingClient_New_WithOptions(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	logger := client.Logging().Management().New("checkout-v2",
@@ -144,7 +144,7 @@ func TestLoggingClient_New_WithOptions(t *testing.T) {
 }
 
 func TestLoggingClient_NewGroup(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	group := client.Logging().Management().NewGroup("infra")
@@ -154,7 +154,7 @@ func TestLoggingClient_NewGroup(t *testing.T) {
 }
 
 func TestLoggingClient_NewGroup_WithOptions(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	parentID := logID1
@@ -255,7 +255,7 @@ func TestLogger_Save_Update(t *testing.T) {
 // --- Logger local mutation tests ---
 
 func TestLogger_SetLevel(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	logger := client.Logging().Management().New("test-logger")
 
@@ -266,7 +266,7 @@ func TestLogger_SetLevel(t *testing.T) {
 }
 
 func TestLogger_ClearLevel(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	logger := client.Logging().Management().New("test-logger")
 
@@ -278,7 +278,7 @@ func TestLogger_ClearLevel(t *testing.T) {
 }
 
 func TestLogger_SetEnvironmentLevel(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	logger := client.Logging().Management().New("test-logger")
 
@@ -290,7 +290,7 @@ func TestLogger_SetEnvironmentLevel(t *testing.T) {
 }
 
 func TestLogger_ClearEnvironmentLevel(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	logger := client.Logging().Management().New("test-logger")
 
@@ -308,7 +308,7 @@ func TestLogger_ClearEnvironmentLevel_NilEnvironments(t *testing.T) {
 }
 
 func TestLogger_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	logger := client.Logging().Management().New("test-logger")
 	// Set a non-map entry to exercise the type assertion branch.
@@ -319,7 +319,7 @@ func TestLogger_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
 }
 
 func TestLogger_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	logger := client.Logging().Management().New("test-logger")
 
@@ -335,7 +335,7 @@ func TestLogger_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
 }
 
 func TestLogger_ClearAllEnvironmentLevels(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	logger := client.Logging().Management().New("test-logger")
 
@@ -425,7 +425,7 @@ func TestLogGroup_Save_Update(t *testing.T) {
 // --- LogGroup local mutation tests ---
 
 func TestLogGroup_SetLevel(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	group := client.Logging().Management().NewGroup("infra")
 
@@ -435,7 +435,7 @@ func TestLogGroup_SetLevel(t *testing.T) {
 }
 
 func TestLogGroup_ClearLevel(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	group := client.Logging().Management().NewGroup("infra")
 
@@ -445,7 +445,7 @@ func TestLogGroup_ClearLevel(t *testing.T) {
 }
 
 func TestLogGroup_SetEnvironmentLevel(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	group := client.Logging().Management().NewGroup("infra")
 
@@ -457,7 +457,7 @@ func TestLogGroup_SetEnvironmentLevel(t *testing.T) {
 }
 
 func TestLogGroup_ClearEnvironmentLevel(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	group := client.Logging().Management().NewGroup("infra")
 
@@ -473,7 +473,7 @@ func TestLogGroup_ClearEnvironmentLevel_NilEnvironments(t *testing.T) {
 }
 
 func TestLogGroup_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	group := client.Logging().Management().NewGroup("infra")
 	group.Environments["staging"] = "not-a-map"
@@ -482,7 +482,7 @@ func TestLogGroup_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
 }
 
 func TestLogGroup_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	group := client.Logging().Management().NewGroup("infra")
 
@@ -498,7 +498,7 @@ func TestLogGroup_ClearEnvironmentLevel_PreservesOtherKeys(t *testing.T) {
 }
 
 func TestLogGroup_ClearAllEnvironmentLevels(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 	group := client.Logging().Management().NewGroup("infra")
 
@@ -564,7 +564,7 @@ func TestLoggingClient_Get_NetworkError(t *testing.T) {
 	transport := &failTransport{}
 	httpClient := &http.Client{Transport: transport}
 
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Logging().Management().Get(context.Background(), "some-key")
@@ -577,9 +577,9 @@ func TestLoggingClient_Get_NetworkError(t *testing.T) {
 func TestLoggingClient_Get_ReadBodyError(t *testing.T) {
 	transport := &loggingBrokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Logging().Management().Get(context.Background(), "some-key")
@@ -638,7 +638,7 @@ func TestLoggingClient_List_Empty(t *testing.T) {
 func TestLoggingClient_List_NetworkError(t *testing.T) {
 	transport := &failTransport{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Logging().Management().List(context.Background())
@@ -651,9 +651,9 @@ func TestLoggingClient_List_NetworkError(t *testing.T) {
 func TestLoggingClient_List_ReadBodyError(t *testing.T) {
 	transport := &loggingBrokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Logging().Management().List(context.Background())
@@ -717,7 +717,7 @@ func TestLoggingClient_Delete_NotFound(t *testing.T) {
 func TestLoggingClient_Delete_NetworkError(t *testing.T) {
 	transport := &failTransport{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	err = client.Logging().Management().Delete(context.Background(), "some-id")
@@ -761,7 +761,7 @@ func TestLoggingClient_GetGroup_NotFound(t *testing.T) {
 func TestLoggingClient_GetGroup_NetworkError(t *testing.T) {
 	transport := &failTransport{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Logging().Management().GetGroup(context.Background(), "infra")
@@ -797,9 +797,9 @@ func TestLoggingClient_ListGroups(t *testing.T) {
 func TestLoggingClient_ListGroups_ReadBodyError(t *testing.T) {
 	transport := &loggingBrokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	_, err = client.Logging().Management().ListGroups(context.Background())
@@ -870,7 +870,7 @@ func TestLoggingClient_DeleteGroup_NotFound(t *testing.T) {
 func TestLogger_Save_Create_NetworkError(t *testing.T) {
 	transport := &failTransport{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	logger := client.Logging().Management().New("test-logger")
@@ -884,9 +884,9 @@ func TestLogger_Save_Create_NetworkError(t *testing.T) {
 func TestLogger_Save_Create_ReadBodyError(t *testing.T) {
 	transport := &loggingBrokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	logger := client.Logging().Management().New("test-logger")
@@ -928,7 +928,7 @@ func TestLogger_Save_Create_HTTPError(t *testing.T) {
 func TestLogger_Save_CreatePath_NetworkError(t *testing.T) {
 	transport := &failTransport{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	logger := client.Logging().Management().New("temp")
@@ -941,9 +941,9 @@ func TestLogger_Save_CreatePath_NetworkError(t *testing.T) {
 func TestLogger_Save_CreatePath_ReadBodyError(t *testing.T) {
 	transport := &loggingBrokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	logger := client.Logging().Management().New("temp")
@@ -1022,9 +1022,9 @@ func TestLogger_Save_Update_ReadBodyError(t *testing.T) {
 		},
 	}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	logger, err := client.Logging().Management().Get(context.Background(), "my.logger")
@@ -1086,7 +1086,7 @@ func TestLogger_Save_Update_HTTPError(t *testing.T) {
 func TestLogGroup_Save_Create_NetworkError(t *testing.T) {
 	transport := &failTransport{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	group := client.Logging().Management().NewGroup("test-group")
@@ -1100,9 +1100,9 @@ func TestLogGroup_Save_Create_NetworkError(t *testing.T) {
 func TestLogGroup_Save_Create_ReadBodyError(t *testing.T) {
 	transport := &loggingBrokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	group := client.Logging().Management().NewGroup("test-group")
@@ -1144,7 +1144,7 @@ func TestLogGroup_Save_Create_HTTPError(t *testing.T) {
 func TestLogGroup_Save_CreatePath_NetworkError(t *testing.T) {
 	transport := &failTransport{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	group := client.Logging().Management().NewGroup("temp")
@@ -1158,9 +1158,9 @@ func TestLogGroup_Save_CreatePath_NetworkError(t *testing.T) {
 func TestLogGroup_Save_CreatePath_ReadBodyError(t *testing.T) {
 	transport := &loggingBrokenBodyRoundTripper{}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	group := client.Logging().Management().NewGroup("temp")
@@ -1239,9 +1239,9 @@ func TestLogGroup_Save_Update_ReadBodyError(t *testing.T) {
 		},
 	}
 	httpClient := &http.Client{Transport: transport}
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service",
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://example.com"),
-		smplkit.WithHTTPClient(httpClient), smplkit.DisableTelemetry())
+		smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
 	group, err := client.Logging().Management().GetGroup(context.Background(), "infra")
@@ -1327,7 +1327,7 @@ func TestLoggingClient_DeleteGroup_HTTPError(t *testing.T) {
 // --- RegisterLogger tests ---
 
 func TestLoggingClient_RegisterLogger(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	// RegisterLogger should not panic and should add to the buffer.
@@ -1342,7 +1342,7 @@ func TestLoggingClient_RegisterLogger(t *testing.T) {
 // --- OnChange / OnChangeKey tests ---
 
 func TestLoggingClient_OnChange(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	var called bool
@@ -1355,7 +1355,7 @@ func TestLoggingClient_OnChange(t *testing.T) {
 }
 
 func TestLoggingClient_OnChangeKey(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	var called bool
@@ -1833,7 +1833,7 @@ func TestApplyLevelsDelegatesToAdapters(t *testing.T) {
 }
 
 func TestCloseCallsUninstallHook(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	adapter := &testAdapter{name: "test"}
@@ -1848,7 +1848,7 @@ func TestCloseCallsUninstallHook(t *testing.T) {
 // --- Client.Close cleans up logging ---
 
 func TestClient_Close_LoggingCleanup(t *testing.T) {
-	client, err := smplkit.NewClient("sk_test_key", "test", "test-service", smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
 	// Should not panic.

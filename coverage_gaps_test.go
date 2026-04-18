@@ -195,7 +195,7 @@ func TestNewClient_AppHeaderEditorCoverage(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	c, err := NewClient("sk_test_key", "test", "test-service", WithBaseURL(server.URL))
+	c, err := NewClient(Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service"}, WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	// Exercise registerServiceContext which goes through the appGenerated client,

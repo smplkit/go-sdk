@@ -6,7 +6,7 @@ import (
 )
 
 // Config represents a configuration resource from the smplkit platform.
-type Config struct {
+type ConfigEntry struct {
 	// ID is the config identifier (e.g. "user_service").
 	ID string
 	// Name is the display name for the config.
@@ -29,43 +29,43 @@ type Config struct {
 }
 
 // ConfigOption configures an unsaved Config returned by ConfigClient.New.
-type ConfigOption func(*Config)
+type ConfigOption func(*ConfigEntry)
 
 // WithConfigName sets the display name for a config.
 func WithConfigName(name string) ConfigOption {
-	return func(c *Config) { c.Name = name }
+	return func(c *ConfigEntry) { c.Name = name }
 }
 
 // WithConfigDescription sets the description for a config.
 func WithConfigDescription(desc string) ConfigOption {
-	return func(c *Config) { c.Description = &desc }
+	return func(c *ConfigEntry) { c.Description = &desc }
 }
 
 // WithConfigParent sets the parent config UUID for inheritance.
 func WithConfigParent(parentID string) ConfigOption {
-	return func(c *Config) { c.Parent = &parentID }
+	return func(c *ConfigEntry) { c.Parent = &parentID }
 }
 
 // WithConfigItems sets the base configuration values for a config.
 func WithConfigItems(items map[string]interface{}) ConfigOption {
-	return func(c *Config) { c.Items = items }
+	return func(c *ConfigEntry) { c.Items = items }
 }
 
 // WithConfigEnvironments sets the environment-specific overrides for a config.
 func WithConfigEnvironments(envs map[string]map[string]interface{}) ConfigOption {
-	return func(c *Config) { c.Environments = envs }
+	return func(c *ConfigEntry) { c.Environments = envs }
 }
 
 // Save persists the config to the server.
 // The Config instance is updated with the server response.
-func (c *Config) Save(ctx context.Context) error {
+func (c *ConfigEntry) Save(ctx context.Context) error {
 	if c.CreatedAt == nil {
 		return c.client.createConfig(ctx, c)
 	}
 	return c.client.updateConfig(ctx, c)
 }
 
-func (c *Config) apply(other *Config) {
+func (c *ConfigEntry) apply(other *ConfigEntry) {
 	c.ID = other.ID
 	c.Name = other.Name
 	c.Description = other.Description

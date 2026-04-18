@@ -616,10 +616,9 @@ func TestPayloadFormat_JSONAPIStructure(t *testing.T) {
 // DisableTelemetry option
 // ===================================================================
 
-func TestDisableTelemetry_Option(t *testing.T) {
-	cfg := defaultConfig()
-	DisableTelemetry()(&cfg)
-	assert.True(t, cfg.disableTelemetry)
+func TestDisableTelemetry_Config(t *testing.T) {
+	cfg := Config{DisableTelemetry: true}
+	assert.True(t, cfg.DisableTelemetry)
 }
 
 // ===================================================================
@@ -684,7 +683,7 @@ func TestClient_MetricsEnabledByDefault(t *testing.T) {
 	t.Setenv("SMPLKIT_ENVIRONMENT", "test")
 	t.Setenv("SMPLKIT_SERVICE", "test-service")
 
-	client, err := NewClient("", "", "")
+	client, err := NewClient(Config{})
 	require.NoError(t, err)
 	assert.NotNil(t, client.metrics)
 	client.Close()
@@ -695,7 +694,7 @@ func TestClient_MetricsDisabled(t *testing.T) {
 	t.Setenv("SMPLKIT_ENVIRONMENT", "test")
 	t.Setenv("SMPLKIT_SERVICE", "test-service")
 
-	client, err := NewClient("", "", "", DisableTelemetry())
+	client, err := NewClient(Config{DisableTelemetry: true})
 	require.NoError(t, err)
 	assert.Nil(t, client.metrics)
 	client.Close()

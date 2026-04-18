@@ -95,8 +95,8 @@ func startTestServer(t *testing.T, configs []map[string]interface{}) *httptest.S
 // connectClient creates a client pointed at the test server for lazy init testing.
 func connectClient(t *testing.T, server *httptest.Server) *smplkit.Client {
 	t.Helper()
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 	return client
 }
@@ -182,8 +182,8 @@ func TestTypedAccessors_GetBool(t *testing.T) {
 }
 
 func TestTypedAccessors_NotConnected(t *testing.T) {
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL("http://localhost:0"), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL("http://localhost:0"))
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -240,8 +240,8 @@ func TestRefresh_UpdatesCache(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -288,8 +288,8 @@ func TestRefresh_ListError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -335,8 +335,8 @@ func TestRefresh_FetchChainError(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -349,8 +349,8 @@ func TestRefresh_FetchChainError(t *testing.T) {
 }
 
 func TestRefresh_NotConnected(t *testing.T) {
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL("http://localhost:0"), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL("http://localhost:0"))
 	require.NoError(t, err)
 
 	err = client.Config().Refresh(context.Background())
@@ -399,8 +399,8 @@ func TestOnChange_FiresOnRefresh(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -466,8 +466,8 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL(server.URL), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -491,8 +491,8 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 // --- singleton accessor identity ---
 
 func TestSingletonAccessor(t *testing.T) {
-	client, err := smplkit.NewClient("sk_api_test", "production", "test-service",
-		smplkit.WithBaseURL("http://localhost:0"), smplkit.DisableTelemetry())
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL("http://localhost:0"))
 	require.NoError(t, err)
 
 	assert.Same(t, client.Config(), client.Config())

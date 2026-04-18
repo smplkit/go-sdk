@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 
 	"github.com/smplkit/go-sdk/internal/debug"
@@ -19,7 +18,7 @@ import (
 //
 // Create one with NewClient and access sub-clients via accessor methods:
 //
-//	client, err := smplkit.NewClient("sk_api_...", "production", "my-service")
+//	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_...", Environment: "production", Service: "my-service"})
 //	cfgs, err := client.Config().Management().List(ctx)
 type Client struct {
 	apiKey       string
@@ -42,70 +41,39 @@ type Client struct {
 // serviceURL builds a per-service URL from the client configuration.
 // If baseURLOverride is set (test mode), all services share that URL.
 // Otherwise the URL is {scheme}://{subdomain}.{baseDomain}.
-func serviceURL(cfg clientConfig, subdomain string) string {
-	if cfg.baseURLOverride != "" {
-		return cfg.baseURLOverride
+func serviceURL(opts clientConfig, subdomain string, rc *resolvedConfig) string {
+	if opts.baseURLOverride != "" {
+		return opts.baseURLOverride
 	}
-	return fmt.Sprintf("%s://%s.%s", cfg.scheme, subdomain, cfg.baseDomain)
+	return fmt.Sprintf("%s://%s.%s", rc.scheme, subdomain, rc.baseDomain)
 }
 
 // NewClient creates a new smplkit API client.
 //
-// The apiKey is used for Bearer token authentication on every request.
-// Pass an empty string to resolve the API key automatically from the
-// SMPLKIT_API_KEY environment variable or the ~/.smplkit config file.
+// Configuration is resolved from four layers (later layers override earlier ones):
+//  1. Defaults (scheme=https, baseDomain=smplkit.com)
+//  2. Config file (~/.smplkit) with [common] and profile sections
+//  3. Environment variables (SMPLKIT_API_KEY, SMPLKIT_ENVIRONMENT, etc.)
+//  4. Explicit Config struct fields
 //
-// The environment is required; pass an empty string to resolve from
-// SMPLKIT_ENVIRONMENT.
-//
-// The service is required; pass an empty string to resolve from
-// SMPLKIT_SERVICE.
-//
-// Use ClientOption functions to customize the base domain, scheme, timeout, or HTTP client.
-func NewClient(apiKey string, environment string, service string, opts ...ClientOption) (*Client, error) {
-	// 1. Resolve environment first.
-	resolvedEnv := environment
-	if resolvedEnv == "" {
-		resolvedEnv = os.Getenv("SMPLKIT_ENVIRONMENT")
-	}
-	if resolvedEnv == "" {
-		return nil, &SmplError{
-			Message: "No environment provided. Set one of:\n" +
-				"  1. Pass environment to NewClient\n" +
-				"  2. Set the SMPLKIT_ENVIRONMENT environment variable",
-		}
-	}
-
-	// 2. Resolve service second.
-	resolvedService := service
-	if resolvedService == "" {
-		resolvedService = os.Getenv("SMPLKIT_SERVICE")
-	}
-	if resolvedService == "" {
-		return nil, &SmplError{
-			Message: "No service provided. Set one of:\n" +
-				"  1. Pass service to NewClient\n" +
-				"  2. Set the SMPLKIT_SERVICE environment variable",
-		}
-	}
-
-	cfg := defaultConfig()
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-
-	// 3. Resolve API key last (receives the already-resolved environment).
-	resolved, err := resolveAPIKey(apiKey, resolvedEnv)
+// Use ClientOption functions to customize the timeout or HTTP client.
+func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
+	rc, err := resolveConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 
+	optCfg := defaultConfig()
+	for _, opt := range opts {
+		opt(&optCfg)
+	}
+
 	var httpClient *http.Client
-	if cfg.httpClient != nil {
-		httpClient = cfg.httpClient
+	if optCfg.httpClient != nil {
+		httpClient = optCfg.httpClient
 	} else {
 		httpClient = &http.Client{
-			Timeout: cfg.timeout,
+			Timeout: optCfg.timeout,
 		}
 	}
 
@@ -115,14 +83,14 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 		base = http.DefaultTransport
 	}
 	httpClient.Transport = &authTransport{
-		token: resolved,
+		token: rc.apiKey,
 		base:  base,
 	}
 
-	configURL := serviceURL(cfg, "config")
-	flagsURL := serviceURL(cfg, "flags")
-	appURL := serviceURL(cfg, "app")
-	logURL := serviceURL(cfg, "logging")
+	configURL := serviceURL(optCfg, "config", rc)
+	flagsURL := serviceURL(optCfg, "flags", rc)
+	appURL := serviceURL(optCfg, "app", rc)
+	logURL := serviceURL(optCfg, "logging", rc)
 
 	// Build the generated config client, passing the auth-wrapped httpClient
 	// and a request editor that injects Accept + User-Agent headers.
@@ -170,16 +138,16 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 	)
 
 	c := &Client{
-		apiKey:       resolved,
-		environment:  resolvedEnv,
-		service:      resolvedService,
+		apiKey:       rc.apiKey,
+		environment:  rc.environment,
+		service:      rc.service,
 		appURL:       appURL,
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
 	}
 
-	if !cfg.disableTelemetry {
-		c.metrics = newMetricsReporter(httpClient, appURL, resolvedEnv, resolvedService, 0)
+	if !rc.disableTelemetry {
+		c.metrics = newMetricsReporter(httpClient, appURL, rc.environment, rc.service, 0)
 	}
 
 	c.config = &ConfigClient{client: c, generated: genConfigClient}
@@ -187,9 +155,9 @@ func NewClient(apiKey string, environment string, service string, opts ...Client
 	c.flags.runtime = newFlagsRuntime(c.flags)
 	c.logging = newLoggingClient(c, genLoggingClient)
 
-	prefixLen := min(10, len(resolved))
-	maskedKey := resolved[:prefixLen] + "..."
-	debug.Debug("lifecycle", "Client created (api_key=%s, environment=%s, service=%s)", maskedKey, resolvedEnv, resolvedService)
+	prefixLen := min(10, len(rc.apiKey))
+	maskedKey := rc.apiKey[:prefixLen] + "..."
+	debug.Debug("lifecycle", "Client created (api_key=%s, environment=%s, service=%s)", maskedKey, rc.environment, rc.service)
 
 	return c, nil
 }

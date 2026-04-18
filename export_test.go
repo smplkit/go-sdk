@@ -6,7 +6,7 @@ import "github.com/smplkit/go-sdk/logging/adapters"
 var CheckStatusForTest = checkStatus
 
 // WithBaseURL is a test-only option that routes all four service clients to the
-// same base URL. Use WithBaseDomain and WithScheme for production configuration.
+// same base URL. Use Config.BaseDomain and Config.Scheme for production configuration.
 var WithBaseURL = withBaseURLOverride
 
 // TestDiscoveredLogger is an alias for adapters.DiscoveredLogger for use in tests.
