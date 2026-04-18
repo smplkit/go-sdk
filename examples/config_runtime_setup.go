@@ -11,9 +11,9 @@ import (
 
 // demoConfigs holds references to configs created by setupDemoConfigs.
 type demoConfigs struct {
-	Common      *smplkit.Config
-	UserService *smplkit.Config
-	AuthModule  *smplkit.Config
+	Common      *smplkit.ConfigEntry
+	UserService *smplkit.ConfigEntry
+	AuthModule  *smplkit.ConfigEntry
 }
 
 // setupDemoConfigs creates and configures the demo config hierarchy for the
