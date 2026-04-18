@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -3397,4 +3400,386 @@ func TestHandleFlagChanged_FetchError(t *testing.T) {
 	// Should not panic; error causes early return
 	rt.handleFlagChanged(map[string]interface{}{"id": "my-flag"})
 	assert.False(t, called)
+}
+
+// --- flagRegistrationBuffer ---
+
+func TestFlagRegistrationBuffer_AddAndDrain(t *testing.T) {
+	buf := newFlagRegistrationBuffer()
+	buf.add("flag-a", "BOOLEAN", true, "svc", "prod")
+	buf.add("flag-b", "STRING", "on", "svc", "prod")
+
+	assert.Equal(t, 2, buf.pendingCount())
+	batch := buf.drain()
+	assert.Len(t, batch, 2)
+	assert.Equal(t, 0, buf.pendingCount())
+
+	assert.Equal(t, "flag-a", batch[0].id)
+	assert.Equal(t, "BOOLEAN", batch[0].flagType)
+	assert.Equal(t, true, batch[0].defaultVal)
+	assert.Equal(t, "svc", batch[0].service)
+	assert.Equal(t, "prod", batch[0].environment)
+
+	assert.Equal(t, "flag-b", batch[1].id)
+	assert.Equal(t, "STRING", batch[1].flagType)
+}
+
+func TestFlagRegistrationBuffer_Deduplication(t *testing.T) {
+	buf := newFlagRegistrationBuffer()
+	buf.add("flag-x", "BOOLEAN", true, "svc", "prod")
+	buf.add("flag-x", "BOOLEAN", false, "svc", "prod") // duplicate — should be ignored
+
+	assert.Equal(t, 1, buf.pendingCount())
+	batch := buf.drain()
+	assert.Len(t, batch, 1)
+	assert.Equal(t, true, batch[0].defaultVal) // first registration wins
+}
+
+func TestFlagRegistrationBuffer_DrainIsNilAfterDrain(t *testing.T) {
+	buf := newFlagRegistrationBuffer()
+	buf.add("flag-a", "BOOLEAN", true, "", "")
+	buf.drain()
+	assert.Equal(t, 0, buf.pendingCount())
+	// second drain returns empty slice
+	assert.Nil(t, buf.drain())
+}
+
+func TestFlagRegistrationBuffer_ConcurrentSafety(t *testing.T) {
+	buf := newFlagRegistrationBuffer()
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			buf.add(string(rune('a'+n%26))+string(rune('0'+n%10)), "BOOLEAN", true, "svc", "prod")
+		}(i)
+	}
+	wg.Wait()
+	// No panic and count is consistent.
+	assert.Greater(t, buf.pendingCount(), 0)
+}
+
+// --- Typed flag methods populate buffer ---
+
+func TestFlagMethods_PopulateBuffer(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	fc.client.service = "my-svc"
+	fc.client.environment = "staging"
+	rt := fc.runtime
+
+	rt.BooleanFlag("bool-flag", true)
+	rt.StringFlag("str-flag", "on")
+	rt.NumberFlag("num-flag", 3.14)
+	rt.JsonFlag("json-flag", map[string]interface{}{"k": "v"})
+
+	assert.Equal(t, 4, rt.flagBuffer.pendingCount())
+
+	batch := rt.flagBuffer.drain()
+	require.Len(t, batch, 4)
+
+	byID := make(map[string]flagRegistrationEntry)
+	for _, e := range batch {
+		byID[e.id] = e
+	}
+
+	assert.Equal(t, "BOOLEAN", byID["bool-flag"].flagType)
+	assert.Equal(t, true, byID["bool-flag"].defaultVal)
+	assert.Equal(t, "my-svc", byID["bool-flag"].service)
+	assert.Equal(t, "staging", byID["bool-flag"].environment)
+
+	assert.Equal(t, "STRING", byID["str-flag"].flagType)
+	assert.Equal(t, "NUMERIC", byID["num-flag"].flagType)
+	assert.Equal(t, "JSON", byID["json-flag"].flagType)
+}
+
+func TestFlagMethods_NoBufferWhenClientNil(t *testing.T) {
+	// newFlagsRuntime(nil) should not panic on flag method calls.
+	rt := newFlagsRuntime(nil)
+	assert.NotPanics(t, func() {
+		rt.BooleanFlag("b", true)
+		rt.StringFlag("s", "x")
+		rt.NumberFlag("n", 1.0)
+		rt.JsonFlag("j", nil)
+	})
+	// Buffer should remain empty since client is nil.
+	assert.Equal(t, 0, rt.flagBuffer.pendingCount())
+}
+
+func TestFlagMethods_ThresholdFlush(t *testing.T) {
+	var bulkCallCount atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags/bulk", func(w http.ResponseWriter, r *http.Request) {
+		bulkCallCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":50}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	fc.client.service = "my-svc"
+	fc.client.environment = "prod"
+	rt := fc.runtime
+
+	// Add exactly flagRegistrationThreshold flags — the 50th triggers a goroutine flush.
+	for i := 0; i < flagRegistrationThreshold; i++ {
+		rt.BooleanFlag(string(rune('a'))+string(rune('0'+i%10))+string(rune('0'+(i/10)%10)), true)
+	}
+
+	// Give the goroutine time to fire.
+	time.Sleep(50 * time.Millisecond)
+
+	assert.GreaterOrEqual(t, bulkCallCount.Load(), int32(1), "threshold flush should have called bulk endpoint")
+}
+
+func TestFlagMethods_ThresholdFlush_AllTypes(t *testing.T) {
+	var bulkCallCount atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags/bulk", func(w http.ResponseWriter, r *http.Request) {
+		bulkCallCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":50}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+
+	// Test StringFlag threshold.
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	fc.client.service = "svc"
+	fc.client.environment = "prod"
+	rt := fc.runtime
+	for i := 0; i < flagRegistrationThreshold; i++ {
+		rt.StringFlag("str-"+string(rune('a'+i%26))+string(rune('0'+i/26)), "val")
+	}
+	time.Sleep(50 * time.Millisecond)
+	assert.GreaterOrEqual(t, bulkCallCount.Load(), int32(1), "StringFlag: threshold flush should fire")
+
+	// Test NumberFlag threshold.
+	bulkCallCount.Store(0)
+	rt2 := newFlagsRuntime(fc)
+	for i := 0; i < flagRegistrationThreshold; i++ {
+		rt2.NumberFlag("num-"+string(rune('a'+i%26))+string(rune('0'+i/26)), float64(i))
+	}
+	time.Sleep(50 * time.Millisecond)
+	assert.GreaterOrEqual(t, bulkCallCount.Load(), int32(1), "NumberFlag: threshold flush should fire")
+
+	// Test JsonFlag threshold.
+	bulkCallCount.Store(0)
+	rt3 := newFlagsRuntime(fc)
+	for i := 0; i < flagRegistrationThreshold; i++ {
+		rt3.JsonFlag("json-"+string(rune('a'+i%26))+string(rune('0'+i/26)), nil)
+	}
+	time.Sleep(50 * time.Millisecond)
+	assert.GreaterOrEqual(t, bulkCallCount.Load(), int32(1), "JsonFlag: threshold flush should fire")
+}
+
+// --- flushFlagBuffer ---
+
+func TestFlushFlagBuffer_EmptyBatch(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	rt := fc.runtime
+	// Should return immediately without panicking or making HTTP calls.
+	rt.flushFlagBuffer(context.Background())
+}
+
+func TestFlushFlagBuffer_Success(t *testing.T) {
+	var reqBody genflags.FlagBulkRequest
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags/bulk", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":2}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	fc.client.service = "my-svc"
+	fc.client.environment = "prod"
+	rt := fc.runtime
+
+	rt.flagBuffer.add("flag-a", "BOOLEAN", true, "my-svc", "prod")
+	rt.flagBuffer.add("flag-b", "STRING", "val", "", "")
+
+	rt.flushFlagBuffer(context.Background())
+
+	require.Len(t, reqBody.Flags, 2)
+	byID := make(map[string]genflags.FlagBulkItem)
+	for _, item := range reqBody.Flags {
+		byID[item.Id] = item
+	}
+	assert.Equal(t, "BOOLEAN", byID["flag-a"].Type)
+	assert.NotNil(t, byID["flag-a"].Service)
+	assert.Equal(t, "my-svc", *byID["flag-a"].Service)
+	assert.NotNil(t, byID["flag-a"].Environment)
+	assert.Equal(t, "prod", *byID["flag-a"].Environment)
+	// Empty service/environment should be omitted (nil pointer).
+	assert.Nil(t, byID["flag-b"].Service)
+	assert.Nil(t, byID["flag-b"].Environment)
+}
+
+func TestFlushFlagBuffer_HTTPError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"invalid flag"}]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	rt := fc.runtime
+
+	rt.flagBuffer.add("flag-a", "BOOLEAN", true, "svc", "prod")
+
+	var logBuf strings.Builder
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
+
+	rt.flushFlagBuffer(context.Background())
+
+	assert.Contains(t, logBuf.String(), "smplkit: bulk flag registration failed")
+	assert.Contains(t, logBuf.String(), "400")
+}
+
+func TestFlushFlagBuffer_NetworkError(t *testing.T) {
+	// Use a closed server to trigger a network error.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	serverURL := server.URL
+	server.Close()
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	// Override the generated client to point to the closed server.
+	genFlagsClient, _ := genflags.NewClient(serverURL)
+	fc.generated = genFlagsClient
+	rt := fc.runtime
+
+	rt.flagBuffer.add("flag-a", "BOOLEAN", true, "svc", "prod")
+
+	var logBuf strings.Builder
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
+
+	rt.flushFlagBuffer(context.Background())
+
+	assert.Contains(t, logBuf.String(), "smplkit: bulk flag registration failed")
+}
+
+// --- periodicFlagFlush / runPeriodicFlagFlush ---
+
+func TestPeriodicFlagFlush_Stops(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	rt := fc.runtime
+
+	done := make(chan struct{})
+	go rt.periodicFlagFlush(done)
+	time.Sleep(10 * time.Millisecond)
+	close(done)
+	// Give goroutine time to exit — no assertion needed; just verifying no deadlock.
+	time.Sleep(20 * time.Millisecond)
+}
+
+func TestRunPeriodicFlagFlush_TickerFires(t *testing.T) {
+	var flushCount atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags/bulk", func(w http.ResponseWriter, r *http.Request) {
+		flushCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":1}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	rt := fc.runtime
+
+	// Add a flag so there's something to flush.
+	rt.flagBuffer.add("ticker-flag", "BOOLEAN", true, "svc", "prod")
+
+	done := make(chan struct{})
+	// Use a 10ms interval — much shorter than the production 30s.
+	go rt.runPeriodicFlagFlush(done, 10*time.Millisecond)
+
+	// Wait for at least one tick.
+	time.Sleep(50 * time.Millisecond)
+	close(done)
+	time.Sleep(10 * time.Millisecond)
+
+	assert.GreaterOrEqual(t, flushCount.Load(), int32(1), "periodic flush should have fired at least once")
+}
+
+// --- ensureInit flush-before-fetch ordering ---
+
+func TestEnsureInit_FlushesBeforeFetch(t *testing.T) {
+	var bulkCalledBefore bool
+	var fetchCalled bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags/bulk", func(w http.ResponseWriter, r *http.Request) {
+		if !fetchCalled {
+			bulkCalledBefore = true
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":1}`))
+	})
+	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
+		fetchCalled = true
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	fc.client.service = "svc"
+	fc.client.environment = "prod"
+	rt := fc.runtime
+
+	// Add a flag before init.
+	rt.BooleanFlag("pre-init-flag", true)
+
+	err := rt.ensureInit(context.Background())
+	require.NoError(t, err)
+
+	assert.True(t, bulkCalledBefore, "bulk registration should happen before flag fetch")
+
+	rt.disconnect(context.Background())
+	fc.client.stopWS()
+}
+
+// --- disconnect closes the flush goroutine ---
+
+func TestDisconnect_StopsFlagFlushGoroutine(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	rt := fc.runtime
+
+	err := rt.ensureInit(context.Background())
+	require.NoError(t, err)
+
+	assert.NotNil(t, rt.flagFlushDone, "flagFlushDone should be set after init")
+
+	rt.disconnect(context.Background())
+	assert.Nil(t, rt.flagFlushDone, "flagFlushDone should be nil after disconnect")
+
+	fc.client.stopWS()
 }

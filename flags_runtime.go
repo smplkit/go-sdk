@@ -4,12 +4,15 @@ import (
 	"container/list"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"sync"
+	"time"
 
 	jsonlogic "github.com/diegoholiveira/jsonlogic/v3"
 
 	"github.com/smplkit/go-sdk/internal/debug"
+	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
 )
 
 // FlagChangeEvent describes a flag definition change.
@@ -154,12 +157,68 @@ func (b *contextRegistrationBuffer) pendingCount() int {
 	return len(b.pending)
 }
 
+const flagRegistrationThreshold = 50
+
+type flagRegistrationEntry struct {
+	id          string
+	flagType    string
+	defaultVal  interface{}
+	service     string
+	environment string
+}
+
+type flagRegistrationBuffer struct {
+	mu      sync.Mutex
+	seen    map[string]struct{}
+	pending []flagRegistrationEntry
+}
+
+func newFlagRegistrationBuffer() *flagRegistrationBuffer {
+	return &flagRegistrationBuffer{seen: make(map[string]struct{})}
+}
+
+func (b *flagRegistrationBuffer) add(id, flagType string, defaultVal interface{}, service, environment string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, ok := b.seen[id]; ok {
+		return
+	}
+	b.seen[id] = struct{}{}
+	b.pending = append(b.pending, flagRegistrationEntry{
+		id:          id,
+		flagType:    flagType,
+		defaultVal:  defaultVal,
+		service:     service,
+		environment: environment,
+	})
+}
+
+func (b *flagRegistrationBuffer) drain() []flagRegistrationEntry {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	batch := b.pending
+	b.pending = nil
+	return batch
+}
+
+func (b *flagRegistrationBuffer) pendingCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.pending)
+}
+
 // BooleanFlag returns a typed handle for a boolean flag.
 func (rt *FlagsRuntime) BooleanFlag(key string, defaultValue bool) *BooleanFlagHandle {
 	h := &BooleanFlagHandle{flagHandle: flagHandle{runtime: rt, key: key, defaultVal: defaultValue}}
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
+	if rt.flagsClient != nil && rt.flagsClient.client != nil {
+		rt.flagBuffer.add(key, "BOOLEAN", defaultValue, rt.flagsClient.client.service, rt.flagsClient.client.environment)
+		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
+			go rt.flushFlagBuffer(context.Background())
+		}
+	}
 	return h
 }
 
@@ -169,6 +228,12 @@ func (rt *FlagsRuntime) StringFlag(key string, defaultValue string) *StringFlagH
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
+	if rt.flagsClient != nil && rt.flagsClient.client != nil {
+		rt.flagBuffer.add(key, "STRING", defaultValue, rt.flagsClient.client.service, rt.flagsClient.client.environment)
+		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
+			go rt.flushFlagBuffer(context.Background())
+		}
+	}
 	return h
 }
 
@@ -178,6 +243,12 @@ func (rt *FlagsRuntime) NumberFlag(key string, defaultValue float64) *NumberFlag
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
+	if rt.flagsClient != nil && rt.flagsClient.client != nil {
+		rt.flagBuffer.add(key, "NUMERIC", defaultValue, rt.flagsClient.client.service, rt.flagsClient.client.environment)
+		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
+			go rt.flushFlagBuffer(context.Background())
+		}
+	}
 	return h
 }
 
@@ -187,6 +258,12 @@ func (rt *FlagsRuntime) JsonFlag(key string, defaultValue map[string]interface{}
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
+	if rt.flagsClient != nil && rt.flagsClient.client != nil {
+		rt.flagBuffer.add(key, "JSON", defaultValue, rt.flagsClient.client.service, rt.flagsClient.client.environment)
+		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
+			go rt.flushFlagBuffer(context.Background())
+		}
+	}
 	return h
 }
 
@@ -281,6 +358,8 @@ type FlagsRuntime struct {
 
 	cache         *resolutionCache
 	contextBuffer *contextRegistrationBuffer
+	flagBuffer    *flagRegistrationBuffer
+	flagFlushDone chan struct{}
 
 	providerMu      sync.RWMutex
 	contextProvider func(ctx context.Context) []Context
@@ -301,6 +380,7 @@ func newFlagsRuntime(fc *FlagsClient) *FlagsRuntime {
 		flagStore:     make(map[string]map[string]interface{}),
 		cache:         newResolutionCache(defaultCacheMaxSize),
 		contextBuffer: newContextRegistrationBuffer(),
+		flagBuffer:    newFlagRegistrationBuffer(),
 		handles:       make(map[string]*flagHandle),
 		keyListeners:  make(map[string][]func(*FlagChangeEvent)),
 	}
@@ -328,6 +408,9 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 		// Register service context.
 		rt.flagsClient.client.registerServiceContext(ctx)
 
+		// Flush any flags registered before init.
+		rt.flushFlagBuffer(ctx)
+
 		store, err := rt.flagsClient.fetchAllFlags(ctx)
 		if err != nil {
 			rt.initErr = err
@@ -345,12 +428,21 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 		rt.wsManager = ws
 		ws.on("flag_changed", rt.handleFlagChanged)
 		ws.on("flag_deleted", rt.handleFlagDeleted)
+
+		// Start periodic flag registration flush.
+		rt.flagFlushDone = make(chan struct{})
+		go rt.periodicFlagFlush(rt.flagFlushDone)
 	})
 	return rt.initErr
 }
 
 // disconnect stops real-time updates and releases runtime resources.
 func (rt *FlagsRuntime) disconnect(ctx context.Context) {
+	if rt.flagFlushDone != nil {
+		close(rt.flagFlushDone)
+		rt.flagFlushDone = nil
+	}
+
 	if rt.wsManager != nil {
 		rt.wsManager.off("flag_changed", rt.handleFlagChanged)
 		rt.wsManager.off("flag_deleted", rt.handleFlagDeleted)
@@ -618,6 +710,56 @@ func isTruthy(v interface{}) bool {
 		return val != ""
 	}
 	return true
+}
+
+func (rt *FlagsRuntime) flushFlagBuffer(ctx context.Context) {
+	batch := rt.flagBuffer.drain()
+	if len(batch) == 0 {
+		return
+	}
+	items := make([]genflags.FlagBulkItem, 0, len(batch))
+	for _, entry := range batch {
+		item := genflags.FlagBulkItem{
+			Id:      entry.id,
+			Type:    entry.flagType,
+			Default: entry.defaultVal,
+		}
+		if entry.service != "" {
+			item.Service = &entry.service
+		}
+		if entry.environment != "" {
+			item.Environment = &entry.environment
+		}
+		items = append(items, item)
+	}
+	reqBody := genflags.FlagBulkRequest{Flags: items}
+	resp, err := rt.flagsClient.generated.BulkRegisterFlagsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	if err != nil {
+		log.Printf("smplkit: bulk flag registration failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		log.Printf("smplkit: bulk flag registration failed: HTTP %d: %s", resp.StatusCode, string(snippet))
+	}
+}
+
+func (rt *FlagsRuntime) periodicFlagFlush(done chan struct{}) {
+	rt.runPeriodicFlagFlush(done, 30*time.Second)
+}
+
+func (rt *FlagsRuntime) runPeriodicFlagFlush(done chan struct{}, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			rt.flushFlagBuffer(context.Background())
+		}
+	}
 }
 
 func (rt *FlagsRuntime) handleFlagChanged(data map[string]interface{}) {
