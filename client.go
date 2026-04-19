@@ -63,6 +63,10 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 		return nil, err
 	}
 
+	if rc.debug {
+		debug.Enable()
+	}
+
 	optCfg := defaultConfig()
 	for _, opt := range opts {
 		opt(&optCfg)

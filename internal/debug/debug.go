@@ -28,6 +28,13 @@ func parseDebugEnv(value string) bool {
 	return v == "1" || v == "true" || v == "yes"
 }
 
+// Enable activates debug output regardless of the SMPLKIT_DEBUG env var.
+// It is called by NewClient when debug=true is resolved from the config
+// file or the Config struct, and may also be called directly in tests.
+func Enable() {
+	debugEnabled = true
+}
+
 // IsEnabled reports whether debug output is currently enabled.
 func IsEnabled() bool { return debugEnabled }
 

@@ -1,6 +1,14 @@
 package smplkit
 
-import "github.com/smplkit/go-sdk/logging/adapters"
+import (
+	"github.com/smplkit/go-sdk/internal/debug"
+	"github.com/smplkit/go-sdk/logging/adapters"
+)
+
+// IsDebugEnabled reports whether the internal debug package has debug output
+// enabled. Used by tests to verify that Config{Debug: true} activates the
+// debug facility.
+var IsDebugEnabled = debug.IsEnabled
 
 // CheckStatusForTest exposes checkStatus for use in external tests.
 var CheckStatusForTest = checkStatus

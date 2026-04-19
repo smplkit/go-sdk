@@ -49,6 +49,24 @@ func TestParseDebugEnv_Whitespace(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Enable — sets debugEnabled to true
+// ---------------------------------------------------------------------------
+
+func TestEnable_SetsDebugEnabled(t *testing.T) {
+	orig := debugEnabled
+	debugEnabled = false
+	defer func() { debugEnabled = orig }()
+
+	Enable()
+	if !debugEnabled {
+		t.Error("Enable() did not set debugEnabled to true")
+	}
+	if !IsEnabled() {
+		t.Error("IsEnabled() = false after Enable()")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // IsEnabled — reports the cached state
 // ---------------------------------------------------------------------------
 

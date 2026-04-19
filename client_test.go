@@ -317,3 +317,33 @@ func TestNewClient_ResolutionOrder_ServiceBeforeAPIKey(t *testing.T) {
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "No service provided")
 }
+
+func TestNewClient_DebugFieldEnablesDebugOutput(t *testing.T) {
+	// Ensure SMPLKIT_DEBUG is unset so we can observe the Config.Debug field alone.
+	t.Setenv("SMPLKIT_DEBUG", "")
+
+	client, err := smplkit.NewClient(smplkit.Config{
+		APIKey:           "sk_test_key",
+		Environment:      "test",
+		Service:          "test-service",
+		Debug:            true,
+		DisableTelemetry: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	assert.True(t, smplkit.IsDebugEnabled(), "debug should be enabled when Config.Debug=true")
+}
+
+func TestNewClient_DebugFromConfigFile(t *testing.T) {
+	t.Setenv("SMPLKIT_DEBUG", "")
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, ".smplkit")
+	err := os.WriteFile(configPath, []byte("[default]\napi_key = sk_api_file\ndebug = true\n"), 0o600)
+	require.NoError(t, err)
+	t.Setenv("HOME", dir)
+
+	client, err := smplkit.NewClient(smplkit.Config{Environment: "test", Service: "test-service", DisableTelemetry: true})
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	assert.True(t, smplkit.IsDebugEnabled(), "debug should be enabled when debug=true is set in config file")
+}
