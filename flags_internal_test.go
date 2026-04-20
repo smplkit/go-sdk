@@ -3756,6 +3756,44 @@ func TestEnsureInit_FlushesBeforeFetch(t *testing.T) {
 	fc.client.stopWS()
 }
 
+// --- WS listener registration after ensureInit ---
+
+func TestFlagsEnsureInit_RegistersWSListeners(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	rt := fc.runtime
+
+	// Pre-inject a sharedWebSocket so ensureWS() uses it without starting a goroutine.
+	ws := &sharedWebSocket{
+		listeners: make(map[string][]eventCallback),
+		closeCh:   make(chan struct{}),
+		wsDone:    make(chan struct{}),
+	}
+	fc.client.ws = ws
+
+	err := rt.ensureInit(context.Background())
+	require.NoError(t, err)
+
+	ws.listenersMu.Lock()
+	_, hasChanged := ws.listeners["flag_changed"]
+	_, hasDeleted := ws.listeners["flag_deleted"]
+	ws.listenersMu.Unlock()
+
+	assert.True(t, hasChanged, "flag_changed should be registered in WS listener map")
+	assert.True(t, hasDeleted, "flag_deleted should be registered in WS listener map")
+
+	rt.disconnect(context.Background())
+}
+
 // --- disconnect closes the flush goroutine ---
 
 func TestDisconnect_StopsFlagFlushGoroutine(t *testing.T) {

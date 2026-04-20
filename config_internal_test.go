@@ -1019,6 +1019,41 @@ func TestDelete_Config_BodyReadFailure_CustomTransport(t *testing.T) {
 	assert.True(t, errors.As(err, &connErr))
 }
 
+// --- WS listener registration after ensureInit ---
+
+func TestConfigEnsureInit_RegistersWSListeners(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	cc := newTestConfigClient(t, mux)
+
+	// Pre-inject a sharedWebSocket so ensureWS() uses it without starting a goroutine.
+	ws := &sharedWebSocket{
+		listeners: make(map[string][]eventCallback),
+		closeCh:   make(chan struct{}),
+		wsDone:    make(chan struct{}),
+	}
+	cc.client.ws = ws
+
+	err := cc.ensureInit(context.Background())
+	require.NoError(t, err)
+
+	ws.listenersMu.Lock()
+	_, hasChanged := ws.listeners["config_changed"]
+	_, hasDeleted := ws.listeners["config_deleted"]
+	ws.listenersMu.Unlock()
+
+	assert.True(t, hasChanged, "config_changed should be registered in WS listener map")
+	assert.True(t, hasDeleted, "config_deleted should be registered in WS listener map")
+}
+
 // --- handleConfigChanged ---
 
 func TestHandleConfigChanged(t *testing.T) {

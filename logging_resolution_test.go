@@ -1789,3 +1789,53 @@ func TestStart_Idempotent(t *testing.T) {
 	lc.close()
 	c.stopWS()
 }
+
+// --- WS listener registration after Start ---
+
+func TestLoggingStart_RegistersWSListeners(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"registered":0}`))
+	})
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	lc := newTestLoggingClient(t, mux)
+
+	// Pre-inject a sharedWebSocket so ensureWS() uses it without starting a goroutine.
+	ws := &sharedWebSocket{
+		listeners: make(map[string][]eventCallback),
+		closeCh:   make(chan struct{}),
+		wsDone:    make(chan struct{}),
+	}
+	lc.client.ws = ws
+
+	err := lc.Start(context.Background())
+	require.NoError(t, err)
+
+	ws.listenersMu.Lock()
+	_, hasLoggerChanged := ws.listeners["logger_changed"]
+	_, hasLoggerDeleted := ws.listeners["logger_deleted"]
+	_, hasGroupChanged := ws.listeners["group_changed"]
+	_, hasGroupDeleted := ws.listeners["group_deleted"]
+	ws.listenersMu.Unlock()
+
+	assert.True(t, hasLoggerChanged, "logger_changed should be registered in WS listener map")
+	assert.True(t, hasLoggerDeleted, "logger_deleted should be registered in WS listener map")
+	assert.True(t, hasGroupChanged, "group_changed should be registered in WS listener map")
+	assert.True(t, hasGroupDeleted, "group_deleted should be registered in WS listener map")
+
+	lc.close()
+}
