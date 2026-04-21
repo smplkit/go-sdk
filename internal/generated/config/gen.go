@@ -87,10 +87,14 @@ type Config struct {
 }
 
 // ConfigItemDefinition Schema for a single config item.
+//
+// “value“ may be “None“ to represent a cleared (typed but unset)
+// slot — e.g. after a type change that could not coerce the previous
+// value. See ADR-024.
 type ConfigItemDefinition struct {
 	Description *string                   `json:"description,omitempty"`
 	Type        *ConfigItemDefinitionType `json:"type,omitempty"`
-	Value       interface{}               `json:"value"`
+	Value       interface{}               `json:"value,omitempty"`
 }
 
 // ConfigItemDefinitionType defines model for ConfigItemDefinition.Type.
@@ -98,7 +102,7 @@ type ConfigItemDefinitionType string
 
 // ConfigItemOverride Schema for an environment override — value only, no type/description.
 type ConfigItemOverride struct {
-	Value interface{} `json:"value"`
+	Value interface{} `json:"value,omitempty"`
 }
 
 // ConfigListResponse defines model for ConfigListResponse.
