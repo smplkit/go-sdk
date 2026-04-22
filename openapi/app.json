@@ -3452,6 +3452,114 @@
         ]
       }
     },
+    "/api/v1/emails": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Send Contact Us Email",
+        "description": "Send a contact-us message. Delivers two emails: a ticket to support with Reply-To set to the user, and an auto-response to the user. Nothing is persisted; the returned id is for correlation only.",
+        "operationId": "send_contact_email",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              },
+              "example": {
+                "data": {
+                  "type": "email",
+                  "attributes": {
+                    "topic": "billing",
+                    "body": "Hi, I have a question about the pro plan pricing..."
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Resource type mismatch",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Email send failure",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/metric_names": {
       "get": {
         "tags": [
@@ -5647,6 +5755,18 @@
           "type": "bundle"
         }
       },
+      "ContactTopic": {
+        "type": "string",
+        "enum": [
+          "billing",
+          "technical",
+          "feature_request",
+          "account",
+          "other"
+        ],
+        "title": "ContactTopic",
+        "description": "Server-validated contact-us topics. Frontend dropdown values must match."
+      },
       "Context": {
         "properties": {
           "name": {
@@ -6072,6 +6192,83 @@
           },
           "type": "subscription"
         }
+      },
+      "Email": {
+        "properties": {
+          "topic": {
+            "$ref": "#/components/schemas/ContactTopic"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Sent At",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "body"
+        ],
+        "title": "Email",
+        "description": "Contact-us email resource attributes.\n\nThis resource is a pure action \u2014 it is not persisted. The id returned in\nthe response is a per-request uuid4 for correlation only.",
+        "example": {
+          "body": "Hi, I have a question about the pro plan pricing...",
+          "topic": "billing"
+        }
+      },
+      "EmailResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "email"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "EmailResource",
+        "example": {
+          "attributes": {
+            "body": "Hi, I have a question about the pro plan pricing...",
+            "sent_at": "2026-04-22T14:32:01.234Z",
+            "topic": "billing"
+          },
+          "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+          "type": "email"
+        }
+      },
+      "EmailResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EmailResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "EmailResponse"
       },
       "Environment": {
         "properties": {

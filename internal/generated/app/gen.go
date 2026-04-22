@@ -82,6 +82,33 @@ func (e CatalogBundleResourceType) Valid() bool {
 	}
 }
 
+// Defines values for ContactTopic.
+const (
+	ContactTopicAccount        ContactTopic = "account"
+	ContactTopicBilling        ContactTopic = "billing"
+	ContactTopicFeatureRequest ContactTopic = "feature_request"
+	ContactTopicOther          ContactTopic = "other"
+	ContactTopicTechnical      ContactTopic = "technical"
+)
+
+// Valid indicates whether the value is a known member of the ContactTopic enum.
+func (e ContactTopic) Valid() bool {
+	switch e {
+	case ContactTopicAccount:
+		return true
+	case ContactTopicBilling:
+		return true
+	case ContactTopicFeatureRequest:
+		return true
+	case ContactTopicOther:
+		return true
+	case ContactTopicTechnical:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ContextResourceType.
 const (
 	ContextResourceTypeContext ContextResourceType = "context"
@@ -121,6 +148,21 @@ const (
 func (e CreateBundleDataType) Valid() bool {
 	switch e {
 	case Bundle:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailResourceType.
+const (
+	EmailResourceTypeEmail EmailResourceType = "email"
+)
+
+// Valid indicates whether the value is a known member of the EmailResourceType enum.
+func (e EmailResourceType) Valid() bool {
+	switch e {
+	case EmailResourceTypeEmail:
 		return true
 	default:
 		return false
@@ -452,6 +494,9 @@ type CatalogBundleResource struct {
 // CatalogBundleResourceType defines model for CatalogBundleResource.Type.
 type CatalogBundleResourceType string
 
+// ContactTopic Server-validated contact-us topics. Frontend dropdown values must match.
+type ContactTopic string
+
 // Context defines model for Context.
 type Context struct {
 	// Attributes Observed attributes
@@ -575,6 +620,37 @@ type CreateSubscriptionBody struct {
 type CreateSubscriptionData struct {
 	Attributes CreateSubscriptionAttributes `json:"attributes"`
 	Type       string                       `json:"type"`
+}
+
+// Email Contact-us email resource attributes.
+//
+// This resource is a pure action — it is not persisted. The id returned in
+// the response is a per-request uuid4 for correlation only.
+type Email struct {
+	Body   string     `json:"body"`
+	SentAt *time.Time `json:"sent_at,omitempty"`
+
+	// Topic Server-validated contact-us topics. Frontend dropdown values must match.
+	Topic ContactTopic `json:"topic"`
+}
+
+// EmailResource defines model for EmailResource.
+type EmailResource struct {
+	// Attributes Contact-us email resource attributes.
+	//
+	// This resource is a pure action — it is not persisted. The id returned in
+	// the response is a per-request uuid4 for correlation only.
+	Attributes Email             `json:"attributes"`
+	Id         *string           `json:"id,omitempty"`
+	Type       EmailResourceType `json:"type"`
+}
+
+// EmailResourceType defines model for EmailResource.Type.
+type EmailResourceType string
+
+// EmailResponse defines model for EmailResponse.
+type EmailResponse struct {
+	Data EmailResource `json:"data"`
 }
 
 // Environment defines model for Environment.
@@ -1040,6 +1116,9 @@ type ListContextsParams struct {
 	FilterContextType *string `form:"filter[context_type],omitempty" json:"filter[context_type],omitempty"`
 }
 
+// SendContactEmailApplicationVndAPIPlusJSONBody defines parameters for SendContactEmail.
+type SendContactEmailApplicationVndAPIPlusJSONBody map[string]interface{}
+
 // ListInvitationsParams defines parameters for ListInvitations.
 type ListInvitationsParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
@@ -1093,6 +1172,9 @@ type UpdateContextTypeApplicationVndAPIPlusJSONRequestBody = ContextTypeResponse
 
 // BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterContexts for application/vnd.api+json ContentType.
 type BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody = ContextBulkRegister
+
+// SendContactEmailApplicationVndAPIPlusJSONRequestBody defines body for SendContactEmail for application/vnd.api+json ContentType.
+type SendContactEmailApplicationVndAPIPlusJSONRequestBody SendContactEmailApplicationVndAPIPlusJSONBody
 
 // CreateEnvironmentApplicationVndAPIPlusJSONRequestBody defines body for CreateEnvironment for application/vnd.api+json ContentType.
 type CreateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentResponse
@@ -1371,6 +1453,11 @@ type ClientInterface interface {
 
 	// GetContext request
 	GetContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendContactEmailWithBody request with any body
+	SendContactEmailWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SendContactEmailWithApplicationVndAPIPlusJSONBody(ctx context.Context, body SendContactEmailApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListEnvironments request
 	ListEnvironments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1968,6 +2055,30 @@ func (c *Client) DeleteContext(ctx context.Context, id string, reqEditors ...Req
 
 func (c *Client) GetContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetContextRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SendContactEmailWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendContactEmailRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SendContactEmailWithApplicationVndAPIPlusJSONBody(ctx context.Context, body SendContactEmailApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendContactEmailRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3741,6 +3852,46 @@ func NewGetContextRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewSendContactEmailRequestWithApplicationVndAPIPlusJSONBody calls the generic SendContactEmail builder with application/vnd.api+json body
+func NewSendContactEmailRequestWithApplicationVndAPIPlusJSONBody(server string, body SendContactEmailApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSendContactEmailRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewSendContactEmailRequestWithBody generates requests for SendContactEmail with any type of body
+func NewSendContactEmailRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/emails")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListEnvironmentsRequest generates requests for ListEnvironments
 func NewListEnvironmentsRequest(server string) (*http.Request, error) {
 	var err error
@@ -5423,6 +5574,11 @@ type ClientWithResponsesInterface interface {
 	// GetContextWithResponse request
 	GetContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextResponse, error)
 
+	// SendContactEmailWithBodyWithResponse request with any body
+	SendContactEmailWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendContactEmailResponse, error)
+
+	SendContactEmailWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body SendContactEmailApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*SendContactEmailResponse, error)
+
 	// ListEnvironmentsWithResponse request
 	ListEnvironmentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error)
 
@@ -6288,6 +6444,34 @@ func (r GetContextResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetContextResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SendContactEmailResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *EmailResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON409 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+	ApplicationvndApiJSON500 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r SendContactEmailResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SendContactEmailResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -7686,6 +7870,23 @@ func (c *ClientWithResponses) GetContextWithResponse(ctx context.Context, id str
 		return nil, err
 	}
 	return ParseGetContextResponse(rsp)
+}
+
+// SendContactEmailWithBodyWithResponse request with arbitrary body returning *SendContactEmailResponse
+func (c *ClientWithResponses) SendContactEmailWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendContactEmailResponse, error) {
+	rsp, err := c.SendContactEmailWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendContactEmailResponse(rsp)
+}
+
+func (c *ClientWithResponses) SendContactEmailWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body SendContactEmailApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*SendContactEmailResponse, error) {
+	rsp, err := c.SendContactEmailWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendContactEmailResponse(rsp)
 }
 
 // ListEnvironmentsWithResponse request returning *ListEnvironmentsResponse
@@ -9618,6 +9819,74 @@ func ParseGetContextResponse(rsp *http.Response) (*GetContextResponse, error) {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSendContactEmailResponse parses an HTTP response from a SendContactEmailWithResponse call
+func ParseSendContactEmailResponse(rsp *http.Response) (*SendContactEmailResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SendContactEmailResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest EmailResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON500 = &dest
 
 	}
 
