@@ -10691,9 +10691,6 @@ func ParseGetInvoiceResponse(rsp *http.Response) (*GetInvoiceResponse, error) {
 		}
 		response.ApplicationvndApiJSON502 = &dest
 
-	case rsp.StatusCode == 200:
-		// Content-type (application/pdf) unsupported
-
 	}
 
 	return response, nil

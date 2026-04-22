@@ -5263,13 +5263,6 @@
           "200": {
             "description": "Successful response. Content type depends on the Accept header: application/vnd.api+json returns a JSON:API invoice resource; application/pdf streams the invoice PDF from Stripe.",
             "content": {
-              "application/pdf": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary",
-                  "description": "PDF file bytes"
-                }
-              },
               "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/InvoiceSingleResponse"
