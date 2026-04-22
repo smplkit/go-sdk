@@ -773,6 +773,11 @@ type InvoiceResource struct {
 // InvoiceResourceType defines model for InvoiceResource.Type.
 type InvoiceResourceType string
 
+// InvoiceSingleResponse defines model for InvoiceSingleResponse.
+type InvoiceSingleResponse struct {
+	Data InvoiceResource `json:"data"`
+}
+
 // LimitDefinition defines model for LimitDefinition.
 type LimitDefinition struct {
 	Description   string  `json:"description"`
@@ -1502,6 +1507,9 @@ type ClientInterface interface {
 
 	// ListInvoices request
 	ListInvoices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInvoice request
+	GetInvoice(ctx context.Context, invoiceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListMetricNames request
 	ListMetricNames(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2271,6 +2279,18 @@ func (c *Client) RevokeInvitation(ctx context.Context, id openapi_types.UUID, re
 
 func (c *Client) ListInvoices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListInvoicesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetInvoice(ctx context.Context, invoiceId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInvoiceRequest(c.Server, invoiceId)
 	if err != nil {
 		return nil, err
 	}
@@ -4325,6 +4345,40 @@ func NewListInvoicesRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewGetInvoiceRequest generates requests for GetInvoice
+func NewGetInvoiceRequest(server string, invoiceId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invoice_id", invoiceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/invoices/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListMetricNamesRequest generates requests for ListMetricNames
 func NewListMetricNamesRequest(server string) (*http.Request, error) {
 	var err error
@@ -5623,6 +5677,9 @@ type ClientWithResponsesInterface interface {
 	// ListInvoicesWithResponse request
 	ListInvoicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListInvoicesResponse, error)
 
+	// GetInvoiceWithResponse request
+	GetInvoiceWithResponse(ctx context.Context, invoiceId string, reqEditors ...RequestEditorFn) (*GetInvoiceResponse, error)
+
 	// ListMetricNamesWithResponse request
 	ListMetricNamesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error)
 
@@ -6783,6 +6840,34 @@ func (r ListInvoicesResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListInvoicesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetInvoiceResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *InvoiceSingleResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON406 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+	ApplicationvndApiJSON502 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInvoiceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInvoiceResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -8027,6 +8112,15 @@ func (c *ClientWithResponses) ListInvoicesWithResponse(ctx context.Context, reqE
 		return nil, err
 	}
 	return ParseListInvoicesResponse(rsp)
+}
+
+// GetInvoiceWithResponse request returning *GetInvoiceResponse
+func (c *ClientWithResponses) GetInvoiceWithResponse(ctx context.Context, invoiceId string, reqEditors ...RequestEditorFn) (*GetInvoiceResponse, error) {
+	rsp, err := c.GetInvoice(ctx, invoiceId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInvoiceResponse(rsp)
 }
 
 // ListMetricNamesWithResponse request returning *ListMetricNamesResponse
@@ -10528,6 +10622,77 @@ func ParseListInvoicesResponse(rsp *http.Response) (*ListInvoicesResponse, error
 			return nil, err
 		}
 		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetInvoiceResponse parses an HTTP response from a GetInvoiceWithResponse call
+func ParseGetInvoiceResponse(rsp *http.Response) (*GetInvoiceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInvoiceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InvoiceSingleResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 406:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON406 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 502:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON502 = &dest
+
+	case rsp.StatusCode == 200:
+		// Content-type (application/pdf) unsupported
 
 	}
 
