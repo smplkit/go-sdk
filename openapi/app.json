@@ -5235,6 +5235,111 @@
         ]
       }
     },
+    "/api/v1/invoices/{invoice_id}": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Get Invoice",
+        "description": "Return a single invoice by ID. Supports content negotiation via Accept header:\n\n- ``application/pdf`` \u2014 PDF bytes proxy-streamed from Stripe\n- ``application/vnd.api+json`` / ``application/json`` / absent \u2014 JSON:API resource\n- Any other value \u2014 406 Not Acceptable",
+        "operationId": "get_invoice",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invoice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Invoice Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response. Content type depends on the Accept header: application/vnd.api+json returns a JSON:API invoice resource; application/pdf streams the invoice PDF from Stripe.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "PDF file bytes"
+                }
+              },
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceSingleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "406": {
+            "description": "Accept header specifies an unsupported media type",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Billing provider (Stripe) unavailable",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/functions/setup_intent/actions/execute": {
       "post": {
         "tags": [
@@ -6758,6 +6863,18 @@
           "id": "in_1234567890abcdef",
           "type": "invoice"
         }
+      },
+      "InvoiceSingleResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/InvoiceResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "InvoiceSingleResponse"
       },
       "LimitDefinition": {
         "properties": {
