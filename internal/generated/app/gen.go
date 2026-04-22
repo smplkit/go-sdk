@@ -1479,6 +1479,12 @@ type ClientInterface interface {
 
 	DowngradeSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UncancelSubscription request
+	UncancelSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UndowngradeSubscription request
+	UndowngradeSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// UpgradeSubscriptionWithBody request with any body
 	UpgradeSubscriptionWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2430,6 +2436,30 @@ func (c *Client) DowngradeSubscriptionWithBody(ctx context.Context, id openapi_t
 
 func (c *Client) DowngradeSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDowngradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UncancelSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUncancelSubscriptionRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UndowngradeSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUndowngradeSubscriptionRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -4796,6 +4826,74 @@ func NewDowngradeSubscriptionRequestWithBody(server string, id openapi_types.UUI
 	return req, nil
 }
 
+// NewUncancelSubscriptionRequest generates requests for UncancelSubscription
+func NewUncancelSubscriptionRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/subscriptions/%s/actions/uncancel", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUndowngradeSubscriptionRequest generates requests for UndowngradeSubscription
+func NewUndowngradeSubscriptionRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/subscriptions/%s/actions/undowngrade", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewUpgradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic UpgradeSubscription builder with application/vnd.api+json body
 func NewUpgradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, body UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -5431,6 +5529,12 @@ type ClientWithResponsesInterface interface {
 	DowngradeSubscriptionWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DowngradeSubscriptionResponse, error)
 
 	DowngradeSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*DowngradeSubscriptionResponse, error)
+
+	// UncancelSubscriptionWithResponse request
+	UncancelSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*UncancelSubscriptionResponse, error)
+
+	// UndowngradeSubscriptionWithResponse request
+	UndowngradeSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*UndowngradeSubscriptionResponse, error)
 
 	// UpgradeSubscriptionWithBodyWithResponse request with any body
 	UpgradeSubscriptionWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpgradeSubscriptionResponse, error)
@@ -6941,6 +7045,58 @@ func (r DowngradeSubscriptionResponse) StatusCode() int {
 	return 0
 }
 
+type UncancelSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SubscriptionResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UncancelSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UncancelSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UndowngradeSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SubscriptionResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UndowngradeSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UndowngradeSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type UpgradeSubscriptionResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -7871,6 +8027,24 @@ func (c *ClientWithResponses) DowngradeSubscriptionWithApplicationVndAPIPlusJSON
 		return nil, err
 	}
 	return ParseDowngradeSubscriptionResponse(rsp)
+}
+
+// UncancelSubscriptionWithResponse request returning *UncancelSubscriptionResponse
+func (c *ClientWithResponses) UncancelSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*UncancelSubscriptionResponse, error) {
+	rsp, err := c.UncancelSubscription(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUncancelSubscriptionResponse(rsp)
+}
+
+// UndowngradeSubscriptionWithResponse request returning *UndowngradeSubscriptionResponse
+func (c *ClientWithResponses) UndowngradeSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*UndowngradeSubscriptionResponse, error) {
+	rsp, err := c.UndowngradeSubscription(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUndowngradeSubscriptionResponse(rsp)
 }
 
 // UpgradeSubscriptionWithBodyWithResponse request with arbitrary body returning *UpgradeSubscriptionResponse
@@ -10950,6 +11124,114 @@ func ParseDowngradeSubscriptionResponse(rsp *http.Response) (*DowngradeSubscript
 	}
 
 	response := &DowngradeSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SubscriptionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUncancelSubscriptionResponse parses an HTTP response from a UncancelSubscriptionWithResponse call
+func ParseUncancelSubscriptionResponse(rsp *http.Response) (*UncancelSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UncancelSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SubscriptionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUndowngradeSubscriptionResponse parses an HTTP response from a UndowngradeSubscriptionWithResponse call
+func ParseUndowngradeSubscriptionResponse(rsp *http.Response) (*UndowngradeSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UndowngradeSubscriptionResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
