@@ -3926,6 +3926,45 @@
               "nullable": true,
               "title": "Filter[Email]"
             }
+          },
+          {
+            "name": "filter[search]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "description": "Case-insensitive substring match against display_name and email. If the value is a valid UUID, also matches user id exactly.",
+              "title": "Filter[Search]"
+            },
+            "description": "Case-insensitive substring match against display_name and email. If the value is a valid UUID, also matches user id exactly."
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "1-based page number",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number"
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Page[Size]"
+            },
+            "description": "Items per page"
           }
         ],
         "responses": {
@@ -7599,6 +7638,38 @@
         ],
         "title": "OidcProvider"
       },
+      "PageMeta": {
+        "properties": {
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "description": "Page size used for this response"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number",
+            "description": "1-based page number returned"
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items",
+            "description": "Total number of matching items across all pages"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages",
+            "description": "Total number of pages at the current page size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "size",
+          "number",
+          "total_items",
+          "total_pages"
+        ],
+        "title": "PageMeta"
+      },
       "PaymentMethod": {
         "properties": {
           "brand": {
@@ -8369,6 +8440,18 @@
           "role": "OWNER"
         }
       },
+      "UserListMeta": {
+        "properties": {
+          "page": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page"
+        ],
+        "title": "UserListMeta"
+      },
       "UserListResponse": {
         "properties": {
           "data": {
@@ -8377,6 +8460,10 @@
             },
             "type": "array",
             "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/UserListMeta",
+            "nullable": true
           }
         },
         "type": "object",
