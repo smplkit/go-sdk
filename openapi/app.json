@@ -478,7 +478,7 @@
           "Users"
         ],
         "summary": "Get Current User",
-        "description": "Return the currently authenticated user.",
+        "description": "Return the currently authenticated user. ``role`` and ``account`` are populated when the user has a membership; both are null when the caller is authenticated but has no account yet \u2014 e.g. a returning user who has just accepted an invitation email.",
         "operationId": "get_current_user",
         "responses": {
           "200": {
@@ -3144,7 +3144,7 @@
           "Invitations"
         ],
         "summary": "List Invitations",
-        "description": "List all invitations for the authenticated account.",
+        "description": "List invitations. Authenticated admins list invitations for their own account and may narrow by status. Unauthenticated callers must pass ``filter[token]`` to look up a specific invitation by its token \u2014 used to render the invitation preview before sign-in. The token-filter path always returns an array of 0 or 1 elements.",
         "operationId": "list_invitations",
         "security": [
           {
@@ -3160,6 +3160,16 @@
               "type": "string",
               "nullable": true,
               "title": "Filter[Status]"
+            }
+          },
+          {
+            "name": "filter[token]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "Filter[Token]"
             }
           }
         ],
@@ -6930,6 +6940,24 @@
             "type": "string",
             "nullable": true,
             "title": "Invited By",
+            "readOnly": true
+          },
+          "account_name": {
+            "type": "string",
+            "nullable": true,
+            "title": "Account Name",
+            "readOnly": true
+          },
+          "inviter_display_name": {
+            "type": "string",
+            "nullable": true,
+            "title": "Inviter Display Name",
+            "readOnly": true
+          },
+          "token": {
+            "type": "string",
+            "nullable": true,
+            "title": "Token",
             "readOnly": true
           },
           "expires_at": {

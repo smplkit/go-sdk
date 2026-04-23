@@ -726,13 +726,16 @@ type ErrorResponse struct {
 
 // Invitation defines model for Invitation.
 type Invitation struct {
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-	Email     *string    `json:"email,omitempty"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	InvitedBy *string    `json:"invited_by,omitempty"`
-	Role      *string    `json:"role,omitempty"`
-	Status    *string    `json:"status,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	AccountName        *string    `json:"account_name,omitempty"`
+	CreatedAt          *time.Time `json:"created_at,omitempty"`
+	Email              *string    `json:"email,omitempty"`
+	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	InvitedBy          *string    `json:"invited_by,omitempty"`
+	InviterDisplayName *string    `json:"inviter_display_name,omitempty"`
+	Role               *string    `json:"role,omitempty"`
+	Status             *string    `json:"status,omitempty"`
+	Token              *string    `json:"token,omitempty"`
+	UpdatedAt          *time.Time `json:"updated_at,omitempty"`
 }
 
 // InvitationAcceptRequest defines model for InvitationAcceptRequest.
@@ -1152,6 +1155,7 @@ type SendContactEmailApplicationVndAPIPlusJSONBody map[string]interface{}
 // ListInvitationsParams defines parameters for ListInvitations.
 type ListInvitationsParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
+	FilterToken  *string `form:"filter[token],omitempty" json:"filter[token],omitempty"`
 }
 
 // ListMetricRollupsParams defines parameters for ListMetricRollups.
@@ -4248,6 +4252,22 @@ func NewListInvitationsRequest(server string, params *ListInvitationsParams) (*h
 		if params.FilterStatus != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[status]", *params.FilterStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FilterToken != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[token]", *params.FilterToken, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
