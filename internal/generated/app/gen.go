@@ -37,6 +37,21 @@ func (e AccountResourceType) Valid() bool {
 	}
 }
 
+// Defines values for AddPaymentMethodDataType.
+const (
+	AddPaymentMethodDataTypePaymentMethod AddPaymentMethodDataType = "payment_method"
+)
+
+// Valid indicates whether the value is a known member of the AddPaymentMethodDataType enum.
+func (e AddPaymentMethodDataType) Valid() bool {
+	switch e {
+	case AddPaymentMethodDataTypePaymentMethod:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApiKeyResourceType.
 const (
 	ApiKeyResourceTypeApiKey ApiKeyResourceType = "api_key"
@@ -322,21 +337,6 @@ func (e ServiceResourceType) Valid() bool {
 	}
 }
 
-// Defines values for SetDefaultPaymentMethodDataType.
-const (
-	SetDefaultPaymentMethodDataTypePaymentMethod SetDefaultPaymentMethodDataType = "payment_method"
-)
-
-// Valid indicates whether the value is a known member of the SetDefaultPaymentMethodDataType enum.
-func (e SetDefaultPaymentMethodDataType) Valid() bool {
-	switch e {
-	case SetDefaultPaymentMethodDataTypePaymentMethod:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SetupIntentResourceType.
 const (
 	SetupIntent SetupIntentResourceType = "setup_intent"
@@ -407,6 +407,35 @@ type AccountResourceType string
 type AccountResponse struct {
 	Data AccountResource `json:"data"`
 }
+
+// AddPaymentMethodAttributes Attributes for POST /api/v1/payment_methods.
+//
+// Distinct from “PaymentMethod“ because this shape takes the Stripe
+// “pm_...“ ID at registration time; the persistent resource does not
+// expose that ID.
+type AddPaymentMethodAttributes struct {
+	Default               *bool  `json:"default,omitempty"`
+	StripePaymentMethodId string `json:"stripe_payment_method_id"`
+}
+
+// AddPaymentMethodBody defines model for AddPaymentMethodBody.
+type AddPaymentMethodBody struct {
+	Data AddPaymentMethodData `json:"data"`
+}
+
+// AddPaymentMethodData defines model for AddPaymentMethodData.
+type AddPaymentMethodData struct {
+	// Attributes Attributes for POST /api/v1/payment_methods.
+	//
+	// Distinct from ``PaymentMethod`` because this shape takes the Stripe
+	// ``pm_...`` ID at registration time; the persistent resource does not
+	// expose that ID.
+	Attributes AddPaymentMethodAttributes `json:"attributes"`
+	Type       AddPaymentMethodDataType   `json:"type"`
+}
+
+// AddPaymentMethodDataType defines model for AddPaymentMethodData.Type.
+type AddPaymentMethodDataType string
 
 // ApiKey defines model for ApiKey.
 type ApiKey struct {
@@ -586,8 +615,8 @@ type ContextTypeResponse struct {
 
 // CreateBundleAttributes defines model for CreateBundleAttributes.
 type CreateBundleAttributes struct {
-	Bundle        string `json:"bundle"`
-	PaymentMethod string `json:"payment_method"`
+	Bundle        string  `json:"bundle"`
+	PaymentMethod *string `json:"payment_method,omitempty"`
 }
 
 // CreateBundleBody defines model for CreateBundleBody.
@@ -606,9 +635,9 @@ type CreateBundleDataType string
 
 // CreateSubscriptionAttributes defines model for CreateSubscriptionAttributes.
 type CreateSubscriptionAttributes struct {
-	PaymentMethodId string `json:"payment_method_id"`
-	Plan            string `json:"plan"`
-	Product         string `json:"product"`
+	PaymentMethod *string `json:"payment_method,omitempty"`
+	Plan          string  `json:"plan"`
+	Product       string  `json:"product"`
 }
 
 // CreateSubscriptionBody defines model for CreateSubscriptionBody.
@@ -871,13 +900,19 @@ type MetricRollupResourceType string
 // OidcProvider defines model for OidcProvider.
 type OidcProvider string
 
-// PaymentMethodAttributes defines model for PaymentMethodAttributes.
-type PaymentMethodAttributes struct {
-	Brand     string `json:"brand"`
-	ExpMonth  int    `json:"exp_month"`
-	ExpYear   int    `json:"exp_year"`
-	IsDefault bool   `json:"is_default"`
-	Last4     string `json:"last4"`
+// PaymentMethod Attributes for a saved card payment method.
+//
+// “default“ is the API-facing name; the underlying column is “is_default“
+// per ADR-013 (reserved-word exception) and ADR-014 (unprefixed API fields).
+type PaymentMethod struct {
+	BillingDetails *map[string]interface{} `json:"billing_details,omitempty"`
+	Brand          *string                 `json:"brand,omitempty"`
+	CreatedAt      *time.Time              `json:"created_at,omitempty"`
+	Default        *bool                   `json:"default,omitempty"`
+	ExpMonth       *int                    `json:"exp_month,omitempty"`
+	ExpYear        *int                    `json:"exp_year,omitempty"`
+	Last4          *string                 `json:"last4,omitempty"`
+	UpdatedAt      *time.Time              `json:"updated_at,omitempty"`
 }
 
 // PaymentMethodListResponse defines model for PaymentMethodListResponse.
@@ -887,13 +922,22 @@ type PaymentMethodListResponse struct {
 
 // PaymentMethodResource defines model for PaymentMethodResource.
 type PaymentMethodResource struct {
-	Attributes PaymentMethodAttributes   `json:"attributes"`
+	// Attributes Attributes for a saved card payment method.
+	//
+	// ``default`` is the API-facing name; the underlying column is ``is_default``
+	// per ADR-013 (reserved-word exception) and ADR-014 (unprefixed API fields).
+	Attributes PaymentMethod             `json:"attributes"`
 	Id         *string                   `json:"id,omitempty"`
 	Type       PaymentMethodResourceType `json:"type"`
 }
 
 // PaymentMethodResourceType defines model for PaymentMethodResource.Type.
 type PaymentMethodResourceType string
+
+// PaymentMethodResponse defines model for PaymentMethodResponse.
+type PaymentMethodResponse struct {
+	Data PaymentMethodResource `json:"data"`
+}
 
 // Plan defines model for Plan.
 type Plan struct {
@@ -983,25 +1027,6 @@ type ServiceResourceType string
 // ServiceResponse defines model for ServiceResponse.
 type ServiceResponse struct {
 	Data ServiceResource `json:"data"`
-}
-
-// SetDefaultPaymentMethodAttributes defines model for SetDefaultPaymentMethodAttributes.
-type SetDefaultPaymentMethodAttributes struct {
-	PaymentMethodId string `json:"payment_method_id"`
-}
-
-// SetDefaultPaymentMethodData defines model for SetDefaultPaymentMethodData.
-type SetDefaultPaymentMethodData struct {
-	Attributes SetDefaultPaymentMethodAttributes `json:"attributes"`
-	Type       SetDefaultPaymentMethodDataType   `json:"type"`
-}
-
-// SetDefaultPaymentMethodDataType defines model for SetDefaultPaymentMethodData.Type.
-type SetDefaultPaymentMethodDataType string
-
-// SetDefaultPaymentMethodRequest defines model for SetDefaultPaymentMethodRequest.
-type SetDefaultPaymentMethodRequest struct {
-	Data SetDefaultPaymentMethodData `json:"data"`
 }
 
 // SetupIntentAttributes defines model for SetupIntentAttributes.
@@ -1196,8 +1221,11 @@ type AcceptInvitationApplicationVndAPIPlusJSONRequestBody = InvitationAcceptRequ
 // BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody defines body for BulkIngestMetrics for application/vnd.api+json ContentType.
 type BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody = MetricBulkRequest
 
-// SetDefaultPaymentMethodApplicationVndAPIPlusJSONRequestBody defines body for SetDefaultPaymentMethod for application/vnd.api+json ContentType.
-type SetDefaultPaymentMethodApplicationVndAPIPlusJSONRequestBody = SetDefaultPaymentMethodRequest
+// CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody defines body for CreatePaymentMethod for application/vnd.api+json ContentType.
+type CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody = AddPaymentMethodBody
+
+// UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody defines body for UpdatePaymentMethod for application/vnd.api+json ContentType.
+type UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody = PaymentMethodResponse
 
 // CreateServiceApplicationVndAPIPlusJSONRequestBody defines body for CreateService for application/vnd.api+json ContentType.
 type CreateServiceApplicationVndAPIPlusJSONRequestBody = ServiceResponse
@@ -1528,10 +1556,24 @@ type ClientInterface interface {
 	// ListPaymentMethods request
 	ListPaymentMethods(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetDefaultPaymentMethodWithBody request with any body
-	SetDefaultPaymentMethodWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// CreatePaymentMethodWithBody request with any body
+	CreatePaymentMethodWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	SetDefaultPaymentMethodWithApplicationVndAPIPlusJSONBody(ctx context.Context, body SetDefaultPaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreatePaymentMethodWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeletePaymentMethod request
+	DeletePaymentMethod(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetPaymentMethod request
+	GetPaymentMethod(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdatePaymentMethodWithBody request with any body
+	UpdatePaymentMethodWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdatePaymentMethodWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetDefaultPaymentMethod request
+	SetDefaultPaymentMethod(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPlans request
 	ListPlans(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2373,8 +2415,8 @@ func (c *Client) ListPaymentMethods(ctx context.Context, reqEditors ...RequestEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) SetDefaultPaymentMethodWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSetDefaultPaymentMethodRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreatePaymentMethodWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePaymentMethodRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2385,8 +2427,68 @@ func (c *Client) SetDefaultPaymentMethodWithBody(ctx context.Context, contentTyp
 	return c.Client.Do(req)
 }
 
-func (c *Client) SetDefaultPaymentMethodWithApplicationVndAPIPlusJSONBody(ctx context.Context, body SetDefaultPaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSetDefaultPaymentMethodRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+func (c *Client) CreatePaymentMethodWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePaymentMethodRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeletePaymentMethod(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeletePaymentMethodRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetPaymentMethod(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPaymentMethodRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdatePaymentMethodWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePaymentMethodRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdatePaymentMethodWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePaymentMethodRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetDefaultPaymentMethod(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetDefaultPaymentMethodRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -4607,19 +4709,19 @@ func NewListPaymentMethodsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewSetDefaultPaymentMethodRequestWithApplicationVndAPIPlusJSONBody calls the generic SetDefaultPaymentMethod builder with application/vnd.api+json body
-func NewSetDefaultPaymentMethodRequestWithApplicationVndAPIPlusJSONBody(server string, body SetDefaultPaymentMethodApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+// NewCreatePaymentMethodRequestWithApplicationVndAPIPlusJSONBody calls the generic CreatePaymentMethod builder with application/vnd.api+json body
+func NewCreatePaymentMethodRequestWithApplicationVndAPIPlusJSONBody(server string, body CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewSetDefaultPaymentMethodRequestWithBody(server, "application/vnd.api+json", bodyReader)
+	return NewCreatePaymentMethodRequestWithBody(server, "application/vnd.api+json", bodyReader)
 }
 
-// NewSetDefaultPaymentMethodRequestWithBody generates requests for SetDefaultPaymentMethod with any type of body
-func NewSetDefaultPaymentMethodRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewCreatePaymentMethodRequestWithBody generates requests for CreatePaymentMethod with any type of body
+func NewCreatePaymentMethodRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4643,6 +4745,155 @@ func NewSetDefaultPaymentMethodRequestWithBody(server string, contentType string
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeletePaymentMethodRequest generates requests for DeletePaymentMethod
+func NewDeletePaymentMethodRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/payment_methods/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetPaymentMethodRequest generates requests for GetPaymentMethod
+func NewGetPaymentMethodRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/payment_methods/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdatePaymentMethodRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdatePaymentMethod builder with application/vnd.api+json body
+func NewUpdatePaymentMethodRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, body UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdatePaymentMethodRequestWithBody(server, id, "application/vnd.api+json", bodyReader)
+}
+
+// NewUpdatePaymentMethodRequestWithBody generates requests for UpdatePaymentMethod with any type of body
+func NewUpdatePaymentMethodRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/payment_methods/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSetDefaultPaymentMethodRequest generates requests for SetDefaultPaymentMethod
+func NewSetDefaultPaymentMethodRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/payment_methods/%s/actions/set_default", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -5697,10 +5948,24 @@ type ClientWithResponsesInterface interface {
 	// ListPaymentMethodsWithResponse request
 	ListPaymentMethodsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPaymentMethodsResponse, error)
 
-	// SetDefaultPaymentMethodWithBodyWithResponse request with any body
-	SetDefaultPaymentMethodWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetDefaultPaymentMethodResponse, error)
+	// CreatePaymentMethodWithBodyWithResponse request with any body
+	CreatePaymentMethodWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePaymentMethodResponse, error)
 
-	SetDefaultPaymentMethodWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body SetDefaultPaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*SetDefaultPaymentMethodResponse, error)
+	CreatePaymentMethodWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePaymentMethodResponse, error)
+
+	// DeletePaymentMethodWithResponse request
+	DeletePaymentMethodWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeletePaymentMethodResponse, error)
+
+	// GetPaymentMethodWithResponse request
+	GetPaymentMethodWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetPaymentMethodResponse, error)
+
+	// UpdatePaymentMethodWithBodyWithResponse request with any body
+	UpdatePaymentMethodWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePaymentMethodResponse, error)
+
+	UpdatePaymentMethodWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePaymentMethodResponse, error)
+
+	// SetDefaultPaymentMethodWithResponse request
+	SetDefaultPaymentMethodWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*SetDefaultPaymentMethodResponse, error)
 
 	// ListPlansWithResponse request
 	ListPlansWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPlansResponse, error)
@@ -7003,10 +7268,113 @@ func (r ListPaymentMethodsResponse) StatusCode() int {
 	return 0
 }
 
+type CreatePaymentMethodResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *PaymentMethodResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePaymentMethodResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePaymentMethodResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeletePaymentMethodResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DeletePaymentMethodResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeletePaymentMethodResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetPaymentMethodResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *PaymentMethodResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPaymentMethodResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPaymentMethodResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdatePaymentMethodResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *PaymentMethodResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdatePaymentMethodResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdatePaymentMethodResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type SetDefaultPaymentMethodResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *PaymentMethodListResponse
+	ApplicationvndApiJSON200 *PaymentMethodResponse
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -8176,17 +8544,61 @@ func (c *ClientWithResponses) ListPaymentMethodsWithResponse(ctx context.Context
 	return ParseListPaymentMethodsResponse(rsp)
 }
 
-// SetDefaultPaymentMethodWithBodyWithResponse request with arbitrary body returning *SetDefaultPaymentMethodResponse
-func (c *ClientWithResponses) SetDefaultPaymentMethodWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetDefaultPaymentMethodResponse, error) {
-	rsp, err := c.SetDefaultPaymentMethodWithBody(ctx, contentType, body, reqEditors...)
+// CreatePaymentMethodWithBodyWithResponse request with arbitrary body returning *CreatePaymentMethodResponse
+func (c *ClientWithResponses) CreatePaymentMethodWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePaymentMethodResponse, error) {
+	rsp, err := c.CreatePaymentMethodWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSetDefaultPaymentMethodResponse(rsp)
+	return ParseCreatePaymentMethodResponse(rsp)
 }
 
-func (c *ClientWithResponses) SetDefaultPaymentMethodWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body SetDefaultPaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*SetDefaultPaymentMethodResponse, error) {
-	rsp, err := c.SetDefaultPaymentMethodWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreatePaymentMethodWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePaymentMethodResponse, error) {
+	rsp, err := c.CreatePaymentMethodWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePaymentMethodResponse(rsp)
+}
+
+// DeletePaymentMethodWithResponse request returning *DeletePaymentMethodResponse
+func (c *ClientWithResponses) DeletePaymentMethodWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeletePaymentMethodResponse, error) {
+	rsp, err := c.DeletePaymentMethod(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeletePaymentMethodResponse(rsp)
+}
+
+// GetPaymentMethodWithResponse request returning *GetPaymentMethodResponse
+func (c *ClientWithResponses) GetPaymentMethodWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetPaymentMethodResponse, error) {
+	rsp, err := c.GetPaymentMethod(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPaymentMethodResponse(rsp)
+}
+
+// UpdatePaymentMethodWithBodyWithResponse request with arbitrary body returning *UpdatePaymentMethodResponse
+func (c *ClientWithResponses) UpdatePaymentMethodWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePaymentMethodResponse, error) {
+	rsp, err := c.UpdatePaymentMethodWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePaymentMethodResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdatePaymentMethodWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePaymentMethodResponse, error) {
+	rsp, err := c.UpdatePaymentMethodWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePaymentMethodResponse(rsp)
+}
+
+// SetDefaultPaymentMethodWithResponse request returning *SetDefaultPaymentMethodResponse
+func (c *ClientWithResponses) SetDefaultPaymentMethodWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*SetDefaultPaymentMethodResponse, error) {
+	rsp, err := c.SetDefaultPaymentMethod(ctx, id, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10959,6 +11371,215 @@ func ParseListPaymentMethodsResponse(rsp *http.Response) (*ListPaymentMethodsRes
 	return response, nil
 }
 
+// ParseCreatePaymentMethodResponse parses an HTTP response from a CreatePaymentMethodWithResponse call
+func ParseCreatePaymentMethodResponse(rsp *http.Response) (*CreatePaymentMethodResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePaymentMethodResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest PaymentMethodResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeletePaymentMethodResponse parses an HTTP response from a DeletePaymentMethodWithResponse call
+func ParseDeletePaymentMethodResponse(rsp *http.Response) (*DeletePaymentMethodResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeletePaymentMethodResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPaymentMethodResponse parses an HTTP response from a GetPaymentMethodWithResponse call
+func ParseGetPaymentMethodResponse(rsp *http.Response) (*GetPaymentMethodResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPaymentMethodResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PaymentMethodResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdatePaymentMethodResponse parses an HTTP response from a UpdatePaymentMethodWithResponse call
+func ParseUpdatePaymentMethodResponse(rsp *http.Response) (*UpdatePaymentMethodResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdatePaymentMethodResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PaymentMethodResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseSetDefaultPaymentMethodResponse parses an HTTP response from a SetDefaultPaymentMethodWithResponse call
 func ParseSetDefaultPaymentMethodResponse(rsp *http.Response) (*SetDefaultPaymentMethodResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -10974,7 +11595,7 @@ func ParseSetDefaultPaymentMethodResponse(rsp *http.Response) (*SetDefaultPaymen
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest PaymentMethodListResponse
+		var dest PaymentMethodResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
