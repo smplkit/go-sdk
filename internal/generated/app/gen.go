@@ -903,6 +903,21 @@ type MetricRollupResourceType string
 // OidcProvider defines model for OidcProvider.
 type OidcProvider string
 
+// PageMeta defines model for PageMeta.
+type PageMeta struct {
+	// Number 1-based page number returned
+	Number int `json:"number"`
+
+	// Size Page size used for this response
+	Size int `json:"size"`
+
+	// TotalItems Total number of matching items across all pages
+	TotalItems int `json:"total_items"`
+
+	// TotalPages Total number of pages at the current page size
+	TotalPages int `json:"total_pages"`
+}
+
 // PaymentMethod Attributes for a saved card payment method.
 //
 // “default“ is the API-facing name; the underlying column is “is_default“
@@ -1100,9 +1115,15 @@ type User struct {
 	Role *string `json:"role,omitempty"`
 }
 
+// UserListMeta defines model for UserListMeta.
+type UserListMeta struct {
+	Page PageMeta `json:"page"`
+}
+
 // UserListResponse defines model for UserListResponse.
 type UserListResponse struct {
 	Data []UserResource `json:"data"`
+	Meta *UserListMeta  `json:"meta,omitempty"`
 }
 
 // UserResource defines model for UserResource.
@@ -1175,6 +1196,15 @@ type ListMetricsParams struct {
 type ListUsersParams struct {
 	FilterAccount *string `form:"filter[account],omitempty" json:"filter[account],omitempty"`
 	FilterEmail   *string `form:"filter[email],omitempty" json:"filter[email],omitempty"`
+
+	// FilterSearch Case-insensitive substring match against display_name and email. If the value is a valid UUID, also matches user id exactly.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+
+	// PageNumber 1-based page number
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Items per page
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
 }
 
 // UpdateAccountApplicationVndAPIPlusJSONRequestBody defines body for UpdateAccount for application/vnd.api+json ContentType.
@@ -5458,6 +5488,54 @@ func NewListUsersRequest(server string, params *ListUsersParams) (*http.Request,
 		if params.FilterEmail != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[email]", *params.FilterEmail, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
