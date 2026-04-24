@@ -208,14 +208,68 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 		ws := c.client.ensureWS()
 		c.wsManager = ws
 		ws.on("config_changed", c.handleConfigChanged)
-		ws.on("config_deleted", c.handleConfigChanged)
+		ws.on("config_deleted", c.handleConfigDeleted)
+		ws.on("configs_changed", c.handleConfigsChanged)
 	})
 	return c.initErr
 }
 
 func (c *ConfigClient) handleConfigChanged(data map[string]interface{}) {
-	configID, _ := data["id"].(string)
-	debug.Debug("websocket", "config event received, id=%q", configID)
+	configKey, _ := data["id"].(string)
+	debug.Debug("websocket", "config_changed event received, key=%q", configKey)
+
+	ctx := context.Background()
+	environment := c.client.environment
+
+	if c.configCache == nil {
+		c.configCache = make(map[string]map[string]interface{})
+	}
+
+	// Snapshot pre-state for this config.
+	oldResolved := c.configCache[configKey]
+
+	// Scoped fetch: fetch the chain for this single config key and resolve.
+	chain, err := c.fetchChain(ctx, configKey)
+	if err != nil {
+		return
+	}
+	newResolved := resolveChain(chain, environment)
+
+	// Only update and fire if content changed.
+	if reflect.DeepEqual(oldResolved, newResolved) {
+		return
+	}
+
+	oldCache := map[string]map[string]interface{}{configKey: oldResolved}
+	newCache := map[string]map[string]interface{}{configKey: newResolved}
+
+	c.configCache[configKey] = newResolved
+	c.diffAndFire(oldCache, newCache, "websocket")
+}
+
+func (c *ConfigClient) handleConfigDeleted(data map[string]interface{}) {
+	configKey, _ := data["id"].(string)
+	debug.Debug("websocket", "config_deleted event received, key=%q", configKey)
+
+	if c.configCache == nil {
+		return
+	}
+
+	oldResolved, existed := c.configCache[configKey]
+	if !existed {
+		return
+	}
+
+	delete(c.configCache, configKey)
+
+	// Fire listeners with old value → nil to signal removal.
+	oldCache := map[string]map[string]interface{}{configKey: oldResolved}
+	newCache := map[string]map[string]interface{}{configKey: {}}
+	c.diffAndFire(oldCache, newCache, "websocket")
+}
+
+func (c *ConfigClient) handleConfigsChanged(_ map[string]interface{}) {
+	debug.Debug("websocket", "configs_changed event received")
 	_ = c.Refresh(context.Background())
 }
 

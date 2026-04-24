@@ -269,6 +269,56 @@ func parseContextTypeRaw(raw json.RawMessage) (*ContextType, error) {
 	}, nil
 }
 
+// fetchSingleFlag fetches a single flag by key and returns it as a plain dict.
+func (c *FlagsClient) fetchSingleFlag(ctx context.Context, key string) (map[string]interface{}, error) {
+	resp, err := c.generated.GetFlag(ctx, key)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genflags.FlagResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+
+	r := result.Data
+	attrs := r.Attributes
+	id := ""
+	if r.Id != nil {
+		id = *r.Id
+	}
+
+	var values interface{}
+	if attrs.Values != nil {
+		v := make([]interface{}, len(*attrs.Values))
+		for i, fv := range *attrs.Values {
+			v[i] = map[string]interface{}{"name": fv.Name, "value": fv.Value}
+		}
+		values = v
+	}
+
+	return map[string]interface{}{
+		"id":           id,
+		"name":         attrs.Name,
+		"type":         attrs.Type,
+		"default":      attrs.Default,
+		"values":       values,
+		"description":  attrs.Description,
+		"environments": extractFlagEnvironments(attrs.Environments),
+	}, nil
+}
+
 // fetchAllFlags fetches all flags and returns them as plain dicts keyed by flag ID.
 func (c *FlagsClient) fetchAllFlags(ctx context.Context) (map[string]map[string]interface{}, error) {
 	flags, err := c.fetchFlagsList(ctx)

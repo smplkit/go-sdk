@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1057,7 +1058,8 @@ func TestConfigEnsureInit_RegistersWSListeners(t *testing.T) {
 // --- handleConfigChanged ---
 
 func TestHandleConfigChanged(t *testing.T) {
-	configJSON := `{"data":[{"id":"svc","type":"config","attributes":{"id":"svc","name":"Svc","items":{},"environments":{}}}]}`
+	// handleConfigChanged now calls fetchChain → GetConfig (single-item response).
+	configJSON := `{"data":{"id":"svc","type":"config","attributes":{"id":"svc","name":"Svc","items":{},"environments":{}}}}`
 	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
@@ -1066,4 +1068,111 @@ func TestHandleConfigChanged(t *testing.T) {
 
 	// Should not panic.
 	cc.handleConfigChanged(map[string]interface{}{"id": "svc"})
+}
+
+// ========== New WS event handler tests for config ==========
+
+// TestHandleConfigChanged_ScopedFetch_ContentChanged verifies that config_changed
+// calls GetConfig (scoped) and fires listeners when content differs.
+func TestHandleConfigChanged_ScopedFetch_ContentChanged(t *testing.T) {
+	var fetchCount int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs/svc", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&fetchCount, 1)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"svc","type":"config","attributes":{"id":"svc","name":"Svc","items":{"log_level":{"value":"INFO","type":"JSON"}},"environments":{}}}}`))
+	})
+	cc := newTestConfigClient(t, http.HandlerFunc(mux.ServeHTTP))
+
+	// Pre-populate cache with different content.
+	cc.configCache = map[string]map[string]interface{}{
+		"svc": {"log_level": "DEBUG"},
+	}
+	cc.client.environment = "production"
+
+	var fired bool
+	cc.OnChange(func(evt *ConfigChangeEvent) {
+		fired = true
+	})
+
+	cc.handleConfigChanged(map[string]interface{}{"id": "svc"})
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call GetConfig once")
+	assert.True(t, fired, "listener should fire when content changed")
+}
+
+// TestHandleConfigChanged_ScopedFetch_ContentUnchanged verifies that config_changed
+// does NOT fire listeners when resolution is identical.
+// We pre-warm the cache using fetchChain so the stored map matches exactly.
+func TestHandleConfigChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs/svc", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"svc","type":"config","attributes":{"id":"svc","name":"Svc","items":{"log_level":{"value":"DEBUG","type":"JSON"}},"environments":{}}}}`))
+	})
+	cc := newTestConfigClient(t, http.HandlerFunc(mux.ServeHTTP))
+	cc.client.environment = "production"
+	cc.configCache = make(map[string]map[string]interface{})
+
+	// Pre-warm: fetch once so the cache has the exact map representation.
+	chain, err := cc.fetchChain(context.Background(), "svc")
+	require.NoError(t, err)
+	cc.configCache["svc"] = resolveChain(chain, "production")
+
+	var called bool
+	cc.OnChange(func(evt *ConfigChangeEvent) { called = true })
+
+	// Second handleConfigChanged call: server returns same data → no diff.
+	cc.handleConfigChanged(map[string]interface{}{"id": "svc"})
+
+	assert.False(t, called, "listener should NOT fire when content is unchanged")
+}
+
+// TestHandleConfigDeleted_RemovesFromCache_FiresListener verifies that config_deleted
+// removes the config from cache and fires listeners without an HTTP fetch.
+func TestHandleConfigDeleted_RemovesFromCache_FiresListener(t *testing.T) {
+	var fetchCount int32
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&fetchCount, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	cc.configCache = map[string]map[string]interface{}{
+		"svc": {"log_level": "INFO"},
+	}
+	cc.client.environment = "production"
+
+	var evt *ConfigChangeEvent
+	cc.OnChange(func(e *ConfigChangeEvent) { evt = e })
+
+	cc.handleConfigDeleted(map[string]interface{}{"id": "svc"})
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&fetchCount), "config_deleted must NOT make HTTP fetch")
+	_, stillInCache := cc.configCache["svc"]
+	assert.False(t, stillInCache, "config should be removed from cache")
+	assert.NotNil(t, evt, "listener should fire on deletion")
+}
+
+// TestHandleConfigsChanged_FullFetch verifies that configs_changed triggers
+// a full Refresh.
+func TestHandleConfigsChanged_FullFetch(t *testing.T) {
+	var listFetched bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, r *http.Request) {
+		listFetched = true
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	cc := newTestConfigClient(t, http.HandlerFunc(mux.ServeHTTP))
+	cc.configCache = map[string]map[string]interface{}{}
+	cc.client.environment = "production"
+	// Mark init done so Refresh succeeds.
+	cc.initOnce.Do(func() {})
+
+	cc.handleConfigsChanged(map[string]interface{}{})
+
+	assert.True(t, listFetched, "configs_changed should trigger a full list fetch")
 }

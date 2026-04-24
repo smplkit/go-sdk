@@ -21,6 +21,8 @@ type FlagChangeEvent struct {
 	ID string
 	// Source is "websocket" or "manual".
 	Source string
+	// Deleted is true when the flag was deleted server-side.
+	Deleted bool
 }
 
 // FlagStats holds runtime statistics for the flags subsystem.
@@ -428,6 +430,7 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 		rt.wsManager = ws
 		ws.on("flag_changed", rt.handleFlagChanged)
 		ws.on("flag_deleted", rt.handleFlagDeleted)
+		ws.on("flags_changed", rt.handleFlagsChanged)
 
 		// Start periodic flag registration flush.
 		rt.flagFlushDone = make(chan struct{})
@@ -446,6 +449,7 @@ func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 	if rt.wsManager != nil {
 		rt.wsManager.off("flag_changed", rt.handleFlagChanged)
 		rt.wsManager.off("flag_deleted", rt.handleFlagDeleted)
+		rt.wsManager.off("flags_changed", rt.handleFlagsChanged)
 		rt.wsManager = nil
 	}
 
@@ -766,23 +770,89 @@ func (rt *FlagsRuntime) runPeriodicFlagFlush(done chan struct{}, interval time.D
 }
 
 func (rt *FlagsRuntime) handleFlagChanged(data map[string]interface{}) {
-	flagID, _ := data["id"].(string)
-	debug.Debug("websocket", "flag event received, id=%q", flagID)
-	store, err := rt.flagsClient.fetchAllFlags(context.Background())
+	flagKey, _ := data["id"].(string)
+	debug.Debug("websocket", "flag_changed event received, key=%q", flagKey)
+
+	ctx := context.Background()
+
+	// Snapshot pre-state.
+	rt.mu.RLock()
+	pre, hadPre := rt.flagStore[flagKey]
+	rt.mu.RUnlock()
+
+	// Scoped single fetch.
+	updated, err := rt.flagsClient.fetchSingleFlag(ctx, flagKey)
 	if err != nil {
 		return
 	}
 
 	rt.mu.Lock()
-	rt.flagStore = store
+	rt.flagStore[flagKey] = updated
 	rt.mu.Unlock()
 
 	rt.cache.clear()
-	rt.fireChangeListeners(flagID, "websocket")
+
+	// Only fire if content changed.
+	if !hadPre || !mapsEqual(pre, updated) {
+		rt.fireChangeListeners(flagKey, "websocket")
+	}
 }
 
 func (rt *FlagsRuntime) handleFlagDeleted(data map[string]interface{}) {
-	rt.handleFlagChanged(data)
+	flagKey, _ := data["id"].(string)
+	debug.Debug("websocket", "flag_deleted event received, key=%q", flagKey)
+
+	rt.mu.Lock()
+	delete(rt.flagStore, flagKey)
+	rt.mu.Unlock()
+
+	rt.cache.clear()
+	rt.fireDeletedListener(flagKey, "websocket")
+}
+
+func (rt *FlagsRuntime) handleFlagsChanged(_ map[string]interface{}) {
+	debug.Debug("websocket", "flags_changed event received")
+
+	ctx := context.Background()
+	newStore, err := rt.flagsClient.fetchAllFlags(ctx)
+	if err != nil {
+		return
+	}
+
+	rt.mu.Lock()
+	oldStore := rt.flagStore
+	rt.flagStore = newStore
+	rt.mu.Unlock()
+
+	rt.cache.clear()
+
+	// Collect changed keys.
+	allKeys := make(map[string]struct{})
+	for k := range oldStore {
+		allKeys[k] = struct{}{}
+	}
+	for k := range newStore {
+		allKeys[k] = struct{}{}
+	}
+
+	var changedKeys []string
+	for k := range allKeys {
+		if !mapsEqual(oldStore[k], newStore[k]) {
+			changedKeys = append(changedKeys, k)
+		}
+	}
+
+	if len(changedKeys) == 0 {
+		return
+	}
+
+	// Fire global listener once.
+	rt.fireGlobalOnce("websocket")
+
+	// Fire per-key listeners only for changed keys.
+	for _, k := range changedKeys {
+		rt.fireKeyListenersOnly(k, "websocket")
+	}
 }
 
 func (rt *FlagsRuntime) fireChangeListeners(flagKey string, source string) {
@@ -790,7 +860,79 @@ func (rt *FlagsRuntime) fireChangeListeners(flagKey string, source string) {
 		return
 	}
 	event := &FlagChangeEvent{ID: flagKey, Source: source}
+	rt.dispatchEvent(event, flagKey)
+}
 
+// fireGlobalOnce fires the global listener exactly once with no specific key.
+// Used by plural events (flags_changed) after per-key listeners have been dispatched.
+func (rt *FlagsRuntime) fireGlobalOnce(source string) {
+	event := &FlagChangeEvent{Source: source}
+
+	rt.listenersMu.Lock()
+	globals := make([]func(*FlagChangeEvent), len(rt.globalListeners))
+	copy(globals, rt.globalListeners)
+	rt.listenersMu.Unlock()
+
+	for _, cb := range globals {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("smplkit: exception in global flags on_change listener: %v", r)
+				}
+			}()
+			cb(event)
+		}()
+	}
+}
+
+// fireKeyListenersOnly fires only key-scoped and handle listeners for the given key.
+func (rt *FlagsRuntime) fireKeyListenersOnly(flagKey string, source string) {
+	if flagKey == "" {
+		return
+	}
+	event := &FlagChangeEvent{ID: flagKey, Source: source}
+
+	rt.listenersMu.Lock()
+	keyListeners := make([]func(*FlagChangeEvent), len(rt.keyListeners[flagKey]))
+	copy(keyListeners, rt.keyListeners[flagKey])
+	rt.listenersMu.Unlock()
+
+	for _, cb := range keyListeners {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("smplkit: exception in key-scoped flags on_change listener: %v", r)
+				}
+			}()
+			cb(event)
+		}()
+	}
+
+	rt.handlesMu.RLock()
+	handle, ok := rt.handles[flagKey]
+	rt.handlesMu.RUnlock()
+
+	if ok {
+		handle.listenersMu.Lock()
+		listeners := make([]func(*FlagChangeEvent), len(handle.listeners))
+		copy(listeners, handle.listeners)
+		handle.listenersMu.Unlock()
+
+		for _, cb := range listeners {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("smplkit: exception in flag-specific on_change listener: %v", r)
+					}
+				}()
+				cb(event)
+			}()
+		}
+	}
+}
+
+// dispatchEvent sends an event to global listeners and key-scoped listeners.
+func (rt *FlagsRuntime) dispatchEvent(event *FlagChangeEvent, flagKey string) {
 	rt.listenersMu.Lock()
 	globals := make([]func(*FlagChangeEvent), len(rt.globalListeners))
 	copy(globals, rt.globalListeners)
@@ -841,6 +983,14 @@ func (rt *FlagsRuntime) fireChangeListeners(flagKey string, source string) {
 			}()
 		}
 	}
+}
+
+func (rt *FlagsRuntime) fireDeletedListener(flagKey string, source string) {
+	if flagKey == "" {
+		return
+	}
+	event := &FlagChangeEvent{ID: flagKey, Source: source, Deleted: true}
+	rt.dispatchEvent(event, flagKey)
 }
 
 func (rt *FlagsRuntime) fireChangeListenersAll(source string) {

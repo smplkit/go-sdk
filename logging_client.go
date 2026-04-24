@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"reflect"
 	"sync"
 	"time"
 
@@ -68,9 +69,10 @@ func (c *LoggingClient) close() {
 	debug.Debug("lifecycle", "LoggingClient.close() called")
 	if c.wsManager != nil {
 		c.wsManager.off("logger_changed", c.handleLoggerChanged)
-		c.wsManager.off("logger_deleted", c.handleLoggerChanged)
+		c.wsManager.off("logger_deleted", c.handleLoggerDeleted)
 		c.wsManager.off("group_changed", c.handleGroupChanged)
-		c.wsManager.off("group_deleted", c.handleGroupChanged)
+		c.wsManager.off("group_deleted", c.handleGroupDeleted)
+		c.wsManager.off("loggers_changed", c.handleLoggersChanged)
 	}
 	for _, adapter := range c.adapters {
 		adapter.UninstallHook()
@@ -142,9 +144,10 @@ func (c *LoggingClient) Start(ctx context.Context) error {
 		ws := c.client.ensureWS()
 		c.wsManager = ws
 		ws.on("logger_changed", c.handleLoggerChanged)
-		ws.on("logger_deleted", c.handleLoggerChanged)
+		ws.on("logger_deleted", c.handleLoggerDeleted)
 		ws.on("group_changed", c.handleGroupChanged)
-		ws.on("group_deleted", c.handleGroupChanged)
+		ws.on("group_deleted", c.handleGroupDeleted)
+		ws.on("loggers_changed", c.handleLoggersChanged)
 
 		// Start periodic flush timer.
 		c.flushDone = make(chan struct{})
@@ -470,6 +473,81 @@ func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
 	}
 }
 
+func (c *LoggingClient) fetchSingleLogger(ctx context.Context, key string) (map[string]interface{}, error) {
+	resp, err := c.generated.GetLogger(ctx, key)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genlogging.LoggerResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+
+	l := resourceToLogger(result.Data, c)
+	entry := map[string]interface{}{
+		"id":           l.ID,
+		"name":         l.Name,
+		"managed":      l.Managed,
+		"environments": l.Environments,
+	}
+	if l.Level != nil {
+		entry["level"] = string(*l.Level)
+	}
+	if l.Group != nil {
+		entry["group"] = *l.Group
+	}
+	return entry, nil
+}
+
+func (c *LoggingClient) fetchSingleGroup(ctx context.Context, key string) (map[string]interface{}, error) {
+	resp, err := c.generated.GetLogGroup(ctx, key)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &SmplConnectionError{
+			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genlogging.LogGroupResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+
+	g := resourceToLogGroup(result.Data, c)
+	entry := map[string]interface{}{
+		"id":           g.ID,
+		"name":         g.Name,
+		"environments": g.Environments,
+	}
+	if g.Level != nil {
+		entry["level"] = string(*g.Level)
+	}
+	if g.Group != nil {
+		entry["group"] = *g.Group
+	}
+	return entry, nil
+}
+
 func (c *LoggingClient) fetchAndCache(ctx context.Context) error {
 	loggers, err := c.Management().List(ctx)
 	if err != nil {
@@ -575,22 +653,134 @@ func (c *LoggingClient) periodicFlush(done chan struct{}) {
 }
 
 func (c *LoggingClient) handleLoggerChanged(data map[string]interface{}) {
-	loggerID, _ := data["id"].(string)
-	debug.Debug("websocket", "logger event received, id=%q", loggerID)
-	if err := c.fetchAndCache(context.Background()); err != nil {
+	loggerKey, _ := data["id"].(string)
+	debug.Debug("websocket", "logger_changed event received, key=%q", loggerKey)
+
+	ctx := context.Background()
+
+	// Snapshot pre-state.
+	prePre := c.loggersCache[loggerKey]
+
+	// Scoped single fetch.
+	updated, err := c.fetchSingleLogger(ctx, loggerKey)
+	if err != nil {
 		return
 	}
+
+	if reflect.DeepEqual(prePre, updated) {
+		return
+	}
+
+	c.loggersCache[loggerKey] = updated
 	c.applyLevels()
-	c.fireChangeListeners(loggerID, "websocket")
+	c.fireChangeListeners(loggerKey, "websocket")
+}
+
+func (c *LoggingClient) handleLoggerDeleted(data map[string]interface{}) {
+	loggerKey, _ := data["id"].(string)
+	debug.Debug("websocket", "logger_deleted event received, key=%q", loggerKey)
+
+	delete(c.loggersCache, loggerKey)
+	c.applyLevels()
+	c.fireDeletedListeners(loggerKey, "websocket")
 }
 
 func (c *LoggingClient) handleGroupChanged(data map[string]interface{}) {
-	groupID, _ := data["id"].(string)
-	debug.Debug("websocket", "group event received, id=%q", groupID)
-	if err := c.fetchAndCache(context.Background()); err != nil {
+	groupKey, _ := data["id"].(string)
+	debug.Debug("websocket", "group_changed event received, key=%q", groupKey)
+
+	ctx := context.Background()
+
+	// Snapshot pre-state.
+	pre := c.groupsCache[groupKey]
+
+	// Scoped single fetch.
+	updated, err := c.fetchSingleGroup(ctx, groupKey)
+	if err != nil {
+		return
+	}
+
+	if reflect.DeepEqual(pre, updated) {
+		return
+	}
+
+	c.groupsCache[groupKey] = updated
+	c.applyLevels()
+}
+
+func (c *LoggingClient) handleGroupDeleted(data map[string]interface{}) {
+	groupKey, _ := data["id"].(string)
+	debug.Debug("websocket", "group_deleted event received, key=%q", groupKey)
+
+	delete(c.groupsCache, groupKey)
+	c.applyLevels()
+}
+
+func (c *LoggingClient) handleLoggersChanged(_ map[string]interface{}) {
+	debug.Debug("websocket", "loggers_changed event received")
+
+	ctx := context.Background()
+
+	oldLoggersCache := c.loggersCache
+	oldGroupsCache := c.groupsCache
+
+	if err := c.fetchAndCache(ctx); err != nil {
 		return
 	}
 	c.applyLevels()
+
+	// Fire listeners for changed loggers.
+	allKeys := make(map[string]struct{})
+	for k := range oldLoggersCache {
+		allKeys[k] = struct{}{}
+	}
+	for k := range c.loggersCache {
+		allKeys[k] = struct{}{}
+	}
+	_ = oldGroupsCache // groups don't have key-scoped listeners
+
+	for k := range allKeys {
+		if !reflect.DeepEqual(oldLoggersCache[k], c.loggersCache[k]) {
+			c.fireChangeListeners(k, "websocket")
+		}
+	}
+}
+
+func (c *LoggingClient) fireDeletedListeners(loggerID string, source string) {
+	if loggerID == "" {
+		return
+	}
+
+	event := &LoggerChangeEvent{ID: loggerID, Deleted: true, Source: source}
+
+	c.listenersMu.Lock()
+	globals := make([]func(*LoggerChangeEvent), len(c.globalListeners))
+	copy(globals, c.globalListeners)
+	keyListeners := make([]func(*LoggerChangeEvent), len(c.keyListeners[loggerID]))
+	copy(keyListeners, c.keyListeners[loggerID])
+	c.listenersMu.Unlock()
+
+	for _, cb := range globals {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("smplkit: exception in global logging on_change listener: %v", r)
+				}
+			}()
+			cb(event)
+		}()
+	}
+
+	for _, cb := range keyListeners {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("smplkit: exception in key-scoped logging on_change listener: %v", r)
+				}
+			}()
+			cb(event)
+		}()
+	}
 }
 
 func (c *LoggingClient) fireChangeListeners(loggerID string, source string) { //nolint:unparam // "refresh" source will be used when Refresh() is implemented

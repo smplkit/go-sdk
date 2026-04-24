@@ -1844,7 +1844,8 @@ func TestFlagsRuntime_HandleFlagChanged(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{
+		// Scoped fetch returns single-item response.
+		_, _ = w.Write([]byte(`{"data":{
 			"id": "feature-x",
 			"type": "flag",
 			"attributes": {
@@ -1855,7 +1856,7 @@ func TestFlagsRuntime_HandleFlagChanged(t *testing.T) {
 				"values": [],
 				"environments": {}
 			}
-		}]}`))
+		}}`))
 	}))
 
 	var changeEvent *FlagChangeEvent
@@ -1871,14 +1872,21 @@ func TestFlagsRuntime_HandleFlagChanged(t *testing.T) {
 }
 
 func TestFlagsRuntime_HandleFlagDeleted(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	}))
+	// handleFlagDeleted removes from store and fires listener — no HTTP fetch needed.
+	fc, _ := newTestFlagsClient(t, nil)
+	fc.runtime.flagStore["deleted-flag"] = map[string]interface{}{"id": "deleted-flag"}
+
+	var evt *FlagChangeEvent
+	fc.OnChange(func(e *FlagChangeEvent) {
+		evt = e
+	})
 
 	fc.runtime.handleFlagDeleted(map[string]interface{}{"id": "deleted-flag"})
-	// handleFlagDeleted delegates to handleFlagChanged
+
+	assert.Nil(t, fc.runtime.flagStore["deleted-flag"], "flag should be removed from store")
+	require.NotNil(t, evt)
+	assert.True(t, evt.Deleted)
+	assert.Equal(t, "deleted-flag", evt.ID)
 }
 
 // --- FlagsClient flushContexts with actual data ---
@@ -3320,12 +3328,13 @@ func TestFireChangeListeners_Flags_EmptyKey(t *testing.T) {
 // ---------- handleFlagChanged ----------
 
 func TestHandleFlagChanged(t *testing.T) {
-	flagsJSON := `{"data":[{"id":"my-flag","type":"flag","attributes":{"id":"my-flag","name":"My Flag","type":"BOOLEAN","default":true,"values":[],"environments":{}}}]}`
+	// Single-item response for scoped fetch.
+	flagJSON := `{"data":{"id":"my-flag","type":"flag","attributes":{"id":"my-flag","name":"My Flag","type":"BOOLEAN","default":true,"values":[],"environments":{}}}}`
 
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(flagsJSON))
+		_, _ = w.Write([]byte(flagJSON))
 	}))
 	rt := fc.runtime
 
@@ -3819,4 +3828,172 @@ func TestDisconnect_StopsFlagFlushGoroutine(t *testing.T) {
 	assert.Nil(t, rt.flagFlushDone, "flagFlushDone should be nil after disconnect")
 
 	fc.client.stopWS()
+}
+
+// ========== New WS event handler tests ==========
+
+// TestHandleFlagChanged_ScopedFetch_ContentChanged verifies that flag_changed
+// calls GetFlag (scoped) and fires listeners when content differs.
+func TestHandleFlagChanged_ScopedFetch_ContentChanged(t *testing.T) {
+	var fetchCount int32
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/flags/my-flag") {
+			atomic.AddInt32(&fetchCount, 1)
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":{"id":"my-flag","type":"flag","attributes":{"id":"my-flag","name":"My Flag","type":"BOOLEAN","default":true,"values":[],"environments":{}}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	rt := fc.runtime
+
+	// Pre-populate store with different content so diff fires.
+	rt.flagStore["my-flag"] = map[string]interface{}{"id": "my-flag", "default": false}
+
+	var received *FlagChangeEvent
+	rt.OnChange(func(evt *FlagChangeEvent) {
+		received = evt
+	})
+
+	rt.handleFlagChanged(map[string]interface{}{"id": "my-flag"})
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call GetFlag once")
+	require.NotNil(t, received, "listener should fire when content changed")
+	assert.Equal(t, "my-flag", received.ID)
+	assert.Equal(t, "websocket", received.Source)
+	assert.False(t, received.Deleted)
+}
+
+// TestHandleFlagChanged_ScopedFetch_ContentUnchanged verifies that flag_changed
+// does NOT fire listeners when content is the same.
+// We pre-warm the store by calling fetchSingleFlag first, so the stored map
+// matches exactly what the server returns on the second call.
+func TestHandleFlagChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/flags/my-flag") {
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":{"id":"my-flag","type":"flag","attributes":{"id":"my-flag","name":"My Flag","type":"BOOLEAN","default":false,"environments":{}}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	rt := fc.runtime
+
+	// Pre-warm: fetch once to get the exact map representation.
+	preFetched, err := fc.fetchSingleFlag(context.Background(), "my-flag")
+	require.NoError(t, err)
+	rt.flagStore["my-flag"] = preFetched
+
+	var called bool
+	rt.OnChange(func(evt *FlagChangeEvent) {
+		called = true
+	})
+
+	// Second handleFlagChanged call: server returns same data → no diff.
+	rt.handleFlagChanged(map[string]interface{}{"id": "my-flag"})
+
+	assert.False(t, called, "listener should NOT fire when content is unchanged")
+}
+
+// TestHandleFlagDeleted_StoreRemoval_ListenerFired verifies that flag_deleted
+// removes the flag from the store and fires the listener with Deleted=true,
+// without making any HTTP fetch.
+func TestHandleFlagDeleted_StoreRemoval_ListenerFired(t *testing.T) {
+	var fetchCount int32
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&fetchCount, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	rt := fc.runtime
+
+	rt.flagStore["gone-flag"] = map[string]interface{}{"id": "gone-flag", "default": true}
+
+	var evt *FlagChangeEvent
+	rt.OnChange(func(e *FlagChangeEvent) {
+		evt = e
+	})
+
+	rt.handleFlagDeleted(map[string]interface{}{"id": "gone-flag"})
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&fetchCount), "flag_deleted must NOT make HTTP fetch")
+	_, stillInStore := rt.flagStore["gone-flag"]
+	assert.False(t, stillInStore, "flag should be removed from store")
+	require.NotNil(t, evt)
+	assert.True(t, evt.Deleted, "event should have Deleted=true")
+	assert.Equal(t, "gone-flag", evt.ID)
+}
+
+// TestHandleFlagsChanged_FullFetch_DiffFiring verifies that flags_changed
+// fetches the full list, diffs, fires global listener once, and fires per-key
+// listeners for each changed key.
+func TestHandleFlagsChanged_FullFetch_DiffFiring(t *testing.T) {
+	var fetchCount int32
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/flags" {
+			atomic.AddInt32(&fetchCount, 1)
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":[
+				{"id":"flag-a","type":"flag","attributes":{"id":"flag-a","name":"Flag A","type":"BOOLEAN","default":true,"environments":{}}},
+				{"id":"flag-b","type":"flag","attributes":{"id":"flag-b","name":"Flag B","type":"BOOLEAN","default":false,"environments":{}}}
+			]}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	rt := fc.runtime
+
+	// Pre-populate with different content for flag-a; flag-b is new.
+	rt.flagStore["flag-a"] = map[string]interface{}{"id": "flag-a", "default": false}
+
+	var globalFired int
+	var keyAFired, keyBFired bool
+
+	rt.OnChange(func(evt *FlagChangeEvent) {
+		globalFired++
+	})
+	rt.OnChangeKey("flag-a", func(evt *FlagChangeEvent) {
+		keyAFired = true
+	})
+	rt.OnChangeKey("flag-b", func(evt *FlagChangeEvent) {
+		keyBFired = true
+	})
+
+	rt.handleFlagsChanged(map[string]interface{}{})
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call list once")
+	assert.Equal(t, 1, globalFired, "global listener should fire exactly once")
+	assert.True(t, keyAFired, "flag-a key listener should fire (content changed)")
+	assert.True(t, keyBFired, "flag-b key listener should fire (new flag)")
+}
+
+// TestHandleFlagsChanged_NoChange_NoListeners verifies that flags_changed
+// does NOT fire any listeners when the full fetch returns identical content.
+// We pre-warm the store using fetchAllFlags so the stored map matches exactly.
+func TestHandleFlagsChanged_NoChange_NoListeners(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/flags" {
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":[{"id":"flag-a","type":"flag","attributes":{"id":"flag-a","name":"Flag A","type":"BOOLEAN","default":false,"environments":{}}}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	rt := fc.runtime
+
+	// Pre-warm: fetch once so the store has the exact map representation.
+	preFetched, err := fc.fetchAllFlags(context.Background())
+	require.NoError(t, err)
+	rt.flagStore = preFetched
+
+	var called bool
+	rt.OnChange(func(evt *FlagChangeEvent) { called = true })
+
+	// Second handleFlagsChanged call: server returns same data → no diff.
+	rt.handleFlagsChanged(map[string]interface{}{})
+
+	assert.False(t, called, "no listener should fire when content is unchanged")
 }

@@ -230,4 +230,6 @@ type LoggerChangeEvent struct {
 	Level *LogLevel
 	// Source is "websocket" or "refresh".
 	Source string
+	// Deleted is true when the logger was deleted server-side.
+	Deleted bool
 }

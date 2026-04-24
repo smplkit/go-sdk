@@ -1,9 +1,16 @@
 package smplkit
 
 import (
+	"reflect"
 	"strings"
 	"unicode"
 )
+
+// mapsEqual reports whether two map[string]interface{} are deeply equal.
+// Returns true if both are nil or both have identical structure.
+func mapsEqual(a, b map[string]interface{}) bool {
+	return reflect.DeepEqual(a, b)
+}
 
 // keyToDisplayName converts a kebab-case or snake_case key to a title-case
 // display name. For example: "checkout-v2" → "Checkout V2",

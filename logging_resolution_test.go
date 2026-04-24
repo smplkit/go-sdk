@@ -1490,13 +1490,10 @@ func TestPeriodicFlush_TickerFires(t *testing.T) {
 
 func TestHandleLoggerChanged(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+	// Scoped single fetch for logger_changed event.
+	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}]}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}}`))
 	})
 
 	lc := newTestLoggingClient(t, mux)
@@ -1531,13 +1528,10 @@ func TestHandleLoggerChanged_FetchError(t *testing.T) {
 
 func TestHandleLoggerChanged_UsesIDField(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+	// Scoped single fetch uses the id field from the event payload.
+	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}]}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}}`))
 	})
 
 	lc := newTestLoggingClient(t, mux)
@@ -1558,13 +1552,10 @@ func TestHandleLoggerChanged_UsesIDField(t *testing.T) {
 
 func TestHandleGroupChanged(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+	// Scoped single fetch for group_changed event.
+	mux.HandleFunc("/api/v1/log_groups/sql", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}]}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}]}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}}`))
 	})
 
 	lc := newTestLoggingClient(t, mux)
@@ -1838,4 +1829,178 @@ func TestLoggingStart_RegistersWSListeners(t *testing.T) {
 	assert.True(t, hasGroupDeleted, "group_deleted should be registered in WS listener map")
 
 	lc.close()
+}
+
+// ========== New WS event handler tests for logging ==========
+
+// TestHandleLoggerChanged_ScopedFetch_ContentChanged verifies that logger_changed
+// calls GetLogger (scoped) and fires listeners when content differs.
+func TestHandleLoggerChanged_ScopedFetch_ContentChanged(t *testing.T) {
+	var fetchCount int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/com.acme.app", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&fetchCount, 1)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"com.acme.app","level":"WARN","managed":true,"environments":{}}}}`))
+	})
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
+
+	// Pre-populate cache with different content.
+	lc.loggersCache["com.acme.app"] = map[string]interface{}{
+		"id":      "com.acme.app",
+		"name":    "com.acme.app",
+		"level":   "DEBUG",
+		"managed": true,
+	}
+
+	var received *LoggerChangeEvent
+	lc.OnChange(func(evt *LoggerChangeEvent) {
+		received = evt
+	})
+
+	lc.handleLoggerChanged(map[string]interface{}{"id": "com.acme.app"})
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call GetLogger once")
+	require.NotNil(t, received, "listener should fire when content changed")
+	assert.Equal(t, "com.acme.app", received.ID)
+	assert.False(t, received.Deleted)
+}
+
+// TestHandleLoggerChanged_ScopedFetch_ContentUnchanged verifies that logger_changed
+// does NOT fire listeners when content is identical.
+// We pre-warm the cache using fetchSingleLogger so the stored map matches exactly.
+func TestHandleLoggerChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/com.acme.app", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"com.acme.app","level":"DEBUG","managed":true,"environments":{}}}}`))
+	})
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
+
+	// Pre-warm: fetch once so the cache has the exact map representation.
+	preFetched, err := lc.fetchSingleLogger(context.Background(), "com.acme.app")
+	require.NoError(t, err)
+	lc.loggersCache["com.acme.app"] = preFetched
+
+	var called bool
+	lc.OnChange(func(evt *LoggerChangeEvent) { called = true })
+
+	// Second handleLoggerChanged call: server returns same data → no diff.
+	lc.handleLoggerChanged(map[string]interface{}{"id": "com.acme.app"})
+
+	assert.False(t, called, "listener should NOT fire when content is unchanged")
+}
+
+// TestHandleLoggerDeleted_StoreRemoval_ListenerFired verifies that logger_deleted
+// removes the logger from cache and fires the listener with Deleted=true,
+// without making any HTTP fetch.
+func TestHandleLoggerDeleted_StoreRemoval_ListenerFired(t *testing.T) {
+	var fetchCount int32
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&fetchCount, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	lc.loggersCache["gone.logger"] = map[string]interface{}{
+		"id":   "gone.logger",
+		"name": "gone.logger",
+	}
+
+	var evt *LoggerChangeEvent
+	lc.OnChange(func(e *LoggerChangeEvent) { evt = e })
+
+	lc.handleLoggerDeleted(map[string]interface{}{"id": "gone.logger"})
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&fetchCount), "logger_deleted must NOT make HTTP fetch")
+	_, stillInCache := lc.loggersCache["gone.logger"]
+	assert.False(t, stillInCache, "logger should be removed from cache")
+	require.NotNil(t, evt)
+	assert.True(t, evt.Deleted, "event should have Deleted=true")
+	assert.Equal(t, "gone.logger", evt.ID)
+}
+
+// TestHandleGroupChanged_ScopedFetch verifies that group_changed calls
+// GetLogGroup (scoped) without a full refetch.
+func TestHandleGroupChanged_ScopedFetch(t *testing.T) {
+	var fetchCount int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/log_groups/sql", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&fetchCount, 1)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}}`))
+	})
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
+
+	// Different content to trigger update.
+	lc.groupsCache["sql"] = map[string]interface{}{"id": "sql", "level": "DEBUG"}
+
+	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call GetLogGroup once")
+}
+
+// TestHandleGroupDeleted_RemovesFromCache verifies that group_deleted
+// removes the group from cache without an HTTP fetch.
+func TestHandleGroupDeleted_RemovesFromCache(t *testing.T) {
+	var fetchCount int32
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&fetchCount, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	lc.groupsCache["sql"] = map[string]interface{}{"id": "sql"}
+
+	lc.handleGroupDeleted(map[string]interface{}{"id": "sql"})
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&fetchCount), "group_deleted must NOT make HTTP fetch")
+	_, stillInCache := lc.groupsCache["sql"]
+	assert.False(t, stillInCache, "group should be removed from cache")
+}
+
+// TestHandleLoggersChanged_FullFetch_DiffFiring verifies that loggers_changed
+// fetches full list, diffs, and fires listeners for changed loggers.
+func TestHandleLoggersChanged_FullFetch_DiffFiring(t *testing.T) {
+	var listFetched int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&listFetched, 1)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[
+			{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"com.acme.app","level":"WARN","managed":true,"environments":{}}},
+			{"id":"com.acme.db","type":"logger","attributes":{"id":"com.acme.db","name":"com.acme.db","level":"DEBUG","managed":true,"environments":{}}}
+		]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
+
+	// Pre-populate with different content for com.acme.app; com.acme.db is new.
+	lc.loggersCache["com.acme.app"] = map[string]interface{}{
+		"id": "com.acme.app", "level": "DEBUG",
+	}
+
+	var globalFired int
+	var keyAppFired, keyDBFired bool
+
+	lc.OnChange(func(evt *LoggerChangeEvent) { globalFired++ })
+	lc.OnChangeKey("com.acme.app", func(evt *LoggerChangeEvent) { keyAppFired = true })
+	lc.OnChangeKey("com.acme.db", func(evt *LoggerChangeEvent) { keyDBFired = true })
+
+	lc.handleLoggersChanged(map[string]interface{}{})
+
+	assert.GreaterOrEqual(t, atomic.LoadInt32(&listFetched), int32(1), "should call list fetch")
+	assert.True(t, keyAppFired, "com.acme.app listener should fire (content changed)")
+	assert.True(t, keyDBFired, "com.acme.db listener should fire (new logger)")
+	_ = globalFired // global fires once per changed key in this path
 }
