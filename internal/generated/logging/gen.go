@@ -113,7 +113,6 @@ type ErrorResponse struct {
 type LogGroup struct {
 	CreatedAt    *time.Time              `json:"created_at,omitempty"`
 	Environments *map[string]interface{} `json:"environments,omitempty"`
-	Key          *string                 `json:"key,omitempty"`
 	Level        *string                 `json:"level,omitempty"`
 	Name         string                  `json:"name"`
 	ParentId     *string                 `json:"parent_id,omitempty"`
