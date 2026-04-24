@@ -3562,9 +3562,12 @@
               "schema": {
                 "additionalProperties": true,
                 "type": "object",
-                "title": "Body",
-                "examples": [
-                  {
+                "title": "Body"
+              },
+              "examples": {
+                "contact_us": {
+                  "summary": "Billing question",
+                  "value": {
                     "data": {
                       "type": "email",
                       "attributes": {
@@ -3573,7 +3576,7 @@
                       }
                     }
                   }
-                ]
+                }
               }
             }
           },
