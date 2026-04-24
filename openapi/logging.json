@@ -1208,18 +1208,6 @@
             "maxLength": 255,
             "title": "Name"
           },
-          "key": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 255
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Key"
-          },
           "level": {
             "anyOf": [
               {
@@ -1294,7 +1282,6 @@
               "level": "ERROR"
             }
           },
-          "key": "database-loggers",
           "level": "WARN",
           "name": "Database Loggers",
           "updated_at": "2026-04-01T10:00:00Z"
@@ -1352,7 +1339,6 @@
                 "level": "ERROR"
               }
             },
-            "key": "database-loggers",
             "level": "WARN",
             "name": "Database Loggers",
             "updated_at": "2026-04-01T10:00:00Z"
