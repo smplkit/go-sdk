@@ -216,6 +216,12 @@ type ListAllFlagSourcesParams struct {
 type ListFlagsParams struct {
 	FilterType    *string `form:"filter[type],omitempty" json:"filter[type],omitempty"`
 	FilterManaged *bool   `form:"filter[managed],omitempty" json:"filter[managed],omitempty"`
+
+	// FilterReferencesContext Return flags whose rules reference this context instance. Format: {type}:{key}
+	FilterReferencesContext *string `form:"filter[references_context],omitempty" json:"filter[references_context],omitempty"`
+
+	// FilterReferencesContextType Return flags whose rules reference any attribute of the given context type.
+	FilterReferencesContextType *string `form:"filter[references_context_type],omitempty" json:"filter[references_context_type],omitempty"`
 }
 
 // ListFlagsUsageParams defines parameters for ListFlagsUsage.
@@ -589,6 +595,38 @@ func NewListFlagsRequest(server string, params *ListFlagsParams) (*http.Request,
 		if params.FilterManaged != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[managed]", *params.FilterManaged, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FilterReferencesContext != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[references_context]", *params.FilterReferencesContext, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FilterReferencesContextType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[references_context_type]", *params.FilterReferencesContextType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
