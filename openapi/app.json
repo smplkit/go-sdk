@@ -2618,6 +2618,92 @@
           }
         }
       },
+      "put": {
+        "tags": [
+          "Contexts"
+        ],
+        "summary": "Update Context",
+        "description": "Update a context instance by composite id (type:key). Only the human-readable display name is mutable through this endpoint; context_type and observed attributes are written by the SDK ingestion path.",
+        "operationId": "update_context",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContextResponse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "Contexts"
@@ -3476,16 +3562,18 @@
               "schema": {
                 "additionalProperties": true,
                 "type": "object",
-                "title": "Body"
-              },
-              "example": {
-                "data": {
-                  "type": "email",
-                  "attributes": {
-                    "topic": "billing",
-                    "body": "Hi, I have a question about the pro plan pricing..."
+                "title": "Body",
+                "examples": [
+                  {
+                    "data": {
+                      "type": "email",
+                      "attributes": {
+                        "topic": "billing",
+                        "body": "Hi, I have a question about the pro plan pricing..."
+                      }
+                    }
                   }
-                }
+                ]
               }
             }
           },
