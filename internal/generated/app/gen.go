@@ -1237,6 +1237,9 @@ type UpdateContextTypeApplicationVndAPIPlusJSONRequestBody = ContextTypeResponse
 // BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterContexts for application/vnd.api+json ContentType.
 type BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody = ContextBulkRegister
 
+// UpdateContextApplicationVndAPIPlusJSONRequestBody defines body for UpdateContext for application/vnd.api+json ContentType.
+type UpdateContextApplicationVndAPIPlusJSONRequestBody = ContextResponse
+
 // SendContactEmailApplicationVndAPIPlusJSONRequestBody defines body for SendContactEmail for application/vnd.api+json ContentType.
 type SendContactEmailApplicationVndAPIPlusJSONRequestBody SendContactEmailApplicationVndAPIPlusJSONBody
 
@@ -1520,6 +1523,11 @@ type ClientInterface interface {
 
 	// GetContext request
 	GetContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateContextWithBody request with any body
+	UpdateContextWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateContextWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SendContactEmailWithBody request with any body
 	SendContactEmailWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2139,6 +2147,30 @@ func (c *Client) DeleteContext(ctx context.Context, id string, reqEditors ...Req
 
 func (c *Client) GetContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetContextRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateContextWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateContextRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateContextWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateContextRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4004,6 +4036,53 @@ func NewGetContextRequest(server string, id string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewUpdateContextRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateContext builder with application/vnd.api+json body
+func NewUpdateContextRequestWithApplicationVndAPIPlusJSONBody(server string, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateContextRequestWithBody(server, id, "application/vnd.api+json", bodyReader)
+}
+
+// NewUpdateContextRequestWithBody generates requests for UpdateContext with any type of body
+func NewUpdateContextRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/contexts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -5977,6 +6056,11 @@ type ClientWithResponsesInterface interface {
 	// GetContextWithResponse request
 	GetContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetContextResponse, error)
 
+	// UpdateContextWithBodyWithResponse request with any body
+	UpdateContextWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextResponse, error)
+
+	UpdateContextWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextResponse, error)
+
 	// SendContactEmailWithBodyWithResponse request with any body
 	SendContactEmailWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendContactEmailResponse, error)
 
@@ -6864,6 +6948,32 @@ func (r GetContextResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetContextResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateContextResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ContextResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateContextResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateContextResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -8421,6 +8531,23 @@ func (c *ClientWithResponses) GetContextWithResponse(ctx context.Context, id str
 		return nil, err
 	}
 	return ParseGetContextResponse(rsp)
+}
+
+// UpdateContextWithBodyWithResponse request with arbitrary body returning *UpdateContextResponse
+func (c *ClientWithResponses) UpdateContextWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextResponse, error) {
+	rsp, err := c.UpdateContextWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateContextResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateContextWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextResponse, error) {
+	rsp, err := c.UpdateContextWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateContextResponse(rsp)
 }
 
 // SendContactEmailWithBodyWithResponse request with arbitrary body returning *SendContactEmailResponse
@@ -10384,6 +10511,60 @@ func ParseGetContextResponse(rsp *http.Response) (*GetContextResponse, error) {
 	}
 
 	response := &GetContextResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ContextResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateContextResponse parses an HTTP response from a UpdateContextWithResponse call
+func ParseUpdateContextResponse(rsp *http.Response) (*UpdateContextResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateContextResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
