@@ -3795,10 +3795,12 @@ func TestFlagsEnsureInit_RegistersWSListeners(t *testing.T) {
 	ws.listenersMu.Lock()
 	_, hasChanged := ws.listeners["flag_changed"]
 	_, hasDeleted := ws.listeners["flag_deleted"]
+	_, hasFlagsChanged := ws.listeners["flags_changed"]
 	ws.listenersMu.Unlock()
 
 	assert.True(t, hasChanged, "flag_changed should be registered in WS listener map")
 	assert.True(t, hasDeleted, "flag_deleted should be registered in WS listener map")
+	assert.True(t, hasFlagsChanged, "flags_changed should be registered in WS listener map")
 
 	rt.disconnect(context.Background())
 }

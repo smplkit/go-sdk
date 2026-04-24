@@ -1821,12 +1821,14 @@ func TestLoggingStart_RegistersWSListeners(t *testing.T) {
 	_, hasLoggerDeleted := ws.listeners["logger_deleted"]
 	_, hasGroupChanged := ws.listeners["group_changed"]
 	_, hasGroupDeleted := ws.listeners["group_deleted"]
+	_, hasLoggersChanged := ws.listeners["loggers_changed"]
 	ws.listenersMu.Unlock()
 
 	assert.True(t, hasLoggerChanged, "logger_changed should be registered in WS listener map")
 	assert.True(t, hasLoggerDeleted, "logger_deleted should be registered in WS listener map")
 	assert.True(t, hasGroupChanged, "group_changed should be registered in WS listener map")
 	assert.True(t, hasGroupDeleted, "group_deleted should be registered in WS listener map")
+	assert.True(t, hasLoggersChanged, "loggers_changed should be registered in WS listener map")
 
 	lc.close()
 }

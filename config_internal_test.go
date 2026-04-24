@@ -1049,10 +1049,12 @@ func TestConfigEnsureInit_RegistersWSListeners(t *testing.T) {
 	ws.listenersMu.Lock()
 	_, hasChanged := ws.listeners["config_changed"]
 	_, hasDeleted := ws.listeners["config_deleted"]
+	_, hasConfigsChanged := ws.listeners["configs_changed"]
 	ws.listenersMu.Unlock()
 
 	assert.True(t, hasChanged, "config_changed should be registered in WS listener map")
 	assert.True(t, hasDeleted, "config_deleted should be registered in WS listener map")
+	assert.True(t, hasConfigsChanged, "configs_changed should be registered in WS listener map")
 }
 
 // --- handleConfigChanged ---
