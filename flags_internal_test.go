@@ -3999,3 +3999,128 @@ func TestHandleFlagsChanged_NoChange_NoListeners(t *testing.T) {
 
 	assert.False(t, called, "no listener should fire when content is unchanged")
 }
+
+// ========== Coverage gap tests ==========
+
+// TestFetchSingleFlag_NetworkError covers the network error path.
+func TestFetchSingleFlag_NetworkError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &failingTransport{})
+	_, err := fc.fetchSingleFlag(context.Background(), "my-flag")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleFlag_ReadBodyError covers the read body error path.
+func TestFetchSingleFlag_ReadBodyError(t *testing.T) {
+	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
+	_, err := fc.fetchSingleFlag(context.Background(), "my-flag")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleFlag_HTTPError covers the HTTP error status path.
+func TestFetchSingleFlag_HTTPError(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	}))
+	_, err := fc.fetchSingleFlag(context.Background(), "missing-flag")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleFlag_MalformedJSON covers the JSON parse error path.
+func TestFetchSingleFlag_MalformedJSON(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not valid json`))
+	}))
+	_, err := fc.fetchSingleFlag(context.Background(), "my-flag")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleFlag_WithValues covers the attrs.Values != nil path.
+func TestFetchSingleFlag_WithValues(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"my-flag","type":"flag","attributes":{"id":"my-flag","name":"My Flag","type":"BOOLEAN","default":true,"values":[{"name":"True","value":true}],"environments":{}}}}`))
+	}))
+	result, err := fc.fetchSingleFlag(context.Background(), "my-flag")
+	require.NoError(t, err)
+	assert.NotNil(t, result["values"])
+}
+
+// TestHandleFlagsChanged_FetchError covers the early return on fetch error.
+func TestHandleFlagsChanged_FetchError(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
+	}))
+	rt := fc.runtime
+
+	var called bool
+	rt.OnChange(func(evt *FlagChangeEvent) { called = true })
+
+	rt.handleFlagsChanged(map[string]interface{}{})
+	assert.False(t, called)
+}
+
+// TestFireGlobalOnce_PanicRecovery covers the panic recovery path.
+func TestFireGlobalOnce_PanicRecovery(t *testing.T) {
+	rt := newFlagsRuntime(nil)
+	rt.OnChange(func(e *FlagChangeEvent) {
+		panic("global panic test")
+	})
+	assert.NotPanics(t, func() {
+		rt.fireGlobalOnce("test")
+	})
+}
+
+// TestFireKeyListenersOnly_EmptyKey covers the empty key early return.
+func TestFireKeyListenersOnly_EmptyKey(t *testing.T) {
+	rt := newFlagsRuntime(nil)
+	var called bool
+	rt.OnChangeKey("some-key", func(e *FlagChangeEvent) { called = true })
+	rt.fireKeyListenersOnly("", "test")
+	assert.False(t, called)
+}
+
+// TestFireKeyListenersOnly_KeyListenerPanic covers the key listener panic recovery.
+func TestFireKeyListenersOnly_KeyListenerPanic(t *testing.T) {
+	rt := newFlagsRuntime(nil)
+	rt.OnChangeKey("feature", func(e *FlagChangeEvent) {
+		panic("key listener panic")
+	})
+	assert.NotPanics(t, func() {
+		rt.fireKeyListenersOnly("feature", "test")
+	})
+}
+
+// TestFireKeyListenersOnly_WithHandle covers the flagHandle path.
+func TestFireKeyListenersOnly_WithHandle(t *testing.T) {
+	rt := newFlagsRuntime(nil)
+	handle := rt.BooleanFlag("feature", true)
+
+	var handleFired bool
+	handle.OnChange(func(e *FlagChangeEvent) { handleFired = true })
+
+	rt.fireKeyListenersOnly("feature", "websocket")
+	assert.True(t, handleFired)
+}
+
+// TestFireKeyListenersOnly_WithHandlePanic covers the handle-specific listener panic recovery.
+func TestFireKeyListenersOnly_WithHandlePanic(t *testing.T) {
+	rt := newFlagsRuntime(nil)
+	handle := rt.BooleanFlag("feature", true)
+	handle.OnChange(func(e *FlagChangeEvent) { panic("handle panic") })
+	assert.NotPanics(t, func() {
+		rt.fireKeyListenersOnly("feature", "test")
+	})
+}
+
+// TestFireDeletedListener_EmptyKey covers the empty key path.
+func TestFireDeletedListener_EmptyKey(t *testing.T) {
+	rt := newFlagsRuntime(nil)
+	var called bool
+	rt.OnChange(func(e *FlagChangeEvent) { called = true })
+	rt.fireDeletedListener("", "test")
+	assert.False(t, called)
+}

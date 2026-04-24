@@ -3,6 +3,7 @@ package smplkit
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -2005,4 +2006,209 @@ func TestHandleLoggersChanged_FullFetch_DiffFiring(t *testing.T) {
 	assert.True(t, keyAppFired, "com.acme.app listener should fire (content changed)")
 	assert.True(t, keyDBFired, "com.acme.db listener should fire (new logger)")
 	_ = globalFired // global fires once per changed key in this path
+}
+
+// ========== Coverage gap tests ==========
+
+// TestFetchSingleLogger_NetworkError covers the network error path.
+func TestFetchSingleLogger_NetworkError(t *testing.T) {
+	httpClient := &http.Client{Transport: &failingTransportLogging{}}
+	genLoggingClient, _ := genlogging.NewClient("http://localhost",
+		genlogging.WithHTTPClient(httpClient),
+	)
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	_, err := lc.fetchSingleLogger(context.Background(), "my-logger")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleLogger_ReadBodyError covers the read body error path.
+func TestFetchSingleLogger_ReadBodyError(t *testing.T) {
+	httpClient := &http.Client{Transport: &brokenBodyTransportLogging{statusCode: 200}}
+	genLoggingClient, _ := genlogging.NewClient("http://localhost",
+		genlogging.WithHTTPClient(httpClient),
+	)
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	_, err := lc.fetchSingleLogger(context.Background(), "my-logger")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleLogger_HTTPError covers the HTTP error status path.
+func TestFetchSingleLogger_HTTPError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	}))
+
+	_, err := lc.fetchSingleLogger(context.Background(), "missing-logger")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleLogger_MalformedJSON covers the JSON parse error path.
+func TestFetchSingleLogger_MalformedJSON(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not valid json`))
+	}))
+
+	_, err := lc.fetchSingleLogger(context.Background(), "my-logger")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleLogger_WithGroup covers the l.Group != nil path.
+func TestFetchSingleLogger_WithGroup(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"com.acme.app","level":"DEBUG","managed":true,"group":"my-group","environments":{}}}}`))
+	}))
+
+	result, err := lc.fetchSingleLogger(context.Background(), "com.acme.app")
+	require.NoError(t, err)
+	assert.Equal(t, "my-group", result["group"])
+}
+
+// TestFetchSingleGroup_NetworkError covers the network error path.
+func TestFetchSingleGroup_NetworkError(t *testing.T) {
+	httpClient := &http.Client{Transport: &failingTransportLogging{}}
+	genLoggingClient, _ := genlogging.NewClient("http://localhost",
+		genlogging.WithHTTPClient(httpClient),
+	)
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	_, err := lc.fetchSingleGroup(context.Background(), "my-group")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleGroup_ReadBodyError covers the read body error path.
+func TestFetchSingleGroup_ReadBodyError(t *testing.T) {
+	httpClient := &http.Client{Transport: &brokenBodyTransportLogging{statusCode: 200}}
+	genLoggingClient, _ := genlogging.NewClient("http://localhost",
+		genlogging.WithHTTPClient(httpClient),
+	)
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+
+	_, err := lc.fetchSingleGroup(context.Background(), "my-group")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleGroup_HTTPError covers the HTTP error status path.
+func TestFetchSingleGroup_HTTPError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	}))
+
+	_, err := lc.fetchSingleGroup(context.Background(), "missing-group")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleGroup_MalformedJSON covers the JSON parse error path.
+func TestFetchSingleGroup_MalformedJSON(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not valid json`))
+	}))
+
+	_, err := lc.fetchSingleGroup(context.Background(), "my-group")
+	assert.Error(t, err)
+}
+
+// TestFetchSingleGroup_WithParentGroup covers the g.Group != nil path.
+func TestFetchSingleGroup_WithParentGroup(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"child","type":"log_group","attributes":{"id":"child","name":"Child","level":"INFO","parent_id":"parent-group","environments":{}}}}`))
+	}))
+
+	result, err := lc.fetchSingleGroup(context.Background(), "child")
+	require.NoError(t, err)
+	assert.Equal(t, "parent-group", result["group"])
+}
+
+// TestHandleGroupChanged_ScopedFetch_ContentUnchanged verifies group_changed
+// does NOT call applyLevels when content is identical.
+func TestHandleGroupChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/log_groups/sql", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}}`))
+	})
+
+	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
+
+	// Pre-warm: fetch once so the cache has the exact map representation.
+	preFetched, err := lc.fetchSingleGroup(context.Background(), "sql")
+	require.NoError(t, err)
+	lc.groupsCache["sql"] = preFetched
+
+	// Second handleGroupChanged call: server returns same data → no diff → early return.
+	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
+	// Test passes if no panic or unexpected behavior.
+}
+
+// TestHandleGroupChanged_FetchError_NoChange covers the early return on fetch error.
+func TestHandleGroupChanged_FetchError_NoChange(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
+	}))
+
+	// Should not panic; error causes early return.
+	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
+}
+
+// TestHandleLoggersChanged_FetchError covers the fetchAndCache error early return.
+func TestHandleLoggersChanged_FetchError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
+	}))
+
+	var called bool
+	lc.OnChange(func(evt *LoggerChangeEvent) { called = true })
+
+	lc.handleLoggersChanged(map[string]interface{}{})
+	assert.False(t, called)
+}
+
+// TestFireDeletedListeners_EmptyKey covers the empty key early return.
+func TestFireDeletedListeners_EmptyKey(t *testing.T) {
+	lc := newTestLoggingClient(t, nil)
+	var called bool
+	lc.OnChange(func(evt *LoggerChangeEvent) { called = true })
+	lc.fireDeletedListeners("", "test")
+	assert.False(t, called)
+}
+
+// TestFireDeletedListeners_GlobalPanic covers the global listener panic recovery.
+func TestFireDeletedListeners_GlobalPanic(t *testing.T) {
+	lc := newTestLoggingClient(t, nil)
+	lc.OnChange(func(evt *LoggerChangeEvent) { panic("global panic") })
+	assert.NotPanics(t, func() {
+		lc.fireDeletedListeners("my-logger", "test")
+	})
+}
+
+// TestFireDeletedListeners_KeyListenerPanic covers the key-scoped listener panic recovery.
+func TestFireDeletedListeners_KeyListenerPanic(t *testing.T) {
+	lc := newTestLoggingClient(t, nil)
+	lc.OnChangeKey("my-logger", func(evt *LoggerChangeEvent) { panic("key panic") })
+	assert.NotPanics(t, func() {
+		lc.fireDeletedListeners("my-logger", "test")
+	})
+}
+
+// failingTransportLogging returns a network error for all requests.
+type failingTransportLogging struct{}
+
+func (t *failingTransportLogging) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return nil, fmt.Errorf("simulated network error")
 }

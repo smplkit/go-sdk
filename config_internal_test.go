@@ -1178,3 +1178,45 @@ func TestHandleConfigsChanged_FullFetch(t *testing.T) {
 
 	assert.True(t, listFetched, "configs_changed should trigger a full list fetch")
 }
+
+// ========== Coverage gap tests ==========
+
+// TestHandleConfigChanged_FetchError covers the fetchChain error early return.
+func TestHandleConfigChanged_FetchError(t *testing.T) {
+	cc := newTestConfigClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
+	}))
+	cc.configCache = make(map[string]map[string]interface{})
+	cc.client.environment = "production"
+
+	var called bool
+	cc.OnChange(func(evt *ConfigChangeEvent) { called = true })
+
+	// Should not panic; error causes early return.
+	cc.handleConfigChanged(map[string]interface{}{"id": "svc"})
+	assert.False(t, called)
+}
+
+// TestHandleConfigDeleted_NilCache covers the nil configCache early return.
+func TestHandleConfigDeleted_NilCache(t *testing.T) {
+	cc := newTestConfigClient(t, nil)
+	// configCache is nil by default.
+	assert.NotPanics(t, func() {
+		cc.handleConfigDeleted(map[string]interface{}{"id": "svc"})
+	})
+}
+
+// TestHandleConfigDeleted_KeyNotInCache covers the !existed early return.
+func TestHandleConfigDeleted_KeyNotInCache(t *testing.T) {
+	cc := newTestConfigClient(t, nil)
+	cc.configCache = map[string]map[string]interface{}{
+		"other": {"x": "y"},
+	}
+
+	var called bool
+	cc.OnChange(func(evt *ConfigChangeEvent) { called = true })
+
+	cc.handleConfigDeleted(map[string]interface{}{"id": "not-in-cache"})
+	assert.False(t, called)
+}
