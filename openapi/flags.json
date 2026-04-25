@@ -386,6 +386,43 @@
         }
       }
     },
+    "/api/v1/functions/remove_references/actions/execute": {
+      "post": {
+        "tags": [
+          "Functions"
+        ],
+        "summary": "Execute Remove References",
+        "description": "Bulk-remove context references from flag rules.\n\nTraverses every flag in the account, removes rules that reference the\nspecified context, and emits a single flags_changed event when done.",
+        "operationId": "remove_references",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveReferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveReferencesResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/usage": {
       "get": {
         "tags": [
@@ -1020,6 +1057,139 @@
           "value"
         ],
         "title": "FlagValue"
+      },
+      "ManualReviewItem": {
+        "properties": {
+          "flag": {
+            "type": "string",
+            "title": "Flag"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "rule_index": {
+            "type": "integer",
+            "title": "Rule Index"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flag",
+          "environment",
+          "rule_index",
+          "reason"
+        ],
+        "title": "ManualReviewItem"
+      },
+      "RemoveReferencesAttributes": {
+        "properties": {
+          "flags_modified": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags Modified"
+          },
+          "rules_removed": {
+            "type": "integer",
+            "title": "Rules Removed"
+          },
+          "rules_needing_manual_review": {
+            "items": {
+              "$ref": "#/components/schemas/ManualReviewItem"
+            },
+            "type": "array",
+            "title": "Rules Needing Manual Review"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flags_modified",
+          "rules_removed",
+          "rules_needing_manual_review"
+        ],
+        "title": "RemoveReferencesAttributes"
+      },
+      "RemoveReferencesRequest": {
+        "properties": {
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "context_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Type"
+          }
+        },
+        "type": "object",
+        "title": "RemoveReferencesRequest"
+      },
+      "RemoveReferencesResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RemoveReferencesResultResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "RemoveReferencesResponse"
+      },
+      "RemoveReferencesResultResource": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_references_result",
+            "title": "Type",
+            "default": "remove_references_result"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/RemoveReferencesAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attributes"
+        ],
+        "title": "RemoveReferencesResultResource",
+        "example": {
+          "attributes": {
+            "flags_modified": [
+              "checkout-v2",
+              "banner-color"
+            ],
+            "rules_needing_manual_review": [
+              {
+                "environment": "production",
+                "flag": "pricing-tier",
+                "reason": "Context reference inside an AND expression \u2014 removing would broaden the rule",
+                "rule_index": 2
+              }
+            ],
+            "rules_removed": 3
+          },
+          "type": "remove_references_result"
+        }
       },
       "UsageAttributes": {
         "properties": {
