@@ -51,6 +51,21 @@ func (e FlagSourceResourceType) Valid() bool {
 	}
 }
 
+// Defines values for RemoveReferencesResultResourceType.
+const (
+	RemoveReferencesResult RemoveReferencesResultResourceType = "remove_references_result"
+)
+
+// Valid indicates whether the value is a known member of the RemoveReferencesResultResourceType enum.
+func (e RemoveReferencesResultResourceType) Valid() bool {
+	switch e {
+	case RemoveReferencesResult:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UsageResourceType.
 const (
 	Usage UsageResourceType = "usage"
@@ -184,6 +199,41 @@ type FlagValue struct {
 	Value interface{} `json:"value"`
 }
 
+// ManualReviewItem defines model for ManualReviewItem.
+type ManualReviewItem struct {
+	Environment string `json:"environment"`
+	Flag        string `json:"flag"`
+	Reason      string `json:"reason"`
+	RuleIndex   int    `json:"rule_index"`
+}
+
+// RemoveReferencesAttributes defines model for RemoveReferencesAttributes.
+type RemoveReferencesAttributes struct {
+	FlagsModified            []string           `json:"flags_modified"`
+	RulesNeedingManualReview []ManualReviewItem `json:"rules_needing_manual_review"`
+	RulesRemoved             int                `json:"rules_removed"`
+}
+
+// RemoveReferencesRequest defines model for RemoveReferencesRequest.
+type RemoveReferencesRequest struct {
+	Context     *string `json:"context,omitempty"`
+	ContextType *string `json:"context_type,omitempty"`
+}
+
+// RemoveReferencesResultEnvelope defines model for RemoveReferencesResultEnvelope.
+type RemoveReferencesResultEnvelope struct {
+	Data RemoveReferencesResultResource `json:"data"`
+}
+
+// RemoveReferencesResultResource defines model for RemoveReferencesResultResource.
+type RemoveReferencesResultResource struct {
+	Attributes RemoveReferencesAttributes          `json:"attributes"`
+	Type       *RemoveReferencesResultResourceType `json:"type,omitempty"`
+}
+
+// RemoveReferencesResultResourceType defines model for RemoveReferencesResultResource.Type.
+type RemoveReferencesResultResourceType string
+
 // UsageAttributes defines model for UsageAttributes.
 type UsageAttributes struct {
 	LimitKey string `json:"limit_key"`
@@ -237,6 +287,9 @@ type BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody = FlagBulkRequest
 
 // UpdateFlagApplicationVndAPIPlusJSONRequestBody defines body for UpdateFlag for application/vnd.api+json ContentType.
 type UpdateFlagApplicationVndAPIPlusJSONRequestBody = FlagResponse
+
+// RemoveReferencesApplicationVndAPIPlusJSONRequestBody defines body for RemoveReferences for application/vnd.api+json ContentType.
+type RemoveReferencesApplicationVndAPIPlusJSONRequestBody = RemoveReferencesRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -340,6 +393,11 @@ type ClientInterface interface {
 
 	// ListFlagSources request
 	ListFlagSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveReferencesWithBody request with any body
+	RemoveReferencesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RemoveReferencesWithApplicationVndAPIPlusJSONBody(ctx context.Context, body RemoveReferencesApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListFlagsUsage request
 	ListFlagsUsage(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -467,6 +525,30 @@ func (c *Client) UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context
 
 func (c *Client) ListFlagSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListFlagSourcesRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RemoveReferencesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveReferencesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RemoveReferencesWithApplicationVndAPIPlusJSONBody(ctx context.Context, body RemoveReferencesApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveReferencesRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -880,6 +962,46 @@ func NewListFlagSourcesRequest(server string, id string) (*http.Request, error) 
 	return req, nil
 }
 
+// NewRemoveReferencesRequestWithApplicationVndAPIPlusJSONBody calls the generic RemoveReferences builder with application/vnd.api+json body
+func NewRemoveReferencesRequestWithApplicationVndAPIPlusJSONBody(server string, body RemoveReferencesApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRemoveReferencesRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewRemoveReferencesRequestWithBody generates requests for RemoveReferences with any type of body
+func NewRemoveReferencesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/functions/remove_references/actions/execute")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListFlagsUsageRequest generates requests for ListFlagsUsage
 func NewListFlagsUsageRequest(server string, params *ListFlagsUsageParams) (*http.Request, error) {
 	var err error
@@ -1001,6 +1123,11 @@ type ClientWithResponsesInterface interface {
 
 	// ListFlagSourcesWithResponse request
 	ListFlagSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListFlagSourcesResponse, error)
+
+	// RemoveReferencesWithBodyWithResponse request with any body
+	RemoveReferencesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RemoveReferencesResponse, error)
+
+	RemoveReferencesWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body RemoveReferencesApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*RemoveReferencesResponse, error)
 
 	// ListFlagsUsageWithResponse request
 	ListFlagsUsageWithResponse(ctx context.Context, params *ListFlagsUsageParams, reqEditors ...RequestEditorFn) (*ListFlagsUsageResponse, error)
@@ -1181,6 +1308,28 @@ func (r ListFlagSourcesResponse) StatusCode() int {
 	return 0
 }
 
+type RemoveReferencesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *RemoveReferencesResultEnvelope
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveReferencesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveReferencesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListFlagsUsageResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -1297,6 +1446,23 @@ func (c *ClientWithResponses) ListFlagSourcesWithResponse(ctx context.Context, i
 		return nil, err
 	}
 	return ParseListFlagSourcesResponse(rsp)
+}
+
+// RemoveReferencesWithBodyWithResponse request with arbitrary body returning *RemoveReferencesResponse
+func (c *ClientWithResponses) RemoveReferencesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RemoveReferencesResponse, error) {
+	rsp, err := c.RemoveReferencesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveReferencesResponse(rsp)
+}
+
+func (c *ClientWithResponses) RemoveReferencesWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body RemoveReferencesApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*RemoveReferencesResponse, error) {
+	rsp, err := c.RemoveReferencesWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveReferencesResponse(rsp)
 }
 
 // ListFlagsUsageWithResponse request returning *ListFlagsUsageResponse
@@ -1496,6 +1662,32 @@ func ParseListFlagSourcesResponse(rsp *http.Response) (*ListFlagSourcesResponse,
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest FlagSourceListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveReferencesResponse parses an HTTP response from a RemoveReferencesWithResponse call
+func ParseRemoveReferencesResponse(rsp *http.Response) (*RemoveReferencesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveReferencesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RemoveReferencesResultEnvelope
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
