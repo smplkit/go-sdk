@@ -4416,7 +4416,7 @@
           "Products"
         ],
         "summary": "List Products",
-        "description": "Return all products with their plans and limits as JSON:API resources.",
+        "description": "Return all flag-enabled products with their plans and limits.",
         "operationId": "list_products",
         "responses": {
           "200": {
