@@ -493,10 +493,16 @@
             "title": "Description"
           },
           "type": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Type",
-            "description": "Value type: STRING, BOOLEAN, NUMERIC, or JSON",
-            "x-immutable": true
+            "description": "Value type: STRING, BOOLEAN, NUMERIC, or JSON"
           },
           "default": {
             "title": "Default",
@@ -582,7 +588,6 @@
         "type": "object",
         "required": [
           "name",
-          "type",
           "default"
         ],
         "title": "Flag",
