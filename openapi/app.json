@@ -3548,6 +3548,96 @@
         ]
       }
     },
+    "/api/v1/email-registrations": {
+      "post": {
+        "tags": [
+          "Email Registrations"
+        ],
+        "summary": "Register for Launch List",
+        "description": "Submit an email address to the smplkit launch list. Sends a notification to support@smplkit.com. No authentication required. Nothing is persisted.",
+        "operationId": "create_email_registration",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              },
+              "examples": {
+                "launch_list": {
+                  "summary": "Join launch list",
+                  "value": {
+                    "data": {
+                      "type": "email_registration",
+                      "attributes": {
+                        "email": "you@example.com"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Registration accepted"
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Resource type mismatch",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/emails": {
       "post": {
         "tags": [
@@ -8606,6 +8696,12 @@
     },
     {
       "name": "Contexts"
+    },
+    {
+      "name": "Email Registrations"
+    },
+    {
+      "name": "Emails"
     },
     {
       "name": "Environments"

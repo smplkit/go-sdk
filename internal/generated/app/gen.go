@@ -1170,6 +1170,9 @@ type ListContextsParams struct {
 	FilterContextType *string `form:"filter[context_type],omitempty" json:"filter[context_type],omitempty"`
 }
 
+// CreateEmailRegistrationApplicationVndAPIPlusJSONBody defines parameters for CreateEmailRegistration.
+type CreateEmailRegistrationApplicationVndAPIPlusJSONBody map[string]interface{}
+
 // SendContactEmailApplicationVndAPIPlusJSONBody defines parameters for SendContactEmail.
 type SendContactEmailApplicationVndAPIPlusJSONBody map[string]interface{}
 
@@ -1239,6 +1242,9 @@ type BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody = ContextBulkRegis
 
 // UpdateContextApplicationVndAPIPlusJSONRequestBody defines body for UpdateContext for application/vnd.api+json ContentType.
 type UpdateContextApplicationVndAPIPlusJSONRequestBody = ContextResponse
+
+// CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody defines body for CreateEmailRegistration for application/vnd.api+json ContentType.
+type CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody CreateEmailRegistrationApplicationVndAPIPlusJSONBody
 
 // SendContactEmailApplicationVndAPIPlusJSONRequestBody defines body for SendContactEmail for application/vnd.api+json ContentType.
 type SendContactEmailApplicationVndAPIPlusJSONRequestBody SendContactEmailApplicationVndAPIPlusJSONBody
@@ -1528,6 +1534,11 @@ type ClientInterface interface {
 	UpdateContextWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateContextWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateEmailRegistrationWithBody request with any body
+	CreateEmailRegistrationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateEmailRegistrationWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SendContactEmailWithBody request with any body
 	SendContactEmailWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2171,6 +2182,30 @@ func (c *Client) UpdateContextWithBody(ctx context.Context, id string, contentTy
 
 func (c *Client) UpdateContextWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateContextRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateEmailRegistrationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEmailRegistrationRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateEmailRegistrationWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEmailRegistrationRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4078,6 +4113,46 @@ func NewUpdateContextRequestWithBody(server string, id string, contentType strin
 	}
 
 	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateEmailRegistrationRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateEmailRegistration builder with application/vnd.api+json body
+func NewCreateEmailRegistrationRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateEmailRegistrationRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateEmailRegistrationRequestWithBody generates requests for CreateEmailRegistration with any type of body
+func NewCreateEmailRegistrationRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/email-registrations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -6061,6 +6136,11 @@ type ClientWithResponsesInterface interface {
 
 	UpdateContextWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextResponse, error)
 
+	// CreateEmailRegistrationWithBodyWithResponse request with any body
+	CreateEmailRegistrationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEmailRegistrationResponse, error)
+
+	CreateEmailRegistrationWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEmailRegistrationResponse, error)
+
 	// SendContactEmailWithBodyWithResponse request with any body
 	SendContactEmailWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SendContactEmailResponse, error)
 
@@ -6974,6 +7054,32 @@ func (r UpdateContextResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateContextResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateEmailRegistrationResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON409 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateEmailRegistrationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateEmailRegistrationResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -8548,6 +8654,23 @@ func (c *ClientWithResponses) UpdateContextWithApplicationVndAPIPlusJSONBodyWith
 		return nil, err
 	}
 	return ParseUpdateContextResponse(rsp)
+}
+
+// CreateEmailRegistrationWithBodyWithResponse request with arbitrary body returning *CreateEmailRegistrationResponse
+func (c *ClientWithResponses) CreateEmailRegistrationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEmailRegistrationResponse, error) {
+	rsp, err := c.CreateEmailRegistrationWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateEmailRegistrationResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateEmailRegistrationWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEmailRegistrationResponse, error) {
+	rsp, err := c.CreateEmailRegistrationWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateEmailRegistrationResponse(rsp)
 }
 
 // SendContactEmailWithBodyWithResponse request with arbitrary body returning *SendContactEmailResponse
@@ -10597,6 +10720,60 @@ func ParseUpdateContextResponse(rsp *http.Response) (*UpdateContextResponse, err
 			return nil, err
 		}
 		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateEmailRegistrationResponse parses an HTTP response from a CreateEmailRegistrationWithResponse call
+func ParseCreateEmailRegistrationResponse(rsp *http.Response) (*CreateEmailRegistrationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateEmailRegistrationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorResponse
