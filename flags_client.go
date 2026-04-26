@@ -104,10 +104,7 @@ func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
 
 	envs := extractFlagEnvironments(attrs.Environments)
 
-	var flagTypeStr string
-	if attrs.Type != nil {
-		flagTypeStr = *attrs.Type
-	}
+	flagTypeStr := attrs.Type
 
 	return &Flag{
 		ID:           id,
@@ -177,7 +174,7 @@ func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]Fla
 			Type: genflags.FlagResourceTypeFlag,
 			Attributes: genflags.Flag{
 				Name:         name,
-				Type:         &flagType,
+				Type:         flagType,
 				Default:      dflt,
 				Values:       genValues,
 				Description:  desc,
