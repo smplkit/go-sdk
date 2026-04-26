@@ -98,7 +98,7 @@ type Flag struct {
 	Sources *[]map[string]interface{} `json:"sources,omitempty"`
 
 	// Type Value type: STRING, BOOLEAN, NUMERIC, or JSON
-	Type      string     `json:"type"`
+	Type      *string    `json:"type,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 
 	// Values Ordered set of allowed values (constrained), or null (unconstrained)
