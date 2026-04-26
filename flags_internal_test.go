@@ -4124,5 +4124,3 @@ func TestFireDeletedListener_EmptyKey(t *testing.T) {
 	rt.fireDeletedListener("", "test")
 	assert.False(t, called)
 }
-
-func ptrStr(s string) *string { return &s }
