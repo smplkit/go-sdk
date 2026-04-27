@@ -814,6 +814,83 @@
         ]
       }
     },
+    "/api/v1/accounts/current/actions/wipe": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Wipe Account Data",
+        "description": "Delete every config, flag, logger, log group, context, context type (except the auto-managed ``service``), and customer API key (except the caller's current key) on the account. Environments are preserved. The ``common`` config is preserved as a structural anchor but its items are reset. Requires ``OWNER`` role and a ``{\"confirm\": true}`` body \u2014 anything else returns 400.",
+        "operationId": "wipe_account_data",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountWipeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountWipeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/users/current/settings": {
       "get": {
         "tags": [
@@ -6055,6 +6132,83 @@
           "data"
         ],
         "title": "AccountResponse"
+      },
+      "AccountWipeRequest": {
+        "properties": {
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "description": "Must be ``true`` to proceed. Anything else returns 400. The frontend gates the call behind a confirmation dialog; this field is the server-side seatbelt."
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "title": "AccountWipeRequest",
+        "description": "Confirmation envelope for ``POST /accounts/current/actions/wipe``.",
+        "example": {
+          "confirm": true
+        }
+      },
+      "AccountWipeResponse": {
+        "properties": {
+          "configs_deleted": {
+            "type": "integer",
+            "title": "Configs Deleted",
+            "default": 0
+          },
+          "flags_deleted": {
+            "type": "integer",
+            "title": "Flags Deleted",
+            "default": 0
+          },
+          "loggers_deleted": {
+            "type": "integer",
+            "title": "Loggers Deleted",
+            "default": 0
+          },
+          "log_groups_deleted": {
+            "type": "integer",
+            "title": "Log Groups Deleted",
+            "default": 0
+          },
+          "contexts_deleted": {
+            "type": "integer",
+            "title": "Contexts Deleted",
+            "default": 0
+          },
+          "context_types_deleted": {
+            "type": "integer",
+            "title": "Context Types Deleted",
+            "default": 0
+          },
+          "api_keys_deleted": {
+            "type": "integer",
+            "title": "Api Keys Deleted",
+            "default": 0
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failures"
+          }
+        },
+        "type": "object",
+        "title": "AccountWipeResponse",
+        "description": "Summary of resources removed by a wipe.",
+        "example": {
+          "api_keys_deleted": 1,
+          "configs_deleted": 9,
+          "context_types_deleted": 3,
+          "contexts_deleted": 30,
+          "failures": [],
+          "flags_deleted": 14,
+          "log_groups_deleted": 3,
+          "loggers_deleted": 10
+        }
       },
       "AddPaymentMethodAttributes": {
         "properties": {
