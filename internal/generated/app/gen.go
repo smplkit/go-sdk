@@ -408,6 +408,24 @@ type AccountResponse struct {
 	Data AccountResource `json:"data"`
 }
 
+// AccountWipeRequest Confirmation envelope for “POST /accounts/current/actions/wipe“.
+type AccountWipeRequest struct {
+	// Confirm Must be ``true`` to proceed. Anything else returns 400. The frontend gates the call behind a confirmation dialog; this field is the server-side seatbelt.
+	Confirm bool `json:"confirm"`
+}
+
+// AccountWipeResponse Summary of resources removed by a wipe.
+type AccountWipeResponse struct {
+	ApiKeysDeleted      *int      `json:"api_keys_deleted,omitempty"`
+	ConfigsDeleted      *int      `json:"configs_deleted,omitempty"`
+	ContextTypesDeleted *int      `json:"context_types_deleted,omitempty"`
+	ContextsDeleted     *int      `json:"contexts_deleted,omitempty"`
+	Failures            *[]string `json:"failures,omitempty"`
+	FlagsDeleted        *int      `json:"flags_deleted,omitempty"`
+	LogGroupsDeleted    *int      `json:"log_groups_deleted,omitempty"`
+	LoggersDeleted      *int      `json:"loggers_deleted,omitempty"`
+}
+
 // AddPaymentMethodAttributes Attributes for POST /api/v1/payment_methods.
 //
 // Distinct from “PaymentMethod“ because this shape takes the Stripe
@@ -1213,6 +1231,9 @@ type ListUsersParams struct {
 // UpdateAccountApplicationVndAPIPlusJSONRequestBody defines body for UpdateAccount for application/vnd.api+json ContentType.
 type UpdateAccountApplicationVndAPIPlusJSONRequestBody = AccountResponse
 
+// WipeAccountDataApplicationVndAPIPlusJSONRequestBody defines body for WipeAccountData for application/vnd.api+json ContentType.
+type WipeAccountDataApplicationVndAPIPlusJSONRequestBody = AccountWipeRequest
+
 // CreateApiKeyApplicationVndAPIPlusJSONRequestBody defines body for CreateApiKey for application/vnd.api+json ContentType.
 type CreateApiKeyApplicationVndAPIPlusJSONRequestBody = ApiKeyResponse
 
@@ -1436,6 +1457,11 @@ type ClientInterface interface {
 	UpdateAccountWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateAccountWithApplicationVndAPIPlusJSONBody(ctx context.Context, body UpdateAccountApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// WipeAccountDataWithBody request with any body
+	WipeAccountDataWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	WipeAccountDataWithApplicationVndAPIPlusJSONBody(ctx context.Context, body WipeAccountDataApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAccountSettings request
 	GetAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1750,6 +1776,30 @@ func (c *Client) UpdateAccountWithBody(ctx context.Context, contentType string, 
 
 func (c *Client) UpdateAccountWithApplicationVndAPIPlusJSONBody(ctx context.Context, body UpdateAccountApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAccountRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) WipeAccountDataWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewWipeAccountDataRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) WipeAccountDataWithApplicationVndAPIPlusJSONBody(ctx context.Context, body WipeAccountDataApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewWipeAccountDataRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3045,6 +3095,46 @@ func NewUpdateAccountRequestWithBody(server string, contentType string, body io.
 	}
 
 	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewWipeAccountDataRequestWithApplicationVndAPIPlusJSONBody calls the generic WipeAccountData builder with application/vnd.api+json body
+func NewWipeAccountDataRequestWithApplicationVndAPIPlusJSONBody(server string, body WipeAccountDataApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewWipeAccountDataRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewWipeAccountDataRequestWithBody generates requests for WipeAccountData with any type of body
+func NewWipeAccountDataRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/actions/wipe")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -6038,6 +6128,11 @@ type ClientWithResponsesInterface interface {
 
 	UpdateAccountWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body UpdateAccountApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAccountResponse, error)
 
+	// WipeAccountDataWithBodyWithResponse request with any body
+	WipeAccountDataWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*WipeAccountDataResponse, error)
+
+	WipeAccountDataWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body WipeAccountDataApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*WipeAccountDataResponse, error)
+
 	// GetAccountSettingsWithResponse request
 	GetAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountSettingsResponse, error)
 
@@ -6384,6 +6479,32 @@ func (r UpdateAccountResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateAccountResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type WipeAccountDataResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *AccountWipeResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r WipeAccountDataResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r WipeAccountDataResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -8342,6 +8463,23 @@ func (c *ClientWithResponses) UpdateAccountWithApplicationVndAPIPlusJSONBodyWith
 	return ParseUpdateAccountResponse(rsp)
 }
 
+// WipeAccountDataWithBodyWithResponse request with arbitrary body returning *WipeAccountDataResponse
+func (c *ClientWithResponses) WipeAccountDataWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*WipeAccountDataResponse, error) {
+	rsp, err := c.WipeAccountDataWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseWipeAccountDataResponse(rsp)
+}
+
+func (c *ClientWithResponses) WipeAccountDataWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body WipeAccountDataApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*WipeAccountDataResponse, error) {
+	rsp, err := c.WipeAccountDataWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseWipeAccountDataResponse(rsp)
+}
+
 // GetAccountSettingsWithResponse request returning *GetAccountSettingsResponse
 func (c *ClientWithResponses) GetAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountSettingsResponse, error) {
 	rsp, err := c.GetAccountSettings(ctx, reqEditors...)
@@ -9333,6 +9471,60 @@ func ParseUpdateAccountResponse(rsp *http.Response) (*UpdateAccountResponse, err
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest AccountResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseWipeAccountDataResponse parses an HTTP response from a WipeAccountDataWithResponse call
+func ParseWipeAccountDataResponse(rsp *http.Response) (*WipeAccountDataResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &WipeAccountDataResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccountWipeResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
