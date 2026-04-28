@@ -504,7 +504,7 @@
           "Log Groups"
         ],
         "summary": "Create Log Group",
-        "description": "Create a new log group. The caller provides the key in data.id or attributes.key.",
+        "description": "Create a new log group. The caller provides the key in data.id, or it is auto-generated from name.",
         "operationId": "create_log_group",
         "requestBody": {
           "content": {
