@@ -6810,13 +6810,6 @@
       },
       "ContextType": {
         "properties": {
-          "id": {
-            "type": "string",
-            "maxLength": 64,
-            "nullable": true,
-            "title": "Id",
-            "writeOnly": true
-          },
           "name": {
             "type": "string",
             "title": "Name",

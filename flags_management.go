@@ -162,7 +162,8 @@ func (m *FlagsManagement) CreateContextType(ctx context.Context, id string, name
 	reqBody := genapp.ContextTypeResponse{
 		Data: genapp.ContextTypeResource{
 			Type:       "context_type",
-			Attributes: genapp.ContextType{Id: &id, Name: name},
+			Id:         &id,
+			Attributes: genapp.ContextType{Name: name},
 		},
 	}
 	resp, err := m.client.appGenerated.CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, reqBody)

@@ -604,7 +604,6 @@ type ContextType struct {
 	// Attributes Known attribute keys with metadata objects
 	Attributes *map[string]interface{} `json:"attributes,omitempty"`
 	CreatedAt  *time.Time              `json:"created_at,omitempty"`
-	Id         *string                 `json:"id,omitempty"`
 
 	// Name Display label: User, Account, Device
 	Name      string     `json:"name"`
