@@ -414,18 +414,6 @@ type AccountWipeRequest struct {
 	Confirm bool `json:"confirm"`
 }
 
-// AccountWipeResponse Summary of resources removed by a wipe.
-type AccountWipeResponse struct {
-	ApiKeysDeleted      *int      `json:"api_keys_deleted,omitempty"`
-	ConfigsDeleted      *int      `json:"configs_deleted,omitempty"`
-	ContextTypesDeleted *int      `json:"context_types_deleted,omitempty"`
-	ContextsDeleted     *int      `json:"contexts_deleted,omitempty"`
-	Failures            *[]string `json:"failures,omitempty"`
-	FlagsDeleted        *int      `json:"flags_deleted,omitempty"`
-	LogGroupsDeleted    *int      `json:"log_groups_deleted,omitempty"`
-	LoggersDeleted      *int      `json:"loggers_deleted,omitempty"`
-}
-
 // AddPaymentMethodAttributes Attributes for POST /api/v1/payment_methods.
 //
 // Distinct from “PaymentMethod“ because this shape takes the Stripe
@@ -6487,7 +6475,6 @@ func (r UpdateAccountResponse) StatusCode() int {
 type WipeAccountDataResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *AccountWipeResponse
 	ApplicationvndApiJSON400 *ErrorResponse
 	ApplicationvndApiJSON401 *ErrorResponse
 	ApplicationvndApiJSON404 *ErrorResponse
@@ -9522,13 +9509,6 @@ func ParseWipeAccountDataResponse(rsp *http.Response) (*WipeAccountDataResponse,
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest AccountWipeResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
