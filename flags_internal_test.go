@@ -153,7 +153,7 @@ func TestResourceToFlag_NilValues(t *testing.T) {
 		Type: genflags.FlagResourceType(flagType),
 		Attributes: genflags.Flag{
 			Name:         "Max Retries",
-			Type:         ptrStr("NUMERIC"),
+			Type:         "NUMERIC",
 			Default:      float64(3),
 			Values:       nil,
 			Description:  &desc,
@@ -2594,7 +2594,7 @@ func flagResource(id, flagType, name, vType string, dflt interface{}, desc strin
 		Type: genflags.FlagResourceType(flagType),
 		Attributes: genflags.Flag{
 			Name:         name,
-			Type:         &vType,
+			Type:         vType,
 			Default:      dflt,
 			Values:       &vals,
 			Description:  &desc,
@@ -2611,7 +2611,7 @@ func flagResourceNoID(name, vType string, dflt interface{}, created time.Time) g
 		Type: genflags.FlagResourceTypeFlag,
 		Attributes: genflags.Flag{
 			Name:      name,
-			Type:      &vType,
+			Type:      vType,
 			Default:   dflt,
 			Values:    &vals,
 			CreatedAt: &created,
@@ -4124,5 +4124,3 @@ func TestFireDeletedListener_EmptyKey(t *testing.T) {
 	rt.fireDeletedListener("", "test")
 	assert.False(t, called)
 }
-
-func ptrStr(s string) *string { return &s }

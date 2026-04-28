@@ -493,14 +493,7 @@
             "title": "Description"
           },
           "type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Type",
             "description": "Value type: STRING, BOOLEAN, NUMERIC, or JSON"
           },
@@ -588,6 +581,7 @@
         "type": "object",
         "required": [
           "name",
+          "type",
           "default"
         ],
         "title": "Flag",
