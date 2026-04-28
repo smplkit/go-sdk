@@ -149,16 +149,6 @@ func (f *Flag) apply(other *Flag) {
 	f.UpdatedAt = other.UpdatedAt
 }
 
-// ContextType represents a context type resource from the management API.
-type ContextType struct {
-	// ID is the context type identifier.
-	ID string
-	// Name is the display name.
-	Name string
-	// Attributes holds the context type's attribute definitions.
-	Attributes map[string]interface{}
-}
-
 func copyEnvMap(m map[string]interface{}) map[string]interface{} {
 	if m == nil {
 		return make(map[string]interface{})

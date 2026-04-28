@@ -222,6 +222,50 @@ func (g *LogGroup) apply(other *LogGroup) {
 	g.UpdatedAt = other.UpdatedAt
 }
 
+// LoggerSource describes a logger observed in a remote service process.
+// Used with LoggingManagement.RegisterSources to seed source discovery data
+// (e.g. for sample-data loading or cross-service migration) without running
+// the actual service.
+type LoggerSource struct {
+	// ID is the normalized logger name (e.g. "sqlalchemy.engine").
+	ID string
+	// Service overrides the client's own service name.
+	// Nil means use the client's service.
+	Service *string
+	// Environment overrides the client's own environment.
+	// Nil means use the client's environment.
+	Environment *string
+	// ResolvedLevel is the effective log level observed in the process.
+	ResolvedLevel *LogLevel
+}
+
+// LoggerSourceOption configures a LoggerSource.
+type LoggerSourceOption func(*LoggerSource)
+
+// WithLoggerSourceService sets an explicit service name for the source.
+func WithLoggerSourceService(service string) LoggerSourceOption {
+	return func(s *LoggerSource) { s.Service = &service }
+}
+
+// WithLoggerSourceEnvironment sets an explicit environment for the source.
+func WithLoggerSourceEnvironment(env string) LoggerSourceOption {
+	return func(s *LoggerSource) { s.Environment = &env }
+}
+
+// WithLoggerSourceResolvedLevel sets the effective log level for the source.
+func WithLoggerSourceResolvedLevel(level LogLevel) LoggerSourceOption {
+	return func(s *LoggerSource) { s.ResolvedLevel = &level }
+}
+
+// NewLoggerSource creates a LoggerSource with the given logger ID and options.
+func NewLoggerSource(id string, opts ...LoggerSourceOption) LoggerSource {
+	s := LoggerSource{ID: id}
+	for _, opt := range opts {
+		opt(&s)
+	}
+	return s
+}
+
 // LoggerChangeEvent describes a logger definition change.
 type LoggerChangeEvent struct {
 	// ID is the logger ID that changed.

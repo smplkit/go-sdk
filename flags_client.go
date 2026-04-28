@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
@@ -251,24 +252,41 @@ func parseContextTypeRaw(raw json.RawMessage) (*ContextType, error) {
 			ID         string                 `json:"id"`
 			Name       string                 `json:"name"`
 			Attributes map[string]interface{} `json:"attributes"`
+			CreatedAt  *string                `json:"created_at"`
+			UpdatedAt  *string                `json:"updated_at"`
 		} `json:"attributes"`
 	}
 	if err := json.Unmarshal(raw, &data); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse context type: %w", err)
 	}
-	attrs := data.Attributes.Attributes
-	if attrs == nil {
-		attrs = map[string]interface{}{}
-	}
 	ctID := data.ID
 	if ctID == "" {
 		ctID = data.Attributes.ID
 	}
-	return &ContextType{
+	typedAttrs := make(map[string]map[string]interface{})
+	for k, v := range data.Attributes.Attributes {
+		if vm, ok := v.(map[string]interface{}); ok {
+			typedAttrs[k] = vm
+		} else {
+			typedAttrs[k] = map[string]interface{}{}
+		}
+	}
+	ct := &ContextType{
 		ID:         ctID,
 		Name:       data.Attributes.Name,
-		Attributes: attrs,
-	}, nil
+		Attributes: typedAttrs,
+	}
+	if data.Attributes.CreatedAt != nil {
+		if t, err := time.Parse(time.RFC3339, *data.Attributes.CreatedAt); err == nil {
+			ct.CreatedAt = &t
+		}
+	}
+	if data.Attributes.UpdatedAt != nil {
+		if t, err := time.Parse(time.RFC3339, *data.Attributes.UpdatedAt); err == nil {
+			ct.UpdatedAt = &t
+		}
+	}
+	return ct, nil
 }
 
 // fetchSingleFlag fetches a single flag by key and returns it as a plain dict.
@@ -442,16 +460,6 @@ func (c *FlagsClient) OnChange(cb func(*FlagChangeEvent)) {
 // specified flag key changes.
 func (c *FlagsClient) OnChangeKey(key string, cb func(*FlagChangeEvent)) {
 	c.runtime.OnChangeKey(key, cb)
-}
-
-// Register explicitly registers context(s) with the server.
-func (c *FlagsClient) Register(ctx context.Context, contexts ...Context) {
-	c.runtime.Register(ctx, contexts...)
-}
-
-// FlushContexts sends any pending context registrations to the server immediately.
-func (c *FlagsClient) FlushContexts(ctx context.Context) {
-	c.runtime.FlushContexts(ctx)
 }
 
 // Evaluate evaluates a flag with the given environment and contexts.

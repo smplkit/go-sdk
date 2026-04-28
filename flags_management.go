@@ -235,13 +235,20 @@ func (m *FlagsManagement) ListContextTypes(ctx context.Context) ([]*ContextType,
 	types := make([]*ContextType, 0, len(result.Data))
 	for _, r := range result.Data {
 		ct := &ContextType{
-			Name: r.Attributes.Name,
+			Name:       r.Attributes.Name,
+			Attributes: make(map[string]map[string]interface{}),
 		}
 		if r.Id != nil {
 			ct.ID = *r.Id
 		}
 		if r.Attributes.Attributes != nil {
-			ct.Attributes = *r.Attributes.Attributes
+			for k, v := range *r.Attributes.Attributes {
+				if vm, ok := v.(map[string]interface{}); ok {
+					ct.Attributes[k] = vm
+				} else {
+					ct.Attributes[k] = map[string]interface{}{}
+				}
+			}
 		}
 		types = append(types, ct)
 	}

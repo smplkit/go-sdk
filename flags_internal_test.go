@@ -69,19 +69,19 @@ func newTestFlagsClient(t *testing.T, handler http.HandlerFunc) (*FlagsClient, *
 		appGenerated: genAppClient,
 	}
 	fc := &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
-	fc.runtime = newFlagsRuntime(fc)
+	fc.runtime = newFlagsRuntime(fc, newContextRegistrationBuffer())
 	return fc, server
 }
 
 // --- Context type management ---
 
 func TestParseContextType(t *testing.T) {
-	body := []byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{"plan":"string"}}}}`)
+	body := []byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{"plan":{"type":"string"}}}}}`)
 	ct, err := parseContextType(body)
 	require.NoError(t, err)
 	assert.Equal(t, "user", ct.ID)
 	assert.Equal(t, "User", ct.Name)
-	assert.Equal(t, "string", ct.Attributes["plan"])
+	assert.Equal(t, map[string]interface{}{"type": "string"}, ct.Attributes["plan"])
 }
 
 func TestParseContextType_NilAttributes(t *testing.T) {
@@ -827,7 +827,7 @@ func TestClient_EnsureWS(t *testing.T) {
 // --- FlagsRuntime additional coverage ---
 
 func TestFlagsRuntime_FireChangeListenersAll(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.flagStore = map[string]map[string]interface{}{
 		"flag1": {"default": true},
@@ -851,7 +851,7 @@ func TestFlagsRuntime_FireChangeListenersAll(t *testing.T) {
 }
 
 func TestFlagsRuntime_HandleSpecificListener_Panic(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	handle := rt.BooleanFlag("feature", true)
 
 	handle.OnChange(func(e *FlagChangeEvent) {
@@ -865,7 +865,7 @@ func TestFlagsRuntime_HandleSpecificListener_Panic(t *testing.T) {
 }
 
 func TestFlagsRuntime_EvaluateHandle_NilEvaluationResult(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -965,14 +965,14 @@ func TestFlagsClient_OnChange(t *testing.T) {
 
 func TestFlagsClient_Register(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	fc.Register(context.Background(), Context{Type: "user", Key: "u1"})
+	fc.runtime.Register(context.Background(), Context{Type: "user", Key: "u1"})
 	assert.Equal(t, 1, fc.runtime.contextBuffer.pendingCount())
 }
 
 func TestFlagsClient_FlushContexts_Empty(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	// Should not panic
-	fc.FlushContexts(context.Background())
+	fc.runtime.FlushContexts(context.Background())
 }
 
 func TestFlagsClient_Evaluate_ConnectedWithStore(t *testing.T) {
@@ -997,28 +997,28 @@ func TestFlagsClient_Evaluate_ConnectedWithStore(t *testing.T) {
 // --- Typed flag handle Get with variadic contexts ---
 
 func TestBooleanFlagHandle_Get_NoContexts(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	handle := rt.BooleanFlag("feature", false)
 	assert.Equal(t, false, handle.Get(context.Background()))
 }
 
 func TestStringFlagHandle_Get_NoContexts(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	handle := rt.StringFlag("theme", "light")
 	assert.Equal(t, "light", handle.Get(context.Background()))
 }
 
 func TestNumberFlagHandle_Get_NoContexts(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	handle := rt.NumberFlag("retries", 5.0)
 	assert.Equal(t, 5.0, handle.Get(context.Background()))
 }
 
 func TestJsonFlagHandle_Get_NoContexts(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	dflt := map[string]interface{}{"a": "b"}
 	handle := rt.JsonFlag("config", dflt)
@@ -1028,7 +1028,7 @@ func TestJsonFlagHandle_Get_NoContexts(t *testing.T) {
 // --- NumberFlagHandle type coercion ---
 
 func TestNumberFlagHandle_GetInt(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -1046,7 +1046,7 @@ func TestNumberFlagHandle_GetInt(t *testing.T) {
 }
 
 func TestNumberFlagHandle_Get_NoContexts_Int(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	handle := rt.NumberFlag("retries", 5.0)
 	assert.Equal(t, 5.0, handle.Get(context.Background()))
@@ -1537,15 +1537,15 @@ func TestFlagsClient_UpdateContextType_FullMethod(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "PUT" && r.URL.Path == "/api/v1/context_types/"+ctID {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + ctID + `","attributes":{"id":"` + ctID + `","name":"User","attributes":{"plan":"string"}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + ctID + `","attributes":{"id":"` + ctID + `","name":"User","attributes":{"plan":{"type":"string"}}}}}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	ct, err := fc.Management().UpdateContextType(context.Background(), ctID, map[string]interface{}{"plan": "string"})
+	ct, err := fc.Management().UpdateContextType(context.Background(), ctID, map[string]interface{}{"plan": map[string]interface{}{"type": "string"}})
 	require.NoError(t, err)
-	assert.Equal(t, "string", ct.Attributes["plan"])
+	assert.Equal(t, map[string]interface{}{"type": "string"}, ct.Attributes["plan"])
 }
 
 func TestFlagsClient_ListContextTypes_FullMethod(t *testing.T) {
@@ -1821,7 +1821,7 @@ func TestFlagsRuntime_ConnectionStatus_WithWSManager(t *testing.T) {
 	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	ws.setStatus("connected")
 
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.wsManager = ws
 	assert.Equal(t, "connected", rt.ConnectionStatus())
 }
@@ -1904,7 +1904,7 @@ func TestFlagsClient_FlushContexts_Lifecycle(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
 
-	fc.Register(context.Background(), Context{Type: "user", Key: "u1"})
+	fc.runtime.Register(context.Background(), Context{Type: "user", Key: "u1"})
 	batch := fc.runtime.contextBuffer.drain()
 	if len(batch) > 0 {
 		fc.flushContexts(context.Background(), batch)
@@ -1915,7 +1915,7 @@ func TestFlagsClient_FlushContexts_Lifecycle(t *testing.T) {
 // --- BooleanFlagHandle type mismatch ---
 
 func TestBooleanFlagHandle_Get_TypeMismatch(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -1933,7 +1933,7 @@ func TestBooleanFlagHandle_Get_TypeMismatch(t *testing.T) {
 }
 
 func TestStringFlagHandle_Get_TypeMismatch(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -1951,7 +1951,7 @@ func TestStringFlagHandle_Get_TypeMismatch(t *testing.T) {
 }
 
 func TestNumberFlagHandle_Get_TypeMismatch(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -1969,7 +1969,7 @@ func TestNumberFlagHandle_Get_TypeMismatch(t *testing.T) {
 }
 
 func TestJsonFlagHandle_Get_TypeMismatch(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -1990,7 +1990,7 @@ func TestJsonFlagHandle_Get_TypeMismatch(t *testing.T) {
 // --- NumberFlagHandle int/int64 coercion ---
 
 func TestNumberFlagHandle_Get_IntValue(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -2008,7 +2008,7 @@ func TestNumberFlagHandle_Get_IntValue(t *testing.T) {
 }
 
 func TestNumberFlagHandle_Get_Int64Value(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -2224,7 +2224,7 @@ func TestFlagsClient_FetchAllFlags_Error(t *testing.T) {
 // --- Get with contexts type coercion and mismatch ---
 
 func TestBooleanFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -2242,7 +2242,7 @@ func TestBooleanFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
 }
 
 func TestStringFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -2260,7 +2260,7 @@ func TestStringFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
 }
 
 func TestNumberFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -2278,7 +2278,7 @@ func TestNumberFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
 }
 
 func TestJsonFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.initOnce.Do(func() {})
 	rt.mu.Lock()
 	rt.environment = "production"
@@ -2675,7 +2675,7 @@ func newFlagsClientWithTransport(t *testing.T, transport http.RoundTripper) *Fla
 		appGenerated: genAppClient,
 	}
 	fc := &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
-	fc.runtime = newFlagsRuntime(fc)
+	fc.runtime = newFlagsRuntime(fc, newContextRegistrationBuffer())
 	return fc
 }
 
@@ -3501,8 +3501,8 @@ func TestFlagMethods_PopulateBuffer(t *testing.T) {
 }
 
 func TestFlagMethods_NoBufferWhenClientNil(t *testing.T) {
-	// newFlagsRuntime(nil) should not panic on flag method calls.
-	rt := newFlagsRuntime(nil)
+	// newFlagsRuntime(nil, newContextRegistrationBuffer()) should not panic on flag method calls.
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	assert.NotPanics(t, func() {
 		rt.BooleanFlag("b", true)
 		rt.StringFlag("s", "x")
@@ -3568,7 +3568,7 @@ func TestFlagMethods_ThresholdFlush_AllTypes(t *testing.T) {
 
 	// Test NumberFlag threshold.
 	bulkCallCount.Store(0)
-	rt2 := newFlagsRuntime(fc)
+	rt2 := newFlagsRuntime(fc, newContextRegistrationBuffer())
 	for i := 0; i < flagRegistrationThreshold; i++ {
 		rt2.NumberFlag("num-"+string(rune('a'+i%26))+string(rune('0'+i/26)), float64(i))
 	}
@@ -3577,7 +3577,7 @@ func TestFlagMethods_ThresholdFlush_AllTypes(t *testing.T) {
 
 	// Test JsonFlag threshold.
 	bulkCallCount.Store(0)
-	rt3 := newFlagsRuntime(fc)
+	rt3 := newFlagsRuntime(fc, newContextRegistrationBuffer())
 	for i := 0; i < flagRegistrationThreshold; i++ {
 		rt3.JsonFlag("json-"+string(rune('a'+i%26))+string(rune('0'+i/26)), nil)
 	}
@@ -4065,7 +4065,7 @@ func TestHandleFlagsChanged_FetchError(t *testing.T) {
 
 // TestFireGlobalOnce_PanicRecovery covers the panic recovery path.
 func TestFireGlobalOnce_PanicRecovery(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.OnChange(func(e *FlagChangeEvent) {
 		panic("global panic test")
 	})
@@ -4076,7 +4076,7 @@ func TestFireGlobalOnce_PanicRecovery(t *testing.T) {
 
 // TestFireKeyListenersOnly_EmptyKey covers the empty key early return.
 func TestFireKeyListenersOnly_EmptyKey(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	var called bool
 	rt.OnChangeKey("some-key", func(e *FlagChangeEvent) { called = true })
 	rt.fireKeyListenersOnly("", "test")
@@ -4085,7 +4085,7 @@ func TestFireKeyListenersOnly_EmptyKey(t *testing.T) {
 
 // TestFireKeyListenersOnly_KeyListenerPanic covers the key listener panic recovery.
 func TestFireKeyListenersOnly_KeyListenerPanic(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.OnChangeKey("feature", func(e *FlagChangeEvent) {
 		panic("key listener panic")
 	})
@@ -4096,7 +4096,7 @@ func TestFireKeyListenersOnly_KeyListenerPanic(t *testing.T) {
 
 // TestFireKeyListenersOnly_WithHandle covers the flagHandle path.
 func TestFireKeyListenersOnly_WithHandle(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	handle := rt.BooleanFlag("feature", true)
 
 	var handleFired bool
@@ -4108,7 +4108,7 @@ func TestFireKeyListenersOnly_WithHandle(t *testing.T) {
 
 // TestFireKeyListenersOnly_WithHandlePanic covers the handle-specific listener panic recovery.
 func TestFireKeyListenersOnly_WithHandlePanic(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	handle := rt.BooleanFlag("feature", true)
 	handle.OnChange(func(e *FlagChangeEvent) { panic("handle panic") })
 	assert.NotPanics(t, func() {
@@ -4118,7 +4118,7 @@ func TestFireKeyListenersOnly_WithHandlePanic(t *testing.T) {
 
 // TestFireDeletedListener_EmptyKey covers the empty key path.
 func TestFireDeletedListener_EmptyKey(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	var called bool
 	rt.OnChange(func(e *FlagChangeEvent) { called = true })
 	rt.fireDeletedListener("", "test")

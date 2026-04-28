@@ -28,9 +28,14 @@ type Client struct {
 	httpClient   *http.Client
 	appGenerated genapp.ClientInterface
 
-	config  *ConfigClient
-	flags   *FlagsClient
-	logging *LoggingClient
+	config     *ConfigClient
+	flags      *FlagsClient
+	logging    *LoggingClient
+	management *ManagementClient
+
+	// Shared context registration buffer — used by both the flags runtime's
+	// auto-registration path and client.Management().Contexts().Register().
+	contextBuf *contextRegistrationBuffer
 
 	metrics *metricsReporter
 
@@ -141,6 +146,8 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 		loggingHeaderEditor,
 	)
 
+	ctxBuf := newContextRegistrationBuffer()
+
 	c := &Client{
 		apiKey:       rc.apiKey,
 		environment:  rc.environment,
@@ -148,6 +155,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 		appURL:       appURL,
 		httpClient:   httpClient,
 		appGenerated: genAppClient,
+		contextBuf:   ctxBuf,
 	}
 
 	if !rc.disableTelemetry {
@@ -156,8 +164,13 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 
 	c.config = &ConfigClient{client: c, generated: genConfigClient}
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
-	c.flags.runtime = newFlagsRuntime(c.flags)
+	c.flags.runtime = newFlagsRuntime(c.flags, ctxBuf)
 	c.logging = newLoggingClient(c, genLoggingClient)
+	c.management = &ManagementClient{
+		client:     c,
+		appClient:  genAppClient,
+		contextBuf: ctxBuf,
+	}
 
 	prefixLen := min(10, len(rc.apiKey))
 	maskedKey := rc.apiKey[:prefixLen] + "..."
@@ -185,6 +198,12 @@ func (c *Client) Flags() *FlagsClient {
 // Logging returns the sub-client for logging management and runtime operations.
 func (c *Client) Logging() *LoggingClient {
 	return c.logging
+}
+
+// Management returns the sub-client for app-service management operations
+// (environments, context types, contexts, account settings).
+func (c *Client) Management() *ManagementClient {
+	return c.management
 }
 
 // Close releases all resources held by the client and its sub-clients.

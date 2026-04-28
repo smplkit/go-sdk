@@ -200,16 +200,24 @@ func main() {
 	// ====================================================================
 	section("8. Context Registration")
 
-	flags.Register(ctx,
-		smplkit.NewContext("device", "device-abc", map[string]interface{}{
-			"os":        "iOS",
-			"version":   "17.4",
-			"app_build": "2024.03.1",
-		}),
+	err = client.Management().Contexts().Register(ctx,
+		[]smplkit.Context{
+			smplkit.NewContext("device", "device-abc", map[string]interface{}{
+				"os":        "iOS",
+				"version":   "17.4",
+				"app_build": "2024.03.1",
+			}),
+		},
 	)
+	if err != nil {
+		fatal("failed to register context", err)
+	}
 	step("Registered device context for batch upload")
 
-	flags.FlushContexts(ctx)
+	err = client.Management().Contexts().Flush(ctx)
+	if err != nil {
+		fatal("failed to flush contexts", err)
+	}
 	step("Flushed pending contexts to server")
 
 	// ====================================================================

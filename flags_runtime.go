@@ -376,12 +376,12 @@ type FlagsRuntime struct {
 	wsManager *sharedWebSocket
 }
 
-func newFlagsRuntime(fc *FlagsClient) *FlagsRuntime {
+func newFlagsRuntime(fc *FlagsClient, sharedBuf *contextRegistrationBuffer) *FlagsRuntime {
 	return &FlagsRuntime{
 		flagsClient:   fc,
 		flagStore:     make(map[string]map[string]interface{}),
 		cache:         newResolutionCache(defaultCacheMaxSize),
-		contextBuffer: newContextRegistrationBuffer(),
+		contextBuffer: sharedBuf,
 		flagBuffer:    newFlagRegistrationBuffer(),
 		handles:       make(map[string]*flagHandle),
 		keyListeners:  make(map[string][]func(*FlagChangeEvent)),

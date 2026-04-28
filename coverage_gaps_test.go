@@ -66,7 +66,7 @@ func newTestFullClient(t *testing.T, server *httptest.Server, service string) *C
 	}
 	c.config = &ConfigClient{client: c, generated: genConfigClient}
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
-	c.flags.runtime = newFlagsRuntime(c.flags)
+	c.flags.runtime = newFlagsRuntime(c.flags, newContextRegistrationBuffer())
 	return c
 }
 

@@ -345,7 +345,7 @@ func TestHashContext_Different(t *testing.T) {
 // --- Typed flag handles tests ---
 
 func TestBooleanFlagHandle_Default(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.initOnce.Do(func() {})
 	rt.mu.Unlock()
@@ -355,7 +355,7 @@ func TestBooleanFlagHandle_Default(t *testing.T) {
 }
 
 func TestStringFlagHandle_Default(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.initOnce.Do(func() {})
 	rt.mu.Unlock()
@@ -364,7 +364,7 @@ func TestStringFlagHandle_Default(t *testing.T) {
 }
 
 func TestNumberFlagHandle_Default(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.initOnce.Do(func() {})
 	rt.mu.Unlock()
@@ -373,7 +373,7 @@ func TestNumberFlagHandle_Default(t *testing.T) {
 }
 
 func TestJsonFlagHandle_Default(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.initOnce.Do(func() {})
 	rt.mu.Unlock()
@@ -383,7 +383,7 @@ func TestJsonFlagHandle_Default(t *testing.T) {
 }
 
 func TestFlagHandle_OnChange(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	handle := rt.BooleanFlag("feature", true)
 
 	var called bool
@@ -400,13 +400,13 @@ func TestFlagHandle_OnChange(t *testing.T) {
 func TestFlagsRuntime_EvaluateHandle_InitFailure_ReturnsDefault(t *testing.T) {
 	// When FlagsRuntime has no flagsClient (nil), ensureInit will fail.
 	// evaluateHandle should return the default value instead of panicking.
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	result := rt.evaluateHandle(context.Background(), "key", "default-val", nil)
 	assert.Equal(t, "default-val", result)
 }
 
 func TestFlagsRuntime_EvaluateHandle_Connected_WithStore(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.initOnce.Do(func() {})
 	rt.environment = "production"
@@ -438,7 +438,7 @@ func TestFlagsRuntime_EvaluateHandle_Connected_WithStore(t *testing.T) {
 }
 
 func TestFlagsRuntime_EvaluateHandle_CacheHit(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.initOnce.Do(func() {})
 	rt.environment = "production"
@@ -458,7 +458,7 @@ func TestFlagsRuntime_EvaluateHandle_CacheHit(t *testing.T) {
 }
 
 func TestFlagsRuntime_EvaluateHandle_WithProvider(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.initOnce.Do(func() {})
 	rt.environment = "production"
@@ -493,7 +493,7 @@ func TestFlagsRuntime_EvaluateHandle_WithProvider(t *testing.T) {
 }
 
 func TestFlagsRuntime_EvaluateHandle_FlagMissing(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.mu.Lock()
 	rt.initOnce.Do(func() {})
 	rt.environment = "production"
@@ -507,7 +507,7 @@ func TestFlagsRuntime_EvaluateHandle_FlagMissing(t *testing.T) {
 // --- Change listeners tests ---
 
 func TestFlagsRuntime_GlobalListeners(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 
 	var events []*FlagChangeEvent
 	var mu sync.Mutex
@@ -527,7 +527,7 @@ func TestFlagsRuntime_GlobalListeners(t *testing.T) {
 }
 
 func TestFlagsRuntime_ListenerExceptionSwallowed(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.OnChange(func(e *FlagChangeEvent) {
 		panic("test panic")
 	})
@@ -538,7 +538,7 @@ func TestFlagsRuntime_ListenerExceptionSwallowed(t *testing.T) {
 }
 
 func TestFlagsRuntime_EmptyKeyNoListeners(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	called := false
 	rt.OnChange(func(e *FlagChangeEvent) {
 		called = true
@@ -548,14 +548,14 @@ func TestFlagsRuntime_EmptyKeyNoListeners(t *testing.T) {
 }
 
 func TestFlagsRuntime_Stats(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	stats := rt.Stats()
 	assert.Equal(t, 0, stats.CacheHits)
 	assert.Equal(t, 0, stats.CacheMisses)
 }
 
 func TestFlagsRuntime_ConnectionStatus_Disconnected(t *testing.T) {
-	rt := newFlagsRuntime(nil)
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	assert.Equal(t, "disconnected", rt.ConnectionStatus())
 }
 

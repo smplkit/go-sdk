@@ -162,14 +162,15 @@ func TestFlag_AddRule_RequiresEnvironment(t *testing.T) {
 // --- ContextType tests ---
 
 func TestContextType_Fields(t *testing.T) {
+	planMeta := map[string]interface{}{"type": "string"}
 	ct := smplkit.ContextType{
 		ID:         "user",
 		Name:       "User",
-		Attributes: map[string]interface{}{"plan": "string"},
+		Attributes: map[string]map[string]interface{}{"plan": planMeta},
 	}
 	assert.Equal(t, "user", ct.ID)
 	assert.Equal(t, "User", ct.Name)
-	assert.Equal(t, "string", ct.Attributes["plan"])
+	assert.Equal(t, planMeta, ct.Attributes["plan"])
 }
 
 // --- Error classification tests ---

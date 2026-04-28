@@ -714,7 +714,7 @@ func TestFlagsRuntime_EvaluationRecordsMetrics(t *testing.T) {
 		metrics:     r,
 	}
 	fc := &FlagsClient{client: client}
-	rt := newFlagsRuntime(fc)
+	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	// Populate flag store.
 	rt.mu.Lock()
@@ -756,7 +756,7 @@ func TestFlagsRuntime_CacheHitRecordsMetrics(t *testing.T) {
 		metrics:     r,
 	}
 	fc := &FlagsClient{client: client}
-	rt := newFlagsRuntime(fc)
+	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	rt.mu.Lock()
 	rt.environment = "test"
@@ -797,7 +797,7 @@ func TestFlagsRuntime_MissingFlagRecordsEvaluation(t *testing.T) {
 		metrics:     r,
 	}
 	fc := &FlagsClient{client: client}
-	rt := newFlagsRuntime(fc)
+	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	rt.mu.Lock()
 	rt.environment = "test"
@@ -824,7 +824,7 @@ func TestFlagsRuntime_MissingFlagRecordsEvaluation(t *testing.T) {
 func TestFlagsRuntime_NoMetricsWhenNilClient(t *testing.T) {
 	// FlagsClient exists but its client field is nil.
 	fc := &FlagsClient{client: nil}
-	rt := newFlagsRuntime(fc)
+	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	rt.mu.Lock()
 	rt.environment = "test"
@@ -850,7 +850,7 @@ func TestFlagsRuntime_NoMetricsWhenDisabled(t *testing.T) {
 		metrics:     nil,
 	}
 	fc := &FlagsClient{client: client}
-	rt := newFlagsRuntime(fc)
+	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	rt.mu.Lock()
 	rt.environment = "test"

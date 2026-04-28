@@ -159,3 +159,39 @@ func (m *LoggingManagement) ListGroups(ctx context.Context) ([]*LogGroup, error)
 func (m *LoggingManagement) DeleteGroup(ctx context.Context, id string) error {
 	return m.client.deleteGroupByID(ctx, id)
 }
+
+// RegisterSources registers a batch of logger sources observed in external services.
+// This is useful for seeding source-discovery data without running the actual
+// service process — e.g. for sample-data loading or cross-service migration.
+func (m *LoggingManagement) RegisterSources(ctx context.Context, sources []LoggerSource) error {
+	if len(sources) == 0 {
+		return nil
+	}
+	items := make([]genlogging.LoggerBulkItem, len(sources))
+	for i, s := range sources {
+		item := genlogging.LoggerBulkItem{Id: s.ID}
+		if s.Service != nil {
+			item.Service = s.Service
+		}
+		if s.Environment != nil {
+			item.Environment = s.Environment
+		}
+		if s.ResolvedLevel != nil {
+			rl := string(*s.ResolvedLevel)
+			item.ResolvedLevel = &rl
+		}
+		items[i] = item
+	}
+	reqBody := genlogging.LoggerBulkRequest{Loggers: items}
+	resp, err := m.client.generated.BulkRegisterLoggersWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	return checkStatus(resp.StatusCode, body)
+}

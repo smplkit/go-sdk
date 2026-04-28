@@ -1,7 +1,8 @@
 .PHONY: install test lint build generate \
 	config_runtime_showcase config_management_showcase \
 	flags_runtime_showcase flags_management_showcase \
-	logging_runtime_showcase logging_management_showcase
+	logging_runtime_showcase logging_management_showcase \
+	management_showcase
 
 install:
 	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
@@ -38,3 +39,6 @@ logging_runtime_showcase:
 
 logging_management_showcase:
 	go run examples/logging_management_showcase.go examples/helpers.go
+
+management_showcase:
+	go run examples/management_showcase.go examples/helpers.go

@@ -171,6 +171,36 @@ func main() {
 	}
 	fmt.Printf("  Cleared all environment levels for: %s\n", workerLogger.ID)
 
+	// ── Section 5b: Register Synthetic Logger Sources ───────────────
+	// RegisterSources accepts explicit (service, environment) overrides —
+	// useful for sample-data seeding, cross-tenant migration, and test
+	// fixtures. Contrast with logging.Start() which registers loggers
+	// discovered in the current process under the client's service+env.
+	section("5b. Register Synthetic Logger Sources")
+
+	step("Registering logger sources with service/environment overrides")
+	err = logging.Management().RegisterSources(ctx, []smplkit.LoggerSource{
+		smplkit.NewLoggerSource("sqlalchemy.engine",
+			smplkit.WithLoggerSourceService("user-service"),
+			smplkit.WithLoggerSourceEnvironment("production"),
+			smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelWarn),
+		),
+		smplkit.NewLoggerSource("sqlalchemy.engine",
+			smplkit.WithLoggerSourceService("payment-service"),
+			smplkit.WithLoggerSourceEnvironment("production"),
+			smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelWarn),
+		),
+		smplkit.NewLoggerSource("httpx",
+			smplkit.WithLoggerSourceService("checkout-service"),
+			smplkit.WithLoggerSourceEnvironment("staging"),
+			smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelInfo),
+		),
+	})
+	if err != nil {
+		fatal("RegisterSources failed", err)
+	}
+	fmt.Println("  3 sources registered")
+
 	// ── Section 6: Cleanup ───────────────────────────────────────────
 	section("6. Cleanup")
 
@@ -204,4 +234,5 @@ func main() {
 	fmt.Println("  [x] GetGroup(key) / ListGroups() — retrieve groups")
 	fmt.Println("  [x] Delete(key) / DeleteGroup(key) — cleanup")
 	fmt.Println("  [x] WithLoggerManaged — unmanaged loggers")
+	fmt.Println("  [x] RegisterSources — synthetic logger registration with service/env overrides")
 }
