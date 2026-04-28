@@ -623,3 +623,532 @@ func TestLoggingManagement_RegisterSources_Error(t *testing.T) {
 	})
 	require.Error(t, err)
 }
+
+func TestLoggingManagement_RegisterSources_NoBranches(t *testing.T) {
+	// Source with no optional fields covers the nil-branch paths in RegisterSources.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/loggers/bulk" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	err := client.Logging().Management().RegisterSources(context.Background(), []smplkit.LoggerSource{
+		smplkit.NewLoggerSource("bare.logger"), // no service, env, or level
+	})
+	require.NoError(t, err)
+}
+
+// ── Error path coverage ───────────────────────────────────────────────────────
+
+func TestEnvironment_Save_Update(t *testing.T) {
+	// Update path: env already has CreatedAt set → triggers PUT.
+	updated := false
+	now := time.Now()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/environments/production" {
+			updated = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":{"id":"production","type":"environment","attributes":{"name":"Production Updated","classification":"STANDARD","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-06-01T00:00:00Z"}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	// Construct an env that already has CreatedAt — Save should call update.
+	e := client.Management().Environments().New("production", "Production")
+	e.CreatedAt = &now
+	err := e.Save(context.Background())
+	require.NoError(t, err)
+	assert.True(t, updated)
+	assert.Equal(t, "Production Updated", e.Name)
+	assert.NotNil(t, e.UpdatedAt)
+}
+
+func TestEnvironmentsManagement_List_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid json`))
+	}))
+	_, err := client.Management().Environments().List(context.Background())
+	require.Error(t, err)
+}
+
+func TestEnvironmentsManagement_Get_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	_, err := client.Management().Environments().Get(context.Background(), "production")
+	require.Error(t, err)
+}
+
+func TestEnvironmentsManagement_Create_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	e := client.Management().Environments().New("test", "Test")
+	err := e.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestEnvironmentsManagement_Update_Error(t *testing.T) {
+	now := time.Now()
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+	e := client.Management().Environments().New("production", "Production")
+	e.CreatedAt = &now
+	err := e.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestEnvironmentsManagement_Update_BadJSON(t *testing.T) {
+	now := time.Now()
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	e := client.Management().Environments().New("production", "Production")
+	e.CreatedAt = &now
+	err := e.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextType_Save_Update(t *testing.T) {
+	// Update path: ct already has CreatedAt set → triggers PUT.
+	now := time.Now()
+	updated := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/context_types/user" {
+			updated = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{"plan":{}},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-06-01T00:00:00Z"}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	ct := client.Management().ContextTypes().New("user", smplkit.WithContextTypeName("User"))
+	ct.CreatedAt = &now
+	ct.AddAttribute("plan")
+	err := ct.Save(context.Background())
+	require.NoError(t, err)
+	assert.True(t, updated)
+	assert.NotNil(t, ct.UpdatedAt)
+}
+
+func TestContextTypesManagement_List_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	_, err := client.Management().ContextTypes().List(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextTypesManagement_Get_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	_, err := client.Management().ContextTypes().Get(context.Background(), "user")
+	require.Error(t, err)
+}
+
+func TestContextTypesManagement_Create_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	ct := client.Management().ContextTypes().New("user")
+	err := ct.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextTypesManagement_Update_Error(t *testing.T) {
+	now := time.Now()
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+	ct := client.Management().ContextTypes().New("user")
+	ct.CreatedAt = &now
+	err := ct.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextTypesManagement_Update_BadJSON(t *testing.T) {
+	now := time.Now()
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	ct := client.Management().ContextTypes().New("user")
+	ct.CreatedAt = &now
+	err := ct.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextTypesManagement_List_NonDictAttribute(t *testing.T) {
+	// When an attribute value is not a map, resourceToContextType should default to {}.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"user","attributes":{"id":"user","name":"User","attributes":{"plan":"string_value"}}}]}`))
+	})
+	client := newManagementTestClient(t, handler)
+
+	types, err := client.Management().ContextTypes().List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, types, 1)
+	assert.Equal(t, map[string]interface{}{}, types[0].Attributes["plan"])
+}
+
+func TestContextsManagement_List_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	_, err := client.Management().Contexts().List(context.Background(), "user")
+	require.Error(t, err)
+}
+
+func TestContextsManagement_List_ParseEntityError(t *testing.T) {
+	// Data item is not valid JSON for a context entity.
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":["not an object"]}`))
+	}))
+	_, err := client.Management().Contexts().List(context.Background(), "user")
+	require.Error(t, err)
+}
+
+func TestContextsManagement_List_EntityNoColon(t *testing.T) {
+	// Entity ID without colon separator — ContextType is the whole ID, Key is empty.
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"nocolon","attributes":{"attributes":{}}}]}`))
+	}))
+	entities, err := client.Management().Contexts().List(context.Background(), "user")
+	require.NoError(t, err)
+	require.Len(t, entities, 1)
+	assert.Equal(t, "nocolon", entities[0].ContextType)
+	assert.Equal(t, "", entities[0].Key)
+}
+
+func TestContextsManagement_Get_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	_, err := client.Management().Contexts().Get(context.Background(), "user:u1")
+	require.Error(t, err)
+}
+
+func TestContextsManagement_Get_ParseEntityError(t *testing.T) {
+	// data field is a string, not an object.
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":"not an object"}`))
+	}))
+	_, err := client.Management().Contexts().Get(context.Background(), "user:u1")
+	require.Error(t, err)
+}
+
+func TestContextsManagement_Get_ZeroArgs(t *testing.T) {
+	client := newManagementTestClient(t, http.NotFoundHandler())
+	_, err := client.Management().Contexts().Get(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextsManagement_Get_EmptyCompositeID(t *testing.T) {
+	client := newManagementTestClient(t, http.NotFoundHandler())
+	_, err := client.Management().Contexts().Get(context.Background(), "")
+	require.Error(t, err)
+}
+
+func TestContextsManagement_Get_EmptyKey(t *testing.T) {
+	client := newManagementTestClient(t, http.NotFoundHandler())
+	_, err := client.Management().Contexts().Get(context.Background(), "user", "")
+	require.Error(t, err)
+}
+
+func TestContextsManagement_Delete_ZeroArgs(t *testing.T) {
+	client := newManagementTestClient(t, http.NotFoundHandler())
+	err := client.Management().Contexts().Delete(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextsManagement_Flush_Error(t *testing.T) {
+	// Register then flush to a server returning 500 — should propagate error.
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"flush failed"}]}`))
+	}))
+
+	err := client.Management().Contexts().Register(context.Background(),
+		[]smplkit.Context{smplkit.NewContext("user", "u1", nil)},
+	)
+	require.NoError(t, err)
+	err = client.Management().Contexts().Flush(context.Background())
+	require.Error(t, err)
+}
+
+func TestAccountSettings_Get_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	_, err := client.Management().AccountSettings().Get(context.Background())
+	require.Error(t, err)
+}
+
+func TestAccountSettings_Get_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"unauthorized"}]}`))
+	}))
+	_, err := client.Management().AccountSettings().Get(context.Background())
+	require.Error(t, err)
+}
+
+func TestAccountSettings_Save_Error(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"environment_order":["production"]}`))
+		case r.Method == "PUT":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	client := newManagementTestClient(t, handler)
+
+	s, err := client.Management().AccountSettings().Get(context.Background())
+	require.NoError(t, err)
+	err = s.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestAccountSettings_Save_BadJSON(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "GET":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"environment_order":["production"]}`))
+		case r.Method == "PUT":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{not json`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	client := newManagementTestClient(t, handler)
+
+	s, err := client.Management().AccountSettings().Get(context.Background())
+	require.NoError(t, err)
+	err = s.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestAccountSettings_SetEnvironmentOrder_NilRaw(t *testing.T) {
+	s := &smplkit.AccountSettings{} // Raw is nil
+	s.SetEnvironmentOrder([]string{"production", "staging"})
+	assert.Equal(t, []string{"production", "staging"}, s.EnvironmentOrder())
+}
+
+func TestAccountSettings_EnvironmentOrder_StringSlice(t *testing.T) {
+	// SetEnvironmentOrder stores []interface{}; verify []string case also works
+	// by directly constructing a Raw with a []string value.
+	s := &smplkit.AccountSettings{
+		Raw: map[string]interface{}{
+			"environment_order": []string{"production", "staging"},
+		},
+	}
+	assert.Equal(t, []string{"production", "staging"}, s.EnvironmentOrder())
+}
+
+func TestAccountSettings_EnvironmentOrder_UnknownType(t *testing.T) {
+	s := &smplkit.AccountSettings{
+		Raw: map[string]interface{}{
+			"environment_order": 42, // unknown type
+		},
+	}
+	assert.Nil(t, s.EnvironmentOrder())
+}
+
+func TestContextType_AddAttribute_NilMeta(t *testing.T) {
+	ct := &smplkit.ContextType{}
+	ct.AddAttribute("plan", nil) // explicit nil meta → else branch
+	require.NotNil(t, ct.Attributes)
+	assert.Equal(t, map[string]interface{}{}, ct.Attributes["plan"])
+}
+
+func TestContextType_UpdateAttribute_NilExistingAttrs(t *testing.T) {
+	ct := &smplkit.ContextType{} // Attributes is nil
+	ct.UpdateAttribute("plan", map[string]interface{}{"type": "string"})
+	require.NotNil(t, ct.Attributes)
+	assert.Equal(t, map[string]interface{}{"type": "string"}, ct.Attributes["plan"])
+}
+
+func TestContextType_Save_Update_HasUpdatedAt(t *testing.T) {
+	// Response includes updated_at — verify parseContextTypeRaw parses it.
+	now := time.Now()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-06-15T12:00:00Z"}}}`))
+	})
+	client := newManagementTestClient(t, handler)
+
+	ct := client.Management().ContextTypes().New("user")
+	ct.CreatedAt = &now
+	err := ct.Save(context.Background())
+	require.NoError(t, err)
+	assert.NotNil(t, ct.UpdatedAt)
+}
+
+func TestFlagsListContextTypes_NonDictAttribute(t *testing.T) {
+	// ListContextTypes on the flags client also has the non-dict attribute path.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/context_types" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":[{"id":"user","attributes":{"id":"user","name":"User","attributes":{"plan":"string_value"}}}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	types, err := client.Flags().Management().ListContextTypes(context.Background())
+	require.NoError(t, err)
+	require.Len(t, types, 1)
+	assert.Equal(t, map[string]interface{}{}, types[0].Attributes["plan"])
+}
+
+func TestParseContextTypeRaw_UpdatedAt(t *testing.T) {
+	// parseContextTypeRaw is called via Get — verify updated_at parsing branch.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/context_types/user" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-06-15T12:00:00Z"}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	ct, err := client.Management().ContextTypes().Get(context.Background(), "user")
+	require.NoError(t, err)
+	assert.NotNil(t, ct.UpdatedAt)
+}
+
+func TestContextsManagement_Register_WithFlush_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"flush error"}]}`))
+	}))
+
+	err := client.Management().Contexts().Register(context.Background(),
+		[]smplkit.Context{smplkit.NewContext("user", "u1", nil)},
+		smplkit.WithContextFlush(),
+	)
+	require.Error(t, err)
+}
+
+// ── checkStatus error paths ───────────────────────────────────────────────────
+// These tests cover the `if err := checkStatus(...); err != nil { return err }`
+// branches by having the server return a non-2xx status for each method.
+
+func TestEnvironmentsManagement_List_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+	_, err := client.Management().Environments().List(context.Background())
+	require.Error(t, err)
+}
+
+func TestEnvironmentsManagement_Create_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"invalid"}]}`))
+	}))
+	e := client.Management().Environments().New("bad", "Bad")
+	err := e.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextTypesManagement_List_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+	_, err := client.Management().ContextTypes().List(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextTypesManagement_Get_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	}))
+	_, err := client.Management().ContextTypes().Get(context.Background(), "nonexistent")
+	require.Error(t, err)
+}
+
+func TestContextTypesManagement_Create_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"invalid"}]}`))
+	}))
+	ct := client.Management().ContextTypes().New("bad")
+	err := ct.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestContextsManagement_List_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+	_, err := client.Management().Contexts().List(context.Background(), "user")
+	require.Error(t, err)
+}
+
+func TestContextsManagement_Get_Error(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	}))
+	_, err := client.Management().Contexts().Get(context.Background(), "user:u1")
+	require.Error(t, err)
+}
+
+// ── Flags ListContextTypes: dict-value attribute branch ───────────────────────
+
+func TestFlagsManagement_ListContextTypes_DictAttribute(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/context_types" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":[{"id":"user","attributes":{"id":"user","name":"User","attributes":{"plan":{"type":"string"}}}}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	types, err := client.Flags().Management().ListContextTypes(context.Background())
+	require.NoError(t, err)
+	require.Len(t, types, 1)
+	assert.Equal(t, map[string]interface{}{"type": "string"}, types[0].Attributes["plan"])
+}
