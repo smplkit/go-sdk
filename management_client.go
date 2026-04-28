@@ -368,7 +368,6 @@ func contextTypeToRequest(ct *ContextType) genapp.ContextTypeResponse {
 		attrMeta[k] = v
 	}
 	attrs := genapp.ContextType{
-		Id:         &ct.ID,
 		Name:       ct.Name,
 		Attributes: &attrMeta,
 	}
