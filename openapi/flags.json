@@ -738,7 +738,7 @@
           "enabled": {
             "type": "boolean",
             "title": "Enabled",
-            "default": false
+            "default": true
           },
           "default": {
             "anyOf": [
