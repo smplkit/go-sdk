@@ -412,6 +412,9 @@ type AccountResponse struct {
 type AccountWipeRequest struct {
 	// Confirm Must be ``true`` to proceed. Anything else returns 400. The frontend gates the call behind a confirmation dialog; this field is the server-side seatbelt.
 	Confirm bool `json:"confirm"`
+
+	// GenerateSampleData When ``true``, the wipe re-seeds the account with the same Acme Commerce sample dataset that new accounts are bootstrapped with. Best-effort: any seeding failures are logged but do not fail the wipe.
+	GenerateSampleData *bool `json:"generate_sample_data,omitempty"`
 }
 
 // AddPaymentMethodAttributes Attributes for POST /api/v1/payment_methods.
