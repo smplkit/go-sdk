@@ -1109,10 +1109,13 @@ type SubscriptionResponse struct {
 // User defines model for User.
 type User struct {
 	// Account Account UUID
-	Account      *string    `json:"account,omitempty"`
-	AuthProvider *string    `json:"auth_provider,omitempty"`
-	CreatedAt    *time.Time `json:"created_at,omitempty"`
-	DisplayName  string     `json:"display_name"`
+	Account      *string `json:"account,omitempty"`
+	AuthProvider *string `json:"auth_provider,omitempty"`
+
+	// AvatarUrl Server-computed ``data:`` URL when an OIDC provider supplied a profile picture. Null otherwise — callers should fall back to Gravatar or initials.
+	AvatarUrl   *string    `json:"avatar_url,omitempty"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	DisplayName string     `json:"display_name"`
 
 	// Email User's email address
 	Email         openapi_types.Email `json:"email"`

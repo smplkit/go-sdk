@@ -8659,6 +8659,13 @@
             "nullable": true,
             "title": "Profile Pic"
           },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true,
+            "title": "Avatar Url",
+            "description": "Server-computed ``data:`` URL when an OIDC provider supplied a profile picture. Null otherwise \u2014 callers should fall back to Gravatar or initials.",
+            "readOnly": true
+          },
           "auth_provider": {
             "type": "string",
             "nullable": true,
