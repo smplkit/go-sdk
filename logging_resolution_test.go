@@ -1098,7 +1098,7 @@ func TestDeleteLoggerByID_CheckStatusError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	err := lc.deleteLoggerByID(context.Background(), "my-logger")
+	err := lc.Management().Delete(context.Background(), "my-logger")
 	require.Error(t, err)
 }
 
@@ -1112,7 +1112,7 @@ func TestDeleteLoggerByID_ConnectionError(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, genLoggingClient)
 
-	err := lc.deleteLoggerByID(context.Background(), "my-logger")
+	err := lc.Management().Delete(context.Background(), "my-logger")
 	require.Error(t, err)
 }
 
@@ -1145,7 +1145,7 @@ func TestDeleteLoggerByID_BodyReadFailure(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, genLoggingClient)
 
-	err := lc.deleteLoggerByID(context.Background(), "my-logger")
+	err := lc.Management().Delete(context.Background(), "my-logger")
 	require.Error(t, err)
 }
 
@@ -1157,7 +1157,7 @@ func TestDeleteGroupByID_CheckStatusError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 	}))
 
-	err := lc.deleteGroupByID(context.Background(), "my-group")
+	err := lc.Management().DeleteGroup(context.Background(), "my-group")
 	require.Error(t, err)
 }
 
@@ -1171,7 +1171,7 @@ func TestDeleteGroupByID_ConnectionError(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, genLoggingClient)
 
-	err := lc.deleteGroupByID(context.Background(), "my-group")
+	err := lc.Management().DeleteGroup(context.Background(), "my-group")
 	require.Error(t, err)
 }
 
@@ -1185,7 +1185,7 @@ func TestDeleteGroupByID_BodyReadFailure(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, genLoggingClient)
 
-	err := lc.deleteGroupByID(context.Background(), "my-group")
+	err := lc.Management().DeleteGroup(context.Background(), "my-group")
 	require.Error(t, err)
 }
 
@@ -1202,7 +1202,7 @@ func TestResourceToLogger_NilOptionalFields(t *testing.T) {
 		},
 	}
 
-	logger := resourceToLogger(r, lc)
+	logger := resourceToLogger(r, lc.Management())
 	assert.Equal(t, "", logger.ID)
 	assert.Nil(t, logger.Level)
 	assert.True(t, logger.Managed) // default true when Managed is nil
@@ -1222,7 +1222,7 @@ func TestResourceToLogger_EmptyLevel(t *testing.T) {
 		},
 	}
 
-	logger := resourceToLogger(r, lc)
+	logger := resourceToLogger(r, lc.Management())
 	assert.Nil(t, logger.Level) // empty string level treated as nil
 }
 
@@ -1238,7 +1238,7 @@ func TestResourceToLogger_ManagedFalse(t *testing.T) {
 		},
 	}
 
-	logger := resourceToLogger(r, lc)
+	logger := resourceToLogger(r, lc.Management())
 	assert.False(t, logger.Managed)
 }
 
@@ -1255,7 +1255,7 @@ func TestResourceToLogGroup_NilOptionalFields(t *testing.T) {
 		},
 	}
 
-	group := resourceToLogGroup(r, lc)
+	group := resourceToLogGroup(r, lc.Management())
 	assert.Equal(t, "", group.ID)
 	assert.Nil(t, group.Level)
 	assert.NotNil(t, group.Environments) // defaults to empty map when nil
@@ -1273,7 +1273,7 @@ func TestResourceToLogGroup_EmptyLevel(t *testing.T) {
 		},
 	}
 
-	group := resourceToLogGroup(r, lc)
+	group := resourceToLogGroup(r, lc.Management())
 	assert.Nil(t, group.Level) // empty string level treated as nil
 }
 

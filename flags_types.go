@@ -30,6 +30,18 @@ const (
 //	    "plan": "enterprise",
 //	    "firstName": "Alice",
 //	})
+//
+// Identity locking note (rule 9): Python's Context locks `type` and
+// `key` after the entity has been persisted. Go's idiom of exported
+// struct fields makes that lock unenforceable at compile time —
+// `ctx.Type = "X"` is always allowed by the language. Customer code
+// that wants identity-locking semantics should treat persisted
+// Contexts (those returned by mgmt.Contexts().Get / List) as
+// read-only and construct fresh ones via NewContext for new entities.
+// The compile-time-checkable equivalent in Python (TypeError on
+// non-string args) is enforced here by the type system; the runtime
+// "must not be empty" check is enforced by NewContext which panics on
+// empty inputs.
 type Context struct {
 	// Type is the context type (e.g. "user", "account").
 	Type string
@@ -154,6 +166,14 @@ func (r *Rule) Serve(value interface{}) *Rule {
 }
 
 // Build finalizes and returns the rule as a plain map.
+//
+// Python's Rule(description, *, environment="...") makes environment a
+// required keyword arg at construction. Go has no kwargs, so the
+// builder permits chained Environment(...) and only validates at the
+// AddRule boundary — Flag.AddRule rejects any rule whose Build() output
+// has no "environment" key. The validation is one frame away from the
+// mistake, which is acceptable for the breaking-change tradeoff of
+// keeping NewRule single-arg.
 func (r *Rule) Build() map[string]interface{} {
 	var logic interface{}
 	switch len(r.conditions) {

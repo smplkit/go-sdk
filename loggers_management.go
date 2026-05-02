@@ -23,7 +23,7 @@ func (m *LoggersManagement) New(id string) *Logger {
 		Name:         id,
 		Managed:      true,
 		Environments: map[string]interface{}{},
-		client:       m.logging.client,
+		client:       m.logging,
 	}
 	return l
 }

@@ -36,8 +36,14 @@ type ManagementClient struct {
 	contextTypes    *ContextTypesManagement
 	contexts        *ContextsManagement
 	accountSettings *AccountSettingsManagement
-	loggers         *LoggersManagement
-	logGroups       *LogGroupsManagement
+
+	// Per-domain management surfaces, owned directly (rule 1):
+	// neither requires the runtime Client to operate.
+	configMgmt    *ConfigManagement
+	flagsMgmt     *FlagsManagement
+	loggingMgmt   *LoggingManagement // legacy combined surface
+	loggersMgmt   *LoggersManagement
+	logGroupsMgmt *LogGroupsManagement
 }
 
 // Environments returns the sub-client for environment CRUD operations.
@@ -523,7 +529,7 @@ func (m *ContextsManagement) List(ctx context.Context, contextType string) ([]*C
 
 	entities := make([]*ContextEntity, 0, len(result.Data))
 	for _, raw := range result.Data {
-		ce, err := parseContextEntityRaw(raw)
+		ce, err := parseContextEntityRawWithClient(raw, m)
 		if err != nil {
 			return nil, err
 		}
@@ -562,7 +568,36 @@ func (m *ContextsManagement) Get(ctx context.Context, parts ...string) (*Context
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse context: %w", err)
 	}
-	return parseContextEntityRaw(result.Data)
+	return parseContextEntityRawWithClient(result.Data, m)
+}
+
+// saveEntity is the active-record save path for a ContextEntity. It uses
+// the upsert-style bulk-register endpoint so creation and update share
+// one wire call.
+func (m *ContextsManagement) saveEntity(ctx context.Context, ce *ContextEntity) error {
+	attrs := make(map[string]interface{}, len(ce.Attributes))
+	for k, v := range ce.Attributes {
+		attrs[k] = v
+	}
+	if ce.Name != nil && *ce.Name != "" {
+		attrs["name"] = *ce.Name
+	}
+	item := genapp.ContextBulkItem{
+		Type:       ce.ContextType,
+		Key:        ce.Key,
+		Attributes: &attrs,
+	}
+	body := genapp.ContextBulkRegister{Contexts: []genapp.ContextBulkItem{item}}
+	resp, err := m.client.appClient.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, body)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	return checkStatus(resp.StatusCode, respBody)
 }
 
 // Delete removes a context by its composite "type:key" id, or by separate type
@@ -613,7 +648,7 @@ func containsColon(s string) bool {
 	return false
 }
 
-func parseContextEntityRaw(raw json.RawMessage) (*ContextEntity, error) {
+func parseContextEntityRawWithClient(raw json.RawMessage, client *ContextsManagement) (*ContextEntity, error) {
 	var data struct {
 		ID         string `json:"id"`
 		Attributes struct {
@@ -629,6 +664,7 @@ func parseContextEntityRaw(raw json.RawMessage) (*ContextEntity, error) {
 
 	ce := &ContextEntity{
 		Attributes: make(map[string]interface{}),
+		client:     client,
 	}
 	compositeID := data.ID
 	if i := indexByte(compositeID, ':'); i >= 0 {

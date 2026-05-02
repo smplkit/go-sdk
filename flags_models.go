@@ -27,8 +27,9 @@ type Flag struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	// client is the back-reference to FlagsClient, set by factory methods.
-	client *FlagsClient
+	// client is the back-reference to the management surface that owns
+	// the create/update/delete logic for this active-record model.
+	client *FlagsManagement
 }
 
 // FlagValue represents a named value in a flag's value set.
@@ -58,6 +59,9 @@ func WithFlagValues(values []FlagValue) FlagOption {
 // Save persists the flag to the server.
 // The Flag instance is updated with the server response.
 func (f *Flag) Save(ctx context.Context) error {
+	if f.client == nil {
+		return &Error{Message: "flag was constructed without a client; cannot save"}
+	}
 	if f.CreatedAt == nil {
 		return f.client.createFlag(ctx, f)
 	}
@@ -71,7 +75,7 @@ func (f *Flag) Delete(ctx context.Context) error {
 	if f.client == nil || f.ID == "" {
 		return &Error{Message: "flag was constructed without a client or id; cannot delete"}
 	}
-	return f.client.Management().Delete(ctx, f.ID)
+	return f.client.Delete(ctx, f.ID)
 }
 
 // AddRule appends a rule to the specified environment. The builtRule must

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	smplkit "github.com/smplkit/go-sdk"
 )
@@ -210,6 +211,41 @@ func TestConfigEntry_Remove_BaseAndEnv(t *testing.T) {
 	empty := &smplkit.ConfigEntry{}
 	empty.Remove("name", "")
 	empty.Remove("name", "production")
+}
+
+func TestFlag_AddRule_RejectsEmptyEnvironment(t *testing.T) {
+	// Rule built without Environment() — AddRule must reject so the
+	// boundary check holds even if customers skip the builder kwarg.
+	f := &smplkit.Flag{Environments: map[string]interface{}{}}
+	rule := smplkit.NewRule("no env").Serve(true).Build()
+	err := f.AddRule(rule)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "environment")
+}
+
+func TestEnvironment_TypedColor_RoundTrip(t *testing.T) {
+	hex := "#ef4444"
+	e := &smplkit.Environment{Color: &hex}
+	tc := e.TypedColor()
+	assert.Equal(t, "#ef4444", tc.Hex())
+
+	// Setting via Color round-trips back to hex string.
+	c, err := smplkit.NewColor("#0066cc")
+	require.NoError(t, err)
+	e.SetTypedColor(c)
+	assert.Equal(t, "#0066cc", *e.Color)
+
+	// Setting zero clears.
+	e.SetTypedColor(smplkit.Color{})
+	assert.Nil(t, e.Color)
+
+	// Reading nil color returns zero.
+	assert.True(t, e.TypedColor().IsZero())
+
+	// Malformed hex on the wire returns zero rather than panicking.
+	bad := "not-a-hex"
+	e.Color = &bad
+	assert.True(t, e.TypedColor().IsZero())
 }
 
 func TestContext_PanicsOnEmpty(t *testing.T) {

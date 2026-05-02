@@ -513,8 +513,8 @@ func TestGet_Basic(t *testing.T) {
 
 	resolved, err := cc.Get(context.Background(), "app")
 	require.NoError(t, err)
-	assert.Equal(t, "localhost", resolved["host"])
-	assert.Equal(t, float64(3000), resolved["port"])
+	assert.Equal(t, "localhost", resolved.Value()["host"])
+	assert.Equal(t, float64(3000), resolved.Value()["port"])
 }
 
 func TestGet_NilWhenKeyNotFound(t *testing.T) {
@@ -526,7 +526,10 @@ func TestGet_NilWhenKeyNotFound(t *testing.T) {
 
 	resolved, err := cc.Get(context.Background(), "nonexistent")
 	require.NoError(t, err)
-	assert.Nil(t, resolved)
+	require.NotNil(t, resolved)
+	// Live proxy on a non-existent config has zero len and a nil Value().
+	assert.Equal(t, 0, resolved.Len())
+	assert.Nil(t, resolved.Value())
 }
 
 // ---------- ResolveInto ----------

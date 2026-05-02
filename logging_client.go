@@ -47,7 +47,8 @@ type LoggingClient struct {
 // Management returns the sub-object for logger and log group CRUD operations.
 func (c *LoggingClient) Management() *LoggingManagement {
 	if c.management == nil {
-		c.management = &LoggingManagement{client: c}
+		c.management = newLoggingManagement(c.generated)
+		c.management.attachRuntime(c)
 	}
 	return c.management
 }
@@ -254,136 +255,12 @@ func (c *LoggingClient) onNewLogger(name string, level string) {
 	}
 }
 
-func (c *LoggingClient) updateLogger(ctx context.Context, l *Logger) error {
-	reqBody := genlogging.LoggerResponse{
-		Data: genlogging.LoggerResource{
-			Id:         &l.ID,
-			Type:       genlogging.LoggerResourceTypeLogger,
-			Attributes: buildLoggerAttributes(l),
-		},
-	}
+// (updateLogger, deleteLoggerByID, createGroup, updateGroup,
+// deleteGroupByID moved to logging_management.go so the active-record
+// save path doesn't depend on the runtime client — rule 1 of the
+// cross-SDK overhaul.)
 
-	resp, err := c.generated.UpdateLoggerWithApplicationVndAPIPlusJSONBody(ctx, l.ID, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &ConnectionError{
-			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var result genlogging.LoggerResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	l.apply(resourceToLogger(result.Data, c))
-	return nil
-}
-
-func (c *LoggingClient) deleteLoggerByID(ctx context.Context, id string) error {
-	resp, err := c.generated.DeleteLogger(ctx, id)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &ConnectionError{
-			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	return checkStatus(resp.StatusCode, body)
-}
-
-func (c *LoggingClient) createGroup(ctx context.Context, g *LogGroup) error {
-	reqBody := genlogging.LogGroupResponse{
-		Data: genlogging.LogGroupResource{
-			Id:         &g.ID,
-			Type:       genlogging.LogGroupResourceTypeLogGroup,
-			Attributes: buildLogGroupAttributes(g),
-		},
-	}
-
-	resp, err := c.generated.CreateLogGroupWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &ConnectionError{
-			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var result genlogging.LogGroupResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	g.apply(resourceToLogGroup(result.Data, c))
-	return nil
-}
-
-func (c *LoggingClient) updateGroup(ctx context.Context, g *LogGroup) error {
-	reqBody := genlogging.LogGroupResponse{
-		Data: genlogging.LogGroupResource{
-			Id:         &g.ID,
-			Type:       genlogging.LogGroupResourceTypeLogGroup,
-			Attributes: buildLogGroupAttributes(g),
-		},
-	}
-
-	resp, err := c.generated.UpdateLogGroupWithApplicationVndAPIPlusJSONBody(ctx, g.ID, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &ConnectionError{
-			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var result genlogging.LogGroupResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	g.apply(resourceToLogGroup(result.Data, c))
-	return nil
-}
-
-func (c *LoggingClient) deleteGroupByID(ctx context.Context, id string) error {
-	resp, err := c.generated.DeleteLogGroup(ctx, id)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &ConnectionError{
-			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	return checkStatus(resp.StatusCode, body)
-}
-
-func resourceToLogger(r genlogging.LoggerResource, c *LoggingClient) *Logger {
+func resourceToLogger(r genlogging.LoggerResource, m *LoggingManagement) *Logger {
 	attrs := r.Attributes
 	id := ""
 	if r.Id != nil {
@@ -419,11 +296,11 @@ func resourceToLogger(r genlogging.LoggerResource, c *LoggingClient) *Logger {
 		Environments: envs,
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
-		client:       c,
+		client:       m,
 	}
 }
 
-func resourceToLogGroup(r genlogging.LogGroupResource, c *LoggingClient) *LogGroup {
+func resourceToLogGroup(r genlogging.LogGroupResource, m *LoggingManagement) *LogGroup {
 	attrs := r.Attributes
 	id := ""
 	if r.Id != nil {
@@ -449,7 +326,7 @@ func resourceToLogGroup(r genlogging.LogGroupResource, c *LoggingClient) *LogGro
 		Environments: envs,
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
-		client:       c,
+		client:       m,
 	}
 }
 
@@ -517,7 +394,7 @@ func (c *LoggingClient) fetchSingleLogger(ctx context.Context, key string) (map[
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 
-	l := resourceToLogger(result.Data, c)
+	l := resourceToLogger(result.Data, c.Management())
 	entry := map[string]interface{}{
 		"id":           l.ID,
 		"name":         l.Name,
@@ -555,7 +432,7 @@ func (c *LoggingClient) fetchSingleGroup(ctx context.Context, key string) (map[s
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
 
-	g := resourceToLogGroup(result.Data, c)
+	g := resourceToLogGroup(result.Data, c.Management())
 	entry := map[string]interface{}{
 		"id":           g.ID,
 		"name":         g.Name,

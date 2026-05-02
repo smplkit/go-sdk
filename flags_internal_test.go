@@ -122,7 +122,7 @@ func TestResourceToFlag(t *testing.T) {
 	now := time.Now()
 	r := flagResource(id, flagType, "Feature X", "BOOLEAN", true, desc, now)
 
-	flag := resourceToFlag(r, fc)
+	flag := resourceToFlag(r, fc.Management())
 	assert.Equal(t, id, flag.ID)
 	assert.Equal(t, "Feature X", flag.Name)
 	assert.Equal(t, "BOOLEAN", flag.Type)
@@ -137,7 +137,7 @@ func TestResourceToFlag_NilID(t *testing.T) {
 	now := time.Now()
 	r := flagResourceNoID("Feature X", "BOOLEAN", true, now)
 
-	flag := resourceToFlag(r, fc)
+	flag := resourceToFlag(r, fc.Management())
 	assert.Equal(t, "", flag.ID)
 }
 
@@ -162,7 +162,7 @@ func TestResourceToFlag_NilValues(t *testing.T) {
 		},
 	}
 
-	flag := resourceToFlag(r, fc)
+	flag := resourceToFlag(r, fc.Management())
 	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values, "unconstrained flag should have nil Values")
 	assert.Equal(t, float64(3), flag.Default)
@@ -1151,13 +1151,13 @@ func TestNewContext_WithOptions(t *testing.T) {
 // --- Rule builder ---
 
 func TestRule_ZeroConditions(t *testing.T) {
-	rule := NewRule("empty rule").Serve(true).Build()
+	rule := NewRule("empty rule").Environment("staging").Serve(true).Build()
 	logic := rule["logic"].(map[string]interface{})
 	assert.Len(t, logic, 0)
 }
 
 func TestRule_SingleCondition(t *testing.T) {
-	rule := NewRule("single").When("user.plan", "==", "enterprise").Serve(true).Build()
+	rule := NewRule("single").Environment("staging").When("user.plan", "==", "enterprise").Serve(true).Build()
 	logic := rule["logic"].(map[string]interface{})
 	assert.Contains(t, logic, "==")
 }
@@ -1445,11 +1445,11 @@ func TestFlagsClient_UpdateFlag_Success(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc,
+		client:       fc.Management(),
 	}
 
 	flag.Name = "Updated Name"
-	err := fc.updateFlag(context.Background(), flag)
+	err := fc.Management().updateFlag(context.Background(), flag)
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Name", flag.Name)
 }
@@ -1468,7 +1468,7 @@ func TestFlagsClient_UpdateFlag_WithAllParams(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc,
+		client:       fc.Management(),
 	}
 
 	newDesc := "New Description"
@@ -1482,7 +1482,7 @@ func TestFlagsClient_UpdateFlag_WithAllParams(t *testing.T) {
 			"enabled": true,
 		},
 	}
-	err := fc.updateFlag(context.Background(), flag)
+	err := fc.Management().updateFlag(context.Background(), flag)
 	require.NoError(t, err)
 }
 
@@ -1504,7 +1504,7 @@ func TestFlag_Save_UpdatePath(t *testing.T) {
 		Type:      "BOOLEAN",
 		Default:   true,
 		CreatedAt: &now,
-		client:    fc,
+		client:    fc.Management(),
 	}
 
 	err := flag.Save(context.Background())
@@ -1762,7 +1762,7 @@ func TestFlag_Update(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc,
+		client:       fc.Management(),
 	}
 
 	err := flag.Save(context.Background())
@@ -1780,7 +1780,7 @@ func TestFlag_AddRule_Success(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc,
+		client:       fc.Management(),
 	}
 
 	rule := NewRule("test").
@@ -1799,7 +1799,7 @@ func TestFlag_AddRule_Success(t *testing.T) {
 
 func TestFlag_AddRule_MissingEnvironment(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	flag := &Flag{ID: testFlagID, client: fc}
+	flag := &Flag{ID: testFlagID, client: fc.Management()}
 
 	err := flag.AddRule(map[string]interface{}{
 		"logic": map[string]interface{}{},
@@ -2105,8 +2105,8 @@ func TestFlagsClient_UpdateFlag_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	err := fc.updateFlag(context.Background(), flag)
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
+	err := fc.Management().updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2116,8 +2116,8 @@ func TestFlagsClient_UpdateFlag_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	err := fc.updateFlag(context.Background(), flag)
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
+	err := fc.Management().updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2365,7 +2365,7 @@ func TestFlag_Update_Error(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
 	}))
 
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
@@ -2375,7 +2375,7 @@ func TestFlag_Update_Error(t *testing.T) {
 func TestFlag_AddRule_MissingEnvironmentKey(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
 	// Rule without environment key should fail.
 	rule := map[string]interface{}{
 		"logic": map[string]interface{}{},
@@ -2708,8 +2708,8 @@ func TestFlagsClient_Delete_NetworkError(t *testing.T) {
 
 func TestFlagsClient_UpdateFlag_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	err := fc.updateFlag(context.Background(), flag)
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
+	err := fc.Management().updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2748,8 +2748,8 @@ func TestFlagsClient_Delete_ReadBodyError(t *testing.T) {
 
 func TestFlagsClient_UpdateFlag_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
-	err := fc.updateFlag(context.Background(), flag)
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
+	err := fc.Management().updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2839,7 +2839,7 @@ func TestFlag_AddRule_ThenSave_UpdateError(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc,
+		client:       fc.Management(),
 	}
 
 	rule := NewRule("test").

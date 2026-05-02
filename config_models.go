@@ -24,8 +24,9 @@ type ConfigEntry struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	// client is the back-reference to ConfigClient, set by factory methods.
-	client *ConfigClient
+	// client is the back-reference to the management surface that owns
+	// the create/update/delete logic for this active-record model.
+	client *ConfigManagement
 }
 
 // ConfigOption configures an unsaved Config returned by ConfigClient.New.
@@ -59,6 +60,9 @@ func WithConfigEnvironments(envs map[string]map[string]interface{}) ConfigOption
 // Save persists the config to the server.
 // The Config instance is updated with the server response.
 func (c *ConfigEntry) Save(ctx context.Context) error {
+	if c.client == nil {
+		return &Error{Message: "config was constructed without a client; cannot save"}
+	}
 	if c.CreatedAt == nil {
 		return c.client.createConfig(ctx, c)
 	}
@@ -71,7 +75,7 @@ func (c *ConfigEntry) Delete(ctx context.Context) error {
 	if c.client == nil || c.ID == "" {
 		return &Error{Message: "config was constructed without a client or id; cannot delete"}
 	}
-	return c.client.Management().Delete(ctx, c.ID)
+	return c.client.Delete(ctx, c.ID)
 }
 
 func (c *ConfigEntry) apply(other *ConfigEntry) {

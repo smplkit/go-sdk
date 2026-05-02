@@ -39,7 +39,7 @@ type Logger struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *LoggingClient
+	client *LoggingManagement
 }
 
 // LoggerOption configures an unsaved Logger returned by LoggingClient.New.
@@ -59,6 +59,9 @@ func WithLoggerManaged(managed bool) LoggerOption {
 // PUT has upsert semantics: the server creates the logger if it does not exist.
 // The Logger instance is updated with the server response.
 func (l *Logger) Save(ctx context.Context) error {
+	if l.client == nil {
+		return &Error{Message: "logger was constructed without a client; cannot save"}
+	}
 	return l.client.updateLogger(ctx, l)
 }
 
@@ -68,7 +71,7 @@ func (l *Logger) Delete(ctx context.Context) error {
 	if l.client == nil || l.ID == "" {
 		return &Error{Message: "logger was constructed without a client or id; cannot delete"}
 	}
-	return l.client.Management().Delete(ctx, l.ID)
+	return l.client.Delete(ctx, l.ID)
 }
 
 // SetBaseLevel sets the logger's base level (no environment scoping).
@@ -153,7 +156,7 @@ type LogGroup struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *LoggingClient
+	client *LoggingManagement
 }
 
 // LogGroupOption configures an unsaved LogGroup returned by LoggingClient.NewGroup.

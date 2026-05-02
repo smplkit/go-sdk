@@ -34,15 +34,15 @@ type ManagementConfig struct {
 // NewManagementClient creates a new management-only smplkit client.
 //
 // Construction has zero side effects: no service registration, no metrics
-// thread, no websocket, no logger discovery. Use this client for setup
-// scripts, CI/CD jobs, admin tools, and anywhere else the goal is CRUD
-// against the platform — not runtime instrumentation.
+// thread, no websocket, no logger discovery, no synchronous outbound HTTP
+// calls. Use this client for setup scripts, CI/CD jobs, admin tools, and
+// anywhere else the goal is CRUD against the platform — not runtime
+// instrumentation.
 //
-// Mirrors Python's SmplManagementClient (rule 1 of the cross-SDK overhaul).
+// Mirrors Python's SmplManagementClient (rule 1 of the cross-SDK
+// overhaul). The Go implementation owns its sub-management surfaces
+// directly — no runtime-Client skeleton is constructed.
 func NewManagementClient(cfg ManagementConfig, opts ...ClientOption) (*ManagementClient, error) {
-	// Project to a runtime Config (Environment / Service unused for management
-	// but the resolver requires them; pass placeholders that the management
-	// surface will never consult).
 	rc, err := resolveManagementConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -56,6 +56,20 @@ func NewManagementClient(cfg ManagementConfig, opts ...ClientOption) (*Managemen
 		opt(&optCfg)
 	}
 
+	httpClient, genApp, genCfg, genFlags, genLogging := buildGenClients(optCfg, rc)
+	return assembleManagementClient(true, optCfg, rc, httpClient, genApp, genCfg, genFlags, genLogging), nil
+}
+
+// buildGenClients constructs the four generated API clients and wires
+// the auth + headers transport. Shared between NewClient (runtime) and
+// NewManagementClient (standalone management).
+func buildGenClients(optCfg clientConfig, rc *resolvedConfig) (
+	*http.Client,
+	genapp.ClientInterface,
+	genconfig.ClientInterface,
+	genflags.ClientInterface,
+	genlogging.ClientInterface,
+) {
 	httpClient := optCfg.httpClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: optCfg.timeout}
@@ -76,43 +90,54 @@ func NewManagementClient(cfg ManagementConfig, opts ...ClientOption) (*Managemen
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	}
-	genConfigClient, _ := genconfig.NewClient(configURL,
-		genconfig.WithHTTPClient(httpClient),
-		genconfig.WithRequestEditorFn(headerEditor),
-	)
-	genFlagsClient, _ := genflags.NewClient(flagsURL,
-		genflags.WithHTTPClient(httpClient),
-		genflags.WithRequestEditorFn(headerEditor),
-	)
-	genAppClient, _ := genapp.NewClient(appURL,
+	genApp, _ := genapp.NewClient(appURL,
 		genapp.WithHTTPClient(httpClient),
 		genapp.WithRequestEditorFn(headerEditor),
 	)
-	genLoggingClient, _ := genlogging.NewClient(logURL,
+	genCfg, _ := genconfig.NewClient(configURL,
+		genconfig.WithHTTPClient(httpClient),
+		genconfig.WithRequestEditorFn(headerEditor),
+	)
+	genFlags, _ := genflags.NewClient(flagsURL,
+		genflags.WithHTTPClient(httpClient),
+		genflags.WithRequestEditorFn(headerEditor),
+	)
+	genLogging, _ := genlogging.NewClient(logURL,
 		genlogging.WithHTTPClient(httpClient),
 		genlogging.WithRequestEditorFn(headerEditor),
 	)
+	return httpClient, genApp, genCfg, genFlags, genLogging
+}
 
-	// Build the slim runtime-less skeleton needed to wire up sub-clients.
-	skeleton := &Client{
-		apiKey:       rc.apiKey,
-		appURL:       appURL,
-		httpClient:   httpClient,
-		appGenerated: genAppClient,
-		contextBuf:   newContextRegistrationBuffer(),
-	}
-	skeleton.config = &ConfigClient{client: skeleton, generated: genConfigClient}
-	skeleton.flags = &FlagsClient{client: skeleton, generated: genFlagsClient, appGenerated: genAppClient}
-	skeleton.logging = newLoggingClient(skeleton, genLoggingClient)
-
+// assembleManagementClient wires the eight sub-management surfaces
+// directly against the generated API clients — no runtime skeleton.
+func assembleManagementClient(
+	standalone bool,
+	_ clientConfig,
+	_ *resolvedConfig,
+	_ *http.Client,
+	genApp genapp.ClientInterface,
+	genCfg genconfig.ClientInterface,
+	genFlags genflags.ClientInterface,
+	genLogging genlogging.ClientInterface,
+) *ManagementClient {
 	mgmt := &ManagementClient{
-		client:     skeleton,
-		appClient:  genAppClient,
-		contextBuf: skeleton.contextBuf,
+		appClient:  genApp,
+		contextBuf: newContextRegistrationBuffer(),
+		standalone: standalone,
 	}
-	skeleton.management = mgmt
 
-	return mgmt, nil
+	cfgMgmt := newConfigManagement(genCfg)
+	flagsMgmt := newFlagsManagement(genFlags, genApp)
+	loggingMgmt := newLoggingManagement(genLogging)
+
+	mgmt.configMgmt = cfgMgmt
+	mgmt.flagsMgmt = flagsMgmt
+	mgmt.loggersMgmt = &LoggersManagement{logging: loggingMgmt}
+	mgmt.logGroupsMgmt = &LogGroupsManagement{logging: loggingMgmt}
+	mgmt.loggingMgmt = loggingMgmt
+
+	return mgmt
 }
 
 // Manage returns the management-plane sub-client. Mirrors Python's
@@ -129,73 +154,60 @@ func NewManagementClient(cfg ManagementConfig, opts ...ClientOption) (*Managemen
 //	client.Manage().Loggers()
 //	client.Manage().LogGroups()
 //
-// The runtime sub-clients (client.Config, client.Flags, client.Logging)
-// no longer expose a .Management() accessor — runtime and management are
-// strictly separated.
+// The same *ManagementClient is shared by the runtime sub-clients —
+// client.Config().Management() returns the same instance as
+// client.Manage().Config().
 func (c *Client) Manage() *ManagementClient { return c.management }
 
 // Config returns the sub-client for config CRUD (mgmt.config).
 // Mirrors Python's mgmt.config namespace.
 func (m *ManagementClient) Config() *ConfigManagement {
-	return m.client.Config().Management()
+	return m.configMgmt
 }
 
 // Flags returns the sub-client for flag CRUD (mgmt.flags).
-// Mirrors Python's mgmt.flags namespace.
 func (m *ManagementClient) Flags() *FlagsManagement {
-	return m.client.Flags().Management()
+	return m.flagsMgmt
 }
 
 // Loggers returns the sub-client for logger CRUD (mgmt.loggers).
-// Mirrors Python's mgmt.loggers namespace — split from the older
-// LoggingManagement to keep loggers and log groups as separate verbs.
+// Split from the older combined LoggingManagement so loggers and log
+// groups live in distinct namespaces.
 func (m *ManagementClient) Loggers() *LoggersManagement {
-	if m.loggers == nil {
-		m.loggers = &LoggersManagement{logging: m.client.Logging().Management()}
-	}
-	return m.loggers
+	return m.loggersMgmt
 }
 
 // LogGroups returns the sub-client for log-group CRUD (mgmt.log_groups).
-// Mirrors Python's mgmt.log_groups namespace.
 func (m *ManagementClient) LogGroups() *LogGroupsManagement {
-	if m.logGroups == nil {
-		m.logGroups = &LogGroupsManagement{logging: m.client.Logging().Management()}
-	}
-	return m.logGroups
+	return m.logGroupsMgmt
 }
 
 // Close releases HTTP resources held by this management client.
-// No-op for the management client returned from a runtime Client — close
-// the runtime Client instead.
-func (m *ManagementClient) Close() error {
-	if m.standalone {
-		return nil
-	}
-	return nil
-}
+// No-op for the management client returned from a runtime Client —
+// close the runtime Client instead so its WebSocket / metrics / context
+// flush all unwind in order. For a standalone management client built
+// via NewManagementClient, Close has nothing to release (the underlying
+// http.Client is owned by net/http and pooled there) but is provided
+// for symmetry and to give customers a clean defer point.
+func (m *ManagementClient) Close() error { return nil }
 
-// resolveManagementConfig projects a ManagementConfig to the same internal
-// resolved-config shape used by the runtime client, supplying placeholder
-// values for the runtime-only fields.
+// resolveManagementConfig projects a ManagementConfig to the internal
+// resolved-config shape, supplying placeholder values for the
+// runtime-only fields.
 func resolveManagementConfig(cfg ManagementConfig) (*resolvedConfig, error) {
 	rc, err := resolveConfig(Config{
 		Profile:    cfg.Profile,
 		APIKey:     cfg.APIKey,
 		BaseDomain: cfg.BaseDomain,
 		Scheme:     cfg.Scheme,
-		// management doesn't need environment/service, but resolveConfig
-		// rejects empty Service when no env-var or profile fallback exists.
-		// Use harmless placeholders so resolution succeeds; nothing in the
-		// management surface reads these.
+		// management never reads environment/service, but resolveConfig
+		// rejects empty values; pass harmless placeholders.
 		Environment:      "_mgmt_",
 		Service:          "_mgmt_",
 		Debug:            cfg.Debug,
 		DisableTelemetry: true,
 	})
 	if err != nil {
-		// Allow the placeholders to bypass missing-environment/missing-service
-		// errors when the customer truly only set api_key/base_domain/scheme.
 		return nil, fmt.Errorf("smplkit: management client config error: %w", err)
 	}
 	return rc, nil

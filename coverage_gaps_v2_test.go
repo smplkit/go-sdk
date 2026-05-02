@@ -23,7 +23,7 @@ func TestConfigEntry_Delete_NoID(t *testing.T) {
 	t.Cleanup(server.Close)
 	c, err := NewClient(Config{APIKey: "k", Environment: "e", Service: "s"}, WithBaseURL(server.URL))
 	require.NoError(t, err)
-	cfg := &ConfigEntry{client: c.config}
+	cfg := &ConfigEntry{client: c.config.Management()}
 	err = cfg.Delete(context.Background())
 	require.Error(t, err)
 }
@@ -36,7 +36,7 @@ func TestConfigEntry_Delete_HappyPath(t *testing.T) {
 	t.Cleanup(server.Close)
 	c, err := NewClient(Config{APIKey: "k", Environment: "e", Service: "s"}, WithBaseURL(server.URL))
 	require.NoError(t, err)
-	cfg := &ConfigEntry{ID: "showcase-x", client: c.config}
+	cfg := &ConfigEntry{ID: "showcase-x", client: c.config.Management()}
 	require.NoError(t, cfg.Delete(context.Background()))
 }
 
@@ -53,7 +53,7 @@ func TestFlag_Delete_HappyPath(t *testing.T) {
 	t.Cleanup(server.Close)
 	c, err := NewClient(Config{APIKey: "k", Environment: "e", Service: "s"}, WithBaseURL(server.URL))
 	require.NoError(t, err)
-	f := &Flag{ID: "showcase-flag", client: c.flags}
+	f := &Flag{ID: "showcase-flag", client: c.flags.Management()}
 	require.NoError(t, f.Delete(context.Background()))
 }
 
@@ -70,7 +70,7 @@ func TestLogger_Delete_HappyPath(t *testing.T) {
 	t.Cleanup(server.Close)
 	c, err := NewClient(Config{APIKey: "k", Environment: "e", Service: "s"}, WithBaseURL(server.URL))
 	require.NoError(t, err)
-	l := &Logger{ID: "showcase.logger", client: c.logging}
+	l := &Logger{ID: "showcase.logger", client: c.logging.Management()}
 	require.NoError(t, l.Delete(context.Background()))
 }
 
@@ -172,6 +172,125 @@ func TestFlag_EnableRules_OneEnv(t *testing.T) {
 	f.EnableRules("production")
 	prod := f.Environments["production"].(map[string]interface{})
 	assert.Equal(t, true, prod["enabled"])
+}
+
+// Save() with a nil client must surface a clear error rather than
+// nil-deref'ing — covers the explicit guard in each model.
+func TestSave_NoClientGuards(t *testing.T) {
+	cfg := &ConfigEntry{ID: "x"}
+	require.Error(t, cfg.Save(context.Background()))
+
+	f := &Flag{ID: "x"}
+	require.Error(t, f.Save(context.Background()))
+
+	l := &Logger{ID: "x"}
+	require.Error(t, l.Save(context.Background()))
+}
+
+func TestContextEntity_SaveDelete_NoClientGuards(t *testing.T) {
+	ce := &ContextEntity{ContextType: "user", Key: "u-1"}
+	require.Error(t, ce.Save(context.Background()))
+	require.Error(t, ce.Delete(context.Background()))
+}
+
+func TestConfigClient_Snapshot_MissingID(t *testing.T) {
+	cc := &ConfigClient{
+		client:      &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{},
+	}
+	cc.initOnce.Do(func() {})
+	v, err := cc.Snapshot(context.Background(), "missing")
+	require.NoError(t, err)
+	assert.Nil(t, v)
+}
+
+func TestConfigClient_Snapshot_RecordsMetricsWhenEnabled(t *testing.T) {
+	r := newMetricsReporter(&http.Client{}, "http://example.test", "test", "svc", 0)
+	defer r.Close()
+	cc := &ConfigClient{
+		client: &Client{environment: "test", metrics: r},
+		configCache: map[string]map[string]interface{}{
+			"app": {"host": "localhost"},
+		},
+	}
+	cc.initOnce.Do(func() {})
+	v, err := cc.Snapshot(context.Background(), "app")
+	require.NoError(t, err)
+	assert.Equal(t, "localhost", v["host"])
+}
+
+// Hits saveEntity's network-error path so the classifyError + ReadAll
+// branches both fire.
+func TestContextEntity_Save_NetworkError(t *testing.T) {
+	c, err := NewClient(
+		Config{APIKey: "k", Environment: "e", Service: "s"},
+		WithBaseURL("http://127.0.0.1:1"), // closed port — connect error
+	)
+	require.NoError(t, err)
+	defer func() { _ = c.Close() }()
+
+	ce := &ContextEntity{
+		ContextType: "user",
+		Key:         "u-1",
+		Attributes:  map[string]interface{}{},
+		client:      c.Manage().Contexts(),
+	}
+	require.Error(t, ce.Save(context.Background()))
+}
+
+// Exercises the non-map-rule fall-through in TypedEnvironments — a rule
+// entry that isn't a map[string]interface{} must be skipped without
+// panicking.
+func TestFlag_TypedEnvironments_NonMapRule(t *testing.T) {
+	f := &Flag{
+		Environments: map[string]interface{}{
+			"production": map[string]interface{}{
+				"enabled": true,
+				"rules":   []interface{}{"not-a-map", map[string]interface{}{"value": "x"}},
+			},
+		},
+	}
+	typed := f.TypedEnvironments()
+	prod := typed["production"]
+	rules := prod.Rules()
+	require.Len(t, rules, 1)
+	assert.Equal(t, "x", rules[0].Value())
+}
+
+func TestContextEntity_Save_HappyPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+	c, err := NewClient(Config{APIKey: "k", Environment: "e", Service: "s"}, WithBaseURL(server.URL))
+	require.NoError(t, err)
+	defer func() { _ = c.Close() }()
+
+	name := "Alice"
+	ce := &ContextEntity{
+		ContextType: "user",
+		Key:         "u-1",
+		Name:        &name,
+		Attributes:  map[string]interface{}{"plan": "ent"},
+		client:      c.Manage().Contexts(),
+	}
+	require.NoError(t, ce.Save(context.Background()))
+	require.NoError(t, ce.Delete(context.Background()))
+}
+
+func TestContextsManagement_Get_WiresClient(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"id":"user:u-1","type":"context","attributes":{"name":"Alice","attributes":{"plan":"ent"}}}}`))
+	}))
+	t.Cleanup(server.Close)
+	c, err := NewClient(Config{APIKey: "k", Environment: "e", Service: "s"}, WithBaseURL(server.URL))
+	require.NoError(t, err)
+	defer func() { _ = c.Close() }()
+
+	ce, err := c.Manage().Contexts().Get(context.Background(), "user", "u-1")
+	require.NoError(t, err)
+	assert.Equal(t, "user", ce.ContextType)
+	assert.Equal(t, "u-1", ce.Key)
 }
 
 // ── Manage Close (standalone branch) ────────────────────────────────────
