@@ -44,7 +44,7 @@ type Environment struct {
 // PUT semantics: creates if CreatedAt is nil, otherwise updates.
 func (e *Environment) Save(ctx context.Context) error {
 	if e.client == nil {
-		return &SmplError{Message: "environment was constructed without a client; cannot save"}
+		return &Error{Message: "environment was constructed without a client; cannot save"}
 	}
 	if e.CreatedAt == nil {
 		return e.client.create(ctx, e)
@@ -127,7 +127,7 @@ func (ct *ContextType) UpdateAttribute(name string, meta map[string]interface{})
 // Creates if CreatedAt is nil, otherwise updates.
 func (ct *ContextType) Save(ctx context.Context) error {
 	if ct.client == nil {
-		return &SmplError{Message: "context type was constructed without a client; cannot save"}
+		return &Error{Message: "context type was constructed without a client; cannot save"}
 	}
 	if ct.CreatedAt == nil {
 		return ct.client.create(ctx, ct)
@@ -219,7 +219,7 @@ func (s *AccountSettings) SetEnvironmentOrder(order []string) {
 // Save writes the full settings object back to the server.
 func (s *AccountSettings) Save(ctx context.Context) error {
 	if s.client == nil {
-		return &SmplError{Message: "account settings was constructed without a client; cannot save"}
+		return &Error{Message: "account settings was constructed without a client; cannot save"}
 	}
 	return s.client.save(ctx, s)
 }

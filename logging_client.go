@@ -249,8 +249,8 @@ func (c *LoggingClient) updateLogger(ctx context.Context, l *Logger) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -273,8 +273,8 @@ func (c *LoggingClient) deleteLoggerByID(ctx context.Context, id string) error {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	return checkStatus(resp.StatusCode, body)
@@ -297,8 +297,8 @@ func (c *LoggingClient) createGroup(ctx context.Context, g *LogGroup) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -330,8 +330,8 @@ func (c *LoggingClient) updateGroup(ctx context.Context, g *LogGroup) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -354,8 +354,8 @@ func (c *LoggingClient) deleteGroupByID(ctx context.Context, id string) error {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	return checkStatus(resp.StatusCode, body)
@@ -482,8 +482,8 @@ func (c *LoggingClient) fetchSingleLogger(ctx context.Context, key string) (map[
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -520,8 +520,8 @@ func (c *LoggingClient) fetchSingleGroup(ctx context.Context, key string) (map[s
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {

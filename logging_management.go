@@ -55,8 +55,8 @@ func (m *LoggingManagement) Get(ctx context.Context, id string) (*Logger, error)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -81,8 +81,8 @@ func (m *LoggingManagement) List(ctx context.Context) ([]*Logger, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -117,8 +117,8 @@ func (m *LoggingManagement) GetGroup(ctx context.Context, id string) (*LogGroup,
 			return g, nil
 		}
 	}
-	return nil, &SmplNotFoundError{
-		SmplError: SmplError{
+	return nil, &NotFoundError{
+		Base: Error{
 			Message:    fmt.Sprintf("log group with id %q not found", id),
 			StatusCode: 404,
 		},
@@ -135,8 +135,8 @@ func (m *LoggingManagement) ListGroups(ctx context.Context) ([]*LogGroup, error)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -191,7 +191,7 @@ func (m *LoggingManagement) RegisterSources(ctx context.Context, sources []Logge
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	return checkStatus(resp.StatusCode, body)
 }

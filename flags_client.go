@@ -42,8 +42,8 @@ func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -70,8 +70,8 @@ func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -299,8 +299,8 @@ func (c *FlagsClient) fetchSingleFlag(ctx context.Context, key string) (map[stri
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -363,8 +363,8 @@ func (c *FlagsClient) fetchFlagsList(ctx context.Context) ([]map[string]interfac
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {

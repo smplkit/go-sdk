@@ -99,7 +99,7 @@ func resolveConfig(cfg Config) (*resolvedConfig, error) {
 						}
 					}
 					if hasOtherSections {
-						return nil, &SmplError{
+						return nil, &Error{
 							Message: fmt.Sprintf("Profile [%s] not found in ~/.smplkit", profile),
 						}
 					}
@@ -145,7 +145,7 @@ func resolveConfig(cfg Config) (*resolvedConfig, error) {
 
 	// Validate required fields.
 	if rc.environment == "" {
-		return nil, &SmplError{
+		return nil, &Error{
 			Message: "No environment provided. Set one of:\n" +
 				"  1. Set Config.Environment\n" +
 				"  2. Set the SMPLKIT_ENVIRONMENT environment variable\n" +
@@ -153,7 +153,7 @@ func resolveConfig(cfg Config) (*resolvedConfig, error) {
 		}
 	}
 	if rc.service == "" {
-		return nil, &SmplError{
+		return nil, &Error{
 			Message: "No service provided. Set one of:\n" +
 				"  1. Set Config.Service\n" +
 				"  2. Set the SMPLKIT_SERVICE environment variable\n" +
@@ -161,7 +161,7 @@ func resolveConfig(cfg Config) (*resolvedConfig, error) {
 		}
 	}
 	if rc.apiKey == "" {
-		return nil, &SmplError{
+		return nil, &Error{
 			Message: "No API key provided. Set one of:\n" +
 				"  1. Set Config.APIKey\n" +
 				"  2. Set the SMPLKIT_API_KEY environment variable\n" +
@@ -213,7 +213,7 @@ func parseBool(value, key string) (bool, error) {
 	case "false", "0", "no":
 		return false, nil
 	default:
-		return false, &SmplError{
+		return false, &Error{
 			Message: fmt.Sprintf("Invalid boolean value %q for %s (expected true/false/1/0/yes/no)", value, key),
 		}
 	}

@@ -9,7 +9,7 @@
 //	})
 //	cfg, err := client.Config().Get(ctx, "my-service")
 //	if err != nil {
-//	    var notFound *smplkit.SmplNotFoundError
+//	    var notFound *smplkit.NotFoundError
 //	    if errors.As(err, &notFound) {
 //	        // handle not found
 //	    }

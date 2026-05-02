@@ -889,7 +889,7 @@ func TestGet_EnsureInitError(t *testing.T) {
 	}
 	// Force initOnce to run with an error
 	cc.initOnce.Do(func() {
-		cc.initErr = &SmplError{Message: "init failed"}
+		cc.initErr = &Error{Message: "init failed"}
 	})
 
 	_, err := cc.Get(context.Background(), "app")
@@ -904,7 +904,7 @@ func TestGetInto_EnsureInitError(t *testing.T) {
 		client: &Client{environment: "test"},
 	}
 	cc.initOnce.Do(func() {
-		cc.initErr = &SmplError{Message: "init failed"}
+		cc.initErr = &Error{Message: "init failed"}
 	})
 
 	var target struct{ Host string }
@@ -920,7 +920,7 @@ func TestSubscribe_EnsureInitError(t *testing.T) {
 		client: &Client{environment: "test"},
 	}
 	cc.initOnce.Do(func() {
-		cc.initErr = &SmplError{Message: "init failed"}
+		cc.initErr = &Error{Message: "init failed"}
 	})
 
 	_, err := cc.Subscribe(context.Background(), "app")

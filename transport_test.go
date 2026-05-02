@@ -26,7 +26,7 @@ func TestParseJSONAPIErrors_FallbackToTitle(t *testing.T) {
 
 	var valErr *smplkit.SmplValidationError
 	require.True(t, errors.As(err, &valErr))
-	assert.Equal(t, "Validation Error", valErr.Message)
+	assert.Equal(t, "Validation Error", valErr.Base.Message)
 }
 
 func TestParseJSONAPIErrors_FallbackToStatus(t *testing.T) {
@@ -70,8 +70,8 @@ func TestClassifyError_URLErrorIncludesURL(t *testing.T) {
 
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr), "expected SmplConnectionError, got %T: %v", err, err)
-	assert.Contains(t, connErr.Message, "http://config.localhost/api/v1/configs")
-	assert.Contains(t, connErr.Message, "no such host")
+	assert.Contains(t, connErr.Base.Message, "http://config.localhost/api/v1/configs")
+	assert.Contains(t, connErr.Base.Message, "no such host")
 }
 
 func TestClassifyError_NonURLErrorFallback(t *testing.T) {
@@ -81,7 +81,7 @@ func TestClassifyError_NonURLErrorFallback(t *testing.T) {
 
 	var connErr *smplkit.SmplConnectionError
 	require.True(t, errors.As(err, &connErr))
-	assert.Contains(t, connErr.Message, "some generic error")
+	assert.Contains(t, connErr.Base.Message, "some generic error")
 }
 
 func TestParseJSONAPIErrors_PluralMoreErrors(t *testing.T) {
@@ -99,6 +99,6 @@ func TestParseJSONAPIErrors_PluralMoreErrors(t *testing.T) {
 
 	var valErr *smplkit.SmplValidationError
 	require.True(t, errors.As(err, &valErr))
-	assert.Contains(t, valErr.Message, "(and 2 more errors)")
-	require.Len(t, valErr.Errors, 3)
+	assert.Contains(t, valErr.Base.Message, "(and 2 more errors)")
+	require.Len(t, valErr.Base.Errors, 3)
 }

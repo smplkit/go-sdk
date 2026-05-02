@@ -32,7 +32,7 @@ func (m *ConfigManagement) New(id string, opts ...ConfigOption) *ConfigEntry {
 }
 
 // Get retrieves a config by its ID.
-// Returns SmplNotFoundError if no match.
+// Returns NotFoundError if no match.
 func (m *ConfigManagement) Get(ctx context.Context, id string) (*ConfigEntry, error) {
 	resp, err := m.client.generated.GetConfig(ctx, id)
 	if err != nil {
@@ -42,8 +42,8 @@ func (m *ConfigManagement) Get(ctx context.Context, id string) (*ConfigEntry, er
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -68,8 +68,8 @@ func (m *ConfigManagement) List(ctx context.Context) ([]*ConfigEntry, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -98,8 +98,8 @@ func (m *ConfigManagement) Delete(ctx context.Context, id string) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	return checkStatus(resp.StatusCode, body)

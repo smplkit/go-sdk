@@ -11,18 +11,33 @@ import (
 	genapp "github.com/smplkit/go-sdk/internal/generated/app"
 )
 
-// ManagementClient provides access to app-service management operations:
-// environments, context types, contexts, and account settings.
-// Obtain one via Client.Management().
+// ManagementClient is the management-plane sub-client. Obtain one via
+// Client.Manage() (or via NewManagementClient for a standalone management
+// client with zero construction side effects — no service registration,
+// no metrics, no websocket).
+//
+// The eight flat namespaces mirror the Python SDK's SmplManagementClient:
+//
+//	mgmt.Contexts()         // context entity CRUD
+//	mgmt.ContextTypes()     // context-type schemas
+//	mgmt.Environments()     // environments
+//	mgmt.AccountSettings()  // account-level settings
+//	mgmt.Config()           // config CRUD (was client.Config().Management())
+//	mgmt.Flags()            // flag CRUD (was client.Flags().Management())
+//	mgmt.Loggers()          // logger CRUD (split from the old logging mgmt)
+//	mgmt.LogGroups()        // log-group CRUD (split from the old logging mgmt)
 type ManagementClient struct {
 	client     *Client
 	appClient  genapp.ClientInterface
 	contextBuf *contextRegistrationBuffer
+	standalone bool
 
 	environments    *EnvironmentsManagement
 	contextTypes    *ContextTypesManagement
 	contexts        *ContextsManagement
 	accountSettings *AccountSettingsManagement
+	loggers         *LoggersManagement
+	logGroups       *LogGroupsManagement
 }
 
 // Environments returns the sub-client for environment CRUD operations.
@@ -89,7 +104,7 @@ func (m *EnvironmentsManagement) List(ctx context.Context) ([]*Environment, erro
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -117,7 +132,7 @@ func (m *EnvironmentsManagement) Get(ctx context.Context, id string) (*Environme
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -140,7 +155,7 @@ func (m *EnvironmentsManagement) Delete(ctx context.Context, id string) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	return checkStatus(resp.StatusCode, body)
 }
@@ -156,7 +171,7 @@ func (m *EnvironmentsManagement) create(ctx context.Context, e *Environment) err
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return err
@@ -181,7 +196,7 @@ func (m *EnvironmentsManagement) update(ctx context.Context, e *Environment) err
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return err
@@ -265,7 +280,7 @@ func (m *ContextTypesManagement) List(ctx context.Context) ([]*ContextType, erro
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -293,7 +308,7 @@ func (m *ContextTypesManagement) Get(ctx context.Context, id string) (*ContextTy
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -311,7 +326,7 @@ func (m *ContextTypesManagement) Delete(ctx context.Context, id string) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	return checkStatus(resp.StatusCode, body)
 }
@@ -326,7 +341,7 @@ func (m *ContextTypesManagement) create(ctx context.Context, ct *ContextType) er
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return err
@@ -349,7 +364,7 @@ func (m *ContextTypesManagement) update(ctx context.Context, ct *ContextType) er
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return err
@@ -477,7 +492,7 @@ func (m *ContextsManagement) flushBatch(ctx context.Context, batch []map[string]
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	return checkStatus(resp.StatusCode, body)
 }
@@ -493,7 +508,7 @@ func (m *ContextsManagement) List(ctx context.Context, contextType string) ([]*C
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -535,7 +550,7 @@ func (m *ContextsManagement) Get(ctx context.Context, parts ...string) (*Context
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -565,7 +580,7 @@ func (m *ContextsManagement) Delete(ctx context.Context, parts ...string) error 
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	return checkStatus(resp.StatusCode, body)
 }
@@ -656,7 +671,7 @@ func (m *AccountSettingsManagement) Get(ctx context.Context) (*AccountSettings, 
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -692,7 +707,7 @@ func (m *AccountSettingsManagement) save(ctx context.Context, s *AccountSettings
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return err

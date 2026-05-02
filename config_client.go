@@ -70,8 +70,8 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*ConfigEntry, er
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -97,8 +97,8 @@ func (c *ConfigClient) createConfig(ctx context.Context, cfg *ConfigEntry) error
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -125,8 +125,8 @@ func (c *ConfigClient) updateConfig(ctx context.Context, cfg *ConfigEntry) error
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -281,7 +281,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 	}
 	environment := c.client.environment
 	if environment == "" {
-		return &SmplError{Message: "No environment set."}
+		return &Error{Message: "No environment set."}
 	}
 
 	configs, err := c.Management().List(ctx)

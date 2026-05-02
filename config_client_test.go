@@ -429,7 +429,7 @@ func TestConfigClient_404_NotFoundError(t *testing.T) {
 
 	var notFound *smplkit.SmplNotFoundError
 	require.True(t, errors.As(err, &notFound))
-	assert.Equal(t, 404, notFound.StatusCode)
+	assert.Equal(t, 404, notFound.Base.StatusCode)
 
 	// Should also match the base error.
 	var base *smplkit.SmplError
@@ -447,7 +447,7 @@ func TestConfigClient_409_ConflictError(t *testing.T) {
 
 	var conflict *smplkit.SmplConflictError
 	require.True(t, errors.As(err, &conflict))
-	assert.Equal(t, 409, conflict.StatusCode)
+	assert.Equal(t, 409, conflict.Base.StatusCode)
 }
 
 func TestConfigClient_422_ValidationError(t *testing.T) {
@@ -462,7 +462,7 @@ func TestConfigClient_422_ValidationError(t *testing.T) {
 
 	var validation *smplkit.SmplValidationError
 	require.True(t, errors.As(err, &validation))
-	assert.Equal(t, 422, validation.StatusCode)
+	assert.Equal(t, 422, validation.Base.StatusCode)
 }
 
 func TestConfigClient_NetworkError_ConnectionError(t *testing.T) {
