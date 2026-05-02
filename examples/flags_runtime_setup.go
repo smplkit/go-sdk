@@ -4,43 +4,42 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	smplkit "github.com/smplkit/go-sdk"
 )
 
-// setupDemoFlags creates and configures three demo flags for the runtime showcase.
-// Returns [checkoutFlag, bannerFlag, retryFlag].
-func setupDemoFlags(ctx context.Context, client *smplkit.Client) ([]*smplkit.Flag, error) {
-	// 1. checkout-v2 — boolean
-	checkoutFlag := client.Flags().Management().NewBooleanFlag("checkout-v2", false,
-		smplkit.WithFlagName("Checkout V2"),
+var (
+	flagsRuntimeDemoEnvironments = []string{"staging", "production"}
+	flagsRuntimeDemoFlagIDs      = []string{"checkout-v2", "banner-color", "max-retries"}
+)
+
+func setupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
+	ensureEnvironments(ctx, mgmt, flagsRuntimeDemoEnvironments...)
+	cleanupFlagsRuntimeShowcase(ctx, mgmt)
+
+	checkout := mgmt.Flags().NewBooleanFlag("checkout-v2", false,
 		smplkit.WithFlagDescription("Controls rollout of the new checkout experience."),
 	)
-	if err := checkoutFlag.Save(ctx); err != nil {
-		return nil, fmt.Errorf("create checkout-v2: %w", err)
-	}
-	checkoutFlag.SetEnvironmentEnabled("staging", true)
-	checkoutFlag.AddRule(smplkit.NewRule("Enable for enterprise users in US region").
-		Environment("staging").
-		When("user.plan", "==", "enterprise").
-		When("account.region", "==", "us").
-		Serve(true).
-		Build())
-	checkoutFlag.AddRule(smplkit.NewRule("Enable for beta testers").
-		Environment("staging").
-		When("user.beta_tester", "==", true).
-		Serve(true).
-		Build())
-	checkoutFlag.SetEnvironmentEnabled("production", false)
-	checkoutFlag.SetEnvironmentDefault("production", false)
-	checkoutFlag.ClearRules("production")
-	if err := checkoutFlag.Save(ctx); err != nil {
-		return nil, fmt.Errorf("update checkout-v2: %w", err)
-	}
+	checkout.EnableRules("staging")
+	fatalIfErr("rule us+enterprise", checkout.AddRule(
+		smplkit.NewRule("Enable for enterprise users in US region").
+			Environment("staging").
+			When("user.plan", "==", "enterprise").
+			When("account.region", "==", "us").
+			Serve(true).Build(),
+	))
+	fatalIfErr("rule beta", checkout.AddRule(
+		smplkit.NewRule("Enable for beta testers").
+			Environment("staging").
+			When("user.beta_tester", "==", true).
+			Serve(true).Build(),
+	))
+	checkout.DisableRules("production")
+	checkout.SetDefault(false, "production")
+	fatalIfErr("save checkout-v2", checkout.Save(ctx))
 
-	// 2. banner-color — string
-	bannerFlag := client.Flags().Management().NewStringFlag("banner-color", "red",
+	banner := mgmt.Flags().NewStringFlag("banner-color", "red",
 		smplkit.WithFlagName("Banner Color"),
 		smplkit.WithFlagDescription("Controls the banner color shown to users."),
 		smplkit.WithFlagValues([]smplkit.FlagValue{
@@ -49,58 +48,44 @@ func setupDemoFlags(ctx context.Context, client *smplkit.Client) ([]*smplkit.Fla
 			{Name: "Blue", Value: "blue"},
 		}),
 	)
-	if err := bannerFlag.Save(ctx); err != nil {
-		return nil, fmt.Errorf("create banner-color: %w", err)
-	}
-	bannerFlag.SetEnvironmentEnabled("staging", true)
-	bannerFlag.AddRule(smplkit.NewRule("Blue for enterprise users").
-		Environment("staging").
-		When("user.plan", "==", "enterprise").
-		Serve("blue").
-		Build())
-	bannerFlag.AddRule(smplkit.NewRule("Green for technology companies").
-		Environment("staging").
-		When("account.industry", "==", "technology").
-		Serve("green").
-		Build())
-	bannerFlag.SetEnvironmentEnabled("production", true)
-	bannerFlag.SetEnvironmentDefault("production", "blue")
-	bannerFlag.ClearRules("production")
-	if err := bannerFlag.Save(ctx); err != nil {
-		return nil, fmt.Errorf("update banner-color: %w", err)
-	}
+	banner.EnableRules("staging")
+	fatalIfErr("rule banner enterprise", banner.AddRule(
+		smplkit.NewRule("Blue for enterprise users").
+			Environment("staging").
+			When("user.plan", "==", "enterprise").
+			Serve("blue").Build(),
+	))
+	fatalIfErr("rule banner technology", banner.AddRule(
+		smplkit.NewRule("Green for technology companies").
+			Environment("staging").
+			When("account.industry", "==", "technology").
+			Serve("green").Build(),
+	))
+	banner.EnableRules("production")
+	banner.SetDefault("blue", "production")
+	fatalIfErr("save banner-color", banner.Save(ctx))
 
-	// 3. max-retries — numeric (unconstrained)
-	retryFlag := client.Flags().Management().NewNumberFlag("max-retries", 3,
-		smplkit.WithFlagName("Max Retries"),
+	retries := mgmt.Flags().NewNumberFlag("max-retries", 3,
 		smplkit.WithFlagDescription("Maximum number of API retries before failing."),
 	)
-	if err := retryFlag.Save(ctx); err != nil {
-		return nil, fmt.Errorf("create max-retries: %w", err)
-	}
-	retryFlag.SetEnvironmentEnabled("staging", true)
-	retryFlag.AddRule(smplkit.NewRule("High retries for large accounts").
-		Environment("staging").
-		When("account.employee_count", ">", 100).
-		Serve(5).
-		Build())
-	retryFlag.SetEnvironmentEnabled("production", true)
-	retryFlag.ClearRules("production")
-	if err := retryFlag.Save(ctx); err != nil {
-		return nil, fmt.Errorf("update max-retries: %w", err)
-	}
-
-	return []*smplkit.Flag{checkoutFlag, bannerFlag, retryFlag}, nil
+	retries.EnableRules("staging")
+	fatalIfErr("rule retries large", retries.AddRule(
+		smplkit.NewRule("High retries for large accounts").
+			Environment("staging").
+			When("account.employee_count", ">", 100).
+			Serve(5).Build(),
+	))
+	retries.EnableRules("production")
+	fatalIfErr("save max-retries", retries.Save(ctx))
 }
 
-// teardownDemoFlags deletes the demo flags and any auto-created context types.
-func teardownDemoFlags(ctx context.Context, client *smplkit.Client, flags []*smplkit.Flag) {
-	for _, f := range flags {
-		_ = client.Flags().Management().Delete(ctx, f.ID)
-	}
-	if cts, err := client.Flags().Management().ListContextTypes(ctx); err == nil {
-		for _, ct := range cts {
-			_ = client.Flags().Management().DeleteContextType(ctx, ct.ID)
+func cleanupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
+	for _, id := range flagsRuntimeDemoFlagIDs {
+		if err := mgmt.Flags().Delete(ctx, id); err != nil {
+			var nf *smplkit.NotFoundError
+			if !errors.As(err, &nf) {
+				fatalIfErr("delete flag "+id, err)
+			}
 		}
 	}
 }

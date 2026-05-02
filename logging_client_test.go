@@ -260,7 +260,7 @@ func TestLogger_SetLevel(t *testing.T) {
 	logger := client.Logging().Management().New("test-logger")
 
 	assert.Nil(t, logger.Level)
-	logger.SetLevel(smplkit.LogLevelDebug)
+	logger.SetLevel(smplkit.LogLevelDebug, "")
 	require.NotNil(t, logger.Level)
 	assert.Equal(t, smplkit.LogLevelDebug, *logger.Level)
 }
@@ -270,10 +270,10 @@ func TestLogger_ClearLevel(t *testing.T) {
 	require.NoError(t, err)
 	logger := client.Logging().Management().New("test-logger")
 
-	logger.SetLevel(smplkit.LogLevelWarn)
+	logger.SetLevel(smplkit.LogLevelWarn, "")
 	require.NotNil(t, logger.Level)
 
-	logger.ClearLevel()
+	logger.ClearLevel("")
 	assert.Nil(t, logger.Level)
 }
 

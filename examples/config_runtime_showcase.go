@@ -1,212 +1,93 @@
 //go:build ignore
 
-// Config Runtime Showcase — end-to-end walkthrough of the Smpl Config
-// runtime in the Go SDK.
-//
-// Demonstrates the full runtime surface:
-//   - Client initialization and config creation (via demo helpers)
-//   - Get / GetInto for reading config values
-//   - Subscribe for live config updates
-//   - Multi-level inheritance (common -> user_service -> auth_module)
-//   - Change listeners (global + key-specific)
-//   - Manual refresh after server-side changes
-//   - Cleanup
+// Demonstrates the smplkit runtime SDK for Smpl Config.
 //
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk
 //   - A valid smplkit API key, provided via one of:
 //   - SMPLKIT_API_KEY environment variable
 //   - ~/.smplkit configuration file (see SDK docs)
-//   - The smplkit config service running and reachable
+//   - The smplkit Config service running and reachable
 //
 // Usage:
 //
-//	go run examples/config_runtime_showcase.go examples/config_runtime_setup.go examples/helpers.go
+//	make config_runtime_showcase
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"sync/atomic"
+	"time"
 
 	smplkit "github.com/smplkit/go-sdk"
 )
 
-// UserServiceConfig is an example struct for ResolveInto demonstration.
-type UserServiceConfig struct {
-	Database                  map[string]interface{} `json:"database"`
-	CacheTTLSeconds           int                    `json:"cache_ttl_seconds"`
-	EnableSignup              bool                   `json:"enable_signup"`
-	PaginationDefaultPageSize int                    `json:"pagination_default_page_size"`
-	AppName                   string                 `json:"app_name"`
-	SupportEmail              string                 `json:"support_email"`
-	MaxRetries                int                    `json:"max_retries"`
-	RequestTimeoutMs          int                    `json:"request_timeout_ms"`
-}
-
 func main() {
 	ctx := context.Background()
 
-	// ====================================================================
-	// 1. SDK INITIALIZATION & CONFIG SETUP
-	// ====================================================================
-	section("1. SDK Initialization & Config Setup")
-
-	// The Config struct resolves required parameters from multiple sources:
-	// defaults -> config file (~/.smplkit) -> env vars -> struct fields.
-	//
-	// To pass the API key explicitly:
-	//
-	//   client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_...", Environment: "production", Service: "showcase-service"})
-	//
-	client, err := smplkit.NewClient(smplkit.Config{Environment: "production", Service: "showcase-service"})
-	if err != nil {
-		fatal("failed to create client", err)
-	}
-	step("smplkit.Client initialized (environment=production)")
-
-	demo, err := setupDemoConfigs(ctx, client)
-	if err != nil {
-		fatal("failed to set up demo configs", err)
-	}
-	step("Demo configs created (common, user_service, auth_module)")
-
-	// ====================================================================
-	// 2. GET — READ RESOLVED VALUES AS A MAP
-	// ====================================================================
-	section("2. Get — Read Resolved Values as a Map")
-
-	resolved, err := client.Config().Get(ctx, "user_service")
-	if err != nil {
-		fatal("failed to resolve user_service", err)
-	}
-	step(fmt.Sprintf("Total resolved keys for user_service: %d", len(resolved)))
-
-	dbConfig := resolved["database"]
-	dbJSON, _ := json.Marshal(dbConfig)
-	step(fmt.Sprintf("database = %s", dbJSON))
-
-	step(fmt.Sprintf("max_retries = %v", resolved["max_retries"]))
-	step(fmt.Sprintf("cache_ttl_seconds = %v", resolved["cache_ttl_seconds"]))
-	step(fmt.Sprintf("pagination_default_page_size = %v", resolved["pagination_default_page_size"]))
-
-	// ====================================================================
-	// 3. GET INTO — UNMARSHAL INTO A STRUCT
-	// ====================================================================
-	section("3. GetInto — Unmarshal Into a Struct")
-
-	var usCfg UserServiceConfig
-	err = client.Config().GetInto(ctx, "user_service", &usCfg)
-	if err != nil {
-		fatal("failed to resolve into struct", err)
-	}
-	step(fmt.Sprintf("app_name = %s", usCfg.AppName))
-	step(fmt.Sprintf("request_timeout_ms = %d", usCfg.RequestTimeoutMs))
-	step(fmt.Sprintf("enable_signup = %v", usCfg.EnableSignup))
-	step(fmt.Sprintf("cache_ttl_seconds = %d", usCfg.CacheTTLSeconds))
-
-	// ====================================================================
-	// 4. MULTI-LEVEL INHERITANCE (auth_module)
-	// ====================================================================
-	section("4. Multi-Level Inheritance (auth_module)")
-
-	authResolved, err := client.Config().Get(ctx, "auth_module")
-	if err != nil {
-		fatal("failed to resolve auth_module", err)
-	}
-
-	step(fmt.Sprintf("session_ttl_minutes = %v", authResolved["session_ttl_minutes"]))
-	step(fmt.Sprintf("mfa_enabled = %v", authResolved["mfa_enabled"]))
-	step(fmt.Sprintf("app_name (inherited from common) = %v", authResolved["app_name"]))
-
-	// ====================================================================
-	// 5. SUBSCRIBE — LIVE CONFIG UPDATES
-	// ====================================================================
-	section("5. Subscribe — Live Config Updates")
-
-	live, err := client.Config().Subscribe(ctx, "user_service")
-	if err != nil {
-		fatal("failed to subscribe to user_service", err)
-	}
-	step("Subscribed to user_service — LiveConfig active")
-
-	snapshot := live.Value()
-	step(fmt.Sprintf("Initial snapshot keys: %d", len(snapshot)))
-	step(fmt.Sprintf("max_retries from live = %v", snapshot["max_retries"]))
-
-	// ====================================================================
-	// 6a. CHANGE LISTENERS
-	// ====================================================================
-	section("6a. Change Listeners")
-
-	var changes []*smplkit.ConfigChangeEvent
-	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
-		changes = append(changes, evt)
-		fmt.Printf("    [CHANGE] %s.%s: %v -> %v\n", evt.ConfigID, evt.ItemKey, evt.OldValue, evt.NewValue)
+	// create the client (runtime + management on the same client)
+	client, err := smplkit.NewClient(smplkit.Config{
+		Environment: "production",
+		Service:     "showcase-service",
 	})
-	step("Global change listener registered")
+	fatalIfErr("create client", err)
+	defer client.Close()
 
-	var retriesChanges []*smplkit.ConfigChangeEvent
-	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
-		retriesChanges = append(retriesChanges, evt)
-	}, smplkit.WithConfigID("common"), smplkit.WithItemKey("max_retries"))
-	step("Key-specific listener registered for common.max_retries")
+	setupConfigRuntimeShowcase(ctx, client.Manage())
 
-	// ====================================================================
-	// 6b. REFRESH AFTER MANAGEMENT CHANGE
-	// ====================================================================
-	section("6b. Refresh After Management Change")
+	// get a config as a plain dict
+	userSvc, err := client.Config().Get(ctx, "showcase-user-service")
+	fatalIfErr("get user_service", err)
+	fmt.Printf("Total resolved keys: %d\n", len(userSvc))
+	fmt.Printf("database.host = %v\n", userSvc["database.host"])
+	fmt.Printf("max_retries = %v\n", userSvc["max_retries"])
+	fmt.Printf("cache_ttl_seconds = %v\n", userSvc["cache_ttl_seconds"])
+	fmt.Printf("pagination_default_page_size = %v\n", userSvc["pagination_default_page_size"])
+	fmt.Printf("enable_signup = %v\n", userSvc["enable_signup"])
+	fmt.Printf("nonexistent_key = %v\n", userSvc["nonexistent_key"])
 
-	if demo.Common.Environments == nil {
-		demo.Common.Environments = map[string]map[string]interface{}{}
+	// production overrides resolve through the inheritance chain
+	if userSvc["database.host"] != "prod-users-rds.internal.acme.dev" {
+		fatalIfErr("database.host", fmt.Errorf("got %v", userSvc["database.host"]))
 	}
-	if demo.Common.Environments["production"] == nil {
-		demo.Common.Environments["production"] = map[string]interface{}{}
-	}
-	demo.Common.Environments["production"]["max_retries"] = 7
-	err = demo.Common.Save(ctx)
-	if err != nil {
-		fatal("failed to update max_retries", err)
-	}
-	step("Updated max_retries to 7 on common (production)")
 
-	err = client.Config().Refresh(ctx)
-	if err != nil {
-		fatal("manual refresh failed", err)
-	}
-	step("client.Config().Refresh(ctx) completed")
+	var anyChanges, retriesChanges int64
 
-	refreshed, err := client.Config().Get(ctx, "user_service")
-	if err != nil {
-		fatal("failed to resolve user_service after refresh", err)
-	}
-	step(fmt.Sprintf("max_retries after refresh = %v", refreshed["max_retries"]))
+	// global listener — fires when ANY config item changes
+	client.Config().OnChange(func(event *smplkit.ConfigChangeEvent) {
+		atomic.AddInt64(&anyChanges, 1)
+		fmt.Printf("    [CHANGE] %s.%s: %v -> %v\n",
+			event.ConfigID, event.ItemKey, event.OldValue, event.NewValue)
+	})
 
-	step(fmt.Sprintf("Global changes received: %d", len(changes)))
-	step(fmt.Sprintf("Retries-specific changes received: %d", len(retriesChanges)))
+	// item-scoped listener via the live-proxy handle
+	commonProxy, err := client.Config().Subscribe(ctx, "showcase-common")
+	fatalIfErr("subscribe common", err)
+	commonProxy.OnChangeKey("max_retries", func(event *smplkit.ConfigChangeEvent) {
+		atomic.AddInt64(&retriesChanges, 1)
+	})
 
-	// ====================================================================
-	// 7. CLEANUP
-	// ====================================================================
-	section("7. Cleanup")
+	// simulate someone making a change to trigger listeners
+	updateMaxRetries(ctx, client, 7)
 
-	teardownDemoConfigs(ctx, client, demo)
-	step("Demo configs deleted and common reset")
+	// wait a moment for the event to be delivered
+	time.Sleep(200 * time.Millisecond)
 
-	// ====================================================================
-	// ALL DONE
-	// ====================================================================
-	section("ALL DONE")
-	fmt.Println("  The Config Runtime showcase completed successfully.")
-	fmt.Println()
-	fmt.Println("Features exercised:")
-	fmt.Println("  [x] Client initialization")
-	fmt.Println("  [x] Config hierarchy setup (common, user_service, auth_module)")
-	fmt.Println("  [x] Get — read resolved values as a map")
-	fmt.Println("  [x] GetInto — unmarshal into a struct")
-	fmt.Println("  [x] Multi-level inheritance")
-	fmt.Println("  [x] Subscribe — live config updates")
-	fmt.Println("  [x] Change listeners (global + key-specific)")
-	fmt.Println("  [x] Manual refresh after management mutation")
-	fmt.Println("  [x] Cleanup")
+	// userSvc always reflects the latest values via re-read
+	updated, err := client.Config().Get(ctx, "showcase-user-service")
+	fatalIfErr("re-get user_service", err)
+	fmt.Printf("max_retries after update = %v\n", updated["max_retries"])
+	fmt.Printf("Global changes received: %d\n", atomic.LoadInt64(&anyChanges))
+	fmt.Printf("Retries-specific changes received: %d\n", atomic.LoadInt64(&retriesChanges))
+
+	cleanupConfigRuntimeShowcase(ctx, client.Manage())
+	fmt.Println("Done!")
+}
+
+func updateMaxRetries(ctx context.Context, client *smplkit.Client, maxRetries int) {
+	common, err := client.Manage().Config().Get(ctx, "showcase-common")
+	fatalIfErr("get common", err)
+	common.SetNumber("max_retries", float64(maxRetries), "production")
+	fatalIfErr("save common", common.Save(ctx))
 }

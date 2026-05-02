@@ -64,6 +64,16 @@ func (f *Flag) Save(ctx context.Context) error {
 	return f.client.updateFlag(ctx, f)
 }
 
+// Delete removes the flag from the server. Equivalent to
+// mgmt.Flags().Delete(ctx, f.ID) — provided as a convenience on the
+// active-record model (rule 3 of the cross-SDK overhaul).
+func (f *Flag) Delete(ctx context.Context) error {
+	if f.client == nil || f.ID == "" {
+		return &Error{Message: "flag was constructed without a client or id; cannot delete"}
+	}
+	return f.client.Management().Delete(ctx, f.ID)
+}
+
 // AddRule appends a rule to the specified environment. The builtRule must
 // include an "environment" key (use NewRule(...).Environment("env").Build()).
 // Call Save(ctx) to persist.

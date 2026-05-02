@@ -784,6 +784,58 @@ func TestLiveConfig_Value_KeyNotFound(t *testing.T) {
 	assert.Nil(t, val)
 }
 
+// ---------- LiveConfig dict-like accessors (rule 10) ----------
+
+func TestLiveConfig_DictLikeAccess(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{
+			"app": {"host": "localhost", "port": float64(5432)},
+		},
+	}
+	lc := &LiveConfig{client: cc, id: "app"}
+
+	assert.Equal(t, "app", lc.ID())
+	assert.Equal(t, 2, lc.Len())
+	assert.True(t, lc.Has("host"))
+	assert.False(t, lc.Has("nope"))
+
+	v, ok := lc.Get("host")
+	assert.True(t, ok)
+	assert.Equal(t, "localhost", v)
+
+	_, ok = lc.Get("nope")
+	assert.False(t, ok)
+
+	keys := lc.Keys()
+	assert.ElementsMatch(t, []string{"host", "port"}, keys)
+}
+
+func TestLiveConfig_DictLikeAccess_NilCache(t *testing.T) {
+	cc := &ConfigClient{client: &Client{environment: "test"}}
+	lc := &LiveConfig{client: cc, id: "app"}
+
+	assert.Equal(t, 0, lc.Len())
+	assert.False(t, lc.Has("k"))
+	_, ok := lc.Get("k")
+	assert.False(t, ok)
+	assert.Nil(t, lc.Keys())
+}
+
+func TestLiveConfig_DictLikeAccess_MissingID(t *testing.T) {
+	cc := &ConfigClient{
+		client:      &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{},
+	}
+	lc := &LiveConfig{client: cc, id: "missing"}
+
+	assert.Equal(t, 0, lc.Len())
+	assert.False(t, lc.Has("k"))
+	_, ok := lc.Get("k")
+	assert.False(t, ok)
+	assert.Nil(t, lc.Keys())
+}
+
 // ---------- LiveConfig.ValueInto ----------
 
 func TestLiveConfig_ValueInto(t *testing.T) {

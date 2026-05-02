@@ -83,18 +83,40 @@ func (c *LoggingClient) close() {
 	}
 }
 
-// RegisterAdapter registers a logging adapter. Must be called before Start().
-// At least one adapter must be registered for runtime features to function.
+// RegisterAdapter registers a logging adapter. Must be called before
+// Install(). At least one adapter must be registered for runtime
+// features to function.
 func (c *LoggingClient) RegisterAdapter(adapter adapters.LoggingAdapter) {
 	if c.started {
-		panic("smplkit: cannot register adapters after Start()")
+		panic("smplkit: cannot register adapters after Install()")
 	}
 	c.adapters = append(c.adapters, adapter)
 }
 
-// Start initializes the logging runtime and begins listening for level changes.
-// Safe to call multiple times; only the first call takes effect.
+// Install hooks the SDK into the application's logging machinery: it
+// runs adapter discovery, fetches managed-logger definitions from the
+// platform, applies resolved levels, and opens the live-updates
+// WebSocket so subsequent server-side level changes propagate.
+//
+// Safe to call multiple times; only the first call takes effect. There
+// is no companion Stop() — close the parent Client instead.
+//
+// Mirrors Python's client.logging.install() (rule 4 of the cross-SDK
+// overhaul). The pre-existing Start name is retained as a deprecated
+// shim that simply forwards to Install.
+func (c *LoggingClient) Install(ctx context.Context) error {
+	return c.start(ctx)
+}
+
+// Start is a deprecated alias for Install.
+//
+// Deprecated: Use Install.
 func (c *LoggingClient) Start(ctx context.Context) error {
+	return c.start(ctx)
+}
+
+// start is the unexported impl shared by Install and Start.
+func (c *LoggingClient) start(ctx context.Context) error {
 	var startErr error
 	c.startOnce.Do(func() {
 		// Warn if no adapters registered.

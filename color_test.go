@@ -4,9 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smplkit/go-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	smplkit "github.com/smplkit/go-sdk"
 )
 
 func TestNewColor_Valid(t *testing.T) {
@@ -98,4 +99,3 @@ func TestColor_IsZero(t *testing.T) {
 	c, _ := smplkit.NewColor("#fff")
 	assert.False(t, c.IsZero())
 }
-

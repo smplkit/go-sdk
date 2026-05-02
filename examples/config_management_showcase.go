@@ -1,27 +1,17 @@
 //go:build ignore
 
-// Config Management Showcase — end-to-end walkthrough of the Smpl Config
-// management API in the Go SDK.
-//
-// Demonstrates the full management surface:
-//   - Client initialization
-//   - Update the common config with base values and environment overrides
-//   - Create configs (user_service, auth_module as child)
-//   - List all configs
-//   - Get config by key
-//   - Update a config (description + production value)
-//   - Cleanup
+// Demonstrates the smplkit management SDK for Smpl Config.
 //
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk
 //   - A valid smplkit API key, provided via one of:
 //   - SMPLKIT_API_KEY environment variable
 //   - ~/.smplkit configuration file (see SDK docs)
-//   - The smplkit config service running and reachable
+//   - The smplkit Config service running and reachable
 //
 // Usage:
 //
-//	go run examples/config_management_showcase.go examples/helpers.go
+//	make config_management_showcase
 package main
 
 import (
@@ -34,234 +24,90 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// ====================================================================
-	// 1. SDK INITIALIZATION
-	// ====================================================================
-	section("1. SDK Initialization")
+	// create the client (management-only — zero side effects)
+	mgmt, err := smplkit.NewManagementClient(smplkit.ManagementConfig{})
+	fatalIfErr("create management client", err)
+	defer mgmt.Close()
 
-	// The Config struct resolves required parameters from multiple sources:
-	// defaults -> config file (~/.smplkit) -> env vars -> struct fields.
-	//
-	// To pass the API key explicitly:
-	//
-	//   client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_...", Environment: "production", Service: "showcase-service"})
-	//
-	client, err := smplkit.NewClient(smplkit.Config{Environment: "production", Service: "showcase-service"})
-	if err != nil {
-		fatal("failed to create client", err)
-	}
-	step("smplkit.Client initialized (environment=production)")
-	step("Config sub-client ready")
+	setupConfigManagementShowcase(ctx, mgmt)
 
-	// Pre-flight: delete any configs left over from a previous run.
-	for _, key := range []string{"auth_module", "user_service"} {
-		_ = client.Config().Management().Delete(ctx, key)
-	}
+	// create a "parent" configuration that all other configs inherit from
+	shared := mgmt.Config().New("showcase-common",
+		smplkit.WithConfigName("Showcase Common"),
+		smplkit.WithConfigDescription("Showcase-only shared configuration."),
+	)
+	shared.SetString("app_name", "Acme SaaS Platform", "")
+	shared.SetString("support_email", "support@acme.dev", "")
+	shared.SetNumber("max_retries", 3, "")
+	shared.SetNumber("request_timeout_ms", 5000, "")
+	shared.SetNumber("pagination_default_page_size", 25, "")
+	shared.SetNumber("max_retries", 5, "production")
+	shared.SetNumber("request_timeout_ms", 10000, "production")
+	shared.SetNumber("max_retries", 2, "staging")
+	fatalIfErr("save shared", shared.Save(ctx))
+	fmt.Printf("Created config: %s\n", shared.ID)
 
-	// ====================================================================
-	// 2a. UPDATE THE COMMON CONFIG
-	// ====================================================================
-	section("2a. Update the Common Config")
-
-	common, err := client.Config().Management().Get(ctx, "common")
-	if err != nil {
-		fatal("failed to fetch common config", err)
-	}
-	step(fmt.Sprintf("Fetched common config: id=%s", common.ID))
-
-	common.Description = strPtr("Organization-wide shared configuration")
-	common.Items = map[string]interface{}{
-		"app_name":                     "Acme SaaS Platform",
-		"support_email":                "support@acme.dev",
-		"max_retries":                  3,
-		"request_timeout_ms":           5000,
-		"pagination_default_page_size": 25,
-	}
-	err = common.Save(ctx)
-	if err != nil {
-		fatal("failed to update common config", err)
-	}
-	step("Common config base values set")
-
-	// ====================================================================
-	// 2b. ENVIRONMENT OVERRIDES
-	// ====================================================================
-	section("2b. Environment Overrides")
-
-	common.Environments = map[string]map[string]interface{}{
-		"production": {
-			"max_retries":        5,
-			"request_timeout_ms": 10000,
-		},
-		"staging": {
-			"max_retries": 2,
-		},
-	}
-	err = common.Save(ctx)
-	if err != nil {
-		fatal("failed to set common environment overrides", err)
-	}
-	step("Common config production overrides set")
-	step("Common config staging overrides set")
-
-	// ====================================================================
-	// 3a. CREATE USER SERVICE CONFIG
-	// ====================================================================
-	section("3a. Create User Service Config")
-
-	userService := client.Config().Management().New("user_service",
-		smplkit.WithConfigName("User Service"),
+	// create a config (inherits from showcase-common)
+	userService := mgmt.Config().New("showcase-user-service",
+		smplkit.WithConfigName("Showcase User Service"),
 		smplkit.WithConfigDescription("Configuration for the user microservice."),
-		smplkit.WithConfigItems(map[string]interface{}{
-			"database": map[string]interface{}{
-				"host":      "localhost",
-				"port":      5432,
-				"name":      "users_dev",
-				"pool_size": 5,
-			},
-			"cache_ttl_seconds":            300,
-			"enable_signup":                true,
-			"pagination_default_page_size": 50,
-		}),
-		smplkit.WithConfigEnvironments(map[string]map[string]interface{}{
-			"production": {
-				"database": map[string]interface{}{
-					"host":      "prod-users-rds.internal.acme.dev",
-					"name":      "users_prod",
-					"pool_size": 20,
-				},
-				"cache_ttl_seconds": 600,
-				"enable_signup":     false,
-			},
-		}),
+		smplkit.WithConfigParent(shared.ID),
 	)
-	err = userService.Save(ctx)
-	if err != nil {
-		fatal("failed to create user_service config", err)
-	}
-	step(fmt.Sprintf("Created user_service config: id=%s", userService.ID))
+	userService.SetString("database.host", "localhost", "")
+	userService.SetNumber("database.port", 5432, "")
+	userService.SetString("database.name", "users_dev", "")
+	userService.SetNumber("database.pool_size", 5, "")
+	userService.SetNumber("cache_ttl_seconds", 300, "")
+	userService.SetBoolean("enable_signup", true, "")
+	userService.SetNumber("pagination_default_page_size", 50, "")
+	fatalIfErr("save user_service", userService.Save(ctx))
 
-	// ====================================================================
-	// 3b. CREATE AUTH MODULE CONFIG (child of user_service)
-	// ====================================================================
-	section("3b. Create Auth Module Config (child of User Service)")
+	// update a config
+	userService.SetString("database.host", "prod-users-rds.internal.acme.dev", "production")
+	userService.SetString("database.name", "users_prod", "production")
+	userService.SetNumber("database.pool_size", 20, "production")
+	userService.SetNumber("cache_ttl_seconds", 600, "production")
+	userService.SetBoolean("enable_signup", false, "production")
+	fatalIfErr("update user_service", userService.Save(ctx))
+	fmt.Printf("Updated config: %s\n", userService.ID)
 
-	authModule := client.Config().Management().New("auth_module",
-		smplkit.WithConfigName("Auth Module"),
-		smplkit.WithConfigDescription("Authentication module within the user service."),
-		smplkit.WithConfigParent(userService.ID),
-		smplkit.WithConfigItems(map[string]interface{}{
-			"session_ttl_minutes": 60,
-			"mfa_enabled":         false,
-		}),
-		smplkit.WithConfigEnvironments(map[string]map[string]interface{}{
-			"production": {
-				"session_ttl_minutes": 30,
-				"mfa_enabled":         true,
-			},
-		}),
-	)
-	err = authModule.Save(ctx)
-	if err != nil {
-		_ = client.Config().Management().Delete(ctx, "user_service")
-		fatal("failed to create auth_module config", err)
-	}
-	step(fmt.Sprintf("Created auth_module config: id=%s (parent=%s)", authModule.ID, userService.ID))
-
-	// ====================================================================
-	// 4a. LIST ALL CONFIGS
-	// ====================================================================
-	section("4a. List All Configs")
-
-	configs, err := client.Config().Management().List(ctx)
-	if err != nil {
-		fatal("failed to list configs", err)
-	}
-	step(fmt.Sprintf("List: %d configs found", len(configs)))
+	// list configs
+	configs, err := mgmt.Config().List(ctx)
+	fatalIfErr("list configs", err)
 	for _, cfg := range configs {
-		parent := "(root)"
+		parentInfo := " (root)"
 		if cfg.Parent != nil {
-			parent = fmt.Sprintf("(parent: %s)", *cfg.Parent)
+			parentInfo = fmt.Sprintf(" (parent: %s)", *cfg.Parent)
 		}
-		step(fmt.Sprintf("  %s %s", cfg.ID, parent))
+		fmt.Printf("  %s%s\n", cfg.ID, parentInfo)
 	}
 
-	// ====================================================================
-	// 4b. GET CONFIG BY KEY
-	// ====================================================================
-	section("4b. Get Config by Key")
-
-	fetched, err := client.Config().Management().Get(ctx, "user_service")
-	if err != nil {
-		fatal("failed to get user_service by key", err)
-	}
-	step(fmt.Sprintf("Get(id=%q): name=%q", fetched.ID, fetched.Name))
+	// get a config
+	fetched, err := mgmt.Config().Get(ctx, "showcase-user-service")
+	fatalIfErr("get user_service", err)
+	desc := ""
 	if fetched.Description != nil {
-		step(fmt.Sprintf("  description=%q", *fetched.Description))
+		desc = *fetched.Description
 	}
-
-	// ====================================================================
-	// 5. UPDATE A CONFIG
-	// ====================================================================
-	section("5. Update a Config (user_service)")
-
-	userService.Description = strPtr("Configuration for the user microservice (updated).")
-	if userService.Environments == nil {
-		userService.Environments = map[string]map[string]interface{}{}
+	parent := "(none)"
+	if fetched.Parent != nil {
+		parent = *fetched.Parent
 	}
-	if userService.Environments["production"] == nil {
-		userService.Environments["production"] = map[string]interface{}{}
+	itemKeys := make([]string, 0, len(fetched.Items))
+	for k := range fetched.Items {
+		itemKeys = append(itemKeys, k)
 	}
-	userService.Environments["production"]["cache_ttl_seconds"] = 900
-	err = userService.Save(ctx)
-	if err != nil {
-		fatal("failed to update user_service", err)
-	}
-	step("Updated user_service description")
-	step("Updated cache_ttl_seconds to 900 in production")
+	fmt.Printf("Fetched: id=%s, name=%s\n", fetched.ID, fetched.Name)
+	fmt.Printf("  description=%s\n", desc)
+	fmt.Printf("  parent=%s\n", parent)
+	fmt.Printf("  items: %v\n", itemKeys)
 
-	// ====================================================================
-	// 6. CLEANUP
-	// ====================================================================
-	section("6. Cleanup")
+	// delete configs
+	fatalIfErr("delete user_service", mgmt.Config().Delete(ctx, userService.ID))
+	fatalIfErr("delete shared", mgmt.Config().Delete(ctx, shared.ID))
+	fmt.Println("Deleted configs")
 
-	if err := client.Config().Management().Delete(ctx, "auth_module"); err != nil {
-		fmt.Printf("  Warning: failed to delete auth_module: %v\n", err)
-	} else {
-		step(fmt.Sprintf("Deleted auth_module (%s)", authModule.ID))
-	}
-
-	if err := client.Config().Management().Delete(ctx, "user_service"); err != nil {
-		fmt.Printf("  Warning: failed to delete user_service: %v\n", err)
-	} else {
-		step(fmt.Sprintf("Deleted user_service (%s)", userService.ID))
-	}
-
-	common.Description = strPtr("")
-	common.Items = map[string]interface{}{}
-	common.Environments = map[string]map[string]interface{}{}
-	err = common.Save(ctx)
-	if err != nil {
-		fmt.Printf("  Warning: failed to reset common config: %v\n", err)
-	} else {
-		step("Common config reset to empty")
-	}
-
-	// ====================================================================
-	// ALL DONE
-	// ====================================================================
-	section("ALL DONE")
-	fmt.Println("  The Config Management showcase completed successfully.")
-	fmt.Println()
-	fmt.Println("Features exercised:")
-	fmt.Println("  [x] Client initialization")
-	fmt.Println("  [x] Update common config with base values")
-	fmt.Println("  [x] Environment overrides (production, staging)")
-	fmt.Println("  [x] Create config (user_service)")
-	fmt.Println("  [x] Create child config (auth_module)")
-	fmt.Println("  [x] List all configs")
-	fmt.Println("  [x] Get config by key")
-	fmt.Println("  [x] Update config (description + production value)")
-	fmt.Println("  [x] Delete configs")
-	fmt.Println("  [x] Reset common config")
+	// cleanup
+	cleanupConfigManagementShowcase(ctx, mgmt)
+	fmt.Println("Done!")
 }

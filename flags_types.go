@@ -53,7 +53,20 @@ type Context struct {
 //	    smplkit.WithName("Alice"),
 //	    smplkit.WithAttr("plan", "enterprise"),
 //	)
+//
+// Fail-fast validation (rule 6 of the cross-SDK overhaul): empty type or
+// key panics with a clear message. The Python SDK raises TypeError for
+// non-string args; in Go the type system enforces that, so we only need
+// to enforce non-emptiness. Numeric IDs must be stringified at the SDK
+// boundary — silent normalization weakens the contract.
 func NewContext(contextType, key string, attrs map[string]interface{}, opts ...ContextOption) Context {
+	if contextType == "" {
+		panic("smplkit: Context type must be a non-empty string")
+	}
+	if key == "" {
+		panic("smplkit: Context key must be a non-empty string. " +
+			"If your identifier is numeric, stringify it at the SDK boundary.")
+	}
 	c := Context{
 		Type:       contextType,
 		Key:        key,
@@ -66,6 +79,13 @@ func NewContext(contextType, key string, attrs map[string]interface{}, opts ...C
 		opt(&c)
 	}
 	return c
+}
+
+// CompositeID returns the composite "type:key" identifier mirroring
+// Python's Context.id property. Useful when calling sub-clients that
+// accept either a composite id or separate (type, key) arguments.
+func (c Context) CompositeID() string {
+	return c.Type + ":" + c.Key
 }
 
 // ContextOption configures a Context. Use WithName and WithAttr.

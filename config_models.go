@@ -65,6 +65,15 @@ func (c *ConfigEntry) Save(ctx context.Context) error {
 	return c.client.updateConfig(ctx, c)
 }
 
+// Delete removes the config from the server. Equivalent to
+// mgmt.Config().Delete(ctx, c.ID).
+func (c *ConfigEntry) Delete(ctx context.Context) error {
+	if c.client == nil || c.ID == "" {
+		return &Error{Message: "config was constructed without a client or id; cannot delete"}
+	}
+	return c.client.Management().Delete(ctx, c.ID)
+}
+
 func (c *ConfigEntry) apply(other *ConfigEntry) {
 	c.ID = other.ID
 	c.Name = other.Name
@@ -76,14 +85,25 @@ func (c *ConfigEntry) apply(other *ConfigEntry) {
 	c.UpdatedAt = other.UpdatedAt
 }
 
-// LiveConfig is a handle returned by Subscribe that always reflects the latest
-// resolved values for a config ID.
+// LiveConfig is a live, dict-like, read-only proxy for a config's resolved
+// values. Returned by ConfigClient.Get and Subscribe. Every read goes
+// through the client's resolved-config cache, so WebSocket updates are
+// picked up automatically — no Subscribe step is required (rule 10 of
+// the cross-SDK overhaul).
+//
+// Customer mutation paths are absent: there is no Set / Put / Delete
+// method on LiveConfig. To mutate configs use the management surface:
+//
+//	client.Manage().Config().Get(ctx, id) // active-record model with Save / Delete
 type LiveConfig struct {
 	client *ConfigClient
 	id     string
 }
 
-// Value returns the latest resolved values for this config.
+// ID returns the config ID this proxy reads from.
+func (lc *LiveConfig) ID() string { return lc.id }
+
+// Value returns a defensive copy of the latest resolved values.
 func (lc *LiveConfig) Value() map[string]interface{} {
 	if lc.client.configCache == nil {
 		return nil
@@ -92,7 +112,6 @@ func (lc *LiveConfig) Value() map[string]interface{} {
 	if !ok {
 		return nil
 	}
-	// Return a copy.
 	cp := make(map[string]interface{}, len(resolved))
 	for k, v := range resolved {
 		cp[k] = v
@@ -106,4 +125,66 @@ func (lc *LiveConfig) Value() map[string]interface{} {
 func (lc *LiveConfig) ValueInto(target interface{}) error {
 	resolved := lc.Value()
 	return unmarshalResolved(resolved, target)
+}
+
+// Get returns a single resolved value by key. The second return is false
+// if the key is absent. Mirrors Python's `proxy[key]` / `proxy.get(key)`
+// dict-like access.
+func (lc *LiveConfig) Get(key string) (interface{}, bool) {
+	if lc.client.configCache == nil {
+		return nil, false
+	}
+	resolved, ok := lc.client.configCache[lc.id]
+	if !ok {
+		return nil, false
+	}
+	v, present := resolved[key]
+	return v, present
+}
+
+// Has reports whether a resolved value exists for the given key.
+func (lc *LiveConfig) Has(key string) bool {
+	_, ok := lc.Get(key)
+	return ok
+}
+
+// Keys returns a snapshot of the resolved key set in unspecified order.
+func (lc *LiveConfig) Keys() []string {
+	if lc.client.configCache == nil {
+		return nil
+	}
+	resolved, ok := lc.client.configCache[lc.id]
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(resolved))
+	for k := range resolved {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// Len returns the number of resolved keys.
+func (lc *LiveConfig) Len() int {
+	if lc.client.configCache == nil {
+		return 0
+	}
+	resolved, ok := lc.client.configCache[lc.id]
+	if !ok {
+		return 0
+	}
+	return len(resolved)
+}
+
+// OnChange registers a listener that fires when any item in this config
+// changes. Mirrors Python's `proxy.on_change(fn)` listener-form sugar
+// (rule 11 — the proxy-scoped form of OnChange).
+func (lc *LiveConfig) OnChange(cb func(*ConfigChangeEvent)) {
+	lc.client.OnChange(cb, WithConfigID(lc.id))
+}
+
+// OnChangeKey registers a listener that fires only when the named item
+// in this config changes. Mirrors `proxy.on_change(item_key=...)`.
+func (lc *LiveConfig) OnChangeKey(key string, cb func(*ConfigChangeEvent)) {
+	lc.client.OnChange(cb, WithConfigID(lc.id), WithItemKey(key))
 }
