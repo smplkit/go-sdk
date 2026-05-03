@@ -1,19 +1,16 @@
 //go:build ignore
 
-// Logging Management Showcase
-//
-// Demonstrates the smplkit Go SDK's logging management API:
-//   - Logger and LogGroup management (create, read, update, delete)
-//   - Level management (base + environment-specific)
-//   - Group assignment and hierarchy
+// Demonstrates the smplkit management SDK for Smpl Logging.
 //
 // Prerequisites:
-//   - Go 1.21+
-//   - SMPLKIT_API_KEY set (or ~/.smplkit config file)
+//   - go get github.com/smplkit/go-sdk
+//   - A valid smplkit API key, provided via one of:
+//   - SMPLKIT_API_KEY environment variable
+//   - ~/.smplkit configuration file (see SDK docs)
 //
 // Usage:
 //
-//	go run examples/logging_management_showcase.go examples/helpers.go
+//	make logging_management_showcase
 package main
 
 import (
@@ -26,213 +23,48 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// ── Section 1: SDK Initialization ─────────────────────────────────
-	section("1. SDK Initialization")
+	// create the client (management-only — zero side effects)
+	mgmt, err := smplkit.NewManagementClient(smplkit.ManagementConfig{})
+	fatalIfErr("create management client", err)
+	defer mgmt.Close()
 
-	step("Creating smplkit client")
-	client, err := smplkit.NewClient(smplkit.Config{Environment: "production", Service: "showcase-service"})
-	if err != nil {
-		fatal("NewClient failed", err)
-	}
-	defer client.Close()
-	fmt.Println("  Client created successfully")
+	setupLoggingManagementShowcase(ctx, mgmt)
 
-	logging := client.Logging()
+	// create a parent logger with a default level
+	root := mgmt.Loggers().New("showcase")
+	root.SetLevel(smplkit.LogLevelInfo, "")
+	fatalIfErr("save root", root.Save(ctx))
+	fmt.Printf("Created: %s (level=%v)\n", root.ID, *root.Level)
 
-	// Pre-flight cleanup.
-	step("Cleaning up leftover resources from previous runs")
-	for _, key := range []string{"showcase.api", "showcase.worker", "showcase.db"} {
-		_ = logging.Management().Delete(ctx, key)
-	}
-	for _, key := range []string{"showcase-infra", "showcase-backend"} {
-		_ = logging.Management().DeleteGroup(ctx, key)
-	}
-	fmt.Println("  Cleanup complete")
+	// child logger with no level (inherits from parent)
+	db := mgmt.Loggers().New("showcase.db")
+	fatalIfErr("save db", db.Save(ctx))
+	fmt.Printf("Created: %s (inherits)\n", db.ID)
 
-	// ── Section 2: Create Log Groups ─────────────────────────────────
-	section("2. Create Log Groups")
+	// child logger with explicit level (overrides parent)
+	payments := mgmt.Loggers().New("showcase.payments")
+	payments.SetLevel(smplkit.LogLevelWarn, "")
+	fatalIfErr("save payments", payments.Save(ctx))
+	fmt.Printf("Created: %s (level=%v)\n", payments.ID, *payments.Level)
 
-	step("Creating parent group: showcase-infra")
-	infraGroup := logging.Management().NewGroup("showcase-infra", smplkit.WithLogGroupName("Infrastructure"))
-	infraGroup.SetLevel(smplkit.LogLevelWarn)
-	if err := infraGroup.Save(ctx); err != nil {
-		fatal("Failed to create infra group", err)
-	}
-	fmt.Printf("  Created: id=%s, name=%s, level=%s\n", infraGroup.ID, infraGroup.Name, *infraGroup.Level)
+	// override log level for different environments
+	root.SetLevel(smplkit.LogLevelError, "production")
+	root.SetLevel(smplkit.LogLevelDebug, "staging")
+	fatalIfErr("save env overrides", root.Save(ctx))
+	fmt.Printf("Set environment overrides: %v\n", root.Environments)
 
-	step("Creating group: showcase-backend")
-	backendGroup := logging.Management().NewGroup("showcase-backend", smplkit.WithLogGroupName("Backend Services"))
-	backendGroup.SetLevel(smplkit.LogLevelInfo)
-	if err := backendGroup.Save(ctx); err != nil {
-		fatal("Failed to create backend group", err)
-	}
-	fmt.Printf("  Created: id=%s, name=%s, level=%s\n",
-		backendGroup.ID, backendGroup.Name, *backendGroup.Level)
+	// clear environment override (inherits from the default level again)
+	root.ClearLevel("staging")
+	fatalIfErr("save after clear", root.Save(ctx))
+	fmt.Printf("Cleared staging override: %v\n", root.Environments)
 
-	// ── Section 3: Create Loggers ────────────────────────────────────
-	section("3. Create Loggers")
-
-	step("Creating logger: showcase.api (in backend group)")
-	apiLogger := logging.Management().New("showcase.api", smplkit.WithLoggerName("API Service"))
-	apiLogger.Group = &backendGroup.ID
-	apiLogger.SetLevel(smplkit.LogLevelDebug)
-	if err := apiLogger.Save(ctx); err != nil {
-		fatal("Failed to create API logger", err)
-	}
-	fmt.Printf("  Created: id=%s, level=%s, group=%s\n", apiLogger.ID, *apiLogger.Level, *apiLogger.Group)
-
-	step("Creating logger: showcase.worker (no group, environment-specific levels)")
-	workerLogger := logging.Management().New("showcase.worker", smplkit.WithLoggerName("Worker"))
-	workerLogger.SetLevel(smplkit.LogLevelInfo)
-	workerLogger.SetEnvironmentLevel("production", smplkit.LogLevelWarn)
-	workerLogger.SetEnvironmentLevel("staging", smplkit.LogLevelDebug)
-	if err := workerLogger.Save(ctx); err != nil {
-		fatal("Failed to create worker logger", err)
-	}
-	fmt.Printf("  Created: id=%s, level=%s\n", workerLogger.ID, *workerLogger.Level)
-
-	step("Creating logger: showcase.db (unmanaged — level inherited from group/platform)")
-	dbLogger := logging.Management().New("showcase.db", smplkit.WithLoggerName("Database"), smplkit.WithLoggerManaged(false))
-	if err := dbLogger.Save(ctx); err != nil {
-		fatal("Failed to create DB logger", err)
-	}
-	levelStr := "<inherit>"
-	if dbLogger.Level != nil {
-		levelStr = string(*dbLogger.Level)
-	}
-	fmt.Printf("  Created: id=%s, level=%s, managed=%v\n", dbLogger.ID, levelStr, dbLogger.Managed)
-
-	// ── Section 4: List and Get ──────────────────────────────────────
-	section("4. List and Get")
-
-	step("Listing all loggers")
-	loggers, err := logging.Management().List(ctx)
-	if err != nil {
-		fatal("Failed to list loggers", err)
-	}
-	fmt.Printf("  Found %d loggers\n", len(loggers))
-	for _, l := range loggers {
-		levelStr := "<inherit>"
-		if l.Level != nil {
-			levelStr = string(*l.Level)
-		}
-		fmt.Printf("    - %s (level=%s, managed=%v)\n", l.ID, levelStr, l.Managed)
+	// fetch a logger by id
+	fetched, err := mgmt.Loggers().Get(ctx, "showcase")
+	fatalIfErr("get showcase", err)
+	if fetched.Level == nil || *fetched.Level != smplkit.LogLevelInfo {
+		fatalIfErr("fetched.Level", fmt.Errorf("expected INFO, got %v", fetched.Level))
 	}
 
-	step("Getting logger by key: showcase.api")
-	fetched, err := logging.Management().Get(ctx, "showcase.api")
-	if err != nil {
-		fatal("Failed to get logger", err)
-	}
-	fmt.Printf("  Got: id=%s, name=%s\n", fetched.ID, fetched.Name)
-
-	step("Listing all log groups")
-	groups, err := logging.Management().ListGroups(ctx)
-	if err != nil {
-		fatal("Failed to list groups", err)
-	}
-	fmt.Printf("  Found %d groups\n", len(groups))
-	for _, g := range groups {
-		levelStr := "<inherit>"
-		if g.Level != nil {
-			levelStr = string(*g.Level)
-		}
-		fmt.Printf("    - %s (level=%s)\n", g.ID, levelStr)
-	}
-
-	step("Getting group by key: showcase-backend")
-	fetchedGroup, err := logging.Management().GetGroup(ctx, "showcase-backend")
-	if err != nil {
-		fatal("Failed to get group", err)
-	}
-	fmt.Printf("  Got: id=%s, name=%s\n", fetchedGroup.ID, fetchedGroup.Name)
-
-	// ── Section 5: Update Loggers and Groups ─────────────────────────
-	section("5. Update Loggers and Groups")
-
-	step("Updating API logger: change level to TRACE")
-	apiLogger.SetLevel(smplkit.LogLevelTrace)
-	if err := apiLogger.Save(ctx); err != nil {
-		fatal("Failed to update API logger", err)
-	}
-	fmt.Printf("  Updated: id=%s, level=%s\n", apiLogger.ID, *apiLogger.Level)
-
-	step("Updating infra group: add environment level for production")
-	infraGroup.SetEnvironmentLevel("production", smplkit.LogLevelError)
-	if err := infraGroup.Save(ctx); err != nil {
-		fatal("Failed to update infra group", err)
-	}
-	fmt.Printf("  Updated: id=%s\n", infraGroup.ID)
-
-	step("Clearing worker logger environment levels")
-	workerLogger.ClearAllEnvironmentLevels()
-	if err := workerLogger.Save(ctx); err != nil {
-		fatal("Failed to update worker logger", err)
-	}
-	fmt.Printf("  Cleared all environment levels for: %s\n", workerLogger.ID)
-
-	// ── Section 5b: Register Synthetic Logger Sources ───────────────
-	// RegisterSources accepts explicit (service, environment) overrides —
-	// useful for sample-data seeding, cross-tenant migration, and test
-	// fixtures. Contrast with logging.Start() which registers loggers
-	// discovered in the current process under the client's service+env.
-	section("5b. Register Synthetic Logger Sources")
-
-	step("Registering logger sources with service/environment overrides")
-	err = logging.Management().RegisterSources(ctx, []smplkit.LoggerSource{
-		smplkit.NewLoggerSource("sqlalchemy.engine",
-			smplkit.WithLoggerSourceService("user-service"),
-			smplkit.WithLoggerSourceEnvironment("production"),
-			smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelWarn),
-		),
-		smplkit.NewLoggerSource("sqlalchemy.engine",
-			smplkit.WithLoggerSourceService("payment-service"),
-			smplkit.WithLoggerSourceEnvironment("production"),
-			smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelWarn),
-		),
-		smplkit.NewLoggerSource("httpx",
-			smplkit.WithLoggerSourceService("checkout-service"),
-			smplkit.WithLoggerSourceEnvironment("staging"),
-			smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelInfo),
-		),
-	})
-	if err != nil {
-		fatal("RegisterSources failed", err)
-	}
-	fmt.Println("  3 sources registered")
-
-	// ── Section 6: Cleanup ───────────────────────────────────────────
-	section("6. Cleanup")
-
-	step("Deleting loggers")
-	for _, key := range []string{"showcase.api", "showcase.worker", "showcase.db"} {
-		if err := logging.Management().Delete(ctx, key); err != nil {
-			fmt.Printf("  Warning: failed to delete %s: %v\n", key, err)
-		} else {
-			fmt.Printf("  Deleted: %s\n", key)
-		}
-	}
-
-	step("Deleting groups (child first)")
-	for _, key := range []string{"showcase-backend", "showcase-infra"} {
-		if err := logging.Management().DeleteGroup(ctx, key); err != nil {
-			fmt.Printf("  Warning: failed to delete %s: %v\n", key, err)
-		} else {
-			fmt.Printf("  Deleted: %s\n", key)
-		}
-	}
-
-	// ── Summary ──────────────────────────────────────────────────────
-	section("Logging Management Showcase Complete")
-	fmt.Println("  Features exercised:")
-	fmt.Println("  [x] New() + Save() — create loggers")
-	fmt.Println("  [x] NewGroup() + Save() — create log groups")
-	fmt.Println("  [x] SetLevel / ClearLevel — base level management")
-	fmt.Println("  [x] SetEnvironmentLevel / ClearAllEnvironmentLevels — env levels")
-	fmt.Println("  [x] Group assignment (flat groups — no nesting in v1)")
-	fmt.Println("  [x] Get(key) / List() — retrieve loggers")
-	fmt.Println("  [x] GetGroup(key) / ListGroups() — retrieve groups")
-	fmt.Println("  [x] Delete(key) / DeleteGroup(key) — cleanup")
-	fmt.Println("  [x] WithLoggerManaged — unmanaged loggers")
-	fmt.Println("  [x] RegisterSources — synthetic logger registration with service/env overrides")
+	cleanupLoggingManagementShowcase(ctx, mgmt)
+	fmt.Println("Done!")
 }

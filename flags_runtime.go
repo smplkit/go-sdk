@@ -399,7 +399,7 @@ func (rt *FlagsRuntime) SetContextProvider(fn func(ctx context.Context) []Contex
 func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 	rt.initOnce.Do(func() {
 		if rt.flagsClient == nil || rt.flagsClient.client == nil {
-			rt.initErr = &SmplConnectionError{SmplError: SmplError{Message: "flags client not initialized"}}
+			rt.initErr = &ConnectionError{Base: Error{Message: "flags client not initialized"}}
 			return
 		}
 

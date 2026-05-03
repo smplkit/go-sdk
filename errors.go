@@ -11,26 +11,40 @@ type ErrorSource struct {
 	Pointer string `json:"pointer,omitempty"`
 }
 
-// ErrorDetail holds a single JSON:API error object.
-type ErrorDetail struct {
+// ApiErrorDetail holds a single JSON:API error object as surfaced by the
+// smplkit platform's JSON:API responses. Mirrors Python's ApiErrorDetail.
+type ApiErrorDetail struct {
 	Status string      `json:"status,omitempty"`
 	Title  string      `json:"title,omitempty"`
 	Detail string      `json:"detail,omitempty"`
 	Source ErrorSource `json:"source,omitempty"`
 }
 
-// SmplError is the base error type for all smplkit SDK errors.
-// All specific error types embed SmplError, so errors.As(err, &SmplError{})
-// will match any SDK error.
-type SmplError struct {
-	Message      string
-	StatusCode   int
+// ErrorDetail is an alias for ApiErrorDetail kept for backward
+// compatibility. New code should use ApiErrorDetail.
+type ErrorDetail = ApiErrorDetail
+
+// Error is the base error type for all smplkit SDK errors. The flat
+// hierarchy mirrors the Python SDK: ConnectionError, TimeoutError,
+// NotFoundError, ConflictError, and ValidationError are direct subtypes.
+//
+// To match any SDK error use errors.As against *Error:
+//
+//	var e *smplkit.Error
+//	if errors.As(err, &e) { ... }
+type Error struct {
+	// Message is a human-readable summary of the error.
+	Message string
+	// StatusCode holds the HTTP status code if the error came from the API.
+	StatusCode int
+	// ResponseBody holds the raw response body if available.
 	ResponseBody string
-	Errors       []ErrorDetail
+	// Errors holds parsed JSON:API error details when available.
+	Errors []ApiErrorDetail
 }
 
 // Error implements the error interface.
-func (e *SmplError) Error() string {
+func (e *Error) Error() string {
 	if len(e.Errors) > 0 {
 		var b strings.Builder
 		b.WriteString(e.Message)
@@ -53,57 +67,94 @@ func (e *SmplError) Error() string {
 	return e.Message
 }
 
-// SmplConnectionError is raised when a network request fails.
-type SmplConnectionError struct {
-	SmplError
+// ConnectionError is raised when a network request fails.
+type ConnectionError struct {
+	Base Error
 }
 
 // Error implements the error interface.
-func (e *SmplConnectionError) Error() string { return e.SmplError.Error() }
+func (e *ConnectionError) Error() string { return e.Base.Error() }
 
-// Unwrap returns the embedded SmplError for errors.Is/errors.As support.
-func (e *SmplConnectionError) Unwrap() error { return &e.SmplError }
+// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
+func (e *ConnectionError) Unwrap() error { return &e.Base }
 
-// SmplTimeoutError is raised when an operation exceeds its timeout.
-type SmplTimeoutError struct {
-	SmplError
+// TimeoutError is raised when an operation exceeds its timeout.
+type TimeoutError struct {
+	Base Error
 }
 
 // Error implements the error interface.
-func (e *SmplTimeoutError) Error() string { return e.SmplError.Error() }
+func (e *TimeoutError) Error() string { return e.Base.Error() }
 
-// Unwrap returns the embedded SmplError for errors.Is/errors.As support.
-func (e *SmplTimeoutError) Unwrap() error { return &e.SmplError }
+// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
+func (e *TimeoutError) Unwrap() error { return &e.Base }
 
-// SmplNotFoundError is raised when a requested resource does not exist.
-type SmplNotFoundError struct {
-	SmplError
+// NotFoundError is raised when a requested resource does not exist.
+type NotFoundError struct {
+	Base Error
 }
 
 // Error implements the error interface.
-func (e *SmplNotFoundError) Error() string { return e.SmplError.Error() }
+func (e *NotFoundError) Error() string { return e.Base.Error() }
 
-// Unwrap returns the embedded SmplError for errors.Is/errors.As support.
-func (e *SmplNotFoundError) Unwrap() error { return &e.SmplError }
+// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
+func (e *NotFoundError) Unwrap() error { return &e.Base }
 
-// SmplConflictError is raised when an operation conflicts with the current resource state.
-type SmplConflictError struct {
-	SmplError
+// ConflictError is raised when an operation conflicts with current resource state.
+type ConflictError struct {
+	Base Error
 }
 
 // Error implements the error interface.
-func (e *SmplConflictError) Error() string { return e.SmplError.Error() }
+func (e *ConflictError) Error() string { return e.Base.Error() }
 
-// Unwrap returns the embedded SmplError for errors.Is/errors.As support.
-func (e *SmplConflictError) Unwrap() error { return &e.SmplError }
+// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
+func (e *ConflictError) Unwrap() error { return &e.Base }
 
-// SmplValidationError is raised when the server rejects a request due to validation errors.
-type SmplValidationError struct {
-	SmplError
+// ValidationError is raised when the server rejects a request due to validation errors.
+type ValidationError struct {
+	Base Error
 }
 
 // Error implements the error interface.
-func (e *SmplValidationError) Error() string { return e.SmplError.Error() }
+func (e *ValidationError) Error() string { return e.Base.Error() }
 
-// Unwrap returns the embedded SmplError for errors.Is/errors.As support.
-func (e *SmplValidationError) Unwrap() error { return &e.SmplError }
+// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
+func (e *ValidationError) Unwrap() error { return &e.Base }
+
+// ─── Backward-compatibility aliases ──────────────────────────────────────────
+//
+// The original error types had a SmplXxxError name to match the Python
+// SmplError convention. The cross-SDK overhaul drops the prefix, but we
+// keep the old names as deprecated aliases so customer code that imported
+// the old names continues to compile while they migrate.
+
+// SmplError is a deprecated alias for Error.
+//
+// Deprecated: Use Error.
+type SmplError = Error
+
+// SmplConnectionError is a deprecated alias for ConnectionError.
+//
+// Deprecated: Use ConnectionError.
+type SmplConnectionError = ConnectionError
+
+// SmplTimeoutError is a deprecated alias for TimeoutError.
+//
+// Deprecated: Use TimeoutError.
+type SmplTimeoutError = TimeoutError
+
+// SmplNotFoundError is a deprecated alias for NotFoundError.
+//
+// Deprecated: Use NotFoundError.
+type SmplNotFoundError = NotFoundError
+
+// SmplConflictError is a deprecated alias for ConflictError.
+//
+// Deprecated: Use ConflictError.
+type SmplConflictError = ConflictError
+
+// SmplValidationError is a deprecated alias for ValidationError.
+//
+// Deprecated: Use ValidationError.
+type SmplValidationError = ValidationError

@@ -25,69 +25,18 @@ type FlagsClient struct {
 // Management returns the sub-object for flag CRUD operations.
 func (c *FlagsClient) Management() *FlagsManagement {
 	if c.management == nil {
-		c.management = &FlagsManagement{client: c}
+		c.management = newFlagsManagement(c.generated, c.appGenerated)
+		c.management.attachRuntime(c)
 	}
 	return c.management
 }
 
-// createFlag creates the flag on the server and updates the local instance.
-func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
-	reqBody := buildFlagRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
-
-	resp, err := c.generated.CreateFlagWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var result genflags.FlagResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	flag.apply(resourceToFlag(result.Data, c))
-	return nil
-}
-
-// updateFlag updates the flag on the server and updates the local instance.
-func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
-	reqBody := buildFlagRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
-
-	resp, err := c.generated.UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx, flag.ID, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var result genflags.FlagResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	flag.apply(resourceToFlag(result.Data, c))
-	return nil
-}
+// (createFlag and updateFlag moved to flags_management.go so the
+// active-record save path doesn't depend on the runtime client —
+// rule 1 of the cross-SDK overhaul.)
 
 // resourceToFlag converts a generated FlagResource to the SDK Flag type.
-func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
+func resourceToFlag(r genflags.FlagResource, m *FlagsManagement) *Flag {
 	attrs := r.Attributes
 	id := ""
 	if r.Id != nil {
@@ -117,7 +66,7 @@ func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
 		Environments: envs,
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
-		client:       c,
+		client:       m,
 	}
 }
 
@@ -299,8 +248,8 @@ func (c *FlagsClient) fetchSingleFlag(ctx context.Context, key string) (map[stri
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -363,8 +312,8 @@ func (c *FlagsClient) fetchFlagsList(ctx context.Context) ([]map[string]interfac
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {

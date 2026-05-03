@@ -1,29 +1,13 @@
-# Test and coverage artifacts
-coverage.out
+# Coverage artifacts
+*.out
 coverage.html
 cov*.out
-cover.out
-*.test
-*.prof
+cov*-filtered.out
+cov*-sdk.out
 
-# Build artifacts
-*.exe
-*.o
-*.a
-*.so
-*.dll
-*.dylib
-
-# Dependency directories
-vendor/
-
-# IDE artifacts
+# IDE
 .idea/
 .vscode/
-*.swp
-*.swo
 
-# Claude Code
-CLAUDE.md
-CLAUDE.local.md
-.claude/
+# OS
+.DS_Store

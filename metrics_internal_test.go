@@ -889,7 +889,7 @@ func TestConfigClient_GetRecordsMetric(t *testing.T) {
 
 	result, err := cc.Get(context.Background(), "my-config")
 	require.NoError(t, err)
-	assert.Equal(t, "localhost", result["host"])
+	assert.Equal(t, "localhost", result.Value()["host"])
 
 	r.mu.Lock()
 	var found bool
@@ -918,7 +918,7 @@ func TestConfigClient_GetNoMetricsWhenDisabled(t *testing.T) {
 
 	result, err := cc.Get(context.Background(), "my-config")
 	require.NoError(t, err)
-	assert.Equal(t, "localhost", result["host"])
+	assert.Equal(t, "localhost", result.Value()["host"])
 }
 
 func TestConfigClient_ChangeListenersRecordMetric(t *testing.T) {

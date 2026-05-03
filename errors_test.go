@@ -82,8 +82,8 @@ func TestErrorsAs_SpecificTypes(t *testing.T) {
 
 	var notFound *smplkit.SmplNotFoundError
 	require.True(t, errors.As(err, &notFound))
-	assert.Equal(t, 404, notFound.StatusCode)
-	assert.Equal(t, `{"error":"not found"}`, notFound.ResponseBody)
+	assert.Equal(t, 404, notFound.Base.StatusCode)
+	assert.Equal(t, `{"error":"not found"}`, notFound.Base.ResponseBody)
 
 	// Should not match other specific types.
 	var conflict *smplkit.SmplConflictError
@@ -98,27 +98,27 @@ func TestSubtypeErrors_Error(t *testing.T) {
 	}{
 		{
 			name:     "connection error",
-			err:      &smplkit.SmplConnectionError{SmplError: smplkit.SmplError{Message: "conn failed"}},
+			err:      &smplkit.ConnectionError{Base: smplkit.SmplError{Message: "conn failed"}},
 			expected: "conn failed",
 		},
 		{
 			name:     "timeout error",
-			err:      &smplkit.SmplTimeoutError{SmplError: smplkit.SmplError{Message: "timed out"}},
+			err:      &smplkit.TimeoutError{Base: smplkit.SmplError{Message: "timed out"}},
 			expected: "timed out",
 		},
 		{
 			name:     "not found error",
-			err:      &smplkit.SmplNotFoundError{SmplError: smplkit.SmplError{Message: "missing", StatusCode: 404}},
+			err:      &smplkit.NotFoundError{Base: smplkit.SmplError{Message: "missing", StatusCode: 404}},
 			expected: "missing (status 404)",
 		},
 		{
 			name:     "conflict error",
-			err:      &smplkit.SmplConflictError{SmplError: smplkit.SmplError{Message: "conflict", StatusCode: 409}},
+			err:      &smplkit.ConflictError{Base: smplkit.SmplError{Message: "conflict", StatusCode: 409}},
 			expected: "conflict (status 409)",
 		},
 		{
 			name:     "validation error",
-			err:      &smplkit.SmplValidationError{SmplError: smplkit.SmplError{Message: "invalid", StatusCode: 422}},
+			err:      &smplkit.ValidationError{Base: smplkit.SmplError{Message: "invalid", StatusCode: 422}},
 			expected: "invalid (status 422)",
 		},
 	}
@@ -132,7 +132,7 @@ func TestSubtypeErrors_Error(t *testing.T) {
 
 func TestErrorUnwrap(t *testing.T) {
 	inner := smplkit.SmplError{Message: "inner", StatusCode: 500}
-	err := &smplkit.SmplConnectionError{SmplError: inner}
+	err := &smplkit.ConnectionError{Base: inner}
 
 	unwrapped := errors.Unwrap(err)
 	require.NotNil(t, unwrapped)
@@ -160,17 +160,17 @@ func TestCheckStatus_SingleError400(t *testing.T) {
 	require.True(t, errors.As(err, &valErr), "expected SmplValidationError")
 
 	// Message derived from first error's Detail.
-	assert.Contains(t, valErr.Message, "The 'name' field is required.")
+	assert.Contains(t, valErr.Base.Message, "The 'name' field is required.")
 
 	// Errors slice has 1 element.
-	require.Len(t, valErr.Errors, 1)
-	assert.Equal(t, "400", valErr.Errors[0].Status)
-	assert.Equal(t, "Validation Error", valErr.Errors[0].Title)
-	assert.Equal(t, "The 'name' field is required.", valErr.Errors[0].Detail)
-	assert.Equal(t, "/data/attributes/name", valErr.Errors[0].Source.Pointer)
+	require.Len(t, valErr.Base.Errors, 1)
+	assert.Equal(t, "400", valErr.Base.Errors[0].Status)
+	assert.Equal(t, "Validation Error", valErr.Base.Errors[0].Title)
+	assert.Equal(t, "The 'name' field is required.", valErr.Base.Errors[0].Detail)
+	assert.Equal(t, "/data/attributes/name", valErr.Base.Errors[0].Source.Pointer)
 
 	// StatusCode is 400.
-	assert.Equal(t, 400, valErr.StatusCode)
+	assert.Equal(t, 400, valErr.Base.StatusCode)
 
 	// String representation includes JSON.
 	errStr := err.Error()
@@ -203,12 +203,12 @@ func TestCheckStatus_MultiError400(t *testing.T) {
 	require.True(t, errors.As(err, &valErr))
 
 	// Message has "(and 1 more error)".
-	assert.Contains(t, valErr.Message, "(and 1 more error)")
+	assert.Contains(t, valErr.Base.Message, "(and 1 more error)")
 
 	// Errors slice has 2 elements.
-	require.Len(t, valErr.Errors, 2)
-	assert.Equal(t, "The 'name' field is required.", valErr.Errors[0].Detail)
-	assert.Equal(t, "The 'id' field is required.", valErr.Errors[1].Detail)
+	require.Len(t, valErr.Base.Errors, 2)
+	assert.Equal(t, "The 'name' field is required.", valErr.Base.Errors[0].Detail)
+	assert.Equal(t, "The 'id' field is required.", valErr.Base.Errors[1].Detail)
 
 	// String representation includes both errors.
 	errStr := err.Error()
@@ -230,7 +230,7 @@ func TestCheckStatus_404Response(t *testing.T) {
 
 	var notFound *smplkit.SmplNotFoundError
 	require.True(t, errors.As(err, &notFound), "expected SmplNotFoundError")
-	assert.Contains(t, notFound.Message, "Config with key 'nonexistent' not found.")
+	assert.Contains(t, notFound.Base.Message, "Config with key 'nonexistent' not found.")
 }
 
 func TestCheckStatus_409Response(t *testing.T) {
@@ -247,7 +247,7 @@ func TestCheckStatus_409Response(t *testing.T) {
 
 	var conflict *smplkit.SmplConflictError
 	require.True(t, errors.As(err, &conflict), "expected SmplConflictError")
-	assert.Contains(t, conflict.Message, "A config with this key already exists.")
+	assert.Contains(t, conflict.Base.Message, "A config with this key already exists.")
 }
 
 func TestCheckStatus_NonJSON502(t *testing.T) {

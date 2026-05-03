@@ -30,6 +30,18 @@ const (
 //	    "plan": "enterprise",
 //	    "firstName": "Alice",
 //	})
+//
+// Identity locking note (rule 9): Python's Context locks `type` and
+// `key` after the entity has been persisted. Go's idiom of exported
+// struct fields makes that lock unenforceable at compile time —
+// `ctx.Type = "X"` is always allowed by the language. Customer code
+// that wants identity-locking semantics should treat persisted
+// Contexts (those returned by mgmt.Contexts().Get / List) as
+// read-only and construct fresh ones via NewContext for new entities.
+// The compile-time-checkable equivalent in Python (TypeError on
+// non-string args) is enforced here by the type system; the runtime
+// "must not be empty" check is enforced by NewContext which panics on
+// empty inputs.
 type Context struct {
 	// Type is the context type (e.g. "user", "account").
 	Type string
@@ -53,7 +65,20 @@ type Context struct {
 //	    smplkit.WithName("Alice"),
 //	    smplkit.WithAttr("plan", "enterprise"),
 //	)
+//
+// Fail-fast validation (rule 6 of the cross-SDK overhaul): empty type or
+// key panics with a clear message. The Python SDK raises TypeError for
+// non-string args; in Go the type system enforces that, so we only need
+// to enforce non-emptiness. Numeric IDs must be stringified at the SDK
+// boundary — silent normalization weakens the contract.
 func NewContext(contextType, key string, attrs map[string]interface{}, opts ...ContextOption) Context {
+	if contextType == "" {
+		panic("smplkit: Context type must be a non-empty string")
+	}
+	if key == "" {
+		panic("smplkit: Context key must be a non-empty string. " +
+			"If your identifier is numeric, stringify it at the SDK boundary.")
+	}
 	c := Context{
 		Type:       contextType,
 		Key:        key,
@@ -66,6 +91,13 @@ func NewContext(contextType, key string, attrs map[string]interface{}, opts ...C
 		opt(&c)
 	}
 	return c
+}
+
+// CompositeID returns the composite "type:key" identifier mirroring
+// Python's Context.id property. Useful when calling sub-clients that
+// accept either a composite id or separate (type, key) arguments.
+func (c Context) CompositeID() string {
+	return c.Type + ":" + c.Key
 }
 
 // ContextOption configures a Context. Use WithName and WithAttr.
@@ -134,6 +166,14 @@ func (r *Rule) Serve(value interface{}) *Rule {
 }
 
 // Build finalizes and returns the rule as a plain map.
+//
+// Python's Rule(description, *, environment="...") makes environment a
+// required keyword arg at construction. Go has no kwargs, so the
+// builder permits chained Environment(...) and only validates at the
+// AddRule boundary — Flag.AddRule rejects any rule whose Build() output
+// has no "environment" key. The validation is one frame away from the
+// mistake, which is acceptable for the breaking-change tradeoff of
+// keeping NewRule single-arg.
 func (r *Rule) Build() map[string]interface{} {
 	var logic interface{}
 	switch len(r.conditions) {

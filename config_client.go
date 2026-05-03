@@ -53,9 +53,14 @@ type ConfigClient struct {
 }
 
 // Management returns the sub-object for config CRUD operations.
+//
+// Returns the same *ConfigManagement instance that
+// client.Manage().Config() returns — runtime and management surfaces
+// share one management object.
 func (c *ConfigClient) Management() *ConfigManagement {
 	if c.management == nil {
-		c.management = &ConfigManagement{client: c}
+		c.management = newConfigManagement(c.generated)
+		c.management.attachRuntime(c)
 	}
 	return c.management
 }
@@ -70,8 +75,8 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*ConfigEntry, er
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
 		}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
@@ -82,67 +87,37 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*ConfigEntry, er
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
-	return resourceToConfig(result.Data, c), nil
+	return resourceToConfig(result.Data, c.Management()), nil
 }
 
-// createConfig creates the config on the server and updates the local instance.
-func (c *ConfigClient) createConfig(ctx context.Context, cfg *ConfigEntry) error {
-	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
-
-	resp, err := c.generated.CreateConfigWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var result genconfig.ConfigResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	cfg.apply(resourceToConfig(result.Data, c))
-	return nil
-}
-
-// updateConfig updates the config on the server and updates the local instance.
-func (c *ConfigClient) updateConfig(ctx context.Context, cfg *ConfigEntry) error {
-	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
-
-	resp, err := c.generated.UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx, cfg.ID, reqBody)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var result genconfig.ConfigResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("smplkit: failed to parse response: %w", err)
-	}
-	cfg.apply(resourceToConfig(result.Data, c))
-	return nil
-}
+// (createConfig and updateConfig moved to config_management.go so
+// the active-record save path doesn't depend on the runtime client —
+// rule 1 of the cross-SDK overhaul.)
 
 // Get returns the resolved config values for the given ID.
-func (c *ConfigClient) Get(ctx context.Context, id string) (map[string]interface{}, error) {
+// Get returns a LiveConfig — a live, dict-like, read-only proxy whose
+// reads always reflect the latest resolved values for the given config
+// ID. WebSocket updates are picked up automatically; there is no
+// separate Subscribe step (rule 10 of the cross-SDK overhaul).
+//
+// Mirrors Python's client.config.get(id) which returns a
+// LiveConfigProxy. Customer code that wants a one-shot snapshot map
+// should call .Value() (or use Snapshot for the verbatim snapshot
+// shape).
+func (c *ConfigClient) Get(ctx context.Context, id string) (*LiveConfig, error) {
+	if err := c.ensureInit(ctx); err != nil {
+		return nil, err
+	}
+	if metrics := c.client.metrics; metrics != nil {
+		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config": id})
+	}
+	return &LiveConfig{client: c, id: id}, nil
+}
+
+// Snapshot returns a one-shot copy of the resolved values for the given
+// config ID. Use Get to receive a live proxy that always reflects the
+// latest values without re-fetching.
+func (c *ConfigClient) Snapshot(ctx context.Context, id string) (map[string]interface{}, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
 	}
@@ -153,7 +128,6 @@ func (c *ConfigClient) Get(ctx context.Context, id string) (map[string]interface
 	if !ok {
 		return nil, nil
 	}
-	// Return a copy.
 	cp := make(map[string]interface{}, len(resolved))
 	for k, v := range resolved {
 		cp[k] = v
@@ -165,20 +139,20 @@ func (c *ConfigClient) Get(ctx context.Context, id string) (map[string]interface
 // The target must be a pointer to a struct. Dot-notation keys (e.g. "database.host")
 // are expanded into nested structures before unmarshaling.
 func (c *ConfigClient) GetInto(ctx context.Context, id string, target interface{}) error {
-	resolved, err := c.Get(ctx, id)
+	resolved, err := c.Snapshot(ctx, id)
 	if err != nil {
 		return err
 	}
 	return unmarshalResolved(resolved, target)
 }
 
-// Subscribe returns a LiveConfig whose Value() always reflects the latest
-// resolved values for the given config ID.
+// Subscribe is a deprecated alias for Get.
+//
+// Deprecated: Use Get — it now returns the same LiveConfig proxy that
+// Subscribe used to provide. The Python SDK collapsed the two methods
+// into one for the same reason (rule 10).
 func (c *ConfigClient) Subscribe(ctx context.Context, id string) (*LiveConfig, error) {
-	if err := c.ensureInit(ctx); err != nil {
-		return nil, err
-	}
-	return &LiveConfig{client: c, id: id}, nil
+	return c.Get(ctx, id)
 }
 
 // ensureInit performs initialization on first runtime access.
@@ -281,7 +255,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 	}
 	environment := c.client.environment
 	if environment == "" {
-		return &SmplError{Message: "No environment set."}
+		return &Error{Message: "No environment set."}
 	}
 
 	configs, err := c.Management().List(ctx)
@@ -506,8 +480,10 @@ func (c *ConfigClient) fetchChain(ctx context.Context, rootID string) ([]chainEn
 	return chain, nil
 }
 
-// resourceToConfig converts a generated ConfigResource to the SDK ConfigEntry type.
-func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *ConfigEntry {
+// resourceToConfig converts a generated ConfigResource to the SDK
+// ConfigEntry type. The management back-reference allows the active
+// record to Save / Delete itself.
+func resourceToConfig(r genconfig.ConfigResource, m *ConfigManagement) *ConfigEntry {
 	attrs := r.Attributes
 	id := ""
 	if r.Id != nil {
@@ -522,7 +498,7 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *ConfigEntry 
 		Environments: extractEnvOverrides(derefEnvs(attrs.Environments)),
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
-		client:       c,
+		client:       m,
 	}
 }
 

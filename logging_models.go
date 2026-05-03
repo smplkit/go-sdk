@@ -39,7 +39,7 @@ type Logger struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *LoggingClient
+	client *LoggingManagement
 }
 
 // LoggerOption configures an unsaved Logger returned by LoggingClient.New.
@@ -59,16 +59,33 @@ func WithLoggerManaged(managed bool) LoggerOption {
 // PUT has upsert semantics: the server creates the logger if it does not exist.
 // The Logger instance is updated with the server response.
 func (l *Logger) Save(ctx context.Context) error {
+	if l.client == nil {
+		return &Error{Message: "logger was constructed without a client; cannot save"}
+	}
 	return l.client.updateLogger(ctx, l)
 }
 
-// SetLevel sets the base log level. Call Save to persist.
-func (l *Logger) SetLevel(level LogLevel) {
+// Delete removes the logger from the server. Equivalent to
+// mgmt.Loggers().Delete(ctx, l.ID).
+func (l *Logger) Delete(ctx context.Context) error {
+	if l.client == nil || l.ID == "" {
+		return &Error{Message: "logger was constructed without a client or id; cannot delete"}
+	}
+	return l.client.Delete(ctx, l.ID)
+}
+
+// SetBaseLevel sets the logger's base level (no environment scoping).
+//
+// Deprecated: Use SetLevel(level, "") for the unified per-env verb that
+// mirrors the Python SDK's set_level(level, *, environment=None).
+func (l *Logger) SetBaseLevel(level LogLevel) {
 	l.Level = &level
 }
 
-// ClearLevel clears the base log level. Call Save to persist.
-func (l *Logger) ClearLevel() {
+// ClearBaseLevel clears the logger's base level.
+//
+// Deprecated: Use ClearLevel("") for the unified per-env verb.
+func (l *Logger) ClearBaseLevel() {
 	l.Level = nil
 }
 
@@ -139,7 +156,7 @@ type LogGroup struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *LoggingClient
+	client *LoggingManagement
 }
 
 // LogGroupOption configures an unsaved LogGroup returned by LoggingClient.NewGroup.

@@ -166,11 +166,21 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	c.flags.runtime = newFlagsRuntime(c.flags, ctxBuf)
 	c.logging = newLoggingClient(c, genLoggingClient)
-	c.management = &ManagementClient{
-		client:     c,
-		appClient:  genAppClient,
-		contextBuf: ctxBuf,
-	}
+
+	// Build the management surface directly against the generated API
+	// clients so the management plane doesn't depend on the runtime
+	// sub-clients (rule 1 — no skeleton inversion). The runtime
+	// sub-clients then attach themselves to the same management
+	// instances so .Management() returns the same object.
+	c.management = assembleManagementClient(false, optCfg, rc, httpClient, genAppClient, genConfigClient, genFlagsClient, genLoggingClient)
+	c.management.client = c
+	c.management.contextBuf = ctxBuf // share the runtime's buffer so context registration coalesces
+	c.config.management = c.management.configMgmt
+	c.config.management.attachRuntime(c.config)
+	c.flags.management = c.management.flagsMgmt
+	c.flags.management.attachRuntime(c.flags)
+	c.logging.management = c.management.loggingMgmt
+	c.logging.management.attachRuntime(c.logging)
 
 	prefixLen := min(10, len(rc.apiKey))
 	maskedKey := rc.apiKey[:prefixLen] + "..."

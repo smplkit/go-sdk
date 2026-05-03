@@ -513,8 +513,8 @@ func TestGet_Basic(t *testing.T) {
 
 	resolved, err := cc.Get(context.Background(), "app")
 	require.NoError(t, err)
-	assert.Equal(t, "localhost", resolved["host"])
-	assert.Equal(t, float64(3000), resolved["port"])
+	assert.Equal(t, "localhost", resolved.Value()["host"])
+	assert.Equal(t, float64(3000), resolved.Value()["port"])
 }
 
 func TestGet_NilWhenKeyNotFound(t *testing.T) {
@@ -526,7 +526,10 @@ func TestGet_NilWhenKeyNotFound(t *testing.T) {
 
 	resolved, err := cc.Get(context.Background(), "nonexistent")
 	require.NoError(t, err)
-	assert.Nil(t, resolved)
+	require.NotNil(t, resolved)
+	// Live proxy on a non-existent config has zero len and a nil Value().
+	assert.Equal(t, 0, resolved.Len())
+	assert.Nil(t, resolved.Value())
 }
 
 // ---------- ResolveInto ----------
@@ -784,6 +787,58 @@ func TestLiveConfig_Value_KeyNotFound(t *testing.T) {
 	assert.Nil(t, val)
 }
 
+// ---------- LiveConfig dict-like accessors (rule 10) ----------
+
+func TestLiveConfig_DictLikeAccess(t *testing.T) {
+	cc := &ConfigClient{
+		client: &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{
+			"app": {"host": "localhost", "port": float64(5432)},
+		},
+	}
+	lc := &LiveConfig{client: cc, id: "app"}
+
+	assert.Equal(t, "app", lc.ID())
+	assert.Equal(t, 2, lc.Len())
+	assert.True(t, lc.Has("host"))
+	assert.False(t, lc.Has("nope"))
+
+	v, ok := lc.Get("host")
+	assert.True(t, ok)
+	assert.Equal(t, "localhost", v)
+
+	_, ok = lc.Get("nope")
+	assert.False(t, ok)
+
+	keys := lc.Keys()
+	assert.ElementsMatch(t, []string{"host", "port"}, keys)
+}
+
+func TestLiveConfig_DictLikeAccess_NilCache(t *testing.T) {
+	cc := &ConfigClient{client: &Client{environment: "test"}}
+	lc := &LiveConfig{client: cc, id: "app"}
+
+	assert.Equal(t, 0, lc.Len())
+	assert.False(t, lc.Has("k"))
+	_, ok := lc.Get("k")
+	assert.False(t, ok)
+	assert.Nil(t, lc.Keys())
+}
+
+func TestLiveConfig_DictLikeAccess_MissingID(t *testing.T) {
+	cc := &ConfigClient{
+		client:      &Client{environment: "test"},
+		configCache: map[string]map[string]interface{}{},
+	}
+	lc := &LiveConfig{client: cc, id: "missing"}
+
+	assert.Equal(t, 0, lc.Len())
+	assert.False(t, lc.Has("k"))
+	_, ok := lc.Get("k")
+	assert.False(t, ok)
+	assert.Nil(t, lc.Keys())
+}
+
 // ---------- LiveConfig.ValueInto ----------
 
 func TestLiveConfig_ValueInto(t *testing.T) {
@@ -889,7 +944,7 @@ func TestGet_EnsureInitError(t *testing.T) {
 	}
 	// Force initOnce to run with an error
 	cc.initOnce.Do(func() {
-		cc.initErr = &SmplError{Message: "init failed"}
+		cc.initErr = &Error{Message: "init failed"}
 	})
 
 	_, err := cc.Get(context.Background(), "app")
@@ -904,7 +959,7 @@ func TestGetInto_EnsureInitError(t *testing.T) {
 		client: &Client{environment: "test"},
 	}
 	cc.initOnce.Do(func() {
-		cc.initErr = &SmplError{Message: "init failed"}
+		cc.initErr = &Error{Message: "init failed"}
 	})
 
 	var target struct{ Host string }
@@ -920,7 +975,7 @@ func TestSubscribe_EnsureInitError(t *testing.T) {
 		client: &Client{environment: "test"},
 	}
 	cc.initOnce.Do(func() {
-		cc.initErr = &SmplError{Message: "init failed"}
+		cc.initErr = &Error{Message: "init failed"}
 	})
 
 	_, err := cc.Subscribe(context.Background(), "app")

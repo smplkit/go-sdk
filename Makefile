@@ -2,7 +2,7 @@
 	config_runtime_showcase config_management_showcase \
 	flags_runtime_showcase flags_management_showcase \
 	logging_runtime_showcase logging_management_showcase \
-	management_showcase
+	showcases
 
 install:
 	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
@@ -22,23 +22,37 @@ build:
 generate:
 	./scripts/generate.sh
 
-config_runtime_showcase:
-	go run examples/config_runtime_showcase.go examples/config_runtime_setup.go examples/helpers.go
+# ── Six showcases (rule 15 of the cross-SDK overhaul) ──────────────────────
 
 config_management_showcase:
-	go run examples/config_management_showcase.go examples/helpers.go
+	go run examples/config_management_showcase.go \
+		examples/config_management_setup.go \
+		examples/helpers.go
 
-flags_runtime_showcase:
-	go run examples/flags_runtime_showcase.go examples/flags_runtime_setup.go examples/helpers.go
+config_runtime_showcase:
+	go run examples/config_runtime_showcase.go \
+		examples/config_runtime_setup.go \
+		examples/helpers.go
 
 flags_management_showcase:
-	go run examples/flags_management_showcase.go examples/flags_runtime_setup.go examples/helpers.go
+	go run examples/flags_management_showcase.go \
+		examples/flags_management_setup.go \
+		examples/helpers.go
 
-logging_runtime_showcase:
-	go run examples/logging_runtime_showcase.go examples/logging_runtime_setup.go examples/helpers.go
+flags_runtime_showcase:
+	go run examples/flags_runtime_showcase.go \
+		examples/flags_runtime_setup.go \
+		examples/helpers.go
 
 logging_management_showcase:
-	go run examples/logging_management_showcase.go examples/helpers.go
+	go run examples/logging_management_showcase.go \
+		examples/logging_management_setup.go \
+		examples/helpers.go
 
-management_showcase:
-	go run examples/management_showcase.go examples/helpers.go
+logging_runtime_showcase:
+	go run examples/logging_runtime_showcase.go \
+		examples/helpers.go
+
+showcases: config_management_showcase config_runtime_showcase \
+	flags_management_showcase flags_runtime_showcase \
+	logging_management_showcase logging_runtime_showcase

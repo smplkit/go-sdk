@@ -1,285 +1,169 @@
 //go:build ignore
 
-// Flags Runtime Showcase — end-to-end walkthrough of the Smpl Flags
-// runtime in the Go SDK.
-//
-// Demonstrates the full runtime surface:
-//   - Client initialization and flag creation (via demo helpers)
-//   - Typed flag handles: BooleanFlag, StringFlag, NumberFlag
-//   - Context providers
-//   - Explicit context evaluation
-//   - Evaluation statistics
-//   - Real-time updates and change listeners
-//   - OnChangeKey listener
-//   - Manual refresh
-//   - Context registration
-//   - Tier 1 stateless Evaluate
-//   - Cleanup
+// Demonstrates the smplkit runtime SDK for Smpl Flags.
 //
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk
 //   - A valid smplkit API key, provided via one of:
 //   - SMPLKIT_API_KEY environment variable
 //   - ~/.smplkit configuration file (see SDK docs)
-//   - The smplkit flags service running and reachable
 //
 // Usage:
 //
-//	go run examples/flags_runtime_showcase.go examples/flags_runtime_setup.go
+//	make flags_runtime_showcase
+//
+// Note: this showcase calls client.Flags().SetContextProvider inline to
+// demonstrate context-driven flag evaluation. In a real app (chi, gin,
+// echo, etc.), the provider is wired once into middleware — not
+// scattered through your handlers.
 package main
 
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	smplkit "github.com/smplkit/go-sdk"
 )
 
+var (
+	alice = map[string]interface{}{
+		"beta_tester": true,
+		"email":       "alice.adams@acme.com",
+		"first_name":  "Alice",
+		"last_name":   "Adams",
+		"plan":        "enterprise",
+	}
+	bob = map[string]interface{}{
+		"beta_tester": false,
+		"email":       "bob.jones@acme.com",
+		"first_name":  "Bob",
+		"last_name":   "Jones",
+		"plan":        "free",
+	}
+	largeTechAccount = map[string]interface{}{
+		"employee_count": 500,
+		"id":             1234,
+		"industry":       "technology",
+		"region":         "us",
+	}
+	smallRetailAccount = map[string]interface{}{
+		"employee_count": 10,
+		"id":             5678,
+		"industry":       "retail",
+		"region":         "eu",
+	}
+)
+
+// Create context within which flags will be evaluated.
+func createContext(user, account map[string]interface{}) []smplkit.Context {
+	return []smplkit.Context{
+		smplkit.NewContext("user", user["email"].(string), nil,
+			smplkit.WithAttr("beta_tester", user["beta_tester"]),
+			smplkit.WithAttr("first_name", user["first_name"]),
+			smplkit.WithAttr("last_name", user["last_name"]),
+			smplkit.WithAttr("plan", user["plan"]),
+		),
+		smplkit.NewContext("account", fmt.Sprintf("%v", account["id"]), nil,
+			smplkit.WithAttr("industry", account["industry"]),
+			smplkit.WithAttr("region", account["region"]),
+			smplkit.WithAttr("employee_count", account["employee_count"]),
+		),
+	}
+}
+
 func main() {
 	ctx := context.Background()
 
-	// ====================================================================
-	// 1. SDK INITIALIZATION & FLAG SETUP
-	// ====================================================================
-	section("1. SDK Initialization & Flag Setup")
-
-	// The Config struct resolves required parameters from multiple sources:
-	// defaults -> config file (~/.smplkit) -> env vars -> struct fields.
-	//
-	// To pass the API key explicitly:
-	//
-	//   client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_...", Environment: "staging", Service: "showcase-service"})
-	//
-	client, err := smplkit.NewClient(smplkit.Config{Environment: "staging", Service: "showcase-service"})
-	if err != nil {
-		fatal("failed to create client", err)
-	}
-	step("smplkit.Client initialized")
-
-	flags := client.Flags()
-	demoFlags, err := setupDemoFlags(ctx, client)
-	if err != nil {
-		fatal("failed to set up demo flags", err)
-	}
-	defer teardownDemoFlags(ctx, client, demoFlags)
-	step("Demo flags created (checkout-v2, banner-color, max-retries)")
-
-	// ====================================================================
-	// 2. TYPED FLAG HANDLES
-	// ====================================================================
-	section("2. Typed Flag Handles")
-
-	checkoutHandle := flags.BooleanFlag("checkout-v2", false)
-	step("BooleanFlag handle: checkout-v2 (default=false)")
-
-	bannerHandle := flags.StringFlag("banner-color", "red")
-	step("StringFlag handle: banner-color (default=\"red\")")
-
-	retryHandle := flags.NumberFlag("max-retries", 3)
-	step("NumberFlag handle: max-retries (default=3)")
-
-	// Before context is set, handles return defaults.
-	step(fmt.Sprintf("checkout-v2 initial: %v (expect false)", checkoutHandle.Get(ctx)))
-	step(fmt.Sprintf("banner-color initial: %q (expect \"red\")", bannerHandle.Get(ctx)))
-	step(fmt.Sprintf("max-retries initial: %.0f (expect 3)", retryHandle.Get(ctx)))
-
-	// ====================================================================
-	// 3. CONTEXT PROVIDER
-	// ====================================================================
-	section("3. Context Provider")
-
-	flags.SetContextProvider(func(goCtx context.Context) []smplkit.Context {
-		return []smplkit.Context{
-			smplkit.NewContext("user", "user-42", map[string]interface{}{
-				"plan":        "enterprise",
-				"beta_tester": true,
-			}, smplkit.WithName("Alice Johnson")),
-			smplkit.NewContext("account", "acme-corp", map[string]interface{}{
-				"region":         "us",
-				"industry":       "technology",
-				"employee_count": 250,
-			}, smplkit.WithName("Acme Corporation")),
-		}
+	// create the client
+	client, err := smplkit.NewClient(smplkit.Config{
+		Environment: "staging",
+		Service:     "showcase-service",
 	})
-	step("Context provider registered (enterprise user at Acme)")
+	fatalIfErr("create client", err)
+	defer client.Close()
 
-	// ====================================================================
-	// 4. EVALUATE FLAGS (provider context)
-	// ====================================================================
-	section("4. Evaluate Flags (via provider)")
+	setupFlagsRuntimeShowcase(ctx, client.Manage())
 
-	checkoutVal := checkoutHandle.Get(ctx)
-	step(fmt.Sprintf("checkout-v2 = %v (expect true — enterprise + us region)", checkoutVal))
+	// declare flags - default values will be used if the flag does not
+	// exist or smplkit is unreachable
+	checkoutV2 := client.Flags().BooleanFlag("checkout-v2", false)
+	bannerColor := client.Flags().StringFlag("banner-color", "red")
+	maxRetries := client.Flags().NumberFlag("max-retries", 3)
 
-	bannerVal := bannerHandle.Get(ctx)
-	step(fmt.Sprintf("banner-color = %q (expect \"blue\" — enterprise plan)", bannerVal))
+	var allChanges, bannerChanges int64
 
-	retryVal := retryHandle.Get(ctx)
-	step(fmt.Sprintf("max-retries = %.0f (expect 5 — employee_count > 100)", retryVal))
-
-	// ====================================================================
-	// 5. EXPLICIT CONTEXT OVERRIDE
-	// ====================================================================
-	section("5. Explicit Context Override")
-
-	// Override with a non-enterprise user — should get defaults/fallbacks.
-	basicUser := smplkit.NewContext("user", "user-99", map[string]interface{}{
-		"plan":        "free",
-		"beta_tester": false,
-	})
-	smallCo := smplkit.NewContext("account", "small-co", map[string]interface{}{
-		"region":         "eu",
-		"industry":       "healthcare",
-		"employee_count": 5,
+	// global listener — fires when ANY flag definition changes
+	client.Flags().OnChange(func(event *smplkit.FlagChangeEvent) {
+		atomic.AddInt64(&allChanges, 1)
+		fmt.Printf("    Global flag listener: %q updated via %s\n", event.ID, event.Source)
 	})
 
-	checkoutExplicit := checkoutHandle.Get(ctx, basicUser, smallCo)
-	step(fmt.Sprintf("checkout-v2 (free/eu user) = %v (expect false — no rule matches)", checkoutExplicit))
-
-	bannerExplicit := bannerHandle.Get(ctx, basicUser, smallCo)
-	step(fmt.Sprintf("banner-color (healthcare) = %q (expect fallback from env default)", bannerExplicit))
-
-	retryExplicit := retryHandle.Get(ctx, basicUser, smallCo)
-	step(fmt.Sprintf("max-retries (5 employees) = %.0f (expect fallback — count <= 100)", retryExplicit))
-
-	// ====================================================================
-	// 6. RESOLUTION CACHE
-	// ====================================================================
-	section("6. Resolution Cache Stats")
-
-	statsBefore := flags.Stats()
-	step(fmt.Sprintf("Cache hits: %d, misses: %d", statsBefore.CacheHits, statsBefore.CacheMisses))
-
-	// Re-evaluate same flags — should hit cache.
-	for i := 0; i < 50; i++ {
-		checkoutHandle.Get(ctx)
-		bannerHandle.Get(ctx)
-		retryHandle.Get(ctx)
-	}
-
-	statsAfter := flags.Stats()
-	step(fmt.Sprintf("After 150 re-evaluations — hits: %d, misses: %d", statsAfter.CacheHits, statsAfter.CacheMisses))
-	step(fmt.Sprintf("New cache hits: %d (expect 150)", statsAfter.CacheHits-statsBefore.CacheHits))
-
-	// ====================================================================
-	// 7. CHANGE LISTENERS
-	// ====================================================================
-	section("7. Change Listeners")
-
-	globalChanges := 0
-	flags.OnChange(func(evt *smplkit.FlagChangeEvent) {
-		globalChanges++
-		fmt.Printf("    [GLOBAL CHANGE] id=%s source=%s\n", evt.ID, evt.Source)
+	// flag listener — fires only when a specific flag changes
+	client.Flags().OnChangeKey("banner-color", func(event *smplkit.FlagChangeEvent) {
+		atomic.AddInt64(&bannerChanges, 1)
+		fmt.Println("    banner-color flag changed!")
 	})
-	step("Global change listener registered")
 
-	checkoutChanges := 0
-	checkoutHandle.OnChange(func(evt *smplkit.FlagChangeEvent) {
-		checkoutChanges++
-		fmt.Printf("    [checkout-v2 CHANGE via handle] source=%s\n", evt.Source)
-	})
-	step("Flag-specific listener registered for checkout-v2 (via handle)")
+	// request 1 — Alice from a large tech account
+	checkoutResult := checkoutV2.Get(ctx, createContext(alice, largeTechAccount)...)
+	fmt.Printf("checkout-v2 = %v\n", checkoutResult)
 
-	keyChanges := 0
-	flags.OnChangeKey("checkout-v2", func(evt *smplkit.FlagChangeEvent) {
-		keyChanges++
-		fmt.Printf("    [checkout-v2 CHANGE via key] source=%s\n", evt.Source)
-	})
-	step("Key-specific listener registered for checkout-v2 (via OnChangeKey)")
+	bannerResult := bannerColor.Get(ctx, createContext(alice, largeTechAccount)...)
+	fmt.Printf("banner-color = %v\n", bannerResult)
 
-	// Trigger via manual refresh.
-	err = flags.Refresh(ctx)
-	if err != nil {
-		fatal("refresh failed", err)
-	}
-	step(fmt.Sprintf("After Refresh: global=%d, handle=%d, key=%d", globalChanges, checkoutChanges, keyChanges))
+	retriesResult := maxRetries.Get(ctx, createContext(alice, largeTechAccount)...)
+	fmt.Printf("max-retries = %v\n", retriesResult)
 
-	// ====================================================================
-	// 8. CONTEXT REGISTRATION
-	// ====================================================================
-	section("8. Context Registration")
+	// request 2 — Bob from a small retail account
+	checkoutResult2 := checkoutV2.Get(ctx, createContext(bob, smallRetailAccount)...)
+	fmt.Printf("checkout-v2 = %v\n", checkoutResult2)
 
-	err = client.Management().Contexts().Register(ctx,
-		[]smplkit.Context{
-			smplkit.NewContext("device", "device-abc", map[string]interface{}{
-				"os":        "iOS",
-				"version":   "17.4",
-				"app_build": "2024.03.1",
-			}),
-		},
+	bannerResult2 := bannerColor.Get(ctx, createContext(bob, smallRetailAccount)...)
+	fmt.Printf("banner-color = %v\n", bannerResult2)
+
+	retriesResult2 := maxRetries.Get(ctx, createContext(bob, smallRetailAccount)...)
+	fmt.Printf("max-retries = %v\n", retriesResult2)
+
+	// get a flag's value (explicitly pass context)
+	explicitResult := checkoutV2.Get(ctx,
+		smplkit.NewContext("user", "john.smith@acme.com", nil,
+			smplkit.WithAttr("plan", "free"),
+			smplkit.WithAttr("beta_tester", false),
+		),
+		smplkit.NewContext("account", "1111", nil,
+			smplkit.WithAttr("region", "jp"),
+		),
 	)
-	if err != nil {
-		fatal("failed to register context", err)
+	fmt.Printf("checkout-v2 (free, JP) = %v\n", explicitResult)
+
+	// simulate someone making changes to a flag to trigger listeners
+	updateRules(ctx, client)
+
+	// wait a moment for the event to be delivered
+	time.Sleep(200 * time.Millisecond)
+
+	// verify both listeners fired
+	if atomic.LoadInt64(&allChanges) < 1 {
+		fatalIfErr("allChanges", fmt.Errorf("expected at least one global change"))
 	}
-	step("Registered device context for batch upload")
-
-	err = client.Management().Contexts().Flush(ctx)
-	if err != nil {
-		fatal("failed to flush contexts", err)
-	}
-	step("Flushed pending contexts to server")
-
-	// ====================================================================
-	// 9. TIER 1 — STATELESS EVALUATE
-	// ====================================================================
-	section("9. Tier 1 — Stateless Evaluate")
-
-	tier1Contexts := []smplkit.Context{
-		smplkit.NewContext("user", "user-77", map[string]interface{}{
-			"plan": "enterprise",
-		}),
-		smplkit.NewContext("account", "big-corp", map[string]interface{}{
-			"region": "us",
-		}),
+	if atomic.LoadInt64(&bannerChanges) < 1 {
+		fatalIfErr("bannerChanges", fmt.Errorf("expected at least one banner change"))
 	}
 
-	result := flags.Evaluate(ctx, "checkout-v2", "staging", tier1Contexts)
-	step(fmt.Sprintf("Evaluate('checkout-v2', 'staging', enterprise/us) = %v (expect true)", result))
+	cleanupFlagsRuntimeShowcase(ctx, client.Manage())
+	fmt.Println("Done!")
+}
 
-	result2 := flags.Evaluate(ctx, "checkout-v2", "production", tier1Contexts)
-	step(fmt.Sprintf("Evaluate('checkout-v2', 'production', ...) = %v (expect false — production disabled)", result2))
-
-	// ====================================================================
-	// 10. WEBSOCKET STATUS
-	// ====================================================================
-	section("10. WebSocket Status")
-
-	step(fmt.Sprintf("Connection status: %s", flags.ConnectionStatus()))
-
-	// Give a moment for any pending WS activity.
-	time.Sleep(500 * time.Millisecond)
-
-	// ====================================================================
-	// 11. DISCONNECT
-	// ====================================================================
-	section("11. Disconnect")
-
-	flags.Disconnect(ctx)
-	step(fmt.Sprintf("Disconnected — status: %s", flags.ConnectionStatus()))
-
-	// After disconnecting, handles return defaults again.
-	step(fmt.Sprintf("checkout-v2 after disconnect: %v (expect false)", checkoutHandle.Get(ctx)))
-	step(fmt.Sprintf("banner-color after disconnect: %q (expect \"red\")", bannerHandle.Get(ctx)))
-
-	// ====================================================================
-	// DONE
-	// ====================================================================
-	section("ALL DONE")
-	fmt.Println("  The Flags Runtime showcase completed successfully.")
-	fmt.Println()
-	fmt.Println("Features exercised:")
-	fmt.Println("  [x] Client initialization")
-	fmt.Println("  [x] Typed flag handles (Boolean, String, Number)")
-	fmt.Println("  [x] Context provider")
-	fmt.Println("  [x] Evaluate flags via provider context")
-	fmt.Println("  [x] Explicit context override")
-	fmt.Println("  [x] Resolution cache (hits/misses)")
-	fmt.Println("  [x] Change listeners (global + handle + OnChangeKey)")
-	fmt.Println("  [x] Manual refresh")
-	fmt.Println("  [x] Context registration and flush")
-	fmt.Println("  [x] Tier 1 stateless Evaluate")
-	fmt.Println("  [x] WebSocket connection status")
-	fmt.Println("  [x] Disconnect lifecycle")
-	fmt.Println("  [x] Cleanup (deferred)")
+func updateRules(ctx context.Context, client *smplkit.Client) {
+	currentBanner, err := client.Manage().Flags().Get(ctx, "banner-color")
+	fatalIfErr("get banner-color", err)
+	fatalIfErr("add small rule", currentBanner.AddRule(
+		smplkit.NewRule("Red for small companies").
+			Environment("staging").
+			When("account.employee_count", "<", 50).
+			Serve("red").Build(),
+	))
+	fatalIfErr("save banner-color", currentBanner.Save(ctx))
 }

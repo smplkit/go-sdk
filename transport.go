@@ -54,7 +54,7 @@ func checkStatus(code int, body []byte) error {
 		msg = fmt.Sprintf("HTTP %d", code)
 	}
 
-	base := SmplError{
+	base := Error{
 		Message:      msg,
 		StatusCode:   code,
 		ResponseBody: raw,
@@ -63,11 +63,11 @@ func checkStatus(code int, body []byte) error {
 
 	switch code {
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
-		return &SmplValidationError{SmplError: base}
+		return &ValidationError{Base: base}
 	case http.StatusNotFound:
-		return &SmplNotFoundError{SmplError: base}
+		return &NotFoundError{Base: base}
 	case http.StatusConflict:
-		return &SmplConflictError{SmplError: base}
+		return &ConflictError{Base: base}
 	default:
 		return &base
 	}
@@ -76,21 +76,21 @@ func checkStatus(code int, body []byte) error {
 // classifyError converts standard library errors into typed SDK errors.
 func classifyError(err error) error {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return &SmplTimeoutError{
-			SmplError: SmplError{Message: fmt.Sprintf("request timed out: %s", err)},
+		return &TimeoutError{
+			Base: Error{Message: fmt.Sprintf("request timed out: %s", err)},
 		}
 	}
 	if errors.Is(err, context.Canceled) {
-		return &SmplTimeoutError{
-			SmplError: SmplError{Message: fmt.Sprintf("request canceled: %s", err)},
+		return &TimeoutError{
+			Base: Error{Message: fmt.Sprintf("request canceled: %s", err)},
 		}
 	}
 
 	// Check for network-level timeout errors (e.g. http.Client.Timeout).
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
-		return &SmplTimeoutError{
-			SmplError: SmplError{Message: fmt.Sprintf("request timed out: %s", err)},
+		return &TimeoutError{
+			Base: Error{Message: fmt.Sprintf("request timed out: %s", err)},
 		}
 	}
 
@@ -98,11 +98,11 @@ func classifyError(err error) error {
 	// If the error is a *url.Error, extract the URL for a cleaner message.
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
-		return &SmplConnectionError{
-			SmplError: SmplError{Message: fmt.Sprintf("Cannot connect to %s: %s", urlErr.URL, urlErr.Err)},
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("Cannot connect to %s: %s", urlErr.URL, urlErr.Err)},
 		}
 	}
-	return &SmplConnectionError{
-		SmplError: SmplError{Message: fmt.Sprintf("connection error: %s", err)},
+	return &ConnectionError{
+		Base: Error{Message: fmt.Sprintf("connection error: %s", err)},
 	}
 }

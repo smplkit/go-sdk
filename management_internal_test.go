@@ -65,10 +65,7 @@ func newLoggingManagementWithTransport(t *testing.T, transport http.RoundTripper
 		logHeaderEditor,
 	)
 
-	lc := &LoggingClient{
-		generated: genLogClient,
-	}
-	lm := &LoggingManagement{client: lc}
+	lm := newLoggingManagement(genLogClient)
 	return lm
 }
 
