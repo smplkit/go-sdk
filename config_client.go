@@ -179,6 +179,10 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 		c.configCache = cache
 
 		// Register WebSocket listeners for real-time config updates.
+		// The WS connect happens in the background — callers that need
+		// to be sure the subscription is registered server-side before
+		// firing writes should call Client.WaitUntilReady (matches
+		// Python's wait_until_ready and TypeScript's waitUntilReady).
 		ws := c.client.ensureWS()
 		c.wsManager = ws
 		ws.on("config_changed", c.handleConfigChanged)

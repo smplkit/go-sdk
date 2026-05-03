@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/smplkit/go-sdk/v3/internal/debug"
 	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
@@ -264,6 +265,29 @@ func (c *Client) ensureWS() *sharedWebSocket {
 		c.ws.start()
 	}
 	return c.ws
+}
+
+// WaitUntilReady eagerly opens the live-updates WebSocket and blocks
+// until the server has accepted the upgrade, validated the API key,
+// and registered the subscription. After this returns, on-change
+// listeners are guaranteed to receive every server event from this
+// point forward — including events triggered by writes the caller
+// fires immediately afterward.
+//
+// Without this, code that constructs a Client and immediately calls a
+// management write (Save / Delete / SetX+Save) can race the broadcast
+// of the resulting change event and silently miss it: the SDK has not
+// yet appeared in the server's subscriber registry when the broadcast
+// runs, so the broadcast goes to zero subscribers.
+//
+// timeout=0 uses the SDK default (5s). Context cancellation also
+// returns. Mirrors Python's client.wait_until_ready() and
+// TypeScript's client.waitUntilReady().
+func (c *Client) WaitUntilReady(ctx context.Context, timeout time.Duration) error {
+	if timeout == 0 {
+		timeout = wsConnectTimeout
+	}
+	return c.ensureWS().waitConnected(ctx, timeout)
 }
 
 // stopWS stops the shared WebSocket connection.

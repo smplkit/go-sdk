@@ -1,6 +1,7 @@
 package smplkit_test
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -13,6 +14,51 @@ import (
 
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
+
+func TestClient_WaitUntilReady_TimeoutOnUnreachableHost(t *testing.T) {
+	// Point at a closed port so the WS dial loop never reaches "connected".
+	// WaitUntilReady must return a timeout error rather than blocking forever.
+	client, err := smplkit.NewClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL("http://127.0.0.1:1"),
+	)
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+
+	err = client.WaitUntilReady(context.Background(), 50*time.Millisecond)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out")
+}
+
+func TestClient_WaitUntilReady_ContextCancel(t *testing.T) {
+	client, err := smplkit.NewClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL("http://127.0.0.1:1"),
+	)
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = client.WaitUntilReady(ctx, time.Second)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestClient_WaitUntilReady_ZeroTimeoutUsesDefault(t *testing.T) {
+	// Pre-cancel the context so we exit the wait immediately without
+	// having to actually elapse the (5s) default timeout.
+	client, err := smplkit.NewClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL("http://127.0.0.1:1"),
+	)
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = client.WaitUntilReady(ctx, 0)
+	require.ErrorIs(t, err, context.Canceled)
+}
 
 func TestNewClient_Defaults(t *testing.T) {
 	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})

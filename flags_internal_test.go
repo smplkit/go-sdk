@@ -486,6 +486,61 @@ func TestSharedWebSocket_ConnectionStatus(t *testing.T) {
 	assert.Equal(t, "connected", ws.connectionStatus())
 }
 
+func TestSharedWebSocket_WaitConnected_Success(t *testing.T) {
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
+
+	// Flip to connected on a separate goroutine so waitConnected has to
+	// actually block on the channel, not return on the fast path.
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		ws.setStatus("connected")
+	}()
+
+	err := ws.waitConnected(context.Background(), time.Second)
+	require.NoError(t, err)
+}
+
+func TestSharedWebSocket_WaitConnected_AlreadyConnected_FastPath(t *testing.T) {
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
+	ws.setStatus("connected")
+
+	// Already-closed channel: must return immediately even with a zero timeout.
+	err := ws.waitConnected(context.Background(), 0)
+	require.NoError(t, err)
+}
+
+func TestSharedWebSocket_WaitConnected_Timeout(t *testing.T) {
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
+	// Never transitions to connected.
+	err := ws.waitConnected(context.Background(), 30*time.Millisecond)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out")
+}
+
+func TestSharedWebSocket_WaitConnected_ContextCancel(t *testing.T) {
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+	err := ws.waitConnected(ctx, time.Second)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestSharedWebSocket_WaitConnected_OnlyClosesOnce(t *testing.T) {
+	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
+
+	// First connect closes the channel; subsequent reconnects (e.g. after
+	// a network blip) must not panic by trying to close it again.
+	ws.setStatus("connected")
+	ws.setStatus("reconnecting")
+	ws.setStatus("connected")
+
+	err := ws.waitConnected(context.Background(), 0)
+	require.NoError(t, err)
+}
+
 func TestSharedWebSocket_Off_Empty(t *testing.T) {
 	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
 	// off on empty list should not panic

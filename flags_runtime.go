@@ -425,7 +425,9 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 
 		rt.cache.clear()
 
-		// Register on the shared WebSocket.
+		// Register on the shared WebSocket. The WS connect happens in
+		// the background — callers that need confirmed subscription
+		// before firing writes should call Client.WaitUntilReady.
 		ws := rt.flagsClient.client.ensureWS()
 		rt.wsManager = ws
 		ws.on("flag_changed", rt.handleFlagChanged)

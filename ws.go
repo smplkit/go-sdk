@@ -1,7 +1,9 @@
 package smplkit
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/url"
 	"strings"
@@ -13,6 +15,13 @@ import (
 	"github.com/smplkit/go-sdk/v3/internal/debug"
 )
 
+// wsConnectTimeout bounds how long runtime ensureInit calls block waiting
+// for the WebSocket subscription to be registered server-side. The block
+// closes a race where an immediate write after Get() triggers a broadcast
+// before the subscription exists; if WS cannot connect within this window
+// we proceed without a confirmed subscription rather than failing Get().
+const wsConnectTimeout = 5 * time.Second
+
 // sharedWebSocket manages the real-time event connection.
 type sharedWebSocket struct {
 	appBaseURL string
@@ -23,6 +32,16 @@ type sharedWebSocket struct {
 
 	statusMu sync.RWMutex
 	status   string // "disconnected" | "connecting" | "connected" | "reconnecting"
+
+	// firstConnectedCh is closed exactly once, the first time the WebSocket
+	// reaches the "connected" state (i.e. server has accepted the upgrade,
+	// validated the API key, registered the subscription, and sent the
+	// {"type":"connected"} confirmation). Callers can wait on it via
+	// waitConnected to avoid a race where the SDK fires writes that
+	// trigger broadcasts before the WS subscription is registered
+	// server-side and so silently miss the resulting events.
+	firstConnectedCh   chan struct{}
+	firstConnectedOnce sync.Once
 
 	closeCh   chan struct{}
 	closeOnce sync.Once //nolint:unused // used by stop(), which is part of the shutdown lifecycle
@@ -54,14 +73,15 @@ func nextCallbackID() uintptr {
 
 func newSharedWebSocket(appBaseURL, apiKey string, metrics *metricsReporter) *sharedWebSocket {
 	return &sharedWebSocket{
-		appBaseURL: appBaseURL,
-		apiKey:     apiKey,
-		listeners:  make(map[string][]eventCallback),
-		status:     "disconnected",
-		closeCh:    make(chan struct{}),
-		wsDone:     make(chan struct{}),
-		dialWS:     defaultDialWS,
-		metrics:    metrics,
+		appBaseURL:       appBaseURL,
+		apiKey:           apiKey,
+		listeners:        make(map[string][]eventCallback),
+		status:           "disconnected",
+		firstConnectedCh: make(chan struct{}),
+		closeCh:          make(chan struct{}),
+		wsDone:           make(chan struct{}),
+		dialWS:           defaultDialWS,
+		metrics:          metrics,
 	}
 }
 
@@ -123,6 +143,39 @@ func (ws *sharedWebSocket) setStatus(s string) {
 	ws.statusMu.Lock()
 	ws.status = s
 	ws.statusMu.Unlock()
+	if s == "connected" {
+		ws.firstConnectedOnce.Do(func() { close(ws.firstConnectedCh) })
+	}
+}
+
+// waitConnected blocks until the WebSocket reaches its first "connected"
+// state, the context is canceled, or the timeout elapses. It returns
+// nil on connect, ctx.Err() on cancellation, or a timeout error.
+//
+// Callers use this to avoid the race where they immediately trigger a
+// write whose broadcast event arrives at the server before the WS
+// subscription is registered. After the first successful connection,
+// subsequent reconnects do not block (the channel stays closed).
+func (ws *sharedWebSocket) waitConnected(ctx context.Context, timeout time.Duration) error {
+	select {
+	case <-ws.firstConnectedCh:
+		return nil
+	default:
+	}
+	var timeoutCh <-chan time.Time
+	if timeout > 0 {
+		t := time.NewTimer(timeout)
+		defer t.Stop()
+		timeoutCh = t.C
+	}
+	select {
+	case <-ws.firstConnectedCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timeoutCh:
+		return fmt.Errorf("smplkit: timed out waiting for WebSocket connection after %s", timeout)
+	}
 }
 
 func defaultDialWS(wsURL string) (*websocket.Conn, error) {

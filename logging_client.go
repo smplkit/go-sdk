@@ -163,7 +163,9 @@ func (c *LoggingClient) start(ctx context.Context) error {
 		debug.Debug("resolution", "starting initial level resolution pass")
 		c.applyLevels()
 
-		// Open WebSocket and register listeners.
+		// Open WebSocket and register listeners. The WS connect happens
+		// in the background — callers that need confirmed subscription
+		// before firing writes should call Client.WaitUntilReady.
 		ws := c.client.ensureWS()
 		c.wsManager = ws
 		ws.on("logger_changed", c.handleLoggerChanged)

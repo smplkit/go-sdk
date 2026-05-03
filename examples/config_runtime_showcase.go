@@ -36,6 +36,13 @@ func main() {
 
 	setupConfigRuntimeShowcase(ctx, client.Manage())
 
+	// Block until the live-updates WebSocket subscription is registered
+	// server-side. Without this, writes fired immediately afterward can
+	// race the broadcast of their own change events (the SDK isn't in
+	// the subscriber registry yet) and silently miss them. Mirrors
+	// `await client.wait_until_ready()` in the Python showcase.
+	fatalIfErr("wait until ready", client.WaitUntilReady(ctx, 0))
+
 	// get a config as a live proxy (rule 10 — every read goes through
 	// the resolved cache, WS updates land automatically)
 	userSvc, err := client.Config().Get(ctx, "showcase-user-service")

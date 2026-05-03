@@ -86,6 +86,13 @@ func main() {
 
 	setupFlagsRuntimeShowcase(ctx, client.Manage())
 
+	// Block until the live-updates WebSocket subscription is registered
+	// server-side. Without this, writes fired immediately afterward can
+	// race the broadcast of their own change events (the SDK isn't in
+	// the subscriber registry yet) and silently miss them. Mirrors
+	// `await client.wait_until_ready()` in the Python showcase.
+	fatalIfErr("wait until ready", client.WaitUntilReady(ctx, 0))
+
 	// declare flags - default values will be used if the flag does not
 	// exist or smplkit is unreachable
 	checkoutV2 := client.Flags().BooleanFlag("checkout-v2", false)
