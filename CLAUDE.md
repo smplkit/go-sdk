@@ -27,7 +27,7 @@ golangci-lint run
 
 ## Go Version Policy
 
-The SDK supports Go 1.21+. CI runs tests against Go 1.21, 1.22, and 1.23.
+The SDK supports Go 1.24+. CI runs tests against Go 1.24, 1.25, and 1.26.
 
 ## Conventions
 

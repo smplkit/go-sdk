@@ -165,6 +165,20 @@ func TestContextsManagement_Delete_ReadBodyError(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestContextsManagement_SaveEntity_ReadBodyError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &brokenBodyTransport{})
+	name := "Alice"
+	ce := &ContextEntity{
+		ContextType: "user",
+		Key:         "u-1",
+		Name:        &name,
+		Attributes:  map[string]interface{}{"plan": "ent"},
+		client:      mgmt.Contexts(),
+	}
+	err := ce.Save(context.Background())
+	assert.Error(t, err)
+}
+
 // ── AccountSettingsManagement io.ReadAll error paths ─────────────────────────
 
 func TestAccountSettingsManagement_Get_ReadBodyError(t *testing.T) {

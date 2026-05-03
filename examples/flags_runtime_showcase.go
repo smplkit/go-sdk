@@ -141,8 +141,16 @@ func main() {
 	// simulate someone making changes to a flag to trigger listeners
 	updateRules(ctx, client)
 
-	// wait a moment for the event to be delivered
-	time.Sleep(200 * time.Millisecond)
+	// poll for the WebSocket-delivered events. The round trip can exceed
+	// any hard-coded sleep when the platform is under load, so wait up to
+	// 5s for both counters to advance and bail out early if they do.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt64(&allChanges) >= 1 && atomic.LoadInt64(&bannerChanges) >= 1 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	// verify both listeners fired
 	if atomic.LoadInt64(&allChanges) < 1 {
