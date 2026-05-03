@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/smplkit/go-sdk/internal/debug"
-	genapp "github.com/smplkit/go-sdk/internal/generated/app"
-	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
-	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
-	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
+	"github.com/smplkit/go-sdk/v3/internal/debug"
+	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
+	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
+	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
+	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
 )
 
 // ManagementConfig holds the construction-time configuration for a

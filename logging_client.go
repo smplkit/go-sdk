@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/smplkit/go-sdk/internal/debug"
-	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
-	"github.com/smplkit/go-sdk/logging/adapters"
+	"github.com/smplkit/go-sdk/v3/internal/debug"
+	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
+	"github.com/smplkit/go-sdk/v3/logging/adapters"
 )
 
 // LoggingClient provides management and runtime operations for logging resources.

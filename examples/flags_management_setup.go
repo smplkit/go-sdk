@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 
-	smplkit "github.com/smplkit/go-sdk"
+	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 var (

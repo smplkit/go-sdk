@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/smplkit/go-sdk/internal/debug"
+	"github.com/smplkit/go-sdk/v3/internal/debug"
 )
 
 const (

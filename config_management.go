@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
+	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
 )
 
 // ConfigManagement provides CRUD operations for config resources.

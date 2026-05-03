@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	genapp "github.com/smplkit/go-sdk/internal/generated/app"
-	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
+	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
+	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
 )
 
 // errTransport returns a transport-level error on every request, used to cover

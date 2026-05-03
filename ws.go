@@ -10,7 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/smplkit/go-sdk/internal/debug"
+	"github.com/smplkit/go-sdk/v3/internal/debug"
 )
 
 // sharedWebSocket manages the real-time event connection.

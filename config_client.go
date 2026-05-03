@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/smplkit/go-sdk/internal/debug"
-	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
+	"github.com/smplkit/go-sdk/v3/internal/debug"
+	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
 )
 
 // ConfigChangeEvent describes a single value change detected on refresh.

@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	smplkit "github.com/smplkit/go-sdk"
+	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 func TestFlagRule_DefensiveLogicCopy(t *testing.T) {

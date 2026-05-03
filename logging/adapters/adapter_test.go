@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/smplkit/go-sdk/logging/adapters"
+	"github.com/smplkit/go-sdk/v3/logging/adapters"
 )
 
 // mockAdapter is a test double that satisfies LoggingAdapter.

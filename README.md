@@ -1,13 +1,13 @@
 # smplkit Go SDK
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/smplkit/go-sdk.svg)](https://pkg.go.dev/github.com/smplkit/go-sdk) [![Build](https://github.com/smplkit/go-sdk/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/smplkit/go-sdk/actions) [![Coverage](https://codecov.io/gh/smplkit/go-sdk/branch/main/graph/badge.svg)](https://codecov.io/gh/smplkit/go-sdk) [![License](https://img.shields.io/github/license/smplkit/go-sdk)](LICENSE) [![Docs](https://img.shields.io/badge/docs-docs.smplkit.com-blue)](https://docs.smplkit.com)
+[![Go Reference](https://pkg.go.dev/badge/github.com/smplkit/go-sdk/v3.svg)](https://pkg.go.dev/github.com/smplkit/go-sdk/v3) [![Build](https://github.com/smplkit/go-sdk/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/smplkit/go-sdk/actions) [![Coverage](https://codecov.io/gh/smplkit/go-sdk/branch/main/graph/badge.svg)](https://codecov.io/gh/smplkit/go-sdk) [![License](https://img.shields.io/github/license/smplkit/go-sdk)](LICENSE) [![Docs](https://img.shields.io/badge/docs-docs.smplkit.com-blue)](https://docs.smplkit.com)
 
 The official Go SDK for [smplkit](https://www.smplkit.com) — simple application infrastructure that just works.
 
 ## Installation
 
 ```bash
-go get github.com/smplkit/go-sdk
+go get github.com/smplkit/go-sdk/v3
 ```
 
 ## Requirements
@@ -24,7 +24,7 @@ import (
     "fmt"
     "log"
 
-    smplkit "github.com/smplkit/go-sdk"
+    smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 func main() {

@@ -3,7 +3,7 @@
 // Demonstrates the smplkit runtime SDK for Smpl Flags.
 //
 // Prerequisites:
-//   - go get github.com/smplkit/go-sdk
+//   - go get github.com/smplkit/go-sdk/v3
 //   - A valid smplkit API key, provided via one of:
 //   - SMPLKIT_API_KEY environment variable
 //   - ~/.smplkit configuration file (see SDK docs)
@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	smplkit "github.com/smplkit/go-sdk"
+	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 var (

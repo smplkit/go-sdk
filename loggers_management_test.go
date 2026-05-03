@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	smplkit "github.com/smplkit/go-sdk"
+	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 func newMgmtNamespaceTestClient(t *testing.T, handler http.Handler) *smplkit.Client {

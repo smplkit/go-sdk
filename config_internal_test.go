@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
+	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
 )
 
 func TestDerefMap_Nil(t *testing.T) {

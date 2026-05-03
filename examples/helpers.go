@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	smplkit "github.com/smplkit/go-sdk"
+	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 // fatalIfErr prints err and exits with status 1.

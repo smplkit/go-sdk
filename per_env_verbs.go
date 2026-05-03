@@ -208,11 +208,21 @@ func (c *ConfigEntry) Remove(name, environment string) {
 	if c.Environments == nil {
 		return
 	}
-	if env, ok := c.Environments[environment]; ok {
-		delete(env, name)
+	env, ok := c.Environments[environment]
+	if !ok {
+		return
 	}
+	vals, ok := env["values"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	delete(vals, name)
 }
 
+// Per-env items live one level down under "values" so the in-memory
+// shape matches what the API serializer (refEnvs/wrapEnvOverrides) and
+// the runtime resolver (resolveChain) both read. Writing flat would
+// silently drop overrides on Save.
 func (c *ConfigEntry) setItem(name string, value interface{}, environment string) {
 	if environment == "" {
 		if c.Items == nil {
@@ -229,5 +239,10 @@ func (c *ConfigEntry) setItem(name string, value interface{}, environment string
 		env = make(map[string]interface{})
 		c.Environments[environment] = env
 	}
-	env[name] = value
+	vals, ok := env["values"].(map[string]interface{})
+	if !ok {
+		vals = make(map[string]interface{})
+		env["values"] = vals
+	}
+	vals[name] = value
 }

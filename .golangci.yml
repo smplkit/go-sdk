@@ -14,7 +14,7 @@ linters:
 
 linters-settings:
   goimports:
-    local-prefixes: github.com/smplkit/go-sdk
+    local-prefixes: github.com/smplkit/go-sdk/v3
   misspell:
     locale: US
 

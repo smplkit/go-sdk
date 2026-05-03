@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	genapp "github.com/smplkit/go-sdk/internal/generated/app"
-	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
+	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
+	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
 )
 
 // FlagsManagement provides CRUD operations for flag resources.

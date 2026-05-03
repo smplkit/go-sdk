@@ -1,8 +1,8 @@
 package smplkit
 
 import (
-	"github.com/smplkit/go-sdk/internal/debug"
-	"github.com/smplkit/go-sdk/logging/adapters"
+	"github.com/smplkit/go-sdk/v3/internal/debug"
+	"github.com/smplkit/go-sdk/v3/logging/adapters"
 )
 
 // IsDebugEnabled reports whether the internal debug package has debug output

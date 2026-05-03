@@ -18,7 +18,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/smplkit/go-sdk/logging/adapters"
+	"github.com/smplkit/go-sdk/v3/logging/adapters"
 )
 
 // smplkit level string → slog.Level mapping.

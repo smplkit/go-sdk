@@ -16,7 +16,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/smplkit/go-sdk/logging/adapters"
+	"github.com/smplkit/go-sdk/v3/logging/adapters"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

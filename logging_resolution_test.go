@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
+	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
 )
 
 // --- NormalizeLoggerName tests ---

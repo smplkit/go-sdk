@@ -41,6 +41,6 @@ The SDK supports Go 1.21+. CI runs tests against Go 1.21, 1.22, and 1.23.
 
 ## Package Naming
 
-- **Module path:** `github.com/smplkit/go-sdk`
-- **Import:** `import "github.com/smplkit/go-sdk"` then use as `smplkit.NewClient(...)`
-- **Install:** `go get github.com/smplkit/go-sdk`
+- **Module path:** `github.com/smplkit/go-sdk/v3`
+- **Import:** `import "github.com/smplkit/go-sdk/v3"` then use as `smplkit.NewClient(...)`
+- **Install:** `go get github.com/smplkit/go-sdk/v3`

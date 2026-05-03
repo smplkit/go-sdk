@@ -1,4 +1,4 @@
-module github.com/smplkit/go-sdk
+module github.com/smplkit/go-sdk/v3
 
 go 1.24
 

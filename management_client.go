@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	genapp "github.com/smplkit/go-sdk/internal/generated/app"
+	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
 )
 
 // ManagementClient is the management-plane sub-client. Obtain one via

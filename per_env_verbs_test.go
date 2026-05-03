@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	smplkit "github.com/smplkit/go-sdk"
+	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 func TestFlag_SetDefault_BaseAndEnv(t *testing.T) {
@@ -189,8 +189,9 @@ func TestConfigEntry_SetX_BaseAndEnv(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"x": 1}, c.Items["flags"])
 
 	c.SetString("name", "service-b", "production")
-	prod := c.Environments["production"]
-	assert.Equal(t, "service-b", prod["name"])
+	prodVals, ok := c.Environments["production"]["values"].(map[string]interface{})
+	require.True(t, ok, "per-env values must live under 'values' so the serializer picks them up")
+	assert.Equal(t, "service-b", prodVals["name"])
 }
 
 func TestConfigEntry_Remove_BaseAndEnv(t *testing.T) {
@@ -199,7 +200,8 @@ func TestConfigEntry_Remove_BaseAndEnv(t *testing.T) {
 	c.SetString("name", "y", "production")
 
 	c.Remove("name", "production")
-	_, hasName := c.Environments["production"]["name"]
+	prodVals, _ := c.Environments["production"]["values"].(map[string]interface{})
+	_, hasName := prodVals["name"]
 	assert.False(t, hasName)
 	assert.Equal(t, "x", c.Items["name"]) // base preserved
 
@@ -211,6 +213,22 @@ func TestConfigEntry_Remove_BaseAndEnv(t *testing.T) {
 	empty := &smplkit.ConfigEntry{}
 	empty.Remove("name", "")
 	empty.Remove("name", "production")
+
+	// removing a per-env item when the env exists but has no values map is a no-op
+	noValues := &smplkit.ConfigEntry{
+		Environments: map[string]map[string]interface{}{
+			"production": {},
+		},
+	}
+	noValues.Remove("name", "production")
+
+	// removing from an env that isn't present in a non-nil Environments map is a no-op
+	noEnv := &smplkit.ConfigEntry{
+		Environments: map[string]map[string]interface{}{
+			"production": {"values": map[string]interface{}{"name": "x"}},
+		},
+	}
+	noEnv.Remove("name", "staging")
 }
 
 func TestFlag_AddRule_RejectsEmptyEnvironment(t *testing.T) {

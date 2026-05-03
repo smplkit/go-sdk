@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	genapp "github.com/smplkit/go-sdk/internal/generated/app"
-	genconfig "github.com/smplkit/go-sdk/internal/generated/config"
-	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
+	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
+	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
+	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
 )
 
 // newTestFullClient builds a Client with both config and flags sub-clients

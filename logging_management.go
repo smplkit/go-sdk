@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	genlogging "github.com/smplkit/go-sdk/internal/generated/logging"
+	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
 )
 
 // LoggingManagement provides CRUD operations for logger and log group

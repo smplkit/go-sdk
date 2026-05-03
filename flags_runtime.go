@@ -11,8 +11,8 @@ import (
 
 	jsonlogic "github.com/diegoholiveira/jsonlogic/v3"
 
-	"github.com/smplkit/go-sdk/internal/debug"
-	genflags "github.com/smplkit/go-sdk/internal/generated/flags"
+	"github.com/smplkit/go-sdk/v3/internal/debug"
+	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
 )
 
 // FlagChangeEvent describes a flag definition change.
