@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -179,7 +180,13 @@ func (ws *sharedWebSocket) waitConnected(ctx context.Context, timeout time.Durat
 }
 
 func defaultDialWS(wsURL string) (*websocket.Conn, error) {
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	// CloudFront's WAF blocks WebSocket upgrade requests that omit a
+	// User-Agent header. gorilla/websocket doesn't set one by default
+	// (browsers do), so we inject it explicitly to match the User-Agent
+	// the HTTP transport sends. Without this, the upgrade request can
+	// be rejected with HTTP 403 before reaching our backend.
+	header := http.Header{"User-Agent": []string{userAgent}}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
 	return conn, err
 }
 
