@@ -30,36 +30,40 @@ import (
 func main() {
     ctx := context.Background()
 
-    // API key resolved from SMPLKIT_API_KEY env var or ~/.smplkit config file.
-    // Pass explicitly as the first argument to override:
-    //   smplkit.NewClient("sk_api_...", "production", "my-service")
-    client, err := smplkit.NewClient("", "production", "my-service")
+    // APIKey, Environment, Service may also come from SMPLKIT_* env vars
+    // or ~/.smplkit; explicit Config fields take precedence.
+    client, err := smplkit.NewClient(smplkit.Config{
+        APIKey:      "sk_api_...",
+        Environment: "production",
+        Service:     "my-service",
+    })
     if err != nil {
         log.Fatal(err)
     }
     defer client.Close()
 
     // ── Runtime: resolve config values ──────────────────────────────────
-    // Returns the merged map for the current environment.
-    values, err := client.Config().Get(ctx, "user_service")
+    // Get returns a LiveConfig proxy; reads always reflect the latest
+    // values pushed by the WebSocket.
+    cfg, err := client.Config().Get(ctx, "user_service")
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Println(values["timeout"])
+    fmt.Println(cfg.Value()["timeout"])
 
     // Or unmarshal directly into a typed struct.
     type ServiceConfig struct {
-        Timeout int    `json:"timeout"`
-        Retries int    `json:"retries"`
+        Timeout int `json:"timeout"`
+        Retries int `json:"retries"`
     }
-    var cfg ServiceConfig
-    if err := client.Config().GetInto(ctx, "user_service", &cfg); err != nil {
+    var sc ServiceConfig
+    if err := client.Config().GetInto(ctx, "user_service", &sc); err != nil {
         log.Fatal(err)
     }
-    fmt.Println(cfg.Timeout)
+    fmt.Println(sc.Timeout)
 
     // ── Management: CRUD operations ──────────────────────────────────────
-    mgmt := client.Config().Management()
+    mgmt := client.Manage().Config()
 
     configs, err := mgmt.List(ctx)
     if err != nil {
@@ -67,14 +71,15 @@ func main() {
     }
     fmt.Println(len(configs))
 
-    raw, err := mgmt.Get(ctx, "user_service")
+    fetched, err := mgmt.Get(ctx, "user_service")
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Println(raw.ID)
+    fmt.Println(fetched.ID)
 
     newConfig := mgmt.New("my_service", smplkit.WithConfigName("My Service"))
-    newConfig.Items = map[string]interface{}{"timeout": 30, "retries": 3}
+    newConfig.SetNumber("timeout", 30, "")
+    newConfig.SetNumber("retries", 3, "")
     if err := newConfig.Save(ctx); err != nil {
         log.Fatal(err)
     }
@@ -85,11 +90,13 @@ func main() {
 }
 ```
 
+`client.Manage()` exposes the eight management namespaces (`Config()`, `Flags()`, `Loggers()`, `LogGroups()`, `Contexts()`, `ContextTypes()`, `Environments()`, `AccountSettings()`). For setup scripts and CI jobs that don't need the runtime, construct a management-only client with no side effects via `smplkit.NewManagementClient(smplkit.ManagementConfig{...})`.
+
 ## Configuration
 
-All settings are resolved from three sources, in order of precedence:
+All settings are resolved from four sources, in order of precedence:
 
-1. **Constructor arguments** — highest priority, always wins.
+1. **Constructor arguments** — explicit `Config` fields, highest priority.
 2. **Environment variables** — e.g. `SMPLKIT_API_KEY`, `SMPLKIT_ENVIRONMENT`.
 3. **Configuration file** (`~/.smplkit`) — INI-format with profile support.
 4. **Defaults** — built-in SDK defaults.
@@ -132,40 +139,42 @@ For the complete configuration reference, see the [Configuration Guide](https://
 
 ## Error Handling
 
-All SDK errors extend `SmplError` and support `errors.Is()` / `errors.As()`:
+All SDK errors extend `*smplkit.Error` and support `errors.Is()` / `errors.As()`:
 
 ```go
 import "errors"
 
-config, err := client.Config().Management().Get(ctx, "nonexistent")
+cfg, err := client.Manage().Config().Get(ctx, "nonexistent")
 if err != nil {
-    var notFound *smplkit.SmplNotFoundError
+    var notFound *smplkit.NotFoundError
     if errors.As(err, &notFound) {
-        fmt.Println("Not found:", notFound.Message)
+        fmt.Println("Not found:", notFound.Base.Message)
     } else {
         fmt.Println("Error:", err)
     }
 }
 ```
 
-| Error                  | Cause                        |
-|------------------------|------------------------------|
-| `SmplNotFoundError`    | HTTP 404 — resource not found |
-| `SmplConflictError`    | HTTP 409 — conflict           |
-| `SmplValidationError`  | HTTP 422 — validation error   |
-| `SmplTimeoutError`     | Request timed out             |
-| `SmplConnectionError`  | Network connectivity issue    |
-| `SmplError`            | Any other SDK error           |
+| Error                | Cause                          |
+|----------------------|--------------------------------|
+| `NotFoundError`      | HTTP 404 — resource not found  |
+| `ConflictError`      | HTTP 409 — conflict            |
+| `ValidationError`    | HTTP 422 — validation error    |
+| `TimeoutError`       | Request timed out              |
+| `ConnectionError`    | Network connectivity issue     |
+| `Error`              | Any other SDK error            |
+
+`Smpl`-prefixed aliases (`SmplError`, `SmplNotFoundError`, etc.) exist for cross-SDK familiarity but the unprefixed names are canonical.
 
 ## Feature Flags
 
-The SDK includes a full-featured feature flags client with management API, prescriptive runtime evaluation, and real-time updates.
+Full management + runtime client with real-time WebSocket updates and a typed-handle evaluation API.
 
 ### Management API
 
 ```go
 ctx := context.Background()
-mgmt := client.Flags().Management()
+mgmt := client.Manage().Flags()
 
 // Create a flag using typed factories
 flag := mgmt.NewBooleanFlag("checkout-v2", false,
@@ -176,34 +185,41 @@ if err := flag.Save(ctx); err != nil {
     log.Fatal(err)
 }
 
-// Configure environments and rules, then save again
-flag.SetEnvironmentEnabled("staging", true)
-flag.AddRule(smplkit.NewRule("Enable for enterprise").
+// Per-environment defaults and rules — env="" targets the base default,
+// non-empty scopes to that environment.
+flag.SetDefault(true, "staging")
+if err := flag.AddRule(smplkit.NewRule("Enable for enterprise").
     Environment("staging").
     When("user.plan", "==", "enterprise").
     Serve(true).
-    Build())
+    Build()); err != nil {
+    log.Fatal(err)
+}
 if err := flag.Save(ctx); err != nil {
     log.Fatal(err)
 }
 
-// List, get, delete
+// List / get / delete
 allFlags, _ := mgmt.List(ctx)
 fetched, _ := mgmt.Get(ctx, "checkout-v2")
 _ = allFlags
 _ = fetched
-err := mgmt.Delete(ctx, "checkout-v2")
+_ = mgmt.Delete(ctx, "checkout-v2")
 ```
 
 ### Runtime Evaluation
 
 ```go
-// Define typed flag handles
-checkout := flags.BoolFlag("checkout-v2", false)
+flags := client.Flags()
+
+// Typed flag handles (no Connect step — runtime initializes lazily on
+// first Get and opens the live-updates WebSocket in the background).
+checkout := flags.BooleanFlag("checkout-v2", false)
 banner   := flags.StringFlag("banner-color", "red")
 retries  := flags.NumberFlag("max-retries", 3)
 
-// Register a context provider
+// Ambient context: a provider runs on every evaluation that doesn't
+// pass an explicit context.
 flags.SetContextProvider(func(ctx context.Context) []smplkit.Context {
     return []smplkit.Context{
         smplkit.NewContext("user", "user-42", map[string]interface{}{
@@ -212,38 +228,168 @@ flags.SetContextProvider(func(ctx context.Context) []smplkit.Context {
     }
 })
 
-// Connect to an environment
-err := flags.Connect(ctx, "staging")
-
-// Evaluate — uses provider context, caches results
+// Evaluate — uses provider context, caches results.
 isV2 := checkout.Get(ctx)            // true (rule matched)
 color := banner.Get(ctx)             // "blue"
+maxR := retries.Get(ctx)             // 5
+_ = color
+_ = maxR
 
-// Explicit context override
+// Per-call context override.
 basicUser := smplkit.NewContext("user", "u-1", map[string]interface{}{"plan": "free"})
 isV2 = checkout.Get(ctx, basicUser)  // false
 
-// Change listeners
+// Live-update listeners.
 flags.OnChange(func(evt *smplkit.FlagChangeEvent) {
-    fmt.Println("flag changed:", evt.Key)
+    fmt.Println("flag changed:", evt.ID)
+})
+checkout.OnChange(func(evt *smplkit.FlagChangeEvent) {
+    fmt.Println("checkout-v2 specifically changed")
 })
 
-// Cache stats
+// Manual re-fetch (bypasses the WebSocket — useful in short-lived scripts).
+if err := flags.Refresh(ctx); err != nil {
+    log.Fatal(err)
+}
+
+// Cache stats.
 stats := flags.Stats()
 fmt.Printf("hits=%d misses=%d\n", stats.CacheHits, stats.CacheMisses)
 
-// Cleanup
-flags.Disconnect(ctx)
+// Cleanup is handled by client.Close(); call flags.Disconnect(ctx) to
+// stop the runtime sub-client without tearing down the rest.
 ```
+
+If you need on-change listeners to receive events for writes that happen immediately after construction (e.g. in showcases or tests), call `client.WaitUntilReady(ctx, 0)` once after `NewClient` to block until the WebSocket subscription has been registered server-side.
 
 ### Flag Types
 
-| Constant              | Value       |
-|-----------------------|-------------|
-| `FlagTypeBoolean`     | `"BOOLEAN"` |
-| `FlagTypeString`      | `"STRING"`  |
-| `FlagTypeNumeric`     | `"NUMERIC"` |
-| `FlagTypeJSON`        | `"JSON"`    |
+| Constant            | Value       |
+|---------------------|-------------|
+| `FlagTypeBoolean`   | `"BOOLEAN"` |
+| `FlagTypeString`    | `"STRING"`  |
+| `FlagTypeNumeric`   | `"NUMERIC"` |
+| `FlagTypeJSON`      | `"JSON"`    |
+
+## Logging
+
+Centrally manage log levels per service+environment from the smplkit platform; the SDK pushes resolved levels onto whichever logging framework you wrap.
+
+### Adapters
+
+The SDK ships two adapters as separate Go modules so you only pay for the framework you use:
+
+- `github.com/smplkit/go-sdk/logging/adapters/slog` — Go's standard `log/slog`.
+- `github.com/smplkit/go-sdk/logging/adapters/zap` — `go.uber.org/zap`.
+
+```bash
+go get github.com/smplkit/go-sdk/logging/adapters/slog
+```
+
+### Runtime: slog
+
+```go
+import (
+    "log/slog"
+
+    smplkit "github.com/smplkit/go-sdk/v3"
+    slogadapter "github.com/smplkit/go-sdk/logging/adapters/slog"
+)
+
+adapter := slogadapter.New()
+
+// Wrap and replace the global slog default. Every package that uses
+// slog.Info / slog.Warn / slog.Error / slog.Debug now routes through
+// the SDK's level-controlled wrapper. Use WrapHandler explicitly if
+// you want to keep your own slog.NewJSONHandler / custom destination.
+adapter.InstallDefault()
+
+client.Logging().RegisterAdapter(adapter)
+if err := client.Logging().Install(ctx); err != nil {
+    log.Fatal(err)
+}
+
+// Force a re-fetch of managed levels without waiting for the WebSocket.
+if err := client.Logging().Refresh(ctx); err != nil {
+    log.Fatal(err)
+}
+
+// Listen for level changes from the platform.
+client.Logging().OnChange(func(evt *smplkit.LoggerChangeEvent) {
+    fmt.Println("logger changed:", evt.ID, "level:", evt.Level, "source:", evt.Source)
+})
+```
+
+> Why `InstallDefault` replaces (rather than wraps) the existing default: Go's `log/slog` has no global registry of loggers, so the SDK can only manage handlers it sits in front of. Wrapping `slog.Default()`'s pre-existing handler causes a recursion deadlock through `log.Default()`; installing a fresh `TextHandler` to stderr avoids the cycle. To attach smplkit control to a non-default handler, use `adapter.WrapHandler(yourHandler)` and call `slog.SetDefault` yourself.
+
+### Runtime: zap
+
+```go
+import (
+    "go.uber.org/zap"
+    "go.uber.org/zap/zapcore"
+
+    zapadapter "github.com/smplkit/go-sdk/logging/adapters/zap"
+)
+
+adapter := zapadapter.New()
+core := adapter.WrapCore(zapcore.NewCore(
+    zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+    zapcore.AddSync(os.Stderr),
+    zapcore.DebugLevel,
+))
+logger := zap.New(core)
+
+client.Logging().RegisterAdapter(adapter)
+_ = client.Logging().Install(ctx)
+logger.Info("hello from zap")
+```
+
+### Management API
+
+```go
+mgmt := client.Manage().Loggers()
+
+// Create or update a logger entry on the platform. PUT is upsert.
+logger := mgmt.New("acme.app")
+logger.SetLevel(smplkit.LogLevelInfo, "")          // base level
+logger.SetLevel(smplkit.LogLevelDebug, "staging")  // env override
+if err := logger.Save(ctx); err != nil {
+    log.Fatal(err)
+}
+
+// Read paths.
+fetched, _ := mgmt.Get(ctx, "acme.app")
+all, _    := mgmt.List(ctx)
+_ = fetched
+_ = all
+
+// Force the discovery buffer to send any pending registrations now
+// (the runtime drains it on a 5s ticker by default).
+if err := mgmt.Flush(ctx); err != nil {
+    log.Fatal(err)
+}
+
+// Log groups have their own namespace; see client.Manage().LogGroups().
+groups := client.Manage().LogGroups()
+group := groups.New("infra", smplkit.WithLogGroupName("Infra"))
+group.SetLevel(smplkit.LogLevelWarn)
+if err := group.Save(ctx); err != nil {
+    log.Fatal(err)
+}
+```
+
+### Log Levels
+
+| Constant            | Value      |
+|---------------------|------------|
+| `LogLevelTrace`     | `"TRACE"`  |
+| `LogLevelDebug`     | `"DEBUG"`  |
+| `LogLevelInfo`      | `"INFO"`   |
+| `LogLevelWarn`      | `"WARN"`   |
+| `LogLevelError`     | `"ERROR"`  |
+| `LogLevelFatal`     | `"FATAL"`  |
+| `LogLevelSilent`    | `"SILENT"` |
 
 ## Debug Logging
 

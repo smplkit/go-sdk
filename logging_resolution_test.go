@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1486,6 +1488,52 @@ func TestPeriodicFlush_TickerFires(t *testing.T) {
 	close(done)
 
 	assert.GreaterOrEqual(t, flushCount.Load(), int32(1), "periodic flush ticker should have fired at least once")
+}
+
+func TestPeriodicFlush_LogsWarningOnFlushError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that waits for 5s ticker")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server rejected batch"}]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	lc := newTestLoggingClient(t, mux)
+	lc.buffer.add("periodic.error.logger", "INFO", "INFO", "my-service", "production")
+
+	var logBuf strings.Builder
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
+
+	done := make(chan struct{})
+	go lc.periodicFlush(done)
+	time.Sleep(6 * time.Second)
+	close(done)
+
+	assert.Contains(t, logBuf.String(), "smplkit: bulk logger registration failed")
+	assert.Contains(t, logBuf.String(), "server rejected batch")
+}
+
+func TestFlush_ReturnsConnectionErrorOnBodyReadFailure(t *testing.T) {
+	httpClient := &http.Client{
+		Transport: &brokenBodyTransportLogging{statusCode: 200},
+	}
+	genLoggingClient, _ := genlogging.NewClient("http://localhost",
+		genlogging.WithHTTPClient(httpClient),
+	)
+	c := &Client{environment: "test", service: "test-service"}
+	lc := newLoggingClient(c, genLoggingClient)
+	lc.buffer.add("body.read.fail", "INFO", "INFO", "svc", "env")
+
+	err := lc.Flush(context.Background())
+	require.Error(t, err)
+	var connErr *ConnectionError
+	require.ErrorAs(t, err, &connErr)
+	assert.Contains(t, err.Error(), "failed to read response body")
 }
 
 // --- handleLoggerChanged ---
