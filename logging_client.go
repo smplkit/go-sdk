@@ -148,7 +148,10 @@ func (c *LoggingClient) start(ctx context.Context) error {
 		debug.Debug("registration", "installed hooks on %d adapters", len(c.adapters))
 
 		// Flush any loggers registered before Start (including discovered ones).
-		c.flushBuffer(ctx)
+		if err := c.Flush(ctx); err != nil {
+			log.Printf("smplkit: bulk logger registration failed: %s", err.Error())
+			debug.Debug("logging", "bulk logger registration error details: %+v", err)
+		}
 		debug.Debug("registration", "initial registration flush complete")
 
 		// Fetch definitions.
@@ -188,6 +191,44 @@ func (c *LoggingClient) start(ctx context.Context) error {
 func (c *LoggingClient) RegisterLogger(name string, level LogLevel) {
 	normalized := NormalizeLoggerName(name)
 	c.buffer.add(normalized, string(level), string(level), c.client.service, c.client.environment)
+}
+
+// Refresh re-fetches managed logger and log-group definitions from the
+// server, re-applies resolved levels to every adapter-known logger, and
+// fires change/deletion listeners (with Source = "manual") for any
+// logger whose definition changed since the previous fetch.
+//
+// Use this when the customer wants to bypass the WebSocket and force a
+// fresh sync — e.g. after a known burst of server-side edits, or when
+// running short-lived scripts that don't keep the WS open. Mirrors
+// Python's client.logging.refresh().
+func (c *LoggingClient) Refresh(ctx context.Context) error {
+	oldLoggers := c.loggersCache
+
+	if err := c.fetchAndCache(ctx); err != nil {
+		return err
+	}
+	c.applyLevels()
+
+	allKeys := make(map[string]struct{}, len(oldLoggers)+len(c.loggersCache))
+	for k := range oldLoggers {
+		allKeys[k] = struct{}{}
+	}
+	for k := range c.loggersCache {
+		allKeys[k] = struct{}{}
+	}
+
+	for k := range allKeys {
+		_, hadOld := oldLoggers[k]
+		_, hasNew := c.loggersCache[k]
+		switch {
+		case hadOld && !hasNew:
+			c.fireDeletedListeners(k, "manual")
+		case !reflect.DeepEqual(oldLoggers[k], c.loggersCache[k]):
+			c.fireChangeListeners(k, "manual")
+		}
+	}
+	return nil
 }
 
 // OnChange registers a global change listener that fires for any logger change.
@@ -497,16 +538,21 @@ func (c *LoggingClient) fetchAndCache(ctx context.Context) error {
 	return nil
 }
 
-func (c *LoggingClient) flushBuffer(ctx context.Context) {
+// Flush sends any pending logger discoveries to the server immediately
+// via the bulk-register endpoint. Discoveries are buffered as adapter
+// hooks fire (e.g. slog WithGroup creating a sub-handler) and on
+// explicit RegisterLogger calls; they are normally flushed on a
+// 5-second interval. Call this when you need them sent right away —
+// e.g. before exiting a short-lived script. Returns nil immediately
+// when the buffer is empty.
+func (c *LoggingClient) Flush(ctx context.Context) error {
 	batch := c.buffer.drain()
 	if len(batch) == 0 {
-		return
+		return nil
 	}
 	items := make([]genlogging.LoggerBulkItem, 0, len(batch))
 	for _, entry := range batch {
-		item := genlogging.LoggerBulkItem{
-			Id: entry.key,
-		}
+		item := genlogging.LoggerBulkItem{Id: entry.key}
 		if entry.level != "" {
 			item.Level = &entry.level
 		}
@@ -524,20 +570,20 @@ func (c *LoggingClient) flushBuffer(ctx context.Context) {
 	reqBody := genlogging.LoggerBulkRequest{Loggers: items}
 	resp, err := c.generated.BulkRegisterLoggersWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
-		log.Printf("smplkit: bulk logger registration failed: %s", err.Error())
-		debug.Debug("logging", "bulk logger registration error details: %+v", err)
-		return
+		return classifyError(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		log.Printf("smplkit: bulk logger registration failed: HTTP %d", resp.StatusCode)
-		debug.Debug("logging", "bulk logger registration HTTP error: %d: %s", resp.StatusCode, string(snippet))
-		return
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", readErr)}}
 	}
-	if metrics := c.client.metrics; metrics != nil && len(batch) > 0 {
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+	if metrics := c.client.metrics; metrics != nil {
 		metrics.Record("logging.loggers_discovered", len(batch), "loggers", nil)
 	}
+	return nil
 }
 
 func (c *LoggingClient) periodicFlush(done chan struct{}) {
@@ -548,7 +594,10 @@ func (c *LoggingClient) periodicFlush(done chan struct{}) {
 		case <-done:
 			return
 		case <-ticker.C:
-			c.flushBuffer(context.Background())
+			if err := c.Flush(context.Background()); err != nil {
+				log.Printf("smplkit: bulk logger registration failed: %s", err.Error())
+				debug.Debug("logging", "bulk logger registration error details: %+v", err)
+			}
 		}
 	}
 }
@@ -684,7 +733,7 @@ func (c *LoggingClient) fireDeletedListeners(loggerID string, source string) {
 	}
 }
 
-func (c *LoggingClient) fireChangeListeners(loggerID string, source string) { //nolint:unparam // "refresh" source will be used when Refresh() is implemented
+func (c *LoggingClient) fireChangeListeners(loggerID string, source string) {
 	if loggerID == "" {
 		return
 	}

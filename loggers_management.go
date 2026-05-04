@@ -43,6 +43,24 @@ func (m *LoggersManagement) Delete(ctx context.Context, id string) error {
 	return m.logging.Delete(ctx, id)
 }
 
+// Flush sends any pending logger discoveries to the server immediately.
+// Discoveries are buffered by the runtime LoggingClient as adapter hooks
+// fire and on explicit RegisterLogger calls; they are normally drained
+// on a 5-second interval. Call this when you need them sent right away.
+//
+// Returns nil immediately when no runtime LoggingClient is attached
+// (the management-only client built via NewManagementClient has no
+// discovery buffer — call LoggingManagement.RegisterSources instead to
+// post sources directly).
+//
+// Mirrors Python's client.manage.loggers.flush().
+func (m *LoggersManagement) Flush(ctx context.Context) error {
+	if m.logging == nil || m.logging.runtime == nil {
+		return nil
+	}
+	return m.logging.runtime.Flush(ctx)
+}
+
 // LogGroupsManagement is the mgmt.log_groups namespace — CRUD against
 // log groups. Split from the older combined LoggingManagement to keep
 // loggers and log groups in distinct namespaces (rule 2).

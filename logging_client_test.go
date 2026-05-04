@@ -1893,9 +1893,9 @@ func (t *loggingMethodAwareRoundTripper) RoundTrip(req *http.Request) (*http.Res
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-// --- flushBuffer error logging ---
+// --- Flush error logging (via start) ---
 
-func TestFlushBuffer_LogsWarningOnHTTPError(t *testing.T) {
+func TestFlush_LogsWarningOnHTTPError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -1929,12 +1929,13 @@ func TestFlushBuffer_LogsWarningOnHTTPError(t *testing.T) {
 
 	logOutput := logBuf.String()
 	assert.Contains(t, logOutput, "smplkit: bulk logger registration failed")
-	assert.Contains(t, logOutput, "400")
-	// Response body details are logged at debug level only (SMPLKIT_DEBUG=1),
-	// not in the standard warning output.
+	// The server's parsed JSON:API detail message now surfaces at the
+	// warning level — customers no longer need SMPLKIT_DEBUG=1 to see why
+	// a bulk-register call was rejected.
+	assert.Contains(t, logOutput, "Invalid level value")
 }
 
-func TestFlushBuffer_LogsWarningOnNetworkError(t *testing.T) {
+func TestFlush_LogsWarningOnNetworkError(t *testing.T) {
 	// Use a server that's immediately closed to trigger network errors on bulk endpoint.
 	mux := http.NewServeMux()
 	bulkCalled := false

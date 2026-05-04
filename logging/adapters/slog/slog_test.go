@@ -3,9 +3,12 @@ package slogadapter_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"log/slog"
+	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -299,4 +302,93 @@ func TestConcurrentAccess(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// --- InstallDefault ---
+
+// withRestoredDefault snapshots and restores slog.Default for tests that
+// mutate the global default — slog.SetDefault is process-wide.
+func withRestoredDefault(t *testing.T) {
+	t.Helper()
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+}
+
+func TestInstallDefault_ReplacesGlobalDefaultWithWrappedHandler(t *testing.T) {
+	withRestoredDefault(t)
+
+	adapter := slogadapter.New()
+	wrapped := adapter.InstallDefault()
+	require.NotNil(t, wrapped)
+
+	// slog.Default() now returns a logger backed by the wrapped handler.
+	assert.Same(t, wrapped, slog.Default().Handler())
+}
+
+func TestInstallDefault_HandlerIsDiscoverable(t *testing.T) {
+	withRestoredDefault(t)
+
+	adapter := slogadapter.New()
+	adapter.InstallDefault()
+
+	discovered := adapter.Discover()
+	require.Len(t, discovered, 1, "InstallDefault should make the wrapped handler visible to Discover")
+	assert.Equal(t, "INFO", discovered[0].Level)
+}
+
+func TestInstallDefault_DoesNotDeadlockOnSlogInfo(t *testing.T) {
+	// Regression test: an earlier draft of InstallDefault wrapped
+	// slog.Default()'s pre-existing handler. That handler is the
+	// internal defaultHandler that delegates to log.Default(); when
+	// slog.SetDefault is called, slog also redirects log.Default's
+	// output through the new default handler, creating a wrapped →
+	// log → wrapped cycle that deadlocks on log.Logger.mu.
+	//
+	// The fix is to install a fresh TextHandler instead of wrapping
+	// the existing default. This test ensures slog.Info returns
+	// promptly after InstallDefault.
+	withRestoredDefault(t)
+
+	adapter := slogadapter.New()
+	adapter.InstallDefault()
+
+	done := make(chan struct{})
+	go func() {
+		slog.Info("must not hang")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("slog.Info hung after InstallDefault — recursion regression")
+	}
+}
+
+func TestInstallDefault_LevelChangeAppliesToGlobalCalls(t *testing.T) {
+	withRestoredDefault(t)
+
+	// Redirect stderr through a pipe so the test can read what the
+	// wrapped TextHandler writes, then restore.
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = origStderr })
+
+	adapter := slogadapter.New()
+	adapter.InstallDefault()
+
+	// Default smplkit level is INFO — DEBUG calls are filtered.
+	slog.Debug("debug suppressed at INFO")
+	// Drop the level and the same call now writes.
+	adapter.ApplyLevel("", "DEBUG")
+	slog.Debug("debug visible at DEBUG")
+
+	require.NoError(t, w.Close())
+	out, err := io.ReadAll(r)
+	require.NoError(t, err)
+	got := string(out)
+	assert.NotContains(t, got, "debug suppressed at INFO")
+	assert.Contains(t, got, "debug visible at DEBUG")
 }

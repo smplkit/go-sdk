@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
+	"github.com/smplkit/go-sdk/v3/logging/adapters"
 )
 
 // --- NormalizeLoggerName tests ---
@@ -1277,18 +1278,18 @@ func TestResourceToLogGroup_EmptyLevel(t *testing.T) {
 	assert.Nil(t, group.Level) // empty string level treated as nil
 }
 
-// --- flushBuffer ---
+// --- Flush ---
 
-func TestFlushBuffer_Empty(t *testing.T) {
+func TestFlush_Empty(t *testing.T) {
 	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	// Should not make any requests when buffer is empty
-	lc.flushBuffer(context.Background())
+	_ = lc.Flush(context.Background())
 }
 
-func TestFlushBuffer_WithEntries(t *testing.T) {
+func TestFlush_WithEntries(t *testing.T) {
 	var receivedBody map[string]interface{}
 
 	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1306,14 +1307,14 @@ func TestFlushBuffer_WithEntries(t *testing.T) {
 	lc.buffer.add("app.logger", "INFO", "INFO", "my-service", "production")
 	lc.buffer.add("db.logger", "DEBUG", "DEBUG", "", "")
 
-	lc.flushBuffer(context.Background())
+	_ = lc.Flush(context.Background())
 
 	require.NotNil(t, receivedBody)
 	loggers := receivedBody["loggers"].([]interface{})
 	assert.Len(t, loggers, 2)
 }
 
-func TestFlushBuffer_WithService(t *testing.T) {
+func TestFlush_WithService(t *testing.T) {
 	var receivedBody map[string]interface{}
 
 	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1329,7 +1330,7 @@ func TestFlushBuffer_WithService(t *testing.T) {
 	}))
 
 	lc.buffer.add("app.logger", "INFO", "INFO", "my-service", "production")
-	lc.flushBuffer(context.Background())
+	_ = lc.Flush(context.Background())
 
 	require.NotNil(t, receivedBody)
 	loggers := receivedBody["loggers"].([]interface{})
@@ -1338,7 +1339,7 @@ func TestFlushBuffer_WithService(t *testing.T) {
 	assert.Equal(t, "production", first["environment"])
 }
 
-func TestFlushBuffer_SendsBothLevelAndResolvedLevel(t *testing.T) {
+func TestFlush_SendsBothLevelAndResolvedLevel(t *testing.T) {
 	// When level and resolved_level are both set to the same value (e.g. from
 	// slog/zap adapters that have no parent inheritance), both fields must be
 	// present in the bulk payload.
@@ -1357,7 +1358,7 @@ func TestFlushBuffer_SendsBothLevelAndResolvedLevel(t *testing.T) {
 	}))
 
 	lc.buffer.add("app.logger", "DEBUG", "DEBUG", "my-service", "production")
-	lc.flushBuffer(context.Background())
+	_ = lc.Flush(context.Background())
 
 	require.NotNil(t, receivedBody)
 	loggers := receivedBody["loggers"].([]interface{})
@@ -1367,7 +1368,7 @@ func TestFlushBuffer_SendsBothLevelAndResolvedLevel(t *testing.T) {
 	assert.Equal(t, "DEBUG", item["resolved_level"])
 }
 
-func TestFlushBuffer_OmitsLevelWhenEmpty(t *testing.T) {
+func TestFlush_OmitsLevelWhenEmpty(t *testing.T) {
 	// When the explicit level is empty (e.g. inherited), the level field must be
 	// omitted from the payload while resolved_level is still sent.
 	var receivedBody map[string]interface{}
@@ -1386,7 +1387,7 @@ func TestFlushBuffer_OmitsLevelWhenEmpty(t *testing.T) {
 
 	// Empty explicit level, non-empty resolved level.
 	lc.buffer.add("inherited.logger", "", "INFO", "", "")
-	lc.flushBuffer(context.Background())
+	_ = lc.Flush(context.Background())
 
 	require.NotNil(t, receivedBody)
 	loggers := receivedBody["loggers"].([]interface{})
@@ -1396,7 +1397,7 @@ func TestFlushBuffer_OmitsLevelWhenEmpty(t *testing.T) {
 	assert.Equal(t, "INFO", item["resolved_level"])
 }
 
-func TestFlushBuffer_ResolvedLevelDifferentFromLevel(t *testing.T) {
+func TestFlush_ResolvedLevelDifferentFromLevel(t *testing.T) {
 	// Verify that level and resolved_level are sent as independent values when
 	// they differ (e.g. a logger with an explicitly-set level that differs from
 	// its effective resolved level after group inheritance).
@@ -1415,7 +1416,7 @@ func TestFlushBuffer_ResolvedLevelDifferentFromLevel(t *testing.T) {
 	}))
 
 	lc.buffer.add("grp.logger", "WARN", "ERROR", "svc", "production")
-	lc.flushBuffer(context.Background())
+	_ = lc.Flush(context.Background())
 
 	require.NotNil(t, receivedBody)
 	loggers := receivedBody["loggers"].([]interface{})
@@ -2212,3 +2213,154 @@ type failingTransportLogging struct{}
 func (t *failingTransportLogging) RoundTrip(_ *http.Request) (*http.Response, error) {
 	return nil, fmt.Errorf("simulated network error")
 }
+
+// --- Refresh ---
+
+// refreshMux serves /api/v1/loggers and /api/v1/log_groups list endpoints
+// from atomic pointers, so the test can swap the served body between
+// successive Refresh calls.
+func refreshMux(loggersBody, groupsBody *atomic.Value) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(loggersBody.Load().(string)))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(groupsBody.Load().(string)))
+	})
+	return mux
+}
+
+func TestRefresh_FetchesAndCachesLoggers(t *testing.T) {
+	var loggers, groups atomic.Value
+	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
+	groups.Store(`{"data":[]}`)
+
+	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
+
+	require.NoError(t, lc.Refresh(context.Background()))
+	assert.Contains(t, lc.loggersCache, "app")
+	assert.Equal(t, "INFO", lc.loggersCache["app"]["level"])
+}
+
+func TestRefresh_FiresChangeListenerWithManualSource(t *testing.T) {
+	var loggers, groups atomic.Value
+	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
+	groups.Store(`{"data":[]}`)
+
+	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
+	require.NoError(t, lc.Refresh(context.Background()))
+
+	var events []*LoggerChangeEvent
+	lc.OnChange(func(evt *LoggerChangeEvent) { events = append(events, evt) })
+
+	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"DEBUG","managed":true,"environments":{},"sources":[]}}]}`)
+	require.NoError(t, lc.Refresh(context.Background()))
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "app", events[0].ID)
+	assert.Equal(t, "manual", events[0].Source)
+	require.NotNil(t, events[0].Level)
+	assert.Equal(t, LogLevelDebug, *events[0].Level)
+	assert.False(t, events[0].Deleted)
+}
+
+func TestRefresh_FiresDeletedListenerForRemovedLogger(t *testing.T) {
+	var loggers, groups atomic.Value
+	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
+	groups.Store(`{"data":[]}`)
+
+	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
+	require.NoError(t, lc.Refresh(context.Background()))
+
+	var events []*LoggerChangeEvent
+	lc.OnChange(func(evt *LoggerChangeEvent) { events = append(events, evt) })
+
+	loggers.Store(`{"data":[]}`)
+	require.NoError(t, lc.Refresh(context.Background()))
+
+	require.Len(t, events, 1)
+	assert.Equal(t, "app", events[0].ID)
+	assert.True(t, events[0].Deleted)
+	assert.Equal(t, "manual", events[0].Source)
+}
+
+func TestRefresh_NoListenerFireWhenUnchanged(t *testing.T) {
+	var loggers, groups atomic.Value
+	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
+	groups.Store(`{"data":[]}`)
+
+	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
+	require.NoError(t, lc.Refresh(context.Background()))
+
+	var fired int
+	lc.OnChange(func(_ *LoggerChangeEvent) { fired++ })
+
+	require.NoError(t, lc.Refresh(context.Background()))
+	assert.Zero(t, fired, "no listener should fire when fetch produces identical caches")
+}
+
+func TestRefresh_AppliesResolvedLevelToAdapter(t *testing.T) {
+	var loggers, groups atomic.Value
+	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
+	groups.Store(`{"data":[]}`)
+
+	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
+	captured := &refreshCapturingAdapter{discovered: []refreshDiscoveredEntry{{name: "app", level: "INFO"}}}
+	lc.RegisterAdapter(captured)
+
+	require.NoError(t, lc.Refresh(context.Background()))
+	require.NotEmpty(t, captured.applied, "Refresh should call ApplyLevel on registered adapters")
+	last := captured.applied[len(captured.applied)-1]
+	assert.Equal(t, "app", last.name)
+	assert.Equal(t, "INFO", last.level)
+
+	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"ERROR","managed":true,"environments":{},"sources":[]}}]}`)
+	require.NoError(t, lc.Refresh(context.Background()))
+	last = captured.applied[len(captured.applied)-1]
+	assert.Equal(t, "app", last.name)
+	assert.Equal(t, "ERROR", last.level)
+}
+
+func TestRefresh_ReturnsErrorOnFetchFailure(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	})
+	lc := newTestLoggingClient(t, mux)
+
+	err := lc.Refresh(context.Background())
+	require.Error(t, err)
+}
+
+// refreshCapturingAdapter records every ApplyLevel call so tests can
+// assert that Refresh propagates levels to registered adapters.
+type refreshCapturingAdapter struct {
+	discovered []refreshDiscoveredEntry
+	applied    []refreshDiscoveredEntry
+}
+
+type refreshDiscoveredEntry struct {
+	name  string
+	level string
+}
+
+func (a *refreshCapturingAdapter) Name() string { return "capture" }
+
+func (a *refreshCapturingAdapter) Discover() []adapters.DiscoveredLogger {
+	out := make([]adapters.DiscoveredLogger, len(a.discovered))
+	for i, d := range a.discovered {
+		out[i] = adapters.DiscoveredLogger{Name: d.name, Level: d.level}
+	}
+	return out
+}
+
+func (a *refreshCapturingAdapter) ApplyLevel(name, level string) {
+	a.applied = append(a.applied, refreshDiscoveredEntry{name: name, level: level})
+}
+
+func (a *refreshCapturingAdapter) InstallHook(_ func(string, string)) {}
+
+func (a *refreshCapturingAdapter) UninstallHook() {}

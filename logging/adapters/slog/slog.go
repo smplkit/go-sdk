@@ -15,6 +15,7 @@ package slogadapter
 import (
 	"context"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 
@@ -108,6 +109,46 @@ func (a *Adapter) WrapHandler(h slog.Handler) *SmplHandler {
 	a.mu.Unlock()
 
 	return sh
+}
+
+// InstallDefault installs a fresh slog.TextHandler writing to stderr,
+// wrapped by this adapter, as the new slog.Default(). After this call,
+// every package using slog.Default(), slog.Info, slog.Warn, etc. routes
+// through the SDK's level-controlled wrapper, and the wrapped handler
+// will be auto-discovered by client.Logging().Install(ctx).
+//
+// This is the closest Go's log/slog allows to "auto-discover all
+// pre-existing loggers": slog has no global registry of loggers, so
+// the SDK can only manage handlers it sits in front of. Replacing
+// the global default catches everything that flows through slog
+// package-level functions and any sub-handler created via WithGroup on
+// that default. For hand-constructed slog.Logger instances elsewhere
+// in the program, call WrapHandler explicitly on each handler to bring
+// them under management.
+//
+// Why a fresh inner handler rather than wrapping slog.Default()'s current
+// one: the standard slog default delegates to log.Default(), and
+// slog.SetDefault(slog.New(wrapped)) also redirects log.Default()'s
+// output back through the new default handler. Wrapping the existing
+// default would create a cycle (wrapped → log.Default → wrapped → ...)
+// and deadlock the first slog.Info call. To attach smplkit control to
+// a non-default handler (e.g. JSON, custom destination, file), use
+// adapter.WrapHandler(yourHandler) and slog.SetDefault yourself.
+//
+// The inner TextHandler is configured with Level: slog.LevelDebug-4 (a
+// sentinel below all standard levels) so the SmplHandler's own gating
+// is the single level filter; smplkit-driven ApplyLevel calls aren't
+// double-gated by the inner handler.
+//
+// Returns the wrapped handler. Safe to call before or after
+// RegisterAdapter.
+func (a *Adapter) InstallDefault() *SmplHandler {
+	inner := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug - 4, // below TRACE — let SmplHandler gate
+	})
+	wrapped := a.WrapHandler(inner)
+	slog.SetDefault(slog.New(wrapped))
+	return wrapped
 }
 
 // Discover returns all tracked handlers with their current levels.
