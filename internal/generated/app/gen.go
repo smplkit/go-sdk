@@ -184,6 +184,24 @@ func (e EmailResourceType) Valid() bool {
 	}
 }
 
+// Defines values for EnvironmentClassification.
+const (
+	ADHOC    EnvironmentClassification = "AD_HOC"
+	STANDARD EnvironmentClassification = "STANDARD"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentClassification enum.
+func (e EnvironmentClassification) Valid() bool {
+	switch e {
+	case ADHOC:
+		return true
+	case STANDARD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EnvironmentResourceType.
 const (
 	EnvironmentResourceTypeEnvironment EnvironmentResourceType = "environment"
@@ -692,12 +710,15 @@ type EmailResponse struct {
 
 // Environment defines model for Environment.
 type Environment struct {
-	Classification *string    `json:"classification,omitempty"`
-	Color          *string    `json:"color,omitempty"`
-	CreatedAt      *time.Time `json:"created_at,omitempty"`
-	Name           string     `json:"name"`
-	UpdatedAt      *time.Time `json:"updated_at,omitempty"`
+	Classification *EnvironmentClassification `json:"classification,omitempty"`
+	Color          *string                    `json:"color,omitempty"`
+	CreatedAt      *time.Time                 `json:"created_at,omitempty"`
+	Name           string                     `json:"name"`
+	UpdatedAt      *time.Time                 `json:"updated_at,omitempty"`
 }
+
+// EnvironmentClassification defines model for Environment.Classification.
+type EnvironmentClassification string
 
 // EnvironmentListResponse defines model for EnvironmentListResponse.
 type EnvironmentListResponse struct {
