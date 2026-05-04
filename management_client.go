@@ -217,7 +217,7 @@ func (m *EnvironmentsManagement) update(ctx context.Context, e *Environment) err
 }
 
 func environmentToRequest(e *Environment) genapp.EnvironmentResponse {
-	cls := string(e.Classification)
+	cls := genapp.EnvironmentClassification(e.Classification)
 	attrs := genapp.Environment{
 		Name:           e.Name,
 		Color:          e.Color,
@@ -246,7 +246,7 @@ func resourceToEnvironment(r genapp.EnvironmentResource, m *EnvironmentsManageme
 		e.ID = *r.Id
 	}
 	if r.Attributes.Classification != nil {
-		if *r.Attributes.Classification == string(EnvironmentClassificationAdHoc) {
+		if *r.Attributes.Classification == genapp.ADHOC {
 			e.Classification = EnvironmentClassificationAdHoc
 		}
 	}

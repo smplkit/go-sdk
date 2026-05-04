@@ -7081,9 +7081,12 @@
           },
           "classification": {
             "type": "string",
-            "nullable": true,
+            "enum": [
+              "STANDARD",
+              "AD_HOC"
+            ],
             "title": "Classification",
-            "readOnly": true
+            "default": "AD_HOC"
           },
           "created_at": {
             "type": "string",
