@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1505,17 +1506,44 @@ func TestPeriodicFlush_LogsWarningOnFlushError(t *testing.T) {
 	lc := newTestLoggingClient(t, mux)
 	lc.buffer.add("periodic.error.logger", "INFO", "INFO", "my-service", "production")
 
-	var logBuf strings.Builder
-	log.SetOutput(&logBuf)
+	// strings.Builder isn't safe for concurrent access, so guard it
+	// with a mutex — periodicFlush writes from a goroutine while the
+	// test reads from the main one.
+	var (
+		mu     sync.Mutex
+		buf    strings.Builder
+		writer = &lockedWriter{mu: &mu, b: &buf}
+	)
+	log.SetOutput(writer)
 	t.Cleanup(func() { log.SetOutput(io.Discard) })
 
 	done := make(chan struct{})
-	go lc.periodicFlush(done)
+	exited := make(chan struct{})
+	go func() {
+		lc.periodicFlush(done)
+		close(exited)
+	}()
 	time.Sleep(6 * time.Second)
 	close(done)
+	<-exited // happens-after ensures all writes are visible below
 
-	assert.Contains(t, logBuf.String(), "smplkit: bulk logger registration failed")
-	assert.Contains(t, logBuf.String(), "server rejected batch")
+	mu.Lock()
+	got := buf.String()
+	mu.Unlock()
+	assert.Contains(t, got, "smplkit: bulk logger registration failed")
+	assert.Contains(t, got, "server rejected batch")
+}
+
+// lockedWriter is a goroutine-safe wrapper around strings.Builder.
+type lockedWriter struct {
+	mu *sync.Mutex
+	b  *strings.Builder
+}
+
+func (w *lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
 }
 
 func TestFlush_ReturnsConnectionErrorOnBodyReadFailure(t *testing.T) {
