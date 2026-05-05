@@ -42,6 +42,16 @@
               "nullable": true,
               "title": "Source"
             }
+          },
+          {
+            "name": "entry_point",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "title": "Entry Point"
+            }
           }
         ],
         "responses": {
@@ -6064,6 +6074,20 @@
             "nullable": true,
             "title": "Product Subscriptions",
             "readOnly": true
+          },
+          "entry_point": {
+            "type": "string",
+            "nullable": true,
+            "title": "Entry Point",
+            "description": "Registration entry point (from account.data)",
+            "readOnly": true
+          },
+          "show_sample_data": {
+            "type": "boolean",
+            "nullable": true,
+            "title": "Show Sample Data",
+            "description": "Whether sample data is active (from account.settings)",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -8319,6 +8343,18 @@
             "maxLength": 128,
             "minLength": 8,
             "title": "Password"
+          },
+          "entry_point": {
+            "type": "string",
+            "enum": [
+              "login",
+              "get_started",
+              "live_demo",
+              "unknown"
+            ],
+            "nullable": true,
+            "title": "Entry Point",
+            "description": "Registration entry point. Allowed: login, get_started, live_demo, unknown. Defaults to unknown when omitted."
           }
         },
         "type": "object",
@@ -8329,6 +8365,7 @@
         "title": "RegisterRequest",
         "example": {
           "email": "jane@example.com",
+          "entry_point": "get_started",
           "password": "correct-horse-battery-staple"
         }
       },

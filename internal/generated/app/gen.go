@@ -340,6 +340,30 @@ func (e ProductResourceType) Valid() bool {
 	}
 }
 
+// Defines values for RegisterRequestEntryPoint.
+const (
+	GetStarted RegisterRequestEntryPoint = "get_started"
+	LiveDemo   RegisterRequestEntryPoint = "live_demo"
+	Login      RegisterRequestEntryPoint = "login"
+	Unknown    RegisterRequestEntryPoint = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the RegisterRequestEntryPoint enum.
+func (e RegisterRequestEntryPoint) Valid() bool {
+	switch e {
+	case GetStarted:
+		return true
+	case LiveDemo:
+		return true
+	case Login:
+		return true
+	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ServiceResourceType.
 const (
 	ServiceResourceTypeService ServiceResourceType = "service"
@@ -402,13 +426,19 @@ func (e UserResourceType) Valid() bool {
 
 // Account defines model for Account.
 type Account struct {
-	CreatedAt            *time.Time              `json:"created_at,omitempty"`
-	DeletedAt            *time.Time              `json:"deleted_at,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+
+	// EntryPoint Registration entry point (from account.data)
+	EntryPoint           *string                 `json:"entry_point,omitempty"`
 	ExpiresAt            *time.Time              `json:"expires_at,omitempty"`
 	HasStripeCustomer    *bool                   `json:"has_stripe_customer,omitempty"`
 	Key                  string                  `json:"key"`
 	Name                 string                  `json:"name"`
 	ProductSubscriptions *map[string]interface{} `json:"product_subscriptions,omitempty"`
+
+	// ShowSampleData Whether sample data is active (from account.settings)
+	ShowSampleData *bool `json:"show_sample_data,omitempty"`
 }
 
 // AccountResource defines model for AccountResource.
@@ -1045,9 +1075,15 @@ type ProductResourceType string
 
 // RegisterRequest defines model for RegisterRequest.
 type RegisterRequest struct {
-	Email    openapi_types.Email `json:"email"`
-	Password string              `json:"password"`
+	Email openapi_types.Email `json:"email"`
+
+	// EntryPoint Registration entry point. Allowed: login, get_started, live_demo, unknown. Defaults to unknown when omitted.
+	EntryPoint *RegisterRequestEntryPoint `json:"entry_point,omitempty"`
+	Password   string                     `json:"password"`
 }
+
+// RegisterRequestEntryPoint Registration entry point. Allowed: login, get_started, live_demo, unknown. Defaults to unknown when omitted.
+type RegisterRequestEntryPoint string
 
 // Service defines model for Service.
 type Service struct {
@@ -1196,8 +1232,9 @@ type HandleOidcCallbackParams struct {
 
 // BeginOidcLoginParams defines parameters for BeginOidcLogin.
 type BeginOidcLoginParams struct {
-	Mode   *string `form:"mode,omitempty" json:"mode,omitempty"`
-	Source *string `form:"source,omitempty" json:"source,omitempty"`
+	Mode       *string `form:"mode,omitempty" json:"mode,omitempty"`
+	Source     *string `form:"source,omitempty" json:"source,omitempty"`
+	EntryPoint *string `form:"entry_point,omitempty" json:"entry_point,omitempty"`
 }
 
 // ListContextsParams defines parameters for ListContexts.
@@ -3645,6 +3682,18 @@ func NewBeginOidcLoginRequest(server string, provider OidcProvider, params *Begi
 		if params.Source != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "source", *params.Source, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EntryPoint != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "entry_point", *params.EntryPoint, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
