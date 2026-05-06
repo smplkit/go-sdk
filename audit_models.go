@@ -28,7 +28,7 @@ type AuditEvent struct {
 
 // CreateEventInput is the input for AuditEvents.Create.
 //
-// Customers must NOT use a ResourceType prefixed with ``smpl.`` — the
+// Customers must NOT use a ResourceType prefixed with “smpl.“ — the
 // server returns 403 for those because that namespace is reserved for
 // smplkit-emitted events.
 type CreateEventInput struct {

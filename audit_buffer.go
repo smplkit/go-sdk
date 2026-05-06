@@ -213,4 +213,3 @@ func (b *auditEventBuffer) handleOutcome(item *pendingAuditEvent, status int, er
 	item.nextRetryAt = time.Now().Add(backoff + jitter)
 	return item
 }
-

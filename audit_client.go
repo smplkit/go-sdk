@@ -45,7 +45,7 @@ func (a *AuditClient) Events() *AuditEvents {
 //
 // Returns nil immediately. The buffer worker handles the actual POST
 // and retries on transient failures. ResourceType beginning with
-// ``smpl.`` is rejected by the server with 403 — that namespace is
+// “smpl.“ is rejected by the server with 403 — that namespace is
 // reserved for smplkit-emitted events.
 func (e *AuditEvents) Create(input CreateEventInput) error {
 	if input.Action == "" || input.ResourceType == "" || input.ResourceID == "" {
@@ -84,7 +84,7 @@ func (e *AuditEvents) Create(input CreateEventInput) error {
 // List returns one page of audit events scoped to the caller's account.
 //
 // Filters are exact-match except OccurredAtRange which uses the
-// platform's range syntax (e.g. ``[2026-01-01T00:00:00Z,*)``). Pass
+// platform's range syntax (e.g. “[2026-01-01T00:00:00Z,*)“). Pass
 // the previous page's NextCursor as PageAfter to walk subsequent pages.
 func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEventsPage, error) {
 	params := &genaudit.ListEventsParams{}
