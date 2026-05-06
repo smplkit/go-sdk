@@ -1054,8 +1054,10 @@ type Product struct {
 	ComingSoon  *bool                      `json:"coming_soon,omitempty"`
 	Description string                     `json:"description"`
 	DisplayName string                     `json:"display_name"`
+	Features    *[]string                  `json:"features,omitempty"`
 	Limits      map[string]LimitDefinition `json:"limits"`
 	Plans       map[string]PlanDefinition  `json:"plans"`
+	Tagline     *string                    `json:"tagline,omitempty"`
 }
 
 // ProductListResponse defines model for ProductListResponse.
