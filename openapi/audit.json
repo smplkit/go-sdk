@@ -39,7 +39,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/Response_Event_"
+                "$ref": "#/components/schemas/EventResponse"
               }
             }
           }
