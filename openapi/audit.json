@@ -1,0 +1,602 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "smplkit Audit API",
+    "description": "Append-only change-history substrate for smpl.* resources and customer-application events. ADR-047.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/events": {
+      "post": {
+        "summary": "Create Event",
+        "description": "Record an audit event for the authenticated account.\n\nReturns ``201 Created`` on first write, ``200 OK`` if the request was a\nduplicate (matched by ``Idempotency-Key`` or auto-derived key).\n\nCustomers may not emit events whose ``resource_type`` starts with\n``smpl.`` \u2014 that namespace is reserved for smplkit-emitted events\nabout platform resources.",
+        "operationId": "create_event",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/Response_Event_"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Idempotent retry \u2014 original event returned",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Events",
+        "description": "List audit events for the authenticated account.\n\nDefault sort is ``-created_at``; cursor pagination via ``page[after]``\n(the opaque cursor returned in ``links.next``). Filters are exact-match\nexcept ``filter[occurred_at]`` which uses the platform's range\nnotation (``[2026-01-01T00:00:00Z,*)``).",
+        "operationId": "list_events",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[occurred_at]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Occurred At]"
+            }
+          },
+          {
+            "name": "filter[actor_type]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Actor Type]"
+            }
+          },
+          {
+            "name": "filter[actor_id]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Actor Id]"
+            }
+          },
+          {
+            "name": "filter[action]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Action]"
+            }
+          },
+          {
+            "name": "filter[resource_type]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Resource Type]"
+            }
+          },
+          {
+            "name": "filter[resource_id]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Resource Id]"
+            }
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[Size]"
+            }
+          },
+          {
+            "name": "page[after]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[After]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events/{event_id}": {
+      "get": {
+        "summary": "Get Event",
+        "description": "Retrieve a single audit event by id.\n\nReturns 404 if no event with that id exists in the caller's account \u2014\nRLS enforces tenant isolation; this endpoint never leaks the existence\nof another tenant's event.",
+        "operationId": "get_event",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "summary": "List Usage",
+        "description": "Current-period usage and quota for the audit product.\n\nOnly ``filter[period]=current`` is supported; historical usage is a\nfollow-up.",
+        "operationId": "list_usage",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[period]",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filter[Period]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Event": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Action"
+          },
+          "resource_type": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Resource Type"
+          },
+          "resource_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Resource Id"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "readOnly": true
+          },
+          "actor_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Type",
+            "readOnly": true
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id",
+            "readOnly": true
+          },
+          "actor_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Label",
+            "readOnly": true
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "resource_type",
+          "resource_id"
+        ],
+        "title": "Event",
+        "description": "Public-facing event resource.\n\nAttribute set on POST /api/v1/events:\n    - action (required)\n    - resource_type (required)\n    - resource_id (required)\n    - occurred_at (optional; defaults to ``created_at``)\n    - snapshot (optional)\n    - data (optional; defaults to ``{}``)\n\nAttribute set on GET responses includes everything above plus the\nserver-populated fields: ``created_at``, ``actor_type``, ``actor_id``,\n``actor_label``, ``idempotency_key``."
+      },
+      "EventListLinks": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          }
+        },
+        "type": "object",
+        "title": "EventListLinks"
+      },
+      "EventListMeta": {
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_size"
+        ],
+        "title": "EventListMeta"
+      },
+      "EventListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EventResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/EventListMeta"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventListLinks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "EventListResponse",
+        "description": "JSON:API collection response with cursor pagination metadata."
+      },
+      "EventResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "event"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Event"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "EventResource",
+        "description": "JSON:API resource envelope for an audit event.",
+        "example": {
+          "attributes": {
+            "action": "user.created",
+            "actor_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "actor_label": "alice@example.com",
+            "actor_type": "USER",
+            "created_at": "2026-05-06T20:00:00.123Z",
+            "data": {
+              "request_id": "req-abc"
+            },
+            "idempotency_key": "auto-1234abcd",
+            "occurred_at": "2026-05-06T20:00:00Z",
+            "resource_id": "u-1",
+            "resource_type": "user",
+            "snapshot": {
+              "email": "alice@example.com"
+            }
+          },
+          "id": "11111111-2222-3333-4444-555555555555",
+          "type": "event"
+        }
+      },
+      "EventResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EventResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "EventResponse",
+        "description": "JSON:API single-resource response."
+      },
+      "UsageResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "usage"
+          },
+          "attributes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Attributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "UsageResource",
+        "example": {
+          "attributes": {
+            "current": 42,
+            "limit": 1000,
+            "limit_key": "audit.customer_events_per_month",
+            "period": "current",
+            "year_month": "2026-05"
+          },
+          "id": "audit.customer_events_per_month",
+          "type": "usage"
+        }
+      },
+      "UsageResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/UsageResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "UsageResponse"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Events"
+    },
+    {
+      "name": "Usage"
+    }
+  ]
+}
