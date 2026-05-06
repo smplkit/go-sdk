@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
 
@@ -216,10 +214,3 @@ func (b *auditEventBuffer) handleOutcome(item *pendingAuditEvent, status int, er
 	return item
 }
 
-// uuidPtr returns a pointer to the supplied UUID, or nil if zero.
-func uuidPtr(u uuid.UUID) *uuid.UUID {
-	if u == uuid.Nil {
-		return nil
-	}
-	return &u
-}

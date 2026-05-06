@@ -126,10 +126,6 @@ func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEve
 	}
 
 	body := resp.ApplicationvndApiJSON200
-	if body == nil {
-		return nil, fmt.Errorf("audit List: empty response body (status=%d)", resp.StatusCode())
-	}
-
 	page := &ListEventsPage{
 		Events: make([]AuditEvent, 0, len(body.Data)),
 	}
@@ -163,9 +159,6 @@ func (e *AuditEvents) Get(ctx context.Context, eventID uuid.UUID) (*AuditEvent, 
 	}
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
 		return nil, fmt.Errorf("audit Get failed: status=%d body=%s", resp.StatusCode(), string(resp.Body))
-	}
-	if resp.ApplicationvndApiJSON200 == nil {
-		return nil, fmt.Errorf("audit Get: empty response body (status=%d)", resp.StatusCode())
 	}
 	ev := eventFromResource(resp.ApplicationvndApiJSON200.Data)
 	return &ev, nil
