@@ -4586,7 +4586,7 @@
           "Products"
         ],
         "summary": "List Products",
-        "description": "Return all flag-enabled products with their plans and limits.",
+        "description": "Return all flag-enabled products with their plans, limits, and marketing content.",
         "operationId": "list_products",
         "responses": {
           "200": {
@@ -8231,6 +8231,19 @@
             "type": "string",
             "title": "Description"
           },
+          "tagline": {
+            "type": "string",
+            "nullable": true,
+            "title": "Tagline"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Features",
+            "default": []
+          },
           "coming_soon": {
             "type": "boolean",
             "title": "Coming Soon",
@@ -8303,8 +8316,13 @@
         "example": {
           "attributes": {
             "coming_soon": false,
-            "description": "Feature flags with targeting rules and real-time updates",
+            "description": "Feature flag management",
             "display_name": "Smpl Flags",
+            "features": [
+              "Targeted rollouts",
+              "Experiment toggles",
+              "Environment controls"
+            ],
             "limits": {
               "flags": {
                 "description": "Maximum number of feature flags",
@@ -8325,7 +8343,8 @@
                 },
                 "price_monthly_cents": 2900
               }
-            }
+            },
+            "tagline": "Feature flag delivery for safer rollouts and controlled experiments."
           },
           "id": "flags",
           "type": "product"
