@@ -10,6 +10,7 @@ import (
 
 	"github.com/smplkit/go-sdk/v3/internal/debug"
 	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
+	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
 	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
 	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
@@ -32,6 +33,7 @@ type Client struct {
 	config     *ConfigClient
 	flags      *FlagsClient
 	logging    *LoggingClient
+	audit      *AuditClient
 	management *ManagementClient
 
 	// Shared context registration buffer — used by both the flags runtime's
@@ -101,6 +103,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	flagsURL := serviceURL(optCfg, "flags", rc)
 	appURL := serviceURL(optCfg, "app", rc)
 	logURL := serviceURL(optCfg, "logging", rc)
+	auditURL := serviceURL(optCfg, "audit", rc)
 
 	// Build the generated config client, passing the auth-wrapped httpClient
 	// and a request editor that injects Accept + User-Agent headers.
@@ -147,6 +150,18 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 		loggingHeaderEditor,
 	)
 
+	// Build the generated audit client.
+	auditHeaderEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genAuditRaw, _ := genaudit.NewClient(auditURL,
+		genaudit.WithHTTPClient(httpClient),
+		auditHeaderEditor,
+	)
+	genAuditClient := &genaudit.ClientWithResponses{ClientInterface: genAuditRaw}
+
 	ctxBuf := newContextRegistrationBuffer()
 
 	c := &Client{
@@ -167,6 +182,8 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	c.flags.runtime = newFlagsRuntime(c.flags, ctxBuf)
 	c.logging = newLoggingClient(c, genLoggingClient)
+	auditEvents := &AuditEvents{gen: genAuditClient, buffer: newAuditEventBuffer(genAuditClient)}
+	c.audit = &AuditClient{client: c, gen: genAuditClient, events: auditEvents}
 
 	// Build the management surface directly against the generated API
 	// clients so the management plane doesn't depend on the runtime
@@ -211,6 +228,13 @@ func (c *Client) Logging() *LoggingClient {
 	return c.logging
 }
 
+// Audit returns the sub-client for the audit service (ADR-047).
+//
+// Use ``client.Audit().Events().Create(...)`` to record an event;
+// the call is fire-and-forget — the SDK buffers the event in memory
+// and a background goroutine flushes the buffer with retry on
+// transient failures.
+
 // Management returns the sub-client for app-service management operations
 // (environments, context types, contexts, account settings).
 func (c *Client) Management() *ManagementClient {
@@ -222,6 +246,9 @@ func (c *Client) Close() error {
 	debug.Debug("lifecycle", "Client.Close() called")
 	if c.logging != nil {
 		c.logging.close()
+	}
+	if c.audit != nil && c.audit.events != nil {
+		c.audit.events.close()
 	}
 	c.stopWS()
 	if c.metrics != nil {
