@@ -408,7 +408,7 @@ func TestAuditEventBuffer_OverflowEvictsOldest(t *testing.T) {
 	defer buf.close(2 * time.Second)
 
 	buf.maxSize = 3
-	buf.watermark = 999  // suppress auto-drain
+	buf.watermark = 999 // suppress auto-drain
 	buf.flushEvery = 60 * time.Second
 	for i := 0; i < 10; i++ {
 		body := genaudit.EventResponse{
@@ -489,7 +489,6 @@ func TestAuditEvents_Get_404Handler(t *testing.T) {
 		t.Fatal("expected error from 404 response")
 	}
 }
-
 
 func TestAuditEventBuffer_WatermarkTriggersDrain(t *testing.T) {
 	var posts atomic.Int32
