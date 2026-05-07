@@ -66,6 +66,16 @@ Demonstrates `RegisterLogger`, `Start(ctx)`, `OnChange` / `OnChangeKey`, level r
 go run examples/logging_runtime_showcase.go examples/logging_runtime_setup.go examples/helpers.go
 ```
 
+## Audit Showcases
+
+### Runtime Showcase
+
+Demonstrates fire-and-forget event emission via `client.Audit().Events().Create(...)`, idempotency-key dedup, `Flush(timeout)` to drain the in-memory buffer, server-side filtered `List(ctx, ListEventsInput{...})` with cursor pagination, and `Get(ctx, eventID)` for single-event retrieval. Audit has no management API.
+
+```bash
+go run examples/audit_runtime_showcase.go examples/helpers.go
+```
+
 ## Client Initialization
 
 All examples use:
