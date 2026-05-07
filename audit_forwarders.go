@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
@@ -145,7 +144,7 @@ func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (
 
 // Get returns one forwarder by id.
 func (f *AuditForwarders) Get(ctx context.Context, forwarderID uuid.UUID) (*Forwarder, error) {
-	resp, err := f.gen.GetForwarderWithResponse(ctx, openapi_types.UUID(forwarderID))
+	resp, err := f.gen.GetForwarderWithResponse(ctx, forwarderID)
 	if err != nil {
 		return nil, fmt.Errorf("audit Forwarders.Get: %w", err)
 	}
@@ -251,7 +250,7 @@ func (a *AuditDeliveryActions) Retry(
 	ctx context.Context, forwarderID, deliveryID uuid.UUID,
 ) (*ForwarderDelivery, error) {
 	resp, err := a.gen.RetryForwarderDeliveryWithResponse(
-		ctx, openapi_types.UUID(forwarderID), openapi_types.UUID(deliveryID),
+		ctx, forwarderID, deliveryID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("audit Deliveries.Actions.Retry: %w", err)
@@ -271,7 +270,7 @@ func (a *AuditDeliveryActions) Retry(
 func (a *AuditForwarderActions) RetryFailedDeliveries(
 	ctx context.Context, forwarderID uuid.UUID,
 ) (*RetryFailedDeliveriesSummary, error) {
-	resp, err := a.gen.RetryFailedForwarderDeliveriesWithResponse(ctx, openapi_types.UUID(forwarderID))
+	resp, err := a.gen.RetryFailedForwarderDeliveriesWithResponse(ctx, forwarderID)
 	if err != nil {
 		return nil, fmt.Errorf("audit Forwarders.Actions.RetryFailedDeliveries: %w", err)
 	}
