@@ -8,9 +8,12 @@
   "paths": {
     "/api/v1/events": {
       "post": {
-        "summary": "Create Event",
+        "tags": [
+          "Events"
+        ],
+        "summary": "Record Event",
         "description": "Record an audit event for the authenticated account.\n\nReturns ``201 Created`` on first write, ``200 OK`` if the request was a\nduplicate (matched by ``Idempotency-Key`` or auto-derived key).\n\nCustomers may not emit events whose ``resource_type`` starts with\n``smpl.`` \u2014 that namespace is reserved for smplkit-emitted events\nabout platform resources.",
-        "operationId": "create_event",
+        "operationId": "record_event",
         "security": [
           {
             "HTTPBearer": []
@@ -68,6 +71,9 @@
         }
       },
       "get": {
+        "tags": [
+          "Events"
+        ],
         "summary": "List Events",
         "description": "List audit events for the authenticated account.\n\nDefault sort is ``-created_at``; cursor pagination via ``page[after]``\n(the opaque cursor returned in ``links.next``). Filters are exact-match\nexcept ``filter[occurred_at]`` which uses the platform's range\nnotation (``[2026-01-01T00:00:00Z,*)``).",
         "operationId": "list_events",
@@ -224,6 +230,9 @@
     },
     "/api/v1/events/{event_id}": {
       "get": {
+        "tags": [
+          "Events"
+        ],
         "summary": "Get Event",
         "description": "Retrieve a single audit event by id.\n\nReturns 404 if no event with that id exists in the caller's account \u2014\nRLS enforces tenant isolation; this endpoint never leaks the existence\nof another tenant's event.",
         "operationId": "get_event",
@@ -260,6 +269,9 @@
     },
     "/api/v1/usage": {
       "get": {
+        "tags": [
+          "Usage"
+        ],
         "summary": "List Usage",
         "description": "Current-period usage and quota for the audit product.\n\nOnly ``filter[period]=current`` is supported; historical usage is a\nfollow-up.",
         "operationId": "list_usage",

@@ -171,12 +171,12 @@ func (b *auditEventBuffer) drainOnce() {
 		b.mu.Unlock()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		params := &genaudit.CreateEventParams{}
+		params := &genaudit.RecordEventParams{}
 		if head.idempKey != "" {
 			ik := head.idempKey
 			params.IdempotencyKey = &ik
 		}
-		resp, err := b.gen.CreateEventWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, params, head.body)
+		resp, err := b.gen.RecordEventWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, params, head.body)
 		cancel()
 
 		var status int

@@ -119,8 +119,8 @@ type ListEventsParams struct {
 	PageAfter          *string             `form:"page[after],omitempty" json:"page[after],omitempty"`
 }
 
-// CreateEventParams defines parameters for CreateEvent.
-type CreateEventParams struct {
+// RecordEventParams defines parameters for RecordEvent.
+type RecordEventParams struct {
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
 
@@ -129,8 +129,8 @@ type ListUsageParams struct {
 	FilterPeriod string `form:"filter[period]" json:"filter[period]"`
 }
 
-// CreateEventApplicationVndAPIPlusJSONRequestBody defines body for CreateEvent for application/vnd.api+json ContentType.
-type CreateEventApplicationVndAPIPlusJSONRequestBody = EventResponse
+// RecordEventApplicationVndAPIPlusJSONRequestBody defines body for RecordEvent for application/vnd.api+json ContentType.
+type RecordEventApplicationVndAPIPlusJSONRequestBody = EventResponse
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -208,10 +208,10 @@ type ClientInterface interface {
 	// ListEvents request
 	ListEvents(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateEventWithBody request with any body
-	CreateEventWithBody(ctx context.Context, params *CreateEventParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// RecordEventWithBody request with any body
+	RecordEventWithBody(ctx context.Context, params *RecordEventParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateEventWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *CreateEventParams, body CreateEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RecordEventWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *RecordEventParams, body RecordEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEvent request
 	GetEvent(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -232,8 +232,8 @@ func (c *Client) ListEvents(ctx context.Context, params *ListEventsParams, reqEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateEventWithBody(ctx context.Context, params *CreateEventParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateEventRequestWithBody(c.Server, params, contentType, body)
+func (c *Client) RecordEventWithBody(ctx context.Context, params *RecordEventParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRecordEventRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -244,8 +244,8 @@ func (c *Client) CreateEventWithBody(ctx context.Context, params *CreateEventPar
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateEventWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *CreateEventParams, body CreateEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateEventRequestWithApplicationVndAPIPlusJSONBody(c.Server, params, body)
+func (c *Client) RecordEventWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *RecordEventParams, body RecordEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRecordEventRequestWithApplicationVndAPIPlusJSONBody(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -418,19 +418,19 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 	return req, nil
 }
 
-// NewCreateEventRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateEvent builder with application/vnd.api+json body
-func NewCreateEventRequestWithApplicationVndAPIPlusJSONBody(server string, params *CreateEventParams, body CreateEventApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+// NewRecordEventRequestWithApplicationVndAPIPlusJSONBody calls the generic RecordEvent builder with application/vnd.api+json body
+func NewRecordEventRequestWithApplicationVndAPIPlusJSONBody(server string, params *RecordEventParams, body RecordEventApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateEventRequestWithBody(server, params, "application/vnd.api+json", bodyReader)
+	return NewRecordEventRequestWithBody(server, params, "application/vnd.api+json", bodyReader)
 }
 
-// NewCreateEventRequestWithBody generates requests for CreateEvent with any type of body
-func NewCreateEventRequestWithBody(server string, params *CreateEventParams, contentType string, body io.Reader) (*http.Request, error) {
+// NewRecordEventRequestWithBody generates requests for RecordEvent with any type of body
+func NewRecordEventRequestWithBody(server string, params *RecordEventParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -603,10 +603,10 @@ type ClientWithResponsesInterface interface {
 	// ListEventsWithResponse request
 	ListEventsWithResponse(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*ListEventsResponse, error)
 
-	// CreateEventWithBodyWithResponse request with any body
-	CreateEventWithBodyWithResponse(ctx context.Context, params *CreateEventParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEventResponse, error)
+	// RecordEventWithBodyWithResponse request with any body
+	RecordEventWithBodyWithResponse(ctx context.Context, params *RecordEventParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordEventResponse, error)
 
-	CreateEventWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *CreateEventParams, body CreateEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEventResponse, error)
+	RecordEventWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *RecordEventParams, body RecordEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordEventResponse, error)
 
 	// GetEventWithResponse request
 	GetEventWithResponse(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetEventResponse, error)
@@ -645,7 +645,7 @@ func (r ListEventsResponse) ContentType() string {
 	return ""
 }
 
-type CreateEventResponse struct {
+type RecordEventResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *EventResponse
@@ -653,7 +653,7 @@ type CreateEventResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r CreateEventResponse) Status() string {
+func (r RecordEventResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -661,7 +661,7 @@ func (r CreateEventResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r CreateEventResponse) StatusCode() int {
+func (r RecordEventResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -669,7 +669,7 @@ func (r CreateEventResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreateEventResponse) ContentType() string {
+func (r RecordEventResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -745,21 +745,21 @@ func (c *ClientWithResponses) ListEventsWithResponse(ctx context.Context, params
 	return ParseListEventsResponse(rsp)
 }
 
-// CreateEventWithBodyWithResponse request with arbitrary body returning *CreateEventResponse
-func (c *ClientWithResponses) CreateEventWithBodyWithResponse(ctx context.Context, params *CreateEventParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEventResponse, error) {
-	rsp, err := c.CreateEventWithBody(ctx, params, contentType, body, reqEditors...)
+// RecordEventWithBodyWithResponse request with arbitrary body returning *RecordEventResponse
+func (c *ClientWithResponses) RecordEventWithBodyWithResponse(ctx context.Context, params *RecordEventParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordEventResponse, error) {
+	rsp, err := c.RecordEventWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCreateEventResponse(rsp)
+	return ParseRecordEventResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateEventWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *CreateEventParams, body CreateEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEventResponse, error) {
-	rsp, err := c.CreateEventWithApplicationVndAPIPlusJSONBody(ctx, params, body, reqEditors...)
+func (c *ClientWithResponses) RecordEventWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *RecordEventParams, body RecordEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordEventResponse, error) {
+	rsp, err := c.RecordEventWithApplicationVndAPIPlusJSONBody(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCreateEventResponse(rsp)
+	return ParseRecordEventResponse(rsp)
 }
 
 // GetEventWithResponse request returning *GetEventResponse
@@ -806,15 +806,15 @@ func ParseListEventsResponse(rsp *http.Response) (*ListEventsResponse, error) {
 	return response, nil
 }
 
-// ParseCreateEventResponse parses an HTTP response from a CreateEventWithResponse call
-func ParseCreateEventResponse(rsp *http.Response) (*CreateEventResponse, error) {
+// ParseRecordEventResponse parses an HTTP response from a RecordEventWithResponse call
+func ParseRecordEventResponse(rsp *http.Response) (*RecordEventResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &CreateEventResponse{
+	response := &RecordEventResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
