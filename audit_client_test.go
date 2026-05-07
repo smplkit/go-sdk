@@ -50,7 +50,7 @@ func TestAuditEvents_Create_FireAndForget(t *testing.T) {
 
 	start := time.Now()
 	for i := 0; i < 20; i++ {
-		if err := events.Create(CreateEventInput{
+		if err := events.Record(CreateEventInput{
 			Action:       "user.created",
 			ResourceType: "user",
 			ResourceID:   "u-1",
@@ -74,7 +74,7 @@ func TestAuditEvents_Create_RequiresFields(t *testing.T) {
 	})
 	defer cleanup()
 
-	err := events.Create(CreateEventInput{ResourceType: "user", ResourceID: "u-1"})
+	err := events.Record(CreateEventInput{ResourceType: "user", ResourceID: "u-1"})
 	if err == nil || !strings.Contains(err.Error(), "Action") {
 		t.Fatalf("expected Action-required error, got %v", err)
 	}
@@ -90,7 +90,7 @@ func TestAuditEvents_Create_PassesIdempotencyKeyHeader(t *testing.T) {
 	})
 	defer cleanup()
 
-	if err := events.Create(CreateEventInput{
+	if err := events.Record(CreateEventInput{
 		Action:         "user.created",
 		ResourceType:   "user",
 		ResourceID:     "u-1",
@@ -265,7 +265,7 @@ func TestAuditEvents_Create_RequiredFields(t *testing.T) {
 		{Action: "x", ResourceID: "u-1"},
 		{Action: "x", ResourceType: "user"},
 	} {
-		if err := events.Create(in); err == nil {
+		if err := events.Record(in); err == nil {
 			t.Fatalf("expected error for missing fields: %+v", in)
 		}
 	}
@@ -277,7 +277,7 @@ func TestAuditEvents_Create_AllOptionalFields(t *testing.T) {
 	})
 	defer cleanup()
 	occurred := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
-	if err := events.Create(CreateEventInput{
+	if err := events.Record(CreateEventInput{
 		Action:         "invoice.created",
 		ResourceType:   "invoice",
 		ResourceID:     "inv-1",

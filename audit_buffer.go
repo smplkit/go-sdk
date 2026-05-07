@@ -31,6 +31,12 @@ type auditEventBuffer struct {
 	queue   []*pendingAuditEvent
 	dropped int
 	closed  bool
+	// inFlight is the number of items the worker has popped from the
+	// queue but not yet finished POSTing. flush() must wait on both
+	// queue empty AND inFlight == 0 — otherwise it can return while a
+	// just-popped item is still in the middle of its HTTP round-trip,
+	// and an immediately following list() call would miss the event.
+	inFlight int
 
 	wake chan struct{}
 	done chan struct{}
@@ -91,9 +97,9 @@ func (b *auditEventBuffer) flush(timeout time.Duration) {
 	deadline := time.Now().Add(timeout)
 	for {
 		b.mu.Lock()
-		empty := len(b.queue) == 0
+		idle := len(b.queue) == 0 && b.inFlight == 0
 		b.mu.Unlock()
-		if empty {
+		if idle {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -168,6 +174,7 @@ func (b *auditEventBuffer) drainOnce() {
 			return
 		}
 		b.queue = b.queue[1:]
+		b.inFlight++
 		b.mu.Unlock()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -183,12 +190,15 @@ func (b *auditEventBuffer) drainOnce() {
 		if resp != nil {
 			status = resp.StatusCode()
 		}
-		if requeue := b.handleOutcome(head, status, err); requeue != nil {
-			b.mu.Lock()
+		requeue := b.handleOutcome(head, status, err)
+		b.mu.Lock()
+		b.inFlight--
+		if requeue != nil {
 			b.queue = append([]*pendingAuditEvent{requeue}, b.queue...)
 			b.mu.Unlock()
 			return
 		}
+		b.mu.Unlock()
 	}
 }
 

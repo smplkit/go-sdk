@@ -41,15 +41,15 @@ func (a *AuditClient) Events() *AuditEvents {
 	return a.events
 }
 
-// Create enqueues an audit event for asynchronous delivery.
+// Record enqueues an audit event for asynchronous delivery.
 //
 // Returns nil immediately. The buffer worker handles the actual POST
 // and retries on transient failures. ResourceType beginning with
 // “smpl.“ is rejected by the server with 403 — that namespace is
 // reserved for smplkit-emitted events.
-func (e *AuditEvents) Create(input CreateEventInput) error {
+func (e *AuditEvents) Record(input CreateEventInput) error {
 	if input.Action == "" || input.ResourceType == "" || input.ResourceID == "" {
-		return errors.New("audit Create requires Action, ResourceType, and ResourceID")
+		return errors.New("audit Record requires Action, ResourceType, and ResourceID")
 	}
 
 	attrs := genaudit.Event{
