@@ -379,6 +379,23 @@ func TestEventFromResource_PopulatedActor(t *testing.T) {
 	}
 }
 
+func TestEventFromResource_PopulatesDoNotForward(t *testing.T) {
+	dnf := true
+	res := genaudit.EventResource{
+		Id: "11111111-2222-3333-4444-555555555555",
+		Attributes: genaudit.Event{
+			Action:       "user.created",
+			ResourceType: "user",
+			ResourceId:   "u-1",
+			DoNotForward: &dnf,
+		},
+	}
+	got := eventFromResource(res)
+	if !got.DoNotForward {
+		t.Fatal("expected DoNotForward=true to propagate")
+	}
+}
+
 func TestAuditEventBuffer_EnqueueAfterCloseIsNoop(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(201)
