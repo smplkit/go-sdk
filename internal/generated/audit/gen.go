@@ -141,9 +141,12 @@ type Forwarder struct {
 
 	// Http The destination HTTP request shape stored encrypted on a forwarder.
 	//
-	// ``success_status`` is either a single integer status (e.g. ``200``) or
-	// a class string like ``"2xx"``. Anything outside the matched set is
-	// treated as a delivery failure.
+	// ``success_status`` is a string: either a single status code (e.g.
+	// ``"200"``, ``"204"``) or a class (e.g. ``"2xx"``, ``"3xx"``). The
+	// string-only contract is intentional — a Pydantic ``int | str`` union
+	// confused several SDK code generators (Java in particular wrote the
+	// default ``"2xx"`` unquoted into a typed enum). String covers both
+	// shapes universally with a single wire type.
 	Http      ForwarderHttp `json:"http"`
 	Name      string        `json:"name"`
 	Slug      *string       `json:"slug,omitempty"`
@@ -197,26 +200,18 @@ type ForwarderDeliveryResponse struct {
 
 // ForwarderHttp The destination HTTP request shape stored encrypted on a forwarder.
 //
-// “success_status“ is either a single integer status (e.g. “200“) or
-// a class string like “"2xx"“. Anything outside the matched set is
-// treated as a delivery failure.
+// “success_status“ is a string: either a single status code (e.g.
+// “"200"“, “"204"“) or a class (e.g. “"2xx"“, “"3xx"“). The
+// string-only contract is intentional — a Pydantic “int | str“ union
+// confused several SDK code generators (Java in particular wrote the
+// default “"2xx"“ unquoted into a typed enum). String covers both
+// shapes universally with a single wire type.
 type ForwarderHttp struct {
-	Body          *string                      `json:"body,omitempty"`
-	Headers       *[]HttpHeader                `json:"headers,omitempty"`
-	Method        *string                      `json:"method,omitempty"`
-	SuccessStatus *ForwarderHttp_SuccessStatus `json:"success_status,omitempty"`
-	Url           string                       `json:"url"`
-}
-
-// ForwarderHttpSuccessStatus0 defines model for .
-type ForwarderHttpSuccessStatus0 = int
-
-// ForwarderHttpSuccessStatus1 defines model for .
-type ForwarderHttpSuccessStatus1 = string
-
-// ForwarderHttp_SuccessStatus defines model for ForwarderHttp.SuccessStatus.
-type ForwarderHttp_SuccessStatus struct {
-	union json.RawMessage
+	Body          *string       `json:"body,omitempty"`
+	Headers       *[]HttpHeader `json:"headers,omitempty"`
+	Method        *string       `json:"method,omitempty"`
+	SuccessStatus *string       `json:"success_status,omitempty"`
+	Url           string        `json:"url"`
 }
 
 // ForwarderListLinks defines model for ForwarderListLinks.
@@ -278,23 +273,12 @@ type RetryFailedDeliveriesSummary struct {
 // Mirrors the encrypted “ForwarderHttp“ shape with one addition —
 // “timeout_ms“, capped server-side.
 type TestForwarderRequest struct {
-	Body          *string                             `json:"body,omitempty"`
-	Headers       *[]HttpHeader                       `json:"headers,omitempty"`
-	Method        *string                             `json:"method,omitempty"`
-	SuccessStatus *TestForwarderRequest_SuccessStatus `json:"success_status,omitempty"`
-	TimeoutMs     *int                                `json:"timeout_ms,omitempty"`
-	Url           string                              `json:"url"`
-}
-
-// TestForwarderRequestSuccessStatus0 defines model for .
-type TestForwarderRequestSuccessStatus0 = int
-
-// TestForwarderRequestSuccessStatus1 defines model for .
-type TestForwarderRequestSuccessStatus1 = string
-
-// TestForwarderRequest_SuccessStatus defines model for TestForwarderRequest.SuccessStatus.
-type TestForwarderRequest_SuccessStatus struct {
-	union json.RawMessage
+	Body          *string       `json:"body,omitempty"`
+	Headers       *[]HttpHeader `json:"headers,omitempty"`
+	Method        *string       `json:"method,omitempty"`
+	SuccessStatus *string       `json:"success_status,omitempty"`
+	TimeoutMs     *int          `json:"timeout_ms,omitempty"`
+	Url           string        `json:"url"`
 }
 
 // TestForwarderResponse Plain-JSON response body. Headers are echoed back unredacted because
@@ -373,130 +357,6 @@ type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderResponse
 
 // ExecuteTestForwarderJSONRequestBody defines body for ExecuteTestForwarder for application/json ContentType.
 type ExecuteTestForwarderJSONRequestBody = TestForwarderRequest
-
-// AsForwarderHttpSuccessStatus0 returns the union data inside the ForwarderHttp_SuccessStatus as a ForwarderHttpSuccessStatus0
-func (t ForwarderHttp_SuccessStatus) AsForwarderHttpSuccessStatus0() (ForwarderHttpSuccessStatus0, error) {
-	var body ForwarderHttpSuccessStatus0
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromForwarderHttpSuccessStatus0 overwrites any union data inside the ForwarderHttp_SuccessStatus as the provided ForwarderHttpSuccessStatus0
-func (t *ForwarderHttp_SuccessStatus) FromForwarderHttpSuccessStatus0(v ForwarderHttpSuccessStatus0) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeForwarderHttpSuccessStatus0 performs a merge with any union data inside the ForwarderHttp_SuccessStatus, using the provided ForwarderHttpSuccessStatus0
-func (t *ForwarderHttp_SuccessStatus) MergeForwarderHttpSuccessStatus0(v ForwarderHttpSuccessStatus0) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsForwarderHttpSuccessStatus1 returns the union data inside the ForwarderHttp_SuccessStatus as a ForwarderHttpSuccessStatus1
-func (t ForwarderHttp_SuccessStatus) AsForwarderHttpSuccessStatus1() (ForwarderHttpSuccessStatus1, error) {
-	var body ForwarderHttpSuccessStatus1
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromForwarderHttpSuccessStatus1 overwrites any union data inside the ForwarderHttp_SuccessStatus as the provided ForwarderHttpSuccessStatus1
-func (t *ForwarderHttp_SuccessStatus) FromForwarderHttpSuccessStatus1(v ForwarderHttpSuccessStatus1) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeForwarderHttpSuccessStatus1 performs a merge with any union data inside the ForwarderHttp_SuccessStatus, using the provided ForwarderHttpSuccessStatus1
-func (t *ForwarderHttp_SuccessStatus) MergeForwarderHttpSuccessStatus1(v ForwarderHttpSuccessStatus1) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ForwarderHttp_SuccessStatus) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ForwarderHttp_SuccessStatus) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
-// AsTestForwarderRequestSuccessStatus0 returns the union data inside the TestForwarderRequest_SuccessStatus as a TestForwarderRequestSuccessStatus0
-func (t TestForwarderRequest_SuccessStatus) AsTestForwarderRequestSuccessStatus0() (TestForwarderRequestSuccessStatus0, error) {
-	var body TestForwarderRequestSuccessStatus0
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTestForwarderRequestSuccessStatus0 overwrites any union data inside the TestForwarderRequest_SuccessStatus as the provided TestForwarderRequestSuccessStatus0
-func (t *TestForwarderRequest_SuccessStatus) FromTestForwarderRequestSuccessStatus0(v TestForwarderRequestSuccessStatus0) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeTestForwarderRequestSuccessStatus0 performs a merge with any union data inside the TestForwarderRequest_SuccessStatus, using the provided TestForwarderRequestSuccessStatus0
-func (t *TestForwarderRequest_SuccessStatus) MergeTestForwarderRequestSuccessStatus0(v TestForwarderRequestSuccessStatus0) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsTestForwarderRequestSuccessStatus1 returns the union data inside the TestForwarderRequest_SuccessStatus as a TestForwarderRequestSuccessStatus1
-func (t TestForwarderRequest_SuccessStatus) AsTestForwarderRequestSuccessStatus1() (TestForwarderRequestSuccessStatus1, error) {
-	var body TestForwarderRequestSuccessStatus1
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTestForwarderRequestSuccessStatus1 overwrites any union data inside the TestForwarderRequest_SuccessStatus as the provided TestForwarderRequestSuccessStatus1
-func (t *TestForwarderRequest_SuccessStatus) FromTestForwarderRequestSuccessStatus1(v TestForwarderRequestSuccessStatus1) error {
-	b, err := json.Marshal(v)
-	t.union = b
-	return err
-}
-
-// MergeTestForwarderRequestSuccessStatus1 performs a merge with any union data inside the TestForwarderRequest_SuccessStatus, using the provided TestForwarderRequestSuccessStatus1
-func (t *TestForwarderRequest_SuccessStatus) MergeTestForwarderRequestSuccessStatus1(v TestForwarderRequestSuccessStatus1) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t TestForwarderRequest_SuccessStatus) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *TestForwarderRequest_SuccessStatus) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error

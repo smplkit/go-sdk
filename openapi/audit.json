@@ -1375,14 +1375,8 @@
             "title": "Body"
           },
           "success_status": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "string"
-              }
-            ],
+            "type": "string",
+            "maxLength": 3,
             "title": "Success Status",
             "default": "2xx"
           }
@@ -1393,7 +1387,7 @@
           "url"
         ],
         "title": "ForwarderHttp",
-        "description": "The destination HTTP request shape stored encrypted on a forwarder.\n\n``success_status`` is either a single integer status (e.g. ``200``) or\na class string like ``\"2xx\"``. Anything outside the matched set is\ntreated as a delivery failure."
+        "description": "The destination HTTP request shape stored encrypted on a forwarder.\n\n``success_status`` is a string: either a single status code (e.g.\n``\"200\"``, ``\"204\"``) or a class (e.g. ``\"2xx\"``, ``\"3xx\"``). The\nstring-only contract is intentional \u2014 a Pydantic ``int | str`` union\nconfused several SDK code generators (Java in particular wrote the\ndefault ``\"2xx\"`` unquoted into a typed enum). String covers both\nshapes universally with a single wire type."
       },
       "ForwarderListLinks": {
         "properties": {
@@ -1600,14 +1594,8 @@
             "title": "Body"
           },
           "success_status": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "string"
-              }
-            ],
+            "type": "string",
+            "maxLength": 3,
             "title": "Success Status",
             "default": "2xx"
           },
