@@ -15,12 +15,15 @@ import (
 
 // AuditClient is the audit-product surface — accessed via Client.Audit().
 //
-// Today the audit namespace is exclusively events; future iterations may
-// add SIEM exports or custom resource types as additional sub-clients.
+// Sub-clients: Events for event recording / listing / retrieval,
+// Forwarders for SIEM streaming destinations and the delivery log,
+// Functions for server-side proxy actions like test_forwarder.
 type AuditClient struct {
-	client *Client
-	gen    *genaudit.ClientWithResponses
-	events *AuditEvents
+	client     *Client
+	gen        *genaudit.ClientWithResponses
+	events     *AuditEvents
+	forwarders *AuditForwarders
+	functions  *AuditFunctions
 }
 
 // AuditEvents handles event creation, listing, and retrieval. Reads are
@@ -39,6 +42,19 @@ func (c *Client) Audit() *AuditClient {
 // Events returns the events sub-client.
 func (a *AuditClient) Events() *AuditEvents {
 	return a.events
+}
+
+// Forwarders returns the SIEM forwarders sub-client (Pro tier only —
+// every method returns a wrapped 402 error on lower tiers).
+func (a *AuditClient) Forwarders() *AuditForwarders {
+	return a.forwarders
+}
+
+// Functions returns the server-side functions sub-client. Today this
+// surface contains the test_forwarder/execute proxy that bypasses
+// browser CORS for the console's "try it out" preview.
+func (a *AuditClient) Functions() *AuditFunctions {
+	return a.functions
 }
 
 // Record enqueues an audit event for asynchronous delivery.
@@ -67,6 +83,10 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 	if input.Data != nil {
 		d := input.Data
 		attrs.Data = &d
+	}
+	if input.DoNotForward {
+		dnf := true
+		attrs.DoNotForward = &dnf
 	}
 
 	resourceType := "event"
@@ -213,6 +233,9 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 	}
 	if attrs.IdempotencyKey != nil {
 		out.IdempotencyKey = *attrs.IdempotencyKey
+	}
+	if attrs.DoNotForward != nil {
+		out.DoNotForward = *attrs.DoNotForward
 	}
 	return out
 }

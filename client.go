@@ -183,7 +183,28 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	c.flags.runtime = newFlagsRuntime(c.flags, ctxBuf)
 	c.logging = newLoggingClient(c, genLoggingClient)
 	auditEvents := &AuditEvents{gen: genAuditClient, buffer: newAuditEventBuffer(genAuditClient)}
-	c.audit = &AuditClient{client: c, gen: genAuditClient, events: auditEvents}
+	auditDeliveries := &AuditForwarderDeliveries{
+		gen:     genAuditClient,
+		actions: &AuditDeliveryActions{gen: genAuditClient},
+	}
+	auditForwarders := &AuditForwarders{
+		gen:        genAuditClient,
+		deliveries: auditDeliveries,
+		actions:    &AuditForwarderActions{gen: genAuditClient},
+	}
+	auditFunctions := &AuditFunctions{
+		gen: genAuditClient,
+		testForwarder: &AuditTestForwarder{
+			actions: &AuditTestForwarderActions{gen: genAuditClient},
+		},
+	}
+	c.audit = &AuditClient{
+		client:     c,
+		gen:        genAuditClient,
+		events:     auditEvents,
+		forwarders: auditForwarders,
+		functions:  auditFunctions,
+	}
 
 	// Build the management surface directly against the generated API
 	// clients so the management plane doesn't depend on the runtime
