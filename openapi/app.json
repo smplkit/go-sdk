@@ -5199,143 +5199,6 @@
         }
       }
     },
-    "/api/v1/bundles": {
-      "get": {
-        "tags": [
-          "Billing"
-        ],
-        "summary": "List Bundles",
-        "description": "Return all bundle definitions as JSON:API resources. Public, unauthenticated.",
-        "operationId": "list_bundles",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BundleListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Billing"
-        ],
-        "summary": "Create Bundle Subscription",
-        "description": "Create a bundle subscription covering all three products at a shared plan tier.",
-        "operationId": "create_bundle",
-        "requestBody": {
-          "content": {
-            "application/vnd.api+json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateBundleBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BundleResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/payment_methods": {
       "get": {
         "tags": [
@@ -6088,6 +5951,35 @@
             "title": "Show Sample Data",
             "description": "Whether sample data is active (from account.settings)",
             "readOnly": true
+          },
+          "discount_override_pct": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Discount Override Pct",
+            "description": "Custom discount percentage that overrides the volume schedule. Null means the volume schedule applies.",
+            "readOnly": true
+          },
+          "discount_override_reason": {
+            "type": "string",
+            "nullable": true,
+            "title": "Discount Override Reason",
+            "description": "Free-form note explaining why the override was set.",
+            "readOnly": true
+          },
+          "discount_override_set_by_user_id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Discount Override Set By User Id",
+            "description": "UUID of the admin user who set the override.",
+            "readOnly": true
+          },
+          "discount_override_set_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Discount Override Set At",
+            "description": "Timestamp when the override was last changed.",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -6407,181 +6299,6 @@
         ],
         "title": "AuthTokenResponse"
       },
-      "BundleAttributes": {
-        "properties": {
-          "bundle": {
-            "type": "string",
-            "title": "Bundle"
-          },
-          "plan": {
-            "type": "string",
-            "title": "Plan"
-          },
-          "products": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Products"
-          },
-          "subscriptions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Subscriptions"
-          }
-        },
-        "type": "object",
-        "required": [
-          "bundle",
-          "plan",
-          "products",
-          "subscriptions"
-        ],
-        "title": "BundleAttributes"
-      },
-      "BundleListResponse": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/CatalogBundleResource"
-            },
-            "type": "array",
-            "title": "Data"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "BundleListResponse"
-      },
-      "BundleResource": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "nullable": true,
-            "title": "Id"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "bundle"
-            ],
-            "title": "Type"
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/BundleAttributes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "type",
-          "attributes"
-        ],
-        "title": "BundleResource",
-        "example": {
-          "attributes": {
-            "bundle": "standard",
-            "plan": "standard",
-            "products": [
-              "config",
-              "flags",
-              "logging"
-            ],
-            "subscriptions": [
-              "sub-uuid-config",
-              "sub-uuid-flags",
-              "sub-uuid-logging"
-            ]
-          },
-          "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-          "type": "bundle"
-        }
-      },
-      "BundleResponse": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/BundleResource"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "BundleResponse"
-      },
-      "CatalogBundleAttributes": {
-        "properties": {
-          "display_name": {
-            "type": "string",
-            "title": "Display Name"
-          },
-          "plan": {
-            "type": "string",
-            "title": "Plan"
-          },
-          "products": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Products"
-          },
-          "price_monthly_cents": {
-            "type": "integer",
-            "title": "Price Monthly Cents"
-          }
-        },
-        "type": "object",
-        "required": [
-          "display_name",
-          "plan",
-          "products",
-          "price_monthly_cents"
-        ],
-        "title": "CatalogBundleAttributes"
-      },
-      "CatalogBundleResource": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "nullable": true,
-            "title": "Id"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "bundle"
-            ],
-            "title": "Type"
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/CatalogBundleAttributes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "type",
-          "attributes"
-        ],
-        "title": "CatalogBundleResource",
-        "example": {
-          "attributes": {
-            "display_name": "Standard Bundle",
-            "plan": "standard",
-            "price_monthly_cents": 14900,
-            "products": [
-              "config",
-              "flags",
-              "logging"
-            ]
-          },
-          "id": "standard",
-          "type": "bundle"
-        }
-      },
       "ContactTopic": {
         "type": "string",
         "enum": [
@@ -6883,60 +6600,6 @@
           "data"
         ],
         "title": "ContextTypeResponse"
-      },
-      "CreateBundleAttributes": {
-        "properties": {
-          "bundle": {
-            "type": "string",
-            "title": "Bundle"
-          },
-          "payment_method": {
-            "type": "string",
-            "nullable": true,
-            "title": "Payment Method"
-          }
-        },
-        "type": "object",
-        "required": [
-          "bundle"
-        ],
-        "title": "CreateBundleAttributes",
-        "example": {
-          "bundle": "standard",
-          "payment_method": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-        }
-      },
-      "CreateBundleBody": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/CreateBundleData"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "CreateBundleBody"
-      },
-      "CreateBundleData": {
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "bundle"
-            ],
-            "title": "Type"
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/CreateBundleAttributes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "type",
-          "attributes"
-        ],
-        "title": "CreateBundleData"
       },
       "CreateSubscriptionAttributes": {
         "properties": {
@@ -7926,6 +7589,29 @@
           "type": "metric_rollup"
         }
       },
+      "NextTierMeta": {
+        "properties": {
+          "products_needed": {
+            "type": "integer",
+            "title": "Products Needed"
+          },
+          "discount_pct": {
+            "type": "integer",
+            "title": "Discount Pct"
+          },
+          "additional_savings_cents": {
+            "type": "integer",
+            "title": "Additional Savings Cents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "products_needed",
+          "discount_pct",
+          "additional_savings_cents"
+        ],
+        "title": "NextTierMeta"
+      },
       "OidcProvider": {
         "type": "string",
         "enum": [
@@ -8608,11 +8294,6 @@
             "type": "boolean",
             "title": "Stripe Managed"
           },
-          "bundle": {
-            "type": "string",
-            "nullable": true,
-            "title": "Bundle"
-          },
           "current_period_end": {
             "type": "string",
             "nullable": true,
@@ -8633,6 +8314,48 @@
         ],
         "title": "SubscriptionAttributes"
       },
+      "SubscriptionListMeta": {
+        "properties": {
+          "subtotal_cents": {
+            "type": "integer",
+            "title": "Subtotal Cents"
+          },
+          "discount_pct": {
+            "type": "integer",
+            "title": "Discount Pct"
+          },
+          "discount_amount_cents": {
+            "type": "integer",
+            "title": "Discount Amount Cents"
+          },
+          "discount_source": {
+            "type": "string",
+            "enum": [
+              "volume",
+              "override"
+            ],
+            "title": "Discount Source"
+          },
+          "total_cents": {
+            "type": "integer",
+            "title": "Total Cents"
+          },
+          "next_tier": {
+            "$ref": "#/components/schemas/NextTierMeta",
+            "nullable": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "subtotal_cents",
+          "discount_pct",
+          "discount_amount_cents",
+          "discount_source",
+          "total_cents"
+        ],
+        "title": "SubscriptionListMeta",
+        "description": "Discount and totals summary attached to GET /api/v1/subscriptions."
+      },
       "SubscriptionListResponse": {
         "properties": {
           "data": {
@@ -8641,6 +8364,10 @@
             },
             "type": "array",
             "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/SubscriptionListMeta",
+            "nullable": true
           }
         },
         "type": "object",
