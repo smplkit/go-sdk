@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
@@ -172,7 +172,7 @@ func (f *AuditForwarders) Update(
 		Data: forwarderResourceFromInput(forwarderID.String(), input),
 	}
 	resp, err := f.gen.UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(
-		ctx, openapi_types.UUID(forwarderID), body,
+		ctx, forwarderID, body,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("audit Forwarders.Update: %w", err)
@@ -189,7 +189,7 @@ func (f *AuditForwarders) Update(
 
 // Delete soft-deletes a forwarder.
 func (f *AuditForwarders) Delete(ctx context.Context, forwarderID uuid.UUID) error {
-	resp, err := f.gen.DeleteForwarderWithResponse(ctx, openapi_types.UUID(forwarderID))
+	resp, err := f.gen.DeleteForwarderWithResponse(ctx, forwarderID)
 	if err != nil {
 		return fmt.Errorf("audit Forwarders.Delete: %w", err)
 	}
@@ -224,7 +224,7 @@ func (d *AuditForwarderDeliveries) List(
 	if input.PageAfter != "" {
 		params.PageAfter = &input.PageAfter
 	}
-	resp, err := d.gen.ListForwarderDeliveriesWithResponse(ctx, openapi_types.UUID(forwarderID), params)
+	resp, err := d.gen.ListForwarderDeliveriesWithResponse(ctx, forwarderID, params)
 	if err != nil {
 		return nil, fmt.Errorf("audit Deliveries.List: %w", err)
 	}

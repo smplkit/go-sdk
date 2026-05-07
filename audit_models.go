@@ -95,19 +95,19 @@ type ForwarderHttp struct {
 // account. Header values returned on reads are always redacted —
 // re-supply real values when calling Update.
 type Forwarder struct {
-	ID             uuid.UUID
-	Name           string
-	Slug           string
-	ForwarderType  string
-	Enabled        bool
-	Filter         map[string]interface{}
-	Transform      *string
-	HTTP           ForwarderHttp
-	Data           map[string]interface{}
-	CreatedAt      *time.Time
-	UpdatedAt      *time.Time
-	DeletedAt      *time.Time
-	Version        *int
+	ID            uuid.UUID
+	Name          string
+	Slug          string
+	ForwarderType string
+	Enabled       bool
+	Filter        map[string]interface{}
+	Transform     *string
+	HTTP          ForwarderHttp
+	Data          map[string]interface{}
+	CreatedAt     *time.Time
+	UpdatedAt     *time.Time
+	DeletedAt     *time.Time
+	Version       *int
 }
 
 // CreateForwarderInput is the input for AuditForwarders.Create.
@@ -146,10 +146,10 @@ type ListForwardersPage struct {
 type ForwarderDeliveryStatus string
 
 const (
-	ForwarderDeliverySucceeded            ForwarderDeliveryStatus = "succeeded"
-	ForwarderDeliveryFailed               ForwarderDeliveryStatus = "failed"
-	ForwarderDeliveryFilteredOut          ForwarderDeliveryStatus = "filtered_out"
-	ForwarderDeliverySkippedDoNotForward  ForwarderDeliveryStatus = "skipped_do_not_forward"
+	ForwarderDeliverySucceeded           ForwarderDeliveryStatus = "succeeded"
+	ForwarderDeliveryFailed              ForwarderDeliveryStatus = "failed"
+	ForwarderDeliveryFilteredOut         ForwarderDeliveryStatus = "filtered_out"
+	ForwarderDeliverySkippedDoNotForward ForwarderDeliveryStatus = "skipped_do_not_forward"
 )
 
 // ForwarderDelivery is one row in the append-only delivery log.
@@ -169,10 +169,10 @@ type ForwarderDelivery struct {
 
 // ListDeliveriesInput is the filter + pagination input for the delivery log.
 type ListDeliveriesInput struct {
-	Status          ForwarderDeliveryStatus
-	CreatedAtRange  string // ADR-014 range syntax
-	PageSize        int
-	PageAfter       string
+	Status         ForwarderDeliveryStatus
+	CreatedAtRange string // ADR-014 range syntax
+	PageSize       int
+	PageAfter      string
 }
 
 // ListDeliveriesPage is one page of forwarder delivery rows.
