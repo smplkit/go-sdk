@@ -31,7 +31,7 @@ func newTestAuditClient(t *testing.T, handler http.HandlerFunc) (*AuditClient, f
 
 // newClosedAuditClient returns an AuditClient whose backing server has
 // already been closed, so every request returns a transport-level error
-// (connection refused). Used to exercise the ``if err != nil`` branches
+// (connection refused). Used to exercise the “if err != nil“ branches
 // of every wrapper method.
 func newClosedAuditClient(t *testing.T) *AuditClient {
 	t.Helper()
