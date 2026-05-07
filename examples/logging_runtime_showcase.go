@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	smplkit "github.com/smplkit/go-sdk/v3"
 	slogadapter "github.com/smplkit/go-sdk/logging/adapters/slog"
+	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 func main() {

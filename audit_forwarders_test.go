@@ -21,9 +21,34 @@ import (
 func newTestAuditClient(t *testing.T, handler http.HandlerFunc) (*AuditClient, func()) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
-	gen, err := genaudit.NewClient(srv.URL)
-	if err != nil {
+	c := newAuditClientPointingAt(t, srv.URL)
+	cleanup := func() {
+		c.events.close()
 		srv.Close()
+	}
+	return c, cleanup
+}
+
+// newClosedAuditClient returns an AuditClient whose backing server has
+// already been closed, so every request returns a transport-level error
+// (connection refused). Used to exercise the “if err != nil“ branches
+// of every wrapper method.
+func newClosedAuditClient(t *testing.T) *AuditClient {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	url := srv.URL
+	srv.Close()
+	c := newAuditClientPointingAt(t, url)
+	t.Cleanup(c.events.close)
+	return c
+}
+
+func newAuditClientPointingAt(t *testing.T, url string) *AuditClient {
+	t.Helper()
+	gen, err := genaudit.NewClient(url)
+	if err != nil {
 		t.Fatalf("genaudit.NewClient: %v", err)
 	}
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
@@ -43,14 +68,9 @@ func newTestAuditClient(t *testing.T, handler http.HandlerFunc) (*AuditClient, f
 		},
 	}
 	events := &AuditEvents{gen: wrapped, buffer: newAuditEventBuffer(wrapped)}
-	c := &AuditClient{
+	return &AuditClient{
 		gen: wrapped, events: events, forwarders: forwarders, functions: functions,
 	}
-	cleanup := func() {
-		events.close()
-		srv.Close()
-	}
-	return c, cleanup
 }
 
 const fwdIDStr = "11111111-2222-3333-4444-555555555555"
@@ -483,5 +503,218 @@ func TestAuditEvents_Record_PassesDoNotForward(t *testing.T) {
 	body := <-captured
 	if !strings.Contains(body, `"do_not_forward":true`) {
 		t.Errorf("expected do_not_forward in body, got: %s", body)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Transport-error paths
+//
+// Every wrapper has an ``if err != nil`` short-circuit on the underlying
+// transport call. These tests point the SDK at a closed httptest server
+// so each call returns "connection refused" and exercises that branch.
+// ---------------------------------------------------------------------------
+
+func TestAuditForwarders_Create_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if _, err := c.Forwarders().Create(context.Background(), CreateForwarderInput{
+		Name: "x", ForwarderType: "http",
+		HTTP: ForwarderHttp{URL: "https://x", SuccessStatus: "2xx"},
+	}); err == nil || !strings.Contains(err.Error(), "Forwarders.Create") {
+		t.Fatalf("expected wrapped Create transport error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_List_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if _, err := c.Forwarders().List(context.Background(), ListForwardersInput{}); err == nil ||
+		!strings.Contains(err.Error(), "Forwarders.List") {
+		t.Fatalf("expected wrapped List transport error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_Get_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if _, err := c.Forwarders().Get(context.Background(), parseUUID(t, fwdIDStr)); err == nil ||
+		!strings.Contains(err.Error(), "Forwarders.Get") {
+		t.Fatalf("expected wrapped Get transport error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_Update_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if _, err := c.Forwarders().Update(context.Background(), parseUUID(t, fwdIDStr), UpdateForwarderInput{
+		Name: "x", ForwarderType: "http",
+		HTTP: ForwarderHttp{URL: "https://x"},
+	}); err == nil || !strings.Contains(err.Error(), "Forwarders.Update") {
+		t.Fatalf("expected wrapped Update transport error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_Delete_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if err := c.Forwarders().Delete(context.Background(), parseUUID(t, fwdIDStr)); err == nil ||
+		!strings.Contains(err.Error(), "Forwarders.Delete") {
+		t.Fatalf("expected wrapped Delete transport error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_Deliveries_List_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if _, err := c.Forwarders().Deliveries().List(context.Background(), parseUUID(t, fwdIDStr), ListDeliveriesInput{}); err == nil ||
+		!strings.Contains(err.Error(), "Deliveries.List") {
+		t.Fatalf("expected wrapped Deliveries.List transport error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_Deliveries_Retry_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if _, err := c.Forwarders().Deliveries().Actions().Retry(context.Background(),
+		parseUUID(t, fwdIDStr), parseUUID(t, deliveryIDStr)); err == nil ||
+		!strings.Contains(err.Error(), "Deliveries.Actions.Retry") {
+		t.Fatalf("expected wrapped Retry transport error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_Actions_RetryFailed_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if _, err := c.Forwarders().Actions().RetryFailedDeliveries(context.Background(), parseUUID(t, fwdIDStr)); err == nil ||
+		!strings.Contains(err.Error(), "Forwarders.Actions.RetryFailedDeliveries") {
+		t.Fatalf("expected wrapped RetryFailedDeliveries transport error, got %v", err)
+	}
+}
+
+func TestAuditFunctions_TestForwarder_Execute_TransportError(t *testing.T) {
+	c := newClosedAuditClient(t)
+	if _, err := c.Functions().TestForwarder().Actions().Execute(context.Background(), TestForwarderInput{
+		URL: "https://x",
+	}); err == nil || !strings.Contains(err.Error(), "TestForwarder.Actions.Execute") {
+		t.Fatalf("expected wrapped Execute transport error, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Other error / branch paths
+// ---------------------------------------------------------------------------
+
+func TestAuditForwarders_Create_Empty201Body(t *testing.T) {
+	// Return 201 with content type the generated client won't decode as
+	// the JSON:API success body — leaves resp.ApplicationvndApiJSON201 nil.
+	c, cleanup := newTestAuditClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusCreated)
+	})
+	defer cleanup()
+	if _, err := c.Forwarders().Create(context.Background(), CreateForwarderInput{
+		Name: "x", ForwarderType: "http",
+		HTTP: ForwarderHttp{URL: "https://x", SuccessStatus: "2xx"},
+	}); err == nil || !strings.Contains(err.Error(), "empty 201 body") {
+		t.Fatalf("expected empty-201-body error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_Get_NonSuccessNon404(t *testing.T) {
+	// 500 hits the second non-success branch (the 404 short-circuit
+	// above is exercised by TestAuditForwarders_Get_404Handled).
+	c, cleanup := newTestAuditClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer cleanup()
+	if _, err := c.Forwarders().Get(context.Background(), parseUUID(t, fwdIDStr)); err == nil ||
+		!strings.Contains(err.Error(), "Forwarders.Get failed") {
+		t.Fatalf("expected wrapped 500 error, got %v", err)
+	}
+}
+
+func TestAuditForwarders_Deliveries_List_AppliesPageAfterParam(t *testing.T) {
+	var captured string
+	c, cleanup := newTestAuditClient(t, func(w http.ResponseWriter, r *http.Request) {
+		captured = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":1}}`))
+	})
+	defer cleanup()
+	if _, err := c.Forwarders().Deliveries().List(context.Background(), parseUUID(t, fwdIDStr), ListDeliveriesInput{
+		PageAfter: "tok-after",
+	}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if !strings.Contains(captured, "page%5Bafter%5D=tok-after") &&
+		!strings.Contains(captured, "page[after]=tok-after") {
+		t.Errorf("expected page[after] in query, got %q", captured)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Helper-function branch coverage
+// ---------------------------------------------------------------------------
+
+func TestForwarderFromResource_PopulatesOptionalFields(t *testing.T) {
+	// Server response that exercises the Filter / Transform / Data
+	// branches in forwarderFromResource and the Body branch in
+	// forwarderHttpFromWire — none of which the round-trip happy path
+	// hit before.
+	c, cleanup := newTestAuditClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{` +
+			`"name":"X","slug":"x","forwarder_type":"http","enabled":true,` +
+			`"http":{"url":"https://x","method":"POST","success_status":"2xx",` +
+			`"body":"{\"hello\":\"world\"}","headers":[{"name":"H","value":"v"}]},` +
+			`"filter":{"==":["a","a"]},"transform":"$","data":{"team":"x"}` +
+			`}}}`))
+	})
+	defer cleanup()
+	fwd, err := c.Forwarders().Get(context.Background(), parseUUID(t, fwdIDStr))
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if fwd.Filter == nil {
+		t.Errorf("expected Filter populated, got nil")
+	}
+	if fwd.Transform == nil || *fwd.Transform != "$" {
+		t.Errorf("expected Transform=\"$\", got %v", fwd.Transform)
+	}
+	if fwd.Data == nil {
+		t.Errorf("expected Data populated, got nil")
+	}
+	if fwd.HTTP.Body == nil {
+		t.Errorf("expected HTTP.Body populated, got nil")
+	}
+}
+
+func TestNextCursorFromForwarderLinks_BranchCoverage(t *testing.T) {
+	// page[after]= followed by &<other> — exercise the `if amp >= 0`
+	// branch that trims the trailing query params.
+	calls := 0
+	c, cleanup := newTestAuditClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		switch calls {
+		case 1:
+			_, _ = w.Write([]byte(`{"data":[],"links":{"next":"/api/v1/forwarders?page[after]=tok-mid&page[size]=1"},"meta":{"page_size":1}}`))
+		case 2:
+			// Next is set but contains no page[after]= — the function
+			// must fall through to the trailing `return ""`.
+			_, _ = w.Write([]byte(`{"data":[],"links":{"next":"/api/v1/forwarders?page[size]=1"},"meta":{"page_size":1}}`))
+		}
+	})
+	defer cleanup()
+
+	first, err := c.Forwarders().List(context.Background(), ListForwardersInput{})
+	if err != nil {
+		t.Fatalf("List call 1: %v", err)
+	}
+	if first.NextCursor != "tok-mid" {
+		t.Errorf("expected cursor=tok-mid (trimmed at &), got %q", first.NextCursor)
+	}
+
+	second, err := c.Forwarders().List(context.Background(), ListForwardersInput{})
+	if err != nil {
+		t.Fatalf("List call 2: %v", err)
+	}
+	if second.NextCursor != "" {
+		t.Errorf("expected empty cursor when page[after] missing, got %q", second.NextCursor)
 	}
 }
