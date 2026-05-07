@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -392,4 +393,68 @@ func TestNewClient_DebugFromConfigFile(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, client)
 	assert.True(t, smplkit.IsDebugEnabled(), "debug should be enabled when debug=true is set in config file")
+}
+
+func TestNewClient_ExtraHeaders_PresentOnRequests(t *testing.T) {
+	var seen http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer server.Close()
+
+	client, err := smplkit.NewClient(
+		smplkit.Config{
+			APIKey:           "sk_test_key",
+			Environment:      "test",
+			Service:          "test-service",
+			DisableTelemetry: true,
+			ExtraHeaders:     map[string]string{"X-Custom": "hello"},
+		},
+		smplkit.WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+
+	_, _ = client.Config().Management().List(context.Background())
+
+	require.NotNil(t, seen)
+	assert.Equal(t, "hello", seen.Get("X-Custom"))
+	assert.Equal(t, "Bearer sk_test_key", seen.Get("Authorization"))
+	assert.Equal(t, "application/vnd.api+json", seen.Get("Accept"))
+}
+
+func TestNewClient_ExtraHeaders_SDKHeadersWinOnCollision(t *testing.T) {
+	var seen http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer server.Close()
+
+	client, err := smplkit.NewClient(
+		smplkit.Config{
+			APIKey:           "sk_test_key",
+			Environment:      "test",
+			Service:          "test-service",
+			DisableTelemetry: true,
+			ExtraHeaders: map[string]string{
+				"Authorization": "Bearer overridden",
+				"Accept":        "text/plain",
+			},
+		},
+		smplkit.WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+
+	_, _ = client.Config().Management().List(context.Background())
+
+	require.NotNil(t, seen)
+	assert.Equal(t, "Bearer sk_test_key", seen.Get("Authorization"))
+	assert.Equal(t, "application/vnd.api+json", seen.Get("Accept"))
 }

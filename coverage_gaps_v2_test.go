@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -357,4 +358,56 @@ func TestNewManagementClient_HeaderEditorExercised(t *testing.T) {
 	envs, err := mgmt.Environments().List(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, envs)
+}
+
+// --- extraHeaders editor closure coverage ---
+
+// TestNewClient_ExtraHeadersEditorsCovered exercises all five per-service
+// extra-header editor closures introduced in the ExtraHeaders feature. When
+// ExtraHeaders is nil the loop body never runs; this test provides a non-empty
+// map and triggers each client so every closure body is hit.
+func TestNewClient_ExtraHeadersEditorsCovered(t *testing.T) {
+	var mu sync.Mutex
+	var seenHeaders []http.Header
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seenHeaders = append(seenHeaders, r.Header.Clone())
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	c, err := NewClient(
+		Config{
+			APIKey:           "sk_test_key",
+			Environment:      "test",
+			Service:          "test-svc",
+			DisableTelemetry: true,
+			ExtraHeaders:     map[string]string{"X-Extra": "1"},
+		},
+		WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+	defer func() { _ = c.Close() }()
+
+	// app editor
+	c.registerServiceContext(context.Background())
+	// flags editor
+	_, _ = c.flags.Management().List(context.Background())
+	// logging editor
+	_, _ = c.logging.Management().List(context.Background())
+	// audit editor
+	_, _ = c.audit.Events().List(context.Background(), ListEventsInput{})
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Greater(t, len(seenHeaders), 0, "no requests were made")
+	for _, h := range seenHeaders {
+		assert.Equal(t, "1", h.Get("X-Extra"), "extra header missing on request to %v", h)
+	}
 }

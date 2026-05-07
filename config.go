@@ -42,6 +42,11 @@ type Config struct {
 	// DisableTelemetry disables anonymous SDK usage telemetry.
 	// Falls back to SMPLKIT_DISABLE_TELEMETRY env var, then the config file.
 	DisableTelemetry bool
+
+	// ExtraHeaders are additional HTTP headers sent on every request.
+	// SDK-owned headers (Authorization, Accept, User-Agent) take precedence
+	// over any key supplied here — callers cannot override them.
+	ExtraHeaders map[string]string
 }
 
 // resolvedConfig holds fully-resolved configuration with all layers merged.
@@ -54,6 +59,7 @@ type resolvedConfig struct {
 	service          string
 	debug            bool
 	disableTelemetry bool
+	extraHeaders     map[string]string
 }
 
 // resolveConfig merges configuration from four layers:
@@ -141,6 +147,9 @@ func resolveConfig(cfg Config) (*resolvedConfig, error) {
 	}
 	if cfg.DisableTelemetry {
 		rc.disableTelemetry = true
+	}
+	if len(cfg.ExtraHeaders) > 0 {
+		rc.extraHeaders = cfg.ExtraHeaders
 	}
 
 	// Validate required fields.

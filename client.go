@@ -105,8 +105,18 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	logURL := serviceURL(optCfg, "logging", rc)
 	auditURL := serviceURL(optCfg, "audit", rc)
 
+	// Capture extra headers once; the closures below close over this value.
+	extraHeaders := rc.extraHeaders
+
 	// Build the generated config client, passing the auth-wrapped httpClient
-	// and a request editor that injects Accept + User-Agent headers.
+	// and request editors that inject extra headers (first) then SDK headers
+	// (second, so SDK headers win on any collision).
+	configExtraEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	})
 	headerEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
@@ -114,10 +124,17 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	})
 	genConfigClient, _ := genconfig.NewClient(configURL,
 		genconfig.WithHTTPClient(httpClient),
+		configExtraEditor,
 		headerEditor,
 	)
 
 	// Build the generated flags client with the same pattern.
+	flagsExtraEditor := genflags.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	})
 	flagsHeaderEditor := genflags.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
@@ -125,10 +142,17 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	})
 	genFlagsClient, _ := genflags.NewClient(flagsURL,
 		genflags.WithHTTPClient(httpClient),
+		flagsExtraEditor,
 		flagsHeaderEditor,
 	)
 
 	// Build the generated app client for context operations.
+	appExtraEditor := genapp.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	})
 	appHeaderEditor := genapp.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
@@ -136,10 +160,17 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	})
 	genAppClient, _ := genapp.NewClient(appURL,
 		genapp.WithHTTPClient(httpClient),
+		appExtraEditor,
 		appHeaderEditor,
 	)
 
 	// Build the generated logging client.
+	loggingExtraEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	})
 	loggingHeaderEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
@@ -147,10 +178,17 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	})
 	genLoggingClient, _ := genlogging.NewClient(logURL,
 		genlogging.WithHTTPClient(httpClient),
+		loggingExtraEditor,
 		loggingHeaderEditor,
 	)
 
 	// Build the generated audit client.
+	auditExtraEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	})
 	auditHeaderEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
@@ -158,6 +196,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	})
 	genAuditRaw, _ := genaudit.NewClient(auditURL,
 		genaudit.WithHTTPClient(httpClient),
+		auditExtraEditor,
 		auditHeaderEditor,
 	)
 	genAuditClient := &genaudit.ClientWithResponses{ClientInterface: genAuditRaw}
