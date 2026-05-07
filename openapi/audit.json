@@ -304,6 +304,480 @@
           }
         }
       }
+    },
+    "/api/v1/forwarders": {
+      "post": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "Create Forwarder",
+        "description": "Create a forwarder. Requires the ``audit.siem_streaming`` entitlement\non the account; lower-tier accounts get 402.",
+        "operationId": "create_forwarder",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForwarderResponse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwarderResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "List Forwarders",
+        "description": "List forwarders for the authenticated account.\n\nReads do not require the entitlement \u2014 a downgraded account can still\ninspect what they configured, they just can't create new ones.",
+        "operationId": "list_forwarders",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[forwarder_type]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Forwarder Type]"
+            }
+          },
+          {
+            "name": "filter[enabled]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Enabled]"
+            }
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[Size]"
+            }
+          },
+          {
+            "name": "page[after]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[After]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwarderListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/forwarders/{forwarder_id}": {
+      "get": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "Get Forwarder",
+        "description": "Retrieve a single forwarder by id.\n\nReturns 404 if no forwarder with that id exists in the caller's\naccount, including if the forwarder is soft-deleted. Header values\nin the response are always redacted regardless of caller permission.",
+        "operationId": "get_forwarder",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Forwarder Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwarderResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "Update Forwarder",
+        "description": "Full-replace update. PUT semantics \u2014 every field is overwritten.\n\nThe header values must be re-supplied; the GET path redacts them, but\na PUT body that contains ``\"<redacted>\"`` would persist that literal.\nCustomers must round-trip the actual secret back. This is the standard\nget-mutate-put pattern (see CLAUDE.md \"Updating Resources via the\nAPI\"); the SDK helpers track the un-redacted secret client-side so\ncustomers don't usually need to re-enter it.",
+        "operationId": "update_forwarder",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Forwarder Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForwarderResponse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwarderResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "Delete Forwarder",
+        "description": "Soft-delete a forwarder. Delivery rows are retained per the normal\nforwarder_delivery retention; a future create with the same slug is\nallowed (the unique index is partial on deleted_at IS NULL).",
+        "operationId": "delete_forwarder",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Forwarder Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/v1/forwarders/{forwarder_id}/deliveries": {
+      "get": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "List Forwarder Deliveries",
+        "description": "List delivery rows for a forwarder.\n\nDefault sort is ``-created_at``. Cursor pagination via ``page[after]``.\nFilter by status (``succeeded`` / ``failed`` / ``filtered_out`` /\n``skipped_do_not_forward``) or by a ``created_at`` range using the\nplatform's interval notation (``[2026-01-01T00:00:00Z,*)``). Reads do\nnot require the entitlement \u2014 a downgraded account can still inspect\nhistorical deliveries from when the forwarder was active.",
+        "operationId": "list_forwarder_deliveries",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Forwarder Id"
+            }
+          },
+          {
+            "name": "filter[status]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Status]"
+            }
+          },
+          {
+            "name": "filter[created_at]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Created At]"
+            }
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[Size]"
+            }
+          },
+          {
+            "name": "page[after]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[After]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwarderDeliveryListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/forwarders/{forwarder_id}/deliveries/{delivery_id}/actions/retry": {
+      "post": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "Retry Forwarder Delivery",
+        "description": "Retry a single failed delivery. Returns the new delivery row with\nits outcome. Prior delivery rows are not modified.",
+        "operationId": "retry_forwarder_delivery",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Forwarder Id"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Delivery Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwarderDeliveryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/forwarders/{forwarder_id}/actions/retry_failed_deliveries": {
+      "post": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "Retry Failed Forwarder Deliveries",
+        "description": "Retry every failed delivery for the forwarder.\n\nFor each failed delivery row, re-attempt with the latest forwarder\nconfiguration and the original event payload. Returns counts.",
+        "operationId": "retry_failed_forwarder_deliveries",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "forwarder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Forwarder Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryFailedDeliveriesSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/functions/test_forwarder/actions/execute": {
+      "post": {
+        "tags": [
+          "Forwarders"
+        ],
+        "summary": "Execute Test Forwarder",
+        "description": "Execute a prepared HTTP request server-side and return the response.\n\nThe same SSRF guard that gates the in-line forwarder loop is applied\nhere \u2014 internal/private addresses, link-local IPs (including the EC2\nmetadata service at 169.254.169.254), unique-local IPv6, and ports\noutside the configured allowlist are all rejected.",
+        "operationId": "execute_test_forwarder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestForwarderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestForwarderResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -353,6 +827,12 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Data"
+          },
+          "do_not_forward": {
+            "type": "boolean",
+            "title": "Do Not Forward",
+            "description": "When true, this event is recorded normally but is not forwarded to any configured SIEM forwarder. A forwarder_delivery row with status=skipped_do_not_forward is recorded for each enabled forwarder so the skip is visible in the delivery log.",
+            "default": false
           },
           "created_at": {
             "anyOf": [
@@ -519,6 +999,7 @@
             "data": {
               "request_id": "req-abc"
             },
+            "do_not_forward": false,
             "idempotency_key": "auto-1234abcd",
             "occurred_at": "2026-05-06T20:00:00Z",
             "resource_id": "u-1",
@@ -543,6 +1024,681 @@
         ],
         "title": "EventResponse",
         "description": "JSON:API single-resource response."
+      },
+      "Forwarder": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "forwarder_type": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Forwarder Type"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter"
+          },
+          "transform": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16384
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transform"
+          },
+          "http": {
+            "$ref": "#/components/schemas/ForwarderHttp"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug",
+            "x-immutable": true
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "readOnly": true
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "readOnly": true
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At",
+            "readOnly": true
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version",
+            "readOnly": true
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "forwarder_type",
+          "http"
+        ],
+        "title": "Forwarder",
+        "description": "Public-facing forwarder resource.\n\nAttribute set on POST /api/v1/forwarders:\n    - name (required)\n    - forwarder_type (required)\n    - http (required)\n    - enabled (optional, defaults true)\n    - filter (optional, JSON Logic)\n    - transform (optional, JSONata)\n\nThe slug is server-derived from name on create; it is immutable on\nupdate because consumers (UI, observability) key off it."
+      },
+      "ForwarderDelivery": {
+        "properties": {
+          "forwarder_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Forwarder Id"
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "attempt_number": {
+            "type": "integer",
+            "title": "Attempt Number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "failed",
+              "filtered_out",
+              "skipped_do_not_forward"
+            ],
+            "title": "Status"
+          },
+          "request": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request"
+          },
+          "response_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Status"
+          },
+          "response_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Body"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "forwarder_id",
+          "event_id",
+          "attempt_number",
+          "status"
+        ],
+        "title": "ForwarderDelivery",
+        "description": "Read-only delivery log row.\n\nAll fields are server-populated. Headers in ``request`` always show\nredacted values, regardless of who configured them."
+      },
+      "ForwarderDeliveryListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ForwarderDeliveryResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ForwarderListMeta"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForwarderListLinks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ForwarderDeliveryListResponse"
+      },
+      "ForwarderDeliveryResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "forwarder_delivery"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/ForwarderDelivery"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "ForwarderDeliveryResource",
+        "example": {
+          "attributes": {
+            "attempt_number": 1,
+            "created_at": "2026-05-07T12:00:01.234Z",
+            "event_id": "33333333-4444-5555-6666-777777777777",
+            "forwarder_id": "11111111-2222-3333-4444-555555555555",
+            "latency_ms": 187,
+            "request": {
+              "body": "{\"action\":\"user.created\",\"resource_id\":\"u-1\"}",
+              "headers": [
+                {
+                  "name": "DD-API-KEY",
+                  "value": "<redacted>"
+                }
+              ],
+              "method": "POST",
+              "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"
+            },
+            "response_body": "",
+            "response_status": 202,
+            "status": "succeeded"
+          },
+          "id": "22222222-3333-4444-5555-666666666666",
+          "type": "forwarder_delivery"
+        }
+      },
+      "ForwarderDeliveryResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ForwarderDeliveryResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ForwarderDeliveryResponse"
+      },
+      "ForwarderHttp": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "default": "POST"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/HttpHeader"
+            },
+            "type": "array",
+            "title": "Headers"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 65536
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "success_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Success Status",
+            "default": "2xx"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "ForwarderHttp",
+        "description": "The destination HTTP request shape stored encrypted on a forwarder.\n\n``success_status`` is either a single integer status (e.g. ``200``) or\na class string like ``\"2xx\"``. Anything outside the matched set is\ntreated as a delivery failure."
+      },
+      "ForwarderListLinks": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          }
+        },
+        "type": "object",
+        "title": "ForwarderListLinks"
+      },
+      "ForwarderListMeta": {
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_size"
+        ],
+        "title": "ForwarderListMeta"
+      },
+      "ForwarderListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ForwarderResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ForwarderListMeta"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForwarderListLinks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ForwarderListResponse"
+      },
+      "ForwarderResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "forwarder"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Forwarder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "ForwarderResource",
+        "example": {
+          "attributes": {
+            "created_at": "2026-05-07T12:00:00Z",
+            "data": {},
+            "enabled": true,
+            "filter": {
+              "==": [
+                {
+                  "var": "action"
+                },
+                "user.created"
+              ]
+            },
+            "forwarder_type": "datadog",
+            "http": {
+              "headers": [
+                {
+                  "name": "DD-API-KEY",
+                  "value": "<redacted>"
+                }
+              ],
+              "method": "POST",
+              "success_status": "2xx",
+              "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"
+            },
+            "name": "Datadog production",
+            "slug": "datadog_production",
+            "updated_at": "2026-05-07T12:00:00Z",
+            "version": 1
+          },
+          "id": "11111111-2222-3333-4444-555555555555",
+          "type": "forwarder"
+        }
+      },
+      "ForwarderResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ForwarderResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ForwarderResponse"
+      },
+      "HttpHeader": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 8192,
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "HttpHeader",
+        "description": "A single header on a forwarder's HTTP destination."
+      },
+      "RetryFailedDeliveriesSummary": {
+        "properties": {
+          "attempted": {
+            "type": "integer",
+            "title": "Attempted"
+          },
+          "succeeded": {
+            "type": "integer",
+            "title": "Succeeded"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempted",
+          "succeeded",
+          "failed"
+        ],
+        "title": "RetryFailedDeliveriesSummary"
+      },
+      "TestForwarderRequest": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "default": "POST"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/HttpHeader"
+            },
+            "type": "array",
+            "title": "Headers"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 65536
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "success_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Success Status",
+            "default": "2xx"
+          },
+          "timeout_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 30000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Ms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "TestForwarderRequest",
+        "description": "Plain-JSON body for the test_forwarder execute action.\n\nMirrors the encrypted ``ForwarderHttp`` shape with one addition \u2014\n``timeout_ms``, capped server-side."
+      },
+      "TestForwarderResponse": {
+        "properties": {
+          "succeeded": {
+            "type": "boolean",
+            "title": "Succeeded"
+          },
+          "response_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Status"
+          },
+          "response_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Response Headers"
+          },
+          "response_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Body"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "succeeded",
+          "response_status",
+          "latency_ms"
+        ],
+        "title": "TestForwarderResponse",
+        "description": "Plain-JSON response body. Headers are echoed back unredacted because\nthe caller already supplied them \u2014 the response is for the caller, not\npersisted into the delivery log."
       },
       "UsageResource": {
         "properties": {
@@ -609,6 +1765,9 @@
     },
     {
       "name": "Usage"
+    },
+    {
+      "name": "Forwarders"
     }
   ]
 }

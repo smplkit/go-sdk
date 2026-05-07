@@ -22,6 +22,30 @@ const (
 	HTTPBearerScopes hTTPBearerContextKey = "HTTPBearer.Scopes"
 )
 
+// Defines values for ForwarderDeliveryStatus.
+const (
+	Failed              ForwarderDeliveryStatus = "failed"
+	FilteredOut         ForwarderDeliveryStatus = "filtered_out"
+	SkippedDoNotForward ForwarderDeliveryStatus = "skipped_do_not_forward"
+	Succeeded           ForwarderDeliveryStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the ForwarderDeliveryStatus enum.
+func (e ForwarderDeliveryStatus) Valid() bool {
+	switch e {
+	case Failed:
+		return true
+	case FilteredOut:
+		return true
+	case SkippedDoNotForward:
+		return true
+	case Succeeded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Event Public-facing event resource.
 //
 // Attribute set on POST /api/v1/events:
@@ -36,12 +60,15 @@ const (
 // server-populated fields: “created_at“, “actor_type“, “actor_id“,
 // “actor_label“, “idempotency_key“.
 type Event struct {
-	Action         string                  `json:"action"`
-	ActorId        *openapi_types.UUID     `json:"actor_id,omitempty"`
-	ActorLabel     *string                 `json:"actor_label,omitempty"`
-	ActorType      *string                 `json:"actor_type,omitempty"`
-	CreatedAt      *time.Time              `json:"created_at,omitempty"`
-	Data           *map[string]interface{} `json:"data,omitempty"`
+	Action     string                  `json:"action"`
+	ActorId    *openapi_types.UUID     `json:"actor_id,omitempty"`
+	ActorLabel *string                 `json:"actor_label,omitempty"`
+	ActorType  *string                 `json:"actor_type,omitempty"`
+	CreatedAt  *time.Time              `json:"created_at,omitempty"`
+	Data       *map[string]interface{} `json:"data,omitempty"`
+
+	// DoNotForward When true, this event is recorded normally but is not forwarded to any configured SIEM forwarder. A forwarder_delivery row with status=skipped_do_not_forward is recorded for each enabled forwarder so the skip is visible in the delivery log.
+	DoNotForward   *bool                   `json:"do_not_forward,omitempty"`
 	IdempotencyKey *string                 `json:"idempotency_key,omitempty"`
 	OccurredAt     *time.Time              `json:"occurred_at,omitempty"`
 	ResourceId     string                  `json:"resource_id"`
@@ -92,6 +119,196 @@ type EventResponse struct {
 	Data EventResource `json:"data"`
 }
 
+// Forwarder Public-facing forwarder resource.
+//
+// Attribute set on POST /api/v1/forwarders:
+//   - name (required)
+//   - forwarder_type (required)
+//   - http (required)
+//   - enabled (optional, defaults true)
+//   - filter (optional, JSON Logic)
+//   - transform (optional, JSONata)
+//
+// The slug is server-derived from name on create; it is immutable on
+// update because consumers (UI, observability) key off it.
+type Forwarder struct {
+	CreatedAt     *time.Time              `json:"created_at,omitempty"`
+	Data          *map[string]interface{} `json:"data,omitempty"`
+	DeletedAt     *time.Time              `json:"deleted_at,omitempty"`
+	Enabled       *bool                   `json:"enabled,omitempty"`
+	Filter        *map[string]interface{} `json:"filter,omitempty"`
+	ForwarderType string                  `json:"forwarder_type"`
+
+	// Http The destination HTTP request shape stored encrypted on a forwarder.
+	//
+	// ``success_status`` is either a single integer status (e.g. ``200``) or
+	// a class string like ``"2xx"``. Anything outside the matched set is
+	// treated as a delivery failure.
+	Http      ForwarderHttp `json:"http"`
+	Name      string        `json:"name"`
+	Slug      *string       `json:"slug,omitempty"`
+	Transform *string       `json:"transform,omitempty"`
+	UpdatedAt *time.Time    `json:"updated_at,omitempty"`
+	Version   *int          `json:"version,omitempty"`
+}
+
+// ForwarderDelivery Read-only delivery log row.
+//
+// All fields are server-populated. Headers in “request“ always show
+// redacted values, regardless of who configured them.
+type ForwarderDelivery struct {
+	AttemptNumber  int                     `json:"attempt_number"`
+	CreatedAt      *time.Time              `json:"created_at,omitempty"`
+	Error          *string                 `json:"error,omitempty"`
+	EventId        openapi_types.UUID      `json:"event_id"`
+	ForwarderId    openapi_types.UUID      `json:"forwarder_id"`
+	LatencyMs      *int                    `json:"latency_ms,omitempty"`
+	Request        *map[string]interface{} `json:"request,omitempty"`
+	ResponseBody   *string                 `json:"response_body,omitempty"`
+	ResponseStatus *int                    `json:"response_status,omitempty"`
+	Status         ForwarderDeliveryStatus `json:"status"`
+}
+
+// ForwarderDeliveryStatus defines model for ForwarderDelivery.Status.
+type ForwarderDeliveryStatus string
+
+// ForwarderDeliveryListResponse defines model for ForwarderDeliveryListResponse.
+type ForwarderDeliveryListResponse struct {
+	Data  []ForwarderDeliveryResource `json:"data"`
+	Links *ForwarderListLinks         `json:"links,omitempty"`
+	Meta  ForwarderListMeta           `json:"meta"`
+}
+
+// ForwarderDeliveryResource defines model for ForwarderDeliveryResource.
+type ForwarderDeliveryResource struct {
+	// Attributes Read-only delivery log row.
+	//
+	// All fields are server-populated. Headers in ``request`` always show
+	// redacted values, regardless of who configured them.
+	Attributes ForwarderDelivery `json:"attributes"`
+	Id         string            `json:"id"`
+	Type       *string           `json:"type,omitempty"`
+}
+
+// ForwarderDeliveryResponse defines model for ForwarderDeliveryResponse.
+type ForwarderDeliveryResponse struct {
+	Data ForwarderDeliveryResource `json:"data"`
+}
+
+// ForwarderHttp The destination HTTP request shape stored encrypted on a forwarder.
+//
+// “success_status“ is either a single integer status (e.g. “200“) or
+// a class string like “"2xx"“. Anything outside the matched set is
+// treated as a delivery failure.
+type ForwarderHttp struct {
+	Body          *string                      `json:"body,omitempty"`
+	Headers       *[]HttpHeader                `json:"headers,omitempty"`
+	Method        *string                      `json:"method,omitempty"`
+	SuccessStatus *ForwarderHttp_SuccessStatus `json:"success_status,omitempty"`
+	Url           string                       `json:"url"`
+}
+
+// ForwarderHttpSuccessStatus0 defines model for .
+type ForwarderHttpSuccessStatus0 = int
+
+// ForwarderHttpSuccessStatus1 defines model for .
+type ForwarderHttpSuccessStatus1 = string
+
+// ForwarderHttp_SuccessStatus defines model for ForwarderHttp.SuccessStatus.
+type ForwarderHttp_SuccessStatus struct {
+	union json.RawMessage
+}
+
+// ForwarderListLinks defines model for ForwarderListLinks.
+type ForwarderListLinks struct {
+	Next *string `json:"next,omitempty"`
+}
+
+// ForwarderListMeta defines model for ForwarderListMeta.
+type ForwarderListMeta struct {
+	PageSize int `json:"page_size"`
+}
+
+// ForwarderListResponse defines model for ForwarderListResponse.
+type ForwarderListResponse struct {
+	Data  []ForwarderResource `json:"data"`
+	Links *ForwarderListLinks `json:"links,omitempty"`
+	Meta  ForwarderListMeta   `json:"meta"`
+}
+
+// ForwarderResource defines model for ForwarderResource.
+type ForwarderResource struct {
+	// Attributes Public-facing forwarder resource.
+	//
+	// Attribute set on POST /api/v1/forwarders:
+	//     - name (required)
+	//     - forwarder_type (required)
+	//     - http (required)
+	//     - enabled (optional, defaults true)
+	//     - filter (optional, JSON Logic)
+	//     - transform (optional, JSONata)
+	//
+	// The slug is server-derived from name on create; it is immutable on
+	// update because consumers (UI, observability) key off it.
+	Attributes Forwarder `json:"attributes"`
+	Id         string    `json:"id"`
+	Type       *string   `json:"type,omitempty"`
+}
+
+// ForwarderResponse defines model for ForwarderResponse.
+type ForwarderResponse struct {
+	Data ForwarderResource `json:"data"`
+}
+
+// HttpHeader A single header on a forwarder's HTTP destination.
+type HttpHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// RetryFailedDeliveriesSummary defines model for RetryFailedDeliveriesSummary.
+type RetryFailedDeliveriesSummary struct {
+	Attempted int `json:"attempted"`
+	Failed    int `json:"failed"`
+	Succeeded int `json:"succeeded"`
+}
+
+// TestForwarderRequest Plain-JSON body for the test_forwarder execute action.
+//
+// Mirrors the encrypted “ForwarderHttp“ shape with one addition —
+// “timeout_ms“, capped server-side.
+type TestForwarderRequest struct {
+	Body          *string                             `json:"body,omitempty"`
+	Headers       *[]HttpHeader                       `json:"headers,omitempty"`
+	Method        *string                             `json:"method,omitempty"`
+	SuccessStatus *TestForwarderRequest_SuccessStatus `json:"success_status,omitempty"`
+	TimeoutMs     *int                                `json:"timeout_ms,omitempty"`
+	Url           string                              `json:"url"`
+}
+
+// TestForwarderRequestSuccessStatus0 defines model for .
+type TestForwarderRequestSuccessStatus0 = int
+
+// TestForwarderRequestSuccessStatus1 defines model for .
+type TestForwarderRequestSuccessStatus1 = string
+
+// TestForwarderRequest_SuccessStatus defines model for TestForwarderRequest.SuccessStatus.
+type TestForwarderRequest_SuccessStatus struct {
+	union json.RawMessage
+}
+
+// TestForwarderResponse Plain-JSON response body. Headers are echoed back unredacted because
+// the caller already supplied them — the response is for the caller, not
+// persisted into the delivery log.
+type TestForwarderResponse struct {
+	Error           *string            `json:"error,omitempty"`
+	LatencyMs       *int               `json:"latency_ms"`
+	ResponseBody    *string            `json:"response_body,omitempty"`
+	ResponseHeaders *map[string]string `json:"response_headers,omitempty"`
+	ResponseStatus  *int               `json:"response_status"`
+	Succeeded       bool               `json:"succeeded"`
+}
+
 // UsageResource defines model for UsageResource.
 type UsageResource struct {
 	Attributes map[string]interface{} `json:"attributes"`
@@ -124,6 +341,22 @@ type RecordEventParams struct {
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
 
+// ListForwardersParams defines parameters for ListForwarders.
+type ListForwardersParams struct {
+	FilterForwarderType *string `form:"filter[forwarder_type],omitempty" json:"filter[forwarder_type],omitempty"`
+	FilterEnabled       *bool   `form:"filter[enabled],omitempty" json:"filter[enabled],omitempty"`
+	PageSize            *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
+	PageAfter           *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+}
+
+// ListForwarderDeliveriesParams defines parameters for ListForwarderDeliveries.
+type ListForwarderDeliveriesParams struct {
+	FilterStatus    *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
+	FilterCreatedAt *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
+	PageSize        *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
+	PageAfter       *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+}
+
 // ListUsageParams defines parameters for ListUsage.
 type ListUsageParams struct {
 	FilterPeriod string `form:"filter[period]" json:"filter[period]"`
@@ -131,6 +364,139 @@ type ListUsageParams struct {
 
 // RecordEventApplicationVndAPIPlusJSONRequestBody defines body for RecordEvent for application/vnd.api+json ContentType.
 type RecordEventApplicationVndAPIPlusJSONRequestBody = EventResponse
+
+// CreateForwarderApplicationVndAPIPlusJSONRequestBody defines body for CreateForwarder for application/vnd.api+json ContentType.
+type CreateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderResponse
+
+// UpdateForwarderApplicationVndAPIPlusJSONRequestBody defines body for UpdateForwarder for application/vnd.api+json ContentType.
+type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderResponse
+
+// ExecuteTestForwarderJSONRequestBody defines body for ExecuteTestForwarder for application/json ContentType.
+type ExecuteTestForwarderJSONRequestBody = TestForwarderRequest
+
+// AsForwarderHttpSuccessStatus0 returns the union data inside the ForwarderHttp_SuccessStatus as a ForwarderHttpSuccessStatus0
+func (t ForwarderHttp_SuccessStatus) AsForwarderHttpSuccessStatus0() (ForwarderHttpSuccessStatus0, error) {
+	var body ForwarderHttpSuccessStatus0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromForwarderHttpSuccessStatus0 overwrites any union data inside the ForwarderHttp_SuccessStatus as the provided ForwarderHttpSuccessStatus0
+func (t *ForwarderHttp_SuccessStatus) FromForwarderHttpSuccessStatus0(v ForwarderHttpSuccessStatus0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeForwarderHttpSuccessStatus0 performs a merge with any union data inside the ForwarderHttp_SuccessStatus, using the provided ForwarderHttpSuccessStatus0
+func (t *ForwarderHttp_SuccessStatus) MergeForwarderHttpSuccessStatus0(v ForwarderHttpSuccessStatus0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsForwarderHttpSuccessStatus1 returns the union data inside the ForwarderHttp_SuccessStatus as a ForwarderHttpSuccessStatus1
+func (t ForwarderHttp_SuccessStatus) AsForwarderHttpSuccessStatus1() (ForwarderHttpSuccessStatus1, error) {
+	var body ForwarderHttpSuccessStatus1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromForwarderHttpSuccessStatus1 overwrites any union data inside the ForwarderHttp_SuccessStatus as the provided ForwarderHttpSuccessStatus1
+func (t *ForwarderHttp_SuccessStatus) FromForwarderHttpSuccessStatus1(v ForwarderHttpSuccessStatus1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeForwarderHttpSuccessStatus1 performs a merge with any union data inside the ForwarderHttp_SuccessStatus, using the provided ForwarderHttpSuccessStatus1
+func (t *ForwarderHttp_SuccessStatus) MergeForwarderHttpSuccessStatus1(v ForwarderHttpSuccessStatus1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ForwarderHttp_SuccessStatus) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ForwarderHttp_SuccessStatus) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsTestForwarderRequestSuccessStatus0 returns the union data inside the TestForwarderRequest_SuccessStatus as a TestForwarderRequestSuccessStatus0
+func (t TestForwarderRequest_SuccessStatus) AsTestForwarderRequestSuccessStatus0() (TestForwarderRequestSuccessStatus0, error) {
+	var body TestForwarderRequestSuccessStatus0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTestForwarderRequestSuccessStatus0 overwrites any union data inside the TestForwarderRequest_SuccessStatus as the provided TestForwarderRequestSuccessStatus0
+func (t *TestForwarderRequest_SuccessStatus) FromTestForwarderRequestSuccessStatus0(v TestForwarderRequestSuccessStatus0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTestForwarderRequestSuccessStatus0 performs a merge with any union data inside the TestForwarderRequest_SuccessStatus, using the provided TestForwarderRequestSuccessStatus0
+func (t *TestForwarderRequest_SuccessStatus) MergeTestForwarderRequestSuccessStatus0(v TestForwarderRequestSuccessStatus0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTestForwarderRequestSuccessStatus1 returns the union data inside the TestForwarderRequest_SuccessStatus as a TestForwarderRequestSuccessStatus1
+func (t TestForwarderRequest_SuccessStatus) AsTestForwarderRequestSuccessStatus1() (TestForwarderRequestSuccessStatus1, error) {
+	var body TestForwarderRequestSuccessStatus1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTestForwarderRequestSuccessStatus1 overwrites any union data inside the TestForwarderRequest_SuccessStatus as the provided TestForwarderRequestSuccessStatus1
+func (t *TestForwarderRequest_SuccessStatus) FromTestForwarderRequestSuccessStatus1(v TestForwarderRequestSuccessStatus1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTestForwarderRequestSuccessStatus1 performs a merge with any union data inside the TestForwarderRequest_SuccessStatus, using the provided TestForwarderRequestSuccessStatus1
+func (t *TestForwarderRequest_SuccessStatus) MergeTestForwarderRequestSuccessStatus1(v TestForwarderRequestSuccessStatus1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t TestForwarderRequest_SuccessStatus) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *TestForwarderRequest_SuccessStatus) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -216,6 +582,39 @@ type ClientInterface interface {
 	// GetEvent request
 	GetEvent(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListForwarders request
+	ListForwarders(ctx context.Context, params *ListForwardersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateForwarderWithBody request with any body
+	CreateForwarderWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteForwarder request
+	DeleteForwarder(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetForwarder request
+	GetForwarder(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateForwarderWithBody request with any body
+	UpdateForwarderWithBody(ctx context.Context, forwarderId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RetryFailedForwarderDeliveries request
+	RetryFailedForwarderDeliveries(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListForwarderDeliveries request
+	ListForwarderDeliveries(ctx context.Context, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RetryForwarderDelivery request
+	RetryForwarderDelivery(ctx context.Context, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExecuteTestForwarderWithBody request with any body
+	ExecuteTestForwarderWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ExecuteTestForwarder(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListUsage request
 	ListUsage(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
@@ -258,6 +657,150 @@ func (c *Client) RecordEventWithApplicationVndAPIPlusJSONBody(ctx context.Contex
 
 func (c *Client) GetEvent(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetEventRequest(c.Server, eventId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListForwarders(ctx context.Context, params *ListForwardersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListForwardersRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateForwarderWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateForwarderRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateForwarderRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteForwarder(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteForwarderRequest(c.Server, forwarderId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetForwarder(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetForwarderRequest(c.Server, forwarderId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateForwarderWithBody(ctx context.Context, forwarderId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateForwarderRequestWithBody(c.Server, forwarderId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateForwarderRequestWithApplicationVndAPIPlusJSONBody(c.Server, forwarderId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RetryFailedForwarderDeliveries(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRetryFailedForwarderDeliveriesRequest(c.Server, forwarderId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListForwarderDeliveries(ctx context.Context, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListForwarderDeliveriesRequest(c.Server, forwarderId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RetryForwarderDelivery(ctx context.Context, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRetryForwarderDeliveryRequest(c.Server, forwarderId, deliveryId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ExecuteTestForwarderWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExecuteTestForwarderRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ExecuteTestForwarder(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExecuteTestForwarderRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -507,6 +1050,463 @@ func NewGetEventRequest(server string, eventId openapi_types.UUID) (*http.Reques
 	return req, nil
 }
 
+// NewListForwardersRequest generates requests for ListForwarders
+func NewListForwardersRequest(server string, params *ListForwardersParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarders")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.FilterForwarderType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[forwarder_type]", *params.FilterForwarderType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterEnabled != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[enabled]", *params.FilterEnabled, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateForwarderRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateForwarder builder with application/vnd.api+json body
+func NewCreateForwarderRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateForwarderApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateForwarderRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateForwarderRequestWithBody generates requests for CreateForwarder with any type of body
+func NewCreateForwarderRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarders")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteForwarderRequest generates requests for DeleteForwarder
+func NewDeleteForwarderRequest(server string, forwarderId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarders/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetForwarderRequest generates requests for GetForwarder
+func NewGetForwarderRequest(server string, forwarderId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarders/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateForwarderRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateForwarder builder with application/vnd.api+json body
+func NewUpdateForwarderRequestWithApplicationVndAPIPlusJSONBody(server string, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateForwarderRequestWithBody(server, forwarderId, "application/vnd.api+json", bodyReader)
+}
+
+// NewUpdateForwarderRequestWithBody generates requests for UpdateForwarder with any type of body
+func NewUpdateForwarderRequestWithBody(server string, forwarderId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarders/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRetryFailedForwarderDeliveriesRequest generates requests for RetryFailedForwarderDeliveries
+func NewRetryFailedForwarderDeliveriesRequest(server string, forwarderId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarders/%s/actions/retry_failed_deliveries", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListForwarderDeliveriesRequest generates requests for ListForwarderDeliveries
+func NewListForwarderDeliveriesRequest(server string, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarders/%s/deliveries", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.FilterStatus != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[status]", *params.FilterStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterCreatedAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[created_at]", *params.FilterCreatedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRetryForwarderDeliveryRequest generates requests for RetryForwarderDelivery
+func NewRetryForwarderDeliveryRequest(server string, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "delivery_id", deliveryId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarders/%s/deliveries/%s/actions/retry", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewExecuteTestForwarderRequest calls the generic ExecuteTestForwarder builder with application/json body
+func NewExecuteTestForwarderRequest(server string, body ExecuteTestForwarderJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewExecuteTestForwarderRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewExecuteTestForwarderRequestWithBody generates requests for ExecuteTestForwarder with any type of body
+func NewExecuteTestForwarderRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/functions/test_forwarder/actions/execute")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListUsageRequest generates requests for ListUsage
 func NewListUsageRequest(server string, params *ListUsageParams) (*http.Request, error) {
 	var err error
@@ -611,6 +1611,39 @@ type ClientWithResponsesInterface interface {
 	// GetEventWithResponse request
 	GetEventWithResponse(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetEventResponse, error)
 
+	// ListForwardersWithResponse request
+	ListForwardersWithResponse(ctx context.Context, params *ListForwardersParams, reqEditors ...RequestEditorFn) (*ListForwardersResponse, error)
+
+	// CreateForwarderWithBodyWithResponse request with any body
+	CreateForwarderWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateForwarderResponse, error)
+
+	CreateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateForwarderResponse, error)
+
+	// DeleteForwarderWithResponse request
+	DeleteForwarderWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteForwarderResponse, error)
+
+	// GetForwarderWithResponse request
+	GetForwarderWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetForwarderResponse, error)
+
+	// UpdateForwarderWithBodyWithResponse request with any body
+	UpdateForwarderWithBodyWithResponse(ctx context.Context, forwarderId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error)
+
+	UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error)
+
+	// RetryFailedForwarderDeliveriesWithResponse request
+	RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error)
+
+	// ListForwarderDeliveriesWithResponse request
+	ListForwarderDeliveriesWithResponse(ctx context.Context, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*ListForwarderDeliveriesResponse, error)
+
+	// RetryForwarderDeliveryWithResponse request
+	RetryForwarderDeliveryWithResponse(ctx context.Context, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryForwarderDeliveryResponse, error)
+
+	// ExecuteTestForwarderWithBodyWithResponse request with any body
+	ExecuteTestForwarderWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExecuteTestForwarderResponse, error)
+
+	ExecuteTestForwarderWithResponse(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*ExecuteTestForwarderResponse, error)
+
 	// ListUsageWithResponse request
 	ListUsageWithResponse(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*ListUsageResponse, error)
 }
@@ -706,6 +1739,275 @@ func (r GetEventResponse) ContentType() string {
 	return ""
 }
 
+type ListForwardersResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ForwarderListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListForwardersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListForwardersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListForwardersResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateForwarderResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *ForwarderResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateForwarderResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateForwarderResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateForwarderResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteForwarderResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteForwarderResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteForwarderResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteForwarderResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetForwarderResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ForwarderResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetForwarderResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetForwarderResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetForwarderResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateForwarderResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ForwarderResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateForwarderResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateForwarderResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateForwarderResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RetryFailedForwarderDeliveriesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *RetryFailedDeliveriesSummary
+}
+
+// Status returns HTTPResponse.Status
+func (r RetryFailedForwarderDeliveriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RetryFailedForwarderDeliveriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RetryFailedForwarderDeliveriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListForwarderDeliveriesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ForwarderDeliveryListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListForwarderDeliveriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListForwarderDeliveriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListForwarderDeliveriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RetryForwarderDeliveryResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ForwarderDeliveryResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r RetryForwarderDeliveryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RetryForwarderDeliveryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RetryForwarderDeliveryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ExecuteTestForwarderResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TestForwarderResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ExecuteTestForwarderResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExecuteTestForwarderResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExecuteTestForwarderResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListUsageResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -769,6 +2071,111 @@ func (c *ClientWithResponses) GetEventWithResponse(ctx context.Context, eventId 
 		return nil, err
 	}
 	return ParseGetEventResponse(rsp)
+}
+
+// ListForwardersWithResponse request returning *ListForwardersResponse
+func (c *ClientWithResponses) ListForwardersWithResponse(ctx context.Context, params *ListForwardersParams, reqEditors ...RequestEditorFn) (*ListForwardersResponse, error) {
+	rsp, err := c.ListForwarders(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListForwardersResponse(rsp)
+}
+
+// CreateForwarderWithBodyWithResponse request with arbitrary body returning *CreateForwarderResponse
+func (c *ClientWithResponses) CreateForwarderWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateForwarderResponse, error) {
+	rsp, err := c.CreateForwarderWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateForwarderResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateForwarderResponse, error) {
+	rsp, err := c.CreateForwarderWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateForwarderResponse(rsp)
+}
+
+// DeleteForwarderWithResponse request returning *DeleteForwarderResponse
+func (c *ClientWithResponses) DeleteForwarderWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteForwarderResponse, error) {
+	rsp, err := c.DeleteForwarder(ctx, forwarderId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteForwarderResponse(rsp)
+}
+
+// GetForwarderWithResponse request returning *GetForwarderResponse
+func (c *ClientWithResponses) GetForwarderWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetForwarderResponse, error) {
+	rsp, err := c.GetForwarder(ctx, forwarderId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetForwarderResponse(rsp)
+}
+
+// UpdateForwarderWithBodyWithResponse request with arbitrary body returning *UpdateForwarderResponse
+func (c *ClientWithResponses) UpdateForwarderWithBodyWithResponse(ctx context.Context, forwarderId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error) {
+	rsp, err := c.UpdateForwarderWithBody(ctx, forwarderId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateForwarderResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error) {
+	rsp, err := c.UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx, forwarderId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateForwarderResponse(rsp)
+}
+
+// RetryFailedForwarderDeliveriesWithResponse request returning *RetryFailedForwarderDeliveriesResponse
+func (c *ClientWithResponses) RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error) {
+	rsp, err := c.RetryFailedForwarderDeliveries(ctx, forwarderId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRetryFailedForwarderDeliveriesResponse(rsp)
+}
+
+// ListForwarderDeliveriesWithResponse request returning *ListForwarderDeliveriesResponse
+func (c *ClientWithResponses) ListForwarderDeliveriesWithResponse(ctx context.Context, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*ListForwarderDeliveriesResponse, error) {
+	rsp, err := c.ListForwarderDeliveries(ctx, forwarderId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListForwarderDeliveriesResponse(rsp)
+}
+
+// RetryForwarderDeliveryWithResponse request returning *RetryForwarderDeliveryResponse
+func (c *ClientWithResponses) RetryForwarderDeliveryWithResponse(ctx context.Context, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryForwarderDeliveryResponse, error) {
+	rsp, err := c.RetryForwarderDelivery(ctx, forwarderId, deliveryId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRetryForwarderDeliveryResponse(rsp)
+}
+
+// ExecuteTestForwarderWithBodyWithResponse request with arbitrary body returning *ExecuteTestForwarderResponse
+func (c *ClientWithResponses) ExecuteTestForwarderWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExecuteTestForwarderResponse, error) {
+	rsp, err := c.ExecuteTestForwarderWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExecuteTestForwarderResponse(rsp)
+}
+
+func (c *ClientWithResponses) ExecuteTestForwarderWithResponse(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*ExecuteTestForwarderResponse, error) {
+	rsp, err := c.ExecuteTestForwarder(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExecuteTestForwarderResponse(rsp)
 }
 
 // ListUsageWithResponse request returning *ListUsageResponse
@@ -859,6 +2266,230 @@ func ParseGetEventResponse(rsp *http.Response) (*GetEventResponse, error) {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListForwardersResponse parses an HTTP response from a ListForwardersWithResponse call
+func ParseListForwardersResponse(rsp *http.Response) (*ListForwardersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListForwardersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ForwarderListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateForwarderResponse parses an HTTP response from a CreateForwarderWithResponse call
+func ParseCreateForwarderResponse(rsp *http.Response) (*CreateForwarderResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateForwarderResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ForwarderResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteForwarderResponse parses an HTTP response from a DeleteForwarderWithResponse call
+func ParseDeleteForwarderResponse(rsp *http.Response) (*DeleteForwarderResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteForwarderResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetForwarderResponse parses an HTTP response from a GetForwarderWithResponse call
+func ParseGetForwarderResponse(rsp *http.Response) (*GetForwarderResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetForwarderResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ForwarderResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateForwarderResponse parses an HTTP response from a UpdateForwarderWithResponse call
+func ParseUpdateForwarderResponse(rsp *http.Response) (*UpdateForwarderResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateForwarderResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ForwarderResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRetryFailedForwarderDeliveriesResponse parses an HTTP response from a RetryFailedForwarderDeliveriesWithResponse call
+func ParseRetryFailedForwarderDeliveriesResponse(rsp *http.Response) (*RetryFailedForwarderDeliveriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RetryFailedForwarderDeliveriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RetryFailedDeliveriesSummary
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListForwarderDeliveriesResponse parses an HTTP response from a ListForwarderDeliveriesWithResponse call
+func ParseListForwarderDeliveriesResponse(rsp *http.Response) (*ListForwarderDeliveriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListForwarderDeliveriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ForwarderDeliveryListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRetryForwarderDeliveryResponse parses an HTTP response from a RetryForwarderDeliveryWithResponse call
+func ParseRetryForwarderDeliveryResponse(rsp *http.Response) (*RetryForwarderDeliveryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RetryForwarderDeliveryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ForwarderDeliveryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseExecuteTestForwarderResponse parses an HTTP response from a ExecuteTestForwarderWithResponse call
+func ParseExecuteTestForwarderResponse(rsp *http.Response) (*ExecuteTestForwarderResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExecuteTestForwarderResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TestForwarderResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 
