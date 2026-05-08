@@ -53,8 +53,12 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 //   - resource_type (required)
 //   - resource_id (required)
 //   - occurred_at (optional; defaults to “created_at“)
-//   - snapshot (optional)
 //   - data (optional; defaults to “{}“)
+//
+// There is no top-level “snapshot“ attribute. Customers wishing to
+// record a resource snapshot place it inside “data“ -- smplkit's
+// internal convention nests it at “data.snapshot“, but customers may
+// follow their own convention.
 //
 // Attribute set on GET responses includes everything above plus the
 // server-populated fields: “created_at“, “actor_type“, “actor_id“,
@@ -68,12 +72,11 @@ type Event struct {
 	Data       *map[string]interface{} `json:"data,omitempty"`
 
 	// DoNotForward When true, this event is recorded normally but is not forwarded to any configured SIEM forwarder. A forwarder_delivery row with status=skipped_do_not_forward is recorded for each enabled forwarder so the skip is visible in the delivery log.
-	DoNotForward   *bool                   `json:"do_not_forward,omitempty"`
-	IdempotencyKey *string                 `json:"idempotency_key,omitempty"`
-	OccurredAt     *time.Time              `json:"occurred_at,omitempty"`
-	ResourceId     string                  `json:"resource_id"`
-	ResourceType   string                  `json:"resource_type"`
-	Snapshot       *map[string]interface{} `json:"snapshot,omitempty"`
+	DoNotForward   *bool      `json:"do_not_forward,omitempty"`
+	IdempotencyKey *string    `json:"idempotency_key,omitempty"`
+	OccurredAt     *time.Time `json:"occurred_at,omitempty"`
+	ResourceId     string     `json:"resource_id"`
+	ResourceType   string     `json:"resource_type"`
 }
 
 // EventListLinks defines model for EventListLinks.
@@ -102,8 +105,12 @@ type EventResource struct {
 	//     - resource_type (required)
 	//     - resource_id (required)
 	//     - occurred_at (optional; defaults to ``created_at``)
-	//     - snapshot (optional)
 	//     - data (optional; defaults to ``{}``)
+	//
+	// There is no top-level ``snapshot`` attribute. Customers wishing to
+	// record a resource snapshot place it inside ``data`` -- smplkit's
+	// internal convention nests it at ``data.snapshot``, but customers may
+	// follow their own convention.
 	//
 	// Attribute set on GET responses includes everything above plus the
 	// server-populated fields: ``created_at``, ``actor_type``, ``actor_id``,

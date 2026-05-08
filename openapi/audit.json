@@ -811,18 +811,6 @@
             ],
             "title": "Occurred At"
           },
-          "snapshot": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Snapshot"
-          },
           "data": {
             "additionalProperties": true,
             "type": "object",
@@ -904,7 +892,7 @@
           "resource_id"
         ],
         "title": "Event",
-        "description": "Public-facing event resource.\n\nAttribute set on POST /api/v1/events:\n    - action (required)\n    - resource_type (required)\n    - resource_id (required)\n    - occurred_at (optional; defaults to ``created_at``)\n    - snapshot (optional)\n    - data (optional; defaults to ``{}``)\n\nAttribute set on GET responses includes everything above plus the\nserver-populated fields: ``created_at``, ``actor_type``, ``actor_id``,\n``actor_label``, ``idempotency_key``."
+        "description": "Public-facing event resource.\n\nAttribute set on POST /api/v1/events:\n    - action (required)\n    - resource_type (required)\n    - resource_id (required)\n    - occurred_at (optional; defaults to ``created_at``)\n    - data (optional; defaults to ``{}``)\n\nThere is no top-level ``snapshot`` attribute. Customers wishing to\nrecord a resource snapshot place it inside ``data`` -- smplkit's\ninternal convention nests it at ``data.snapshot``, but customers may\nfollow their own convention.\n\nAttribute set on GET responses includes everything above plus the\nserver-populated fields: ``created_at``, ``actor_type``, ``actor_id``,\n``actor_label``, ``idempotency_key``."
       },
       "EventListLinks": {
         "properties": {
@@ -997,16 +985,16 @@
             "actor_type": "USER",
             "created_at": "2026-05-06T20:00:00.123Z",
             "data": {
-              "request_id": "req-abc"
+              "request_id": "req-abc",
+              "snapshot": {
+                "email": "alice@example.com"
+              }
             },
             "do_not_forward": false,
             "idempotency_key": "auto-1234abcd",
             "occurred_at": "2026-05-06T20:00:00Z",
             "resource_id": "u-1",
-            "resource_type": "user",
-            "snapshot": {
-              "email": "alice@example.com"
-            }
+            "resource_type": "user"
           },
           "id": "11111111-2222-3333-4444-555555555555",
           "type": "event"
