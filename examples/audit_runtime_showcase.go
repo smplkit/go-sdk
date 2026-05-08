@@ -50,8 +50,10 @@ func main() {
 		ResourceType: "invoice",
 		ResourceID:   someResourceID,
 		OccurredAt:   &now,
-		Snapshot:     map[string]interface{}{"total_cents": 4900, "currency": "USD"},
-		Data:         map[string]interface{}{"request_id": "req-abc"},
+		Data: map[string]interface{}{
+			"snapshot":   map[string]interface{}{"total_cents": 4900, "currency": "USD"},
+			"request_id": "req-abc",
+		},
 	}))
 
 	// force the event to be posted (normally happens automatically, in the
