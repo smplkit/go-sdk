@@ -76,10 +76,6 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 	if input.OccurredAt != nil {
 		attrs.OccurredAt = input.OccurredAt
 	}
-	if input.Snapshot != nil {
-		s := input.Snapshot
-		attrs.Snapshot = &s
-	}
 	if input.Data != nil {
 		d := input.Data
 		attrs.Data = &d
@@ -224,9 +220,6 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 	}
 	if attrs.ActorLabel != nil {
 		out.ActorLabel = *attrs.ActorLabel
-	}
-	if attrs.Snapshot != nil {
-		out.Snapshot = *attrs.Snapshot
 	}
 	if attrs.Data != nil {
 		out.Data = *attrs.Data

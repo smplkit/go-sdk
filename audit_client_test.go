@@ -282,8 +282,7 @@ func TestAuditEvents_Create_AllOptionalFields(t *testing.T) {
 		ResourceType:   "invoice",
 		ResourceID:     "inv-1",
 		OccurredAt:     &occurred,
-		Snapshot:       map[string]interface{}{"total_cents": 4900},
-		Data:           map[string]interface{}{"req_id": "abc"},
+		Data:           map[string]interface{}{"snapshot": map[string]interface{}{"total_cents": 4900}, "req_id": "abc"},
 		IdempotencyKey: "k-1",
 	}); err != nil {
 		t.Fatalf("Create: %v", err)
@@ -362,8 +361,7 @@ func TestEventFromResource_PopulatedActor(t *testing.T) {
 			ActorType:      &actorType,
 			ActorId:        &actorID,
 			ActorLabel:     &actorLabel,
-			Snapshot:       &map[string]interface{}{"email": "m@example.com"},
-			Data:           &map[string]interface{}{"req_id": "abc"},
+			Data:           &map[string]interface{}{"snapshot": map[string]interface{}{"email": "m@example.com"}, "req_id": "abc"},
 			IdempotencyKey: &idemKey,
 		},
 	}
@@ -374,8 +372,11 @@ func TestEventFromResource_PopulatedActor(t *testing.T) {
 	if got.ActorType != "USER" || got.ActorLabel != actorLabel {
 		t.Fatal("actor fields not propagated")
 	}
-	if got.Snapshot == nil || got.Data == nil {
-		t.Fatal("snapshot / data not propagated")
+	if got.Data == nil {
+		t.Fatal("data not propagated")
+	}
+	if _, ok := got.Data["snapshot"]; !ok {
+		t.Fatal("data.snapshot not propagated")
 	}
 }
 

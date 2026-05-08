@@ -21,7 +21,6 @@ type AuditEvent struct {
 	ActorType      string
 	ActorID        *uuid.UUID
 	ActorLabel     string
-	Snapshot       map[string]interface{}
 	Data           map[string]interface{}
 	IdempotencyKey string
 	DoNotForward   bool
@@ -37,12 +36,14 @@ type AuditEvent struct {
 // event itself is still recorded; the forwarder loop records a
 // "skipped_do_not_forward" delivery row for each enabled forwarder so
 // the skip is visible in the delivery log.
+// Data is free-form contextual JSON. To record a resource snapshot,
+// nest it inside Data — smplkit's internal convention is
+// Data["snapshot"], but the shape is unconstrained.
 type CreateEventInput struct {
 	Action         string
 	ResourceType   string
 	ResourceID     string
 	OccurredAt     *time.Time
-	Snapshot       map[string]interface{}
 	Data           map[string]interface{}
 	IdempotencyKey string
 	DoNotForward   bool
