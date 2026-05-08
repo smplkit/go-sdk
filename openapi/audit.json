@@ -440,7 +440,7 @@
           "Forwarders"
         ],
         "summary": "Get Forwarder",
-        "description": "Retrieve a single forwarder by id.\n\nReturns 404 if no forwarder with that id exists in the caller's\naccount, including if the forwarder is soft-deleted. Header values\nin the response are always redacted regardless of caller permission.",
+        "description": "Retrieve a single forwarder by id.\n\nReturns 404 if no forwarder with that id exists in the caller's\naccount, including if the forwarder is soft-deleted. Header values\nin the response are returned in plaintext so callers can perform a\nGET-modify-PUT round-trip without re-entering secrets (ADR-014).\nThe persisted ``forwarder_delivery.request`` log column is what\nkeeps redaction; that read path is unaffected by this route.",
         "operationId": "get_forwarder",
         "security": [
           {
@@ -477,7 +477,7 @@
           "Forwarders"
         ],
         "summary": "Update Forwarder",
-        "description": "Full-replace update. PUT semantics \u2014 every field is overwritten.\n\nThe header values must be re-supplied; the GET path redacts them, but\na PUT body that contains ``\"<redacted>\"`` would persist that literal.\nCustomers must round-trip the actual secret back. This is the standard\nget-mutate-put pattern (see CLAUDE.md \"Updating Resources via the\nAPI\"); the SDK helpers track the un-redacted secret client-side so\ncustomers don't usually need to re-enter it.",
+        "description": "Full-replace update. PUT semantics \u2014 every field is overwritten.\n\nThe GET path returns plaintext header values, so the standard\nget-mutate-put round-trip (ADR-014) preserves secrets without any\nextra work from the caller: GET, change one field, PUT the result.",
         "operationId": "update_forwarder",
         "security": [
           {
@@ -1488,7 +1488,7 @@
               "headers": [
                 {
                   "name": "DD-API-KEY",
-                  "value": "<redacted>"
+                  "value": "dd-api-key-plaintext"
                 }
               ],
               "method": "POST",
