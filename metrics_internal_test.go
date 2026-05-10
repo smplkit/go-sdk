@@ -728,7 +728,7 @@ func TestFlagsRuntime_EvaluationRecordsMetrics(t *testing.T) {
 	rt.mu.Unlock()
 
 	// Mark init complete.
-	rt.initOnce.Do(func() {})
+	rt.connected = true
 
 	// First call: cache miss.
 	rt.evaluateHandle(context.Background(), "checkout-v2", false, nil)
@@ -768,7 +768,7 @@ func TestFlagsRuntime_CacheHitRecordsMetrics(t *testing.T) {
 	}
 	rt.mu.Unlock()
 
-	rt.initOnce.Do(func() {})
+	rt.connected = true
 
 	// First call: cache miss. Second call: cache hit.
 	rt.evaluateHandle(context.Background(), "checkout-v2", false, nil)
@@ -804,7 +804,7 @@ func TestFlagsRuntime_MissingFlagRecordsEvaluation(t *testing.T) {
 	// Flag store is empty — "missing-flag" won't be found.
 	rt.mu.Unlock()
 
-	rt.initOnce.Do(func() {})
+	rt.connected = true
 
 	value := rt.evaluateHandle(context.Background(), "missing-flag", "default-value", nil)
 	assert.Equal(t, "default-value", value)
@@ -836,7 +836,7 @@ func TestFlagsRuntime_NoMetricsWhenNilClient(t *testing.T) {
 	}
 	rt.mu.Unlock()
 
-	rt.initOnce.Do(func() {})
+	rt.connected = true
 
 	// Should not panic with nil client.
 	value := rt.evaluateHandle(context.Background(), "checkout-v2", false, nil)
@@ -862,7 +862,7 @@ func TestFlagsRuntime_NoMetricsWhenDisabled(t *testing.T) {
 	}
 	rt.mu.Unlock()
 
-	rt.initOnce.Do(func() {})
+	rt.connected = true
 
 	// Should not panic with nil metrics.
 	rt.evaluateHandle(context.Background(), "checkout-v2", false, nil)

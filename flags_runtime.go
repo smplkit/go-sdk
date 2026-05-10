@@ -203,6 +203,39 @@ func (b *flagRegistrationBuffer) drain() []flagRegistrationEntry {
 	return batch
 }
 
+// peek returns a snapshot of pending entries without removing them.
+func (b *flagRegistrationBuffer) peek() []flagRegistrationEntry {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.pending) == 0 {
+		return nil
+	}
+	result := make([]flagRegistrationEntry, len(b.pending))
+	copy(result, b.pending)
+	return result
+}
+
+// commit removes the entries with the given IDs from the buffer.
+// Call this after a successful bulk-register POST.
+func (b *flagRegistrationBuffer) commit(ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	toRemove := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		toRemove[id] = struct{}{}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	remaining := b.pending[:0]
+	for _, entry := range b.pending {
+		if _, remove := toRemove[entry.id]; !remove {
+			remaining = append(remaining, entry)
+		}
+	}
+	b.pending = remaining
+}
+
 func (b *flagRegistrationBuffer) pendingCount() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -355,8 +388,15 @@ type FlagsRuntime struct {
 	environment string
 	flagStore   map[string]map[string]interface{}
 
-	initOnce sync.Once
-	initErr  error
+	// connectMu guards connected, retryDelay, and nextRetryAt.
+	connectMu   sync.Mutex
+	connected   bool
+	retryDelay  time.Duration
+	nextRetryAt time.Time
+	// wsOnce and periodicOnce ensure WS handlers and the flush goroutine are
+	// each registered exactly once, even across multiple retry attempts.
+	wsOnce       sync.Once
+	periodicOnce sync.Once
 
 	cache         *resolutionCache
 	contextBuffer *contextRegistrationBuffer
@@ -395,50 +435,83 @@ func (rt *FlagsRuntime) SetContextProvider(fn func(ctx context.Context) []Contex
 	rt.providerMu.Unlock()
 }
 
-// ensureInit performs initialization on first runtime use.
+// ensureInit initializes the runtime on first use, with backoff retry on failure.
+// On success it sets connected=true. On failure it records a backoff window and
+// returns an error so callers fall back to handle defaults.
 func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
-	rt.initOnce.Do(func() {
-		if rt.flagsClient == nil || rt.flagsClient.client == nil {
-			rt.initErr = &ConnectionError{Base: Error{Message: "flags client not initialized"}}
-			return
-		}
+	rt.connectMu.Lock()
+	defer rt.connectMu.Unlock()
 
-		rt.mu.Lock()
-		rt.environment = rt.flagsClient.client.environment
-		rt.mu.Unlock()
+	if rt.connected {
+		return nil
+	}
 
-		// Register service context.
-		rt.flagsClient.client.registerServiceContext(ctx)
+	if rt.flagsClient == nil || rt.flagsClient.client == nil {
+		return &ConnectionError{Base: Error{Message: "flags client not initialized"}}
+	}
 
-		// Flush any flags registered before init.
-		rt.flushFlagBuffer(ctx)
+	// Still inside the backoff window — don't hammer the server.
+	if !rt.nextRetryAt.IsZero() && time.Now().Before(rt.nextRetryAt) {
+		return &ConnectionError{Base: Error{Message: "flags client not yet connected, retrying"}}
+	}
 
-		store, err := rt.flagsClient.fetchAllFlags(ctx)
-		if err != nil {
-			rt.initErr = err
-			return
-		}
+	rt.mu.Lock()
+	rt.environment = rt.flagsClient.client.environment
+	rt.mu.Unlock()
 
-		rt.mu.Lock()
-		rt.flagStore = store
-		rt.mu.Unlock()
+	// Register service context.
+	rt.flagsClient.client.registerServiceContext(ctx)
 
-		rt.cache.clear()
+	// Flush any flags registered before init. Non-destructive: items stay in
+	// the buffer until the POST succeeds, so failures here don't lose declarations.
+	rt.flushFlagBuffer(ctx)
 
-		// Register on the shared WebSocket. The WS connect happens in
-		// the background — callers that need confirmed subscription
-		// before firing writes should call Client.WaitUntilReady.
+	store, err := rt.flagsClient.fetchAllFlags(ctx)
+	if err != nil {
+		rt.advanceBackoff()
+		return err
+	}
+
+	rt.mu.Lock()
+	rt.flagStore = store
+	rt.mu.Unlock()
+
+	rt.cache.clear()
+
+	// Register WebSocket handlers exactly once across all retry attempts.
+	// A second successful start after a transient failure must not double-register.
+	rt.wsOnce.Do(func() {
 		ws := rt.flagsClient.client.ensureWS()
 		rt.wsManager = ws
 		ws.on("flag_changed", rt.handleFlagChanged)
 		ws.on("flag_deleted", rt.handleFlagDeleted)
 		ws.on("flags_changed", rt.handleFlagsChanged)
+	})
 
-		// Start periodic flag registration flush.
+	// Start the periodic flag-registration flush exactly once.
+	rt.periodicOnce.Do(func() {
 		rt.flagFlushDone = make(chan struct{})
 		go rt.periodicFlagFlush(rt.flagFlushDone)
 	})
-	return rt.initErr
+
+	rt.connected = true
+	rt.retryDelay = 0
+	rt.nextRetryAt = time.Time{}
+	return nil
+}
+
+// advanceBackoff doubles the retry delay (1s → 60s cap) and records nextRetryAt.
+// Must be called with connectMu held.
+func (rt *FlagsRuntime) advanceBackoff() {
+	if rt.retryDelay == 0 {
+		rt.retryDelay = time.Second
+	} else {
+		rt.retryDelay *= 2
+		if rt.retryDelay > 60*time.Second {
+			rt.retryDelay = 60 * time.Second
+		}
+	}
+	rt.nextRetryAt = time.Now().Add(rt.retryDelay)
 }
 
 // disconnect stops real-time updates and releases runtime resources.
@@ -465,9 +538,14 @@ func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 
 	rt.cache.clear()
 
-	// Reset initOnce so re-initialization is possible after disconnect.
-	rt.initOnce = sync.Once{}
-	rt.initErr = nil
+	// Reset connection state so re-initialization is possible after disconnect.
+	rt.connectMu.Lock()
+	rt.connected = false
+	rt.retryDelay = 0
+	rt.nextRetryAt = time.Time{}
+	rt.wsOnce = sync.Once{}
+	rt.periodicOnce = sync.Once{}
+	rt.connectMu.Unlock()
 }
 
 // Refresh fetches the latest flag definitions from the server.
@@ -720,7 +798,8 @@ func isTruthy(v interface{}) bool {
 }
 
 func (rt *FlagsRuntime) flushFlagBuffer(ctx context.Context) {
-	batch := rt.flagBuffer.drain()
+	// Peek without draining: items remain in the buffer until the POST succeeds.
+	batch := rt.flagBuffer.peek()
 	if len(batch) == 0 {
 		return
 	}
@@ -744,14 +823,21 @@ func (rt *FlagsRuntime) flushFlagBuffer(ctx context.Context) {
 	if err != nil {
 		log.Printf("smplkit: bulk flag registration failed: %s", err.Error())
 		debug.Debug("flags", "bulk flag registration error details: %+v", err)
-		return
+		return // items remain in buffer for the next periodic flush
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		log.Printf("smplkit: bulk flag registration failed: HTTP %d", resp.StatusCode)
 		debug.Debug("flags", "bulk flag registration HTTP error: %d: %s", resp.StatusCode, string(snippet))
+		return // items remain in buffer for the next periodic flush
 	}
+	// Success: commit all peeked items.
+	ids := make([]string, len(batch))
+	for i, e := range batch {
+		ids[i] = e.id
+	}
+	rt.flagBuffer.commit(ids)
 }
 
 func (rt *FlagsRuntime) periodicFlagFlush(done chan struct{}) {
