@@ -110,7 +110,10 @@ func (f *AuditForwarders) Create(ctx context.Context, input CreateForwarderInput
 func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (*ListForwardersPage, error) {
 	params := &genaudit.ListForwardersParams{}
 	if input.ForwarderType != "" {
-		params.FilterForwarderType = &input.ForwarderType
+		// Generated client typed FilterForwarderType as *string; convert
+		// to drop the typed alias before taking its address.
+		ft := string(input.ForwarderType)
+		params.FilterForwarderType = &ft
 	}
 	if input.Enabled != nil {
 		params.FilterEnabled = input.Enabled
