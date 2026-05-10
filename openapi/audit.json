@@ -778,10 +778,301 @@
           }
         ]
       }
+    },
+    "/api/v1/resource_types": {
+      "get": {
+        "tags": [
+          "Resource Types",
+          "Actions"
+        ],
+        "summary": "List Resource Types",
+        "description": "List the distinct ``resource_type`` slugs seen in the account.\n\nEach row's ``id`` is the slug itself, mirroring the smplkit\nconvention of using customer-provided identifiers as the\npublic-facing resource id (ADR-014).",
+        "operationId": "list_resource_types",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[Size]"
+            }
+          },
+          {
+            "name": "page[after]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[After]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceTypeListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions": {
+      "get": {
+        "tags": [
+          "Resource Types",
+          "Actions"
+        ],
+        "summary": "List Actions",
+        "description": "List the distinct ``action`` slugs seen in the account.\n\nWithout ``filter[resource_type]``, returns one row per distinct\naction \u2014 the same action may have been recorded with multiple\nresource types and the unfiltered dropdown shows it once.\n\nWith ``filter[resource_type]``, returns the actions seen with\nthat specific resource type, powering the Activity tab's\ncascading filter behavior.",
+        "operationId": "list_actions",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[resource_type]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Resource Type]"
+            }
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[Size]"
+            }
+          },
+          {
+            "name": "page[after]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[After]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/functions/wipe/actions/execute": {
+      "post": {
+        "tags": [
+          "Functions"
+        ],
+        "summary": "Execute Wipe",
+        "description": "Delete every audit-database row scoped to the authenticated account.\n\nReturns the per-table row counts that were deleted along with the\ncompletion timestamp. The action is atomic within the audit\ndatabase \u2014 either every account-scoped row is gone, or none is.\nThe body is required to be ``{}``; no parameters are accepted.",
+        "operationId": "execute_wipe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WipeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WipeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "ActionAttributes": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action",
+            "description": "The action slug. Same as the JSON:API ``id``."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "First sighting of this action for the account. When the request includes ``filter[resource_type]``, this is the first sighting of the (action, resource_type) triple rather than the action overall."
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "created_at"
+        ],
+        "title": "ActionAttributes"
+      },
+      "ActionListLinks": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          }
+        },
+        "type": "object",
+        "title": "ActionListLinks"
+      },
+      "ActionListMeta": {
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_size"
+        ],
+        "title": "ActionListMeta"
+      },
+      "ActionListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ActionResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ActionListMeta"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionListLinks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ActionListResponse"
+      },
+      "ActionResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "The action slug."
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "action"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/ActionAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "ActionResource",
+        "example": {
+          "attributes": {
+            "action": "smpl.flag.created",
+            "created_at": "2026-04-12T15:23:01Z"
+          },
+          "id": "smpl.flag.created",
+          "type": "action"
+        }
+      },
       "Event": {
         "properties": {
           "action": {
@@ -1526,6 +1817,118 @@
         "title": "HttpHeader",
         "description": "A single header on a forwarder's HTTP destination."
       },
+      "ResourceTypeAttributes": {
+        "properties": {
+          "resource_type": {
+            "type": "string",
+            "title": "Resource Type",
+            "description": "The resource_type slug. Same as the JSON:API ``id``."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "First sighting of this resource_type for the account."
+          }
+        },
+        "type": "object",
+        "required": [
+          "resource_type",
+          "created_at"
+        ],
+        "title": "ResourceTypeAttributes"
+      },
+      "ResourceTypeListLinks": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          }
+        },
+        "type": "object",
+        "title": "ResourceTypeListLinks"
+      },
+      "ResourceTypeListMeta": {
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_size"
+        ],
+        "title": "ResourceTypeListMeta"
+      },
+      "ResourceTypeListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceTypeResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceTypeListMeta"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceTypeListLinks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "ResourceTypeListResponse"
+      },
+      "ResourceTypeResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "The resource_type slug."
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "resource_type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/ResourceTypeAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "ResourceTypeResource",
+        "example": {
+          "attributes": {
+            "created_at": "2026-04-12T15:23:01Z",
+            "resource_type": "smpl.flag"
+          },
+          "id": "smpl.flag",
+          "type": "resource_type"
+        }
+      },
       "RetryFailedDeliveriesSummary": {
         "properties": {
           "attempted": {
@@ -1746,6 +2149,92 @@
           "data"
         ],
         "title": "UsageResponse"
+      },
+      "WipeRequest": {
+        "properties": {},
+        "additionalProperties": false,
+        "type": "object",
+        "title": "WipeRequest",
+        "description": "Empty body \u2014 the action requires no parameters."
+      },
+      "WipeResponse": {
+        "properties": {
+          "wiped": {
+            "type": "boolean",
+            "title": "Wiped",
+            "default": true
+          },
+          "tables": {
+            "$ref": "#/components/schemas/WipeTablesSummary"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tables",
+          "completed_at"
+        ],
+        "title": "WipeResponse",
+        "example": {
+          "completed_at": "2026-05-08T19:31:24Z",
+          "tables": {
+            "action": 11,
+            "audit_event": 1432,
+            "audit_event_quota": 5,
+            "forwarder": 2,
+            "forwarder_delivery": 312,
+            "resource_type": 4
+          },
+          "wiped": true
+        }
+      },
+      "WipeTablesSummary": {
+        "properties": {
+          "audit_event": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Audit Event"
+          },
+          "audit_event_quota": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Audit Event Quota"
+          },
+          "forwarder": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Forwarder"
+          },
+          "forwarder_delivery": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Forwarder Delivery"
+          },
+          "resource_type": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Resource Type"
+          },
+          "action": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "audit_event",
+          "audit_event_quota",
+          "forwarder",
+          "forwarder_delivery",
+          "resource_type",
+          "action"
+        ],
+        "title": "WipeTablesSummary"
       }
     },
     "securitySchemes": {
@@ -1760,10 +2249,19 @@
       "name": "Events"
     },
     {
+      "name": "Resource Types"
+    },
+    {
+      "name": "Actions"
+    },
+    {
       "name": "Usage"
     },
     {
       "name": "Forwarders"
+    },
+    {
+      "name": "Functions"
     }
   ]
 }
