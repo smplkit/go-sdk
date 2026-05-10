@@ -300,11 +300,29 @@ type TestForwarderResponse struct {
 	Succeeded       bool               `json:"succeeded"`
 }
 
+// UsageAttributes Attribute set for a usage resource.
+//
+// The shape mirrors the “/api/v1/usage“ contract used by config, flags,
+// and logging — three fields, no per-product extras. Per-period limits
+// live in the product catalog (“GET /api/v1/products“); the usage
+// endpoint reports counts only.
+type UsageAttributes struct {
+	LimitKey string `json:"limit_key"`
+	Period   string `json:"period"`
+	Value    int    `json:"value"`
+}
+
 // UsageResource defines model for UsageResource.
 type UsageResource struct {
-	Attributes map[string]interface{} `json:"attributes"`
-	Id         string                 `json:"id"`
-	Type       *string                `json:"type,omitempty"`
+	// Attributes Attribute set for a usage resource.
+	//
+	// The shape mirrors the ``/api/v1/usage`` contract used by config, flags,
+	// and logging — three fields, no per-product extras. Per-period limits
+	// live in the product catalog (``GET /api/v1/products``); the usage
+	// endpoint reports counts only.
+	Attributes UsageAttributes `json:"attributes"`
+	Id         string          `json:"id"`
+	Type       *string         `json:"type,omitempty"`
 }
 
 // UsageResponse defines model for UsageResponse.

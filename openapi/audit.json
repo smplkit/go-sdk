@@ -1676,6 +1676,30 @@
         "title": "TestForwarderResponse",
         "description": "Plain-JSON response body. Headers are echoed back unredacted because\nthe caller already supplied them \u2014 the response is for the caller, not\npersisted into the delivery log."
       },
+      "UsageAttributes": {
+        "properties": {
+          "limit_key": {
+            "type": "string",
+            "title": "Limit Key"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "value": {
+            "type": "integer",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "limit_key",
+          "period",
+          "value"
+        ],
+        "title": "UsageAttributes",
+        "description": "Attribute set for a usage resource.\n\nThe shape mirrors the ``/api/v1/usage`` contract used by config, flags,\nand logging \u2014 three fields, no per-product extras. Per-period limits\nlive in the product catalog (``GET /api/v1/products``); the usage\nendpoint reports counts only."
+      },
       "UsageResource": {
         "properties": {
           "id": {
@@ -1688,9 +1712,7 @@
             "default": "usage"
           },
           "attributes": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Attributes"
+            "$ref": "#/components/schemas/UsageAttributes"
           }
         },
         "type": "object",
@@ -1701,11 +1723,9 @@
         "title": "UsageResource",
         "example": {
           "attributes": {
-            "current": 42,
-            "limit": 1000,
             "limit_key": "audit.customer_events_per_month",
             "period": "current",
-            "year_month": "2026-05"
+            "value": 42
           },
           "id": "audit.customer_events_per_month",
           "type": "usage"
