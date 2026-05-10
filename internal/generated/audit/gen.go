@@ -46,6 +46,41 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 	}
 }
 
+// ActionAttributes defines model for ActionAttributes.
+type ActionAttributes struct {
+	// Action The action slug. Same as the JSON:API ``id``.
+	Action string `json:"action"`
+
+	// CreatedAt First sighting of this action for the account. When the request includes ``filter[resource_type]``, this is the first sighting of the (action, resource_type) triple rather than the action overall.
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ActionListLinks defines model for ActionListLinks.
+type ActionListLinks struct {
+	Next *string `json:"next,omitempty"`
+}
+
+// ActionListMeta defines model for ActionListMeta.
+type ActionListMeta struct {
+	PageSize int `json:"page_size"`
+}
+
+// ActionListResponse defines model for ActionListResponse.
+type ActionListResponse struct {
+	Data  []ActionResource `json:"data"`
+	Links *ActionListLinks `json:"links,omitempty"`
+	Meta  ActionListMeta   `json:"meta"`
+}
+
+// ActionResource defines model for ActionResource.
+type ActionResource struct {
+	Attributes ActionAttributes `json:"attributes"`
+
+	// Id The action slug.
+	Id   string  `json:"id"`
+	Type *string `json:"type,omitempty"`
+}
+
 // Event Public-facing event resource.
 //
 // Attribute set on POST /api/v1/events:
@@ -268,6 +303,41 @@ type HttpHeader struct {
 	Value string `json:"value"`
 }
 
+// ResourceTypeAttributes defines model for ResourceTypeAttributes.
+type ResourceTypeAttributes struct {
+	// CreatedAt First sighting of this resource_type for the account.
+	CreatedAt time.Time `json:"created_at"`
+
+	// ResourceType The resource_type slug. Same as the JSON:API ``id``.
+	ResourceType string `json:"resource_type"`
+}
+
+// ResourceTypeListLinks defines model for ResourceTypeListLinks.
+type ResourceTypeListLinks struct {
+	Next *string `json:"next,omitempty"`
+}
+
+// ResourceTypeListMeta defines model for ResourceTypeListMeta.
+type ResourceTypeListMeta struct {
+	PageSize int `json:"page_size"`
+}
+
+// ResourceTypeListResponse defines model for ResourceTypeListResponse.
+type ResourceTypeListResponse struct {
+	Data  []ResourceTypeResource `json:"data"`
+	Links *ResourceTypeListLinks `json:"links,omitempty"`
+	Meta  ResourceTypeListMeta   `json:"meta"`
+}
+
+// ResourceTypeResource defines model for ResourceTypeResource.
+type ResourceTypeResource struct {
+	Attributes ResourceTypeAttributes `json:"attributes"`
+
+	// Id The resource_type slug.
+	Id   string  `json:"id"`
+	Type *string `json:"type,omitempty"`
+}
+
 // RetryFailedDeliveriesSummary defines model for RetryFailedDeliveriesSummary.
 type RetryFailedDeliveriesSummary struct {
 	Attempted int `json:"attempted"`
@@ -330,8 +400,35 @@ type UsageResponse struct {
 	Data []UsageResource `json:"data"`
 }
 
+// WipeRequest Empty body — the action requires no parameters.
+type WipeRequest = map[string]interface{}
+
+// WipeResponse defines model for WipeResponse.
+type WipeResponse struct {
+	CompletedAt time.Time         `json:"completed_at"`
+	Tables      WipeTablesSummary `json:"tables"`
+	Wiped       *bool             `json:"wiped,omitempty"`
+}
+
+// WipeTablesSummary defines model for WipeTablesSummary.
+type WipeTablesSummary struct {
+	Action            int `json:"action"`
+	AuditEvent        int `json:"audit_event"`
+	AuditEventQuota   int `json:"audit_event_quota"`
+	Forwarder         int `json:"forwarder"`
+	ForwarderDelivery int `json:"forwarder_delivery"`
+	ResourceType      int `json:"resource_type"`
+}
+
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
 type hTTPBearerContextKey string
+
+// ListActionsParams defines parameters for ListActions.
+type ListActionsParams struct {
+	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
+	PageSize           *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
+	PageAfter          *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+}
 
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
@@ -366,6 +463,12 @@ type ListForwarderDeliveriesParams struct {
 	PageAfter       *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 }
 
+// ListResourceTypesParams defines parameters for ListResourceTypes.
+type ListResourceTypesParams struct {
+	PageSize  *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
+	PageAfter *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+}
+
 // ListUsageParams defines parameters for ListUsage.
 type ListUsageParams struct {
 	FilterPeriod string `form:"filter[period]" json:"filter[period]"`
@@ -382,6 +485,9 @@ type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderResponse
 
 // ExecuteTestForwarderJSONRequestBody defines body for ExecuteTestForwarder for application/json ContentType.
 type ExecuteTestForwarderJSONRequestBody = TestForwarderRequest
+
+// ExecuteWipeJSONRequestBody defines body for ExecuteWipe for application/json ContentType.
+type ExecuteWipeJSONRequestBody = WipeRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -456,6 +562,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// ListActions request
+	ListActions(ctx context.Context, params *ListActionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEvents request
 	ListEvents(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -500,8 +609,28 @@ type ClientInterface interface {
 
 	ExecuteTestForwarder(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ExecuteWipeWithBody request with any body
+	ExecuteWipeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ExecuteWipe(ctx context.Context, body ExecuteWipeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListResourceTypes request
+	ListResourceTypes(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListUsage request
 	ListUsage(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ListActions(ctx context.Context, params *ListActionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListActionsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListEvents(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -696,6 +825,42 @@ func (c *Client) ExecuteTestForwarder(ctx context.Context, body ExecuteTestForwa
 	return c.Client.Do(req)
 }
 
+func (c *Client) ExecuteWipeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExecuteWipeRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ExecuteWipe(ctx context.Context, body ExecuteWipeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExecuteWipeRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListResourceTypes(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListResourceTypesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListUsage(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListUsageRequest(c.Server, params)
 	if err != nil {
@@ -706,6 +871,84 @@ func (c *Client) ListUsage(ctx context.Context, params *ListUsageParams, reqEdit
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListActionsRequest generates requests for ListActions
+func NewListActionsRequest(server string, params *ListActionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/actions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.FilterResourceType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[resource_type]", *params.FilterResourceType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListEventsRequest generates requests for ListEvents
@@ -1392,6 +1635,112 @@ func NewExecuteTestForwarderRequestWithBody(server string, contentType string, b
 	return req, nil
 }
 
+// NewExecuteWipeRequest calls the generic ExecuteWipe builder with application/json body
+func NewExecuteWipeRequest(server string, body ExecuteWipeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewExecuteWipeRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewExecuteWipeRequestWithBody generates requests for ExecuteWipe with any type of body
+func NewExecuteWipeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/functions/wipe/actions/execute")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListResourceTypesRequest generates requests for ListResourceTypes
+func NewListResourceTypesRequest(server string, params *ListResourceTypesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/resource_types")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListUsageRequest generates requests for ListUsage
 func NewListUsageRequest(server string, params *ListUsageParams) (*http.Request, error) {
 	var err error
@@ -1485,6 +1834,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// ListActionsWithResponse request
+	ListActionsWithResponse(ctx context.Context, params *ListActionsParams, reqEditors ...RequestEditorFn) (*ListActionsResponse, error)
+
 	// ListEventsWithResponse request
 	ListEventsWithResponse(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*ListEventsResponse, error)
 
@@ -1529,8 +1881,46 @@ type ClientWithResponsesInterface interface {
 
 	ExecuteTestForwarderWithResponse(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*ExecuteTestForwarderResponse, error)
 
+	// ExecuteWipeWithBodyWithResponse request with any body
+	ExecuteWipeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExecuteWipeResponse, error)
+
+	ExecuteWipeWithResponse(ctx context.Context, body ExecuteWipeJSONRequestBody, reqEditors ...RequestEditorFn) (*ExecuteWipeResponse, error)
+
+	// ListResourceTypesWithResponse request
+	ListResourceTypesWithResponse(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*ListResourceTypesResponse, error)
+
 	// ListUsageWithResponse request
 	ListUsageWithResponse(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*ListUsageResponse, error)
+}
+
+type ListActionsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ActionListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListActionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListActionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListActionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type ListEventsResponse struct {
@@ -1893,6 +2283,66 @@ func (r ExecuteTestForwarderResponse) ContentType() string {
 	return ""
 }
 
+type ExecuteWipeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *WipeResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ExecuteWipeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExecuteWipeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExecuteWipeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListResourceTypesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ResourceTypeListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListResourceTypesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListResourceTypesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListResourceTypesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListUsageResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -1921,6 +2371,15 @@ func (r ListUsageResponse) ContentType() string {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
+}
+
+// ListActionsWithResponse request returning *ListActionsResponse
+func (c *ClientWithResponses) ListActionsWithResponse(ctx context.Context, params *ListActionsParams, reqEditors ...RequestEditorFn) (*ListActionsResponse, error) {
+	rsp, err := c.ListActions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListActionsResponse(rsp)
 }
 
 // ListEventsWithResponse request returning *ListEventsResponse
@@ -2063,6 +2522,32 @@ func (c *ClientWithResponses) ExecuteTestForwarderWithResponse(ctx context.Conte
 	return ParseExecuteTestForwarderResponse(rsp)
 }
 
+// ExecuteWipeWithBodyWithResponse request with arbitrary body returning *ExecuteWipeResponse
+func (c *ClientWithResponses) ExecuteWipeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExecuteWipeResponse, error) {
+	rsp, err := c.ExecuteWipeWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExecuteWipeResponse(rsp)
+}
+
+func (c *ClientWithResponses) ExecuteWipeWithResponse(ctx context.Context, body ExecuteWipeJSONRequestBody, reqEditors ...RequestEditorFn) (*ExecuteWipeResponse, error) {
+	rsp, err := c.ExecuteWipe(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExecuteWipeResponse(rsp)
+}
+
+// ListResourceTypesWithResponse request returning *ListResourceTypesResponse
+func (c *ClientWithResponses) ListResourceTypesWithResponse(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*ListResourceTypesResponse, error) {
+	rsp, err := c.ListResourceTypes(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListResourceTypesResponse(rsp)
+}
+
 // ListUsageWithResponse request returning *ListUsageResponse
 func (c *ClientWithResponses) ListUsageWithResponse(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*ListUsageResponse, error) {
 	rsp, err := c.ListUsage(ctx, params, reqEditors...)
@@ -2070,6 +2555,32 @@ func (c *ClientWithResponses) ListUsageWithResponse(ctx context.Context, params 
 		return nil, err
 	}
 	return ParseListUsageResponse(rsp)
+}
+
+// ParseListActionsResponse parses an HTTP response from a ListActionsWithResponse call
+func ParseListActionsResponse(rsp *http.Response) (*ListActionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListActionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ActionListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListEventsResponse parses an HTTP response from a ListEventsWithResponse call
@@ -2375,6 +2886,58 @@ func ParseExecuteTestForwarderResponse(rsp *http.Response) (*ExecuteTestForwarde
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseExecuteWipeResponse parses an HTTP response from a ExecuteWipeWithResponse call
+func ParseExecuteWipeResponse(rsp *http.Response) (*ExecuteWipeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExecuteWipeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WipeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListResourceTypesResponse parses an HTTP response from a ListResourceTypesWithResponse call
+func ParseListResourceTypesResponse(rsp *http.Response) (*ListResourceTypesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListResourceTypesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ResourceTypeListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
 
 	}
 
