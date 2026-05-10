@@ -4,7 +4,45 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
+
+// ForwarderType is a SIEM streaming destination type. Aliases the
+// generated typed string so customers refer to it as
+// “smplkit.ForwarderType“ without reaching into the internal
+// generated package, while still satisfying the generated client's
+// type constraints.
+//
+// ADR-047 §2.12. Use the published constants below — the audit
+// service rejects any other value with a 400.
+type ForwarderType = genaudit.ForwarderType
+
+// Constants for every supported ForwarderType value. The names match
+// the codegen but are re-exported here so customer code stays inside
+// the public “smplkit“ package.
+const (
+	ForwarderTypeHTTP      = genaudit.Http
+	ForwarderTypeDatadog   = genaudit.Datadog
+	ForwarderTypeSplunkHEC = genaudit.SplunkHec
+	ForwarderTypeSumoLogic = genaudit.SumoLogic
+	ForwarderTypeNewRelic  = genaudit.NewRelic
+	ForwarderTypeHoneycomb = genaudit.Honeycomb
+	ForwarderTypeElastic   = genaudit.Elastic
+)
+
+// ForwarderTypes lists every supported ForwarderType value, in spec
+// order. Useful for `<select>`-style enumerations or membership
+// checks on free-form input.
+var ForwarderTypes = []ForwarderType{
+	ForwarderTypeHTTP,
+	ForwarderTypeDatadog,
+	ForwarderTypeSplunkHEC,
+	ForwarderTypeSumoLogic,
+	ForwarderTypeNewRelic,
+	ForwarderTypeHoneycomb,
+	ForwarderTypeElastic,
+}
 
 // AuditEvent is the public-facing representation of an audit event.
 //
@@ -99,7 +137,7 @@ type Forwarder struct {
 	ID            uuid.UUID
 	Name          string
 	Slug          string
-	ForwarderType string
+	ForwarderType ForwarderType
 	Enabled       bool
 	Filter        map[string]interface{}
 	Transform     *string
@@ -114,7 +152,7 @@ type Forwarder struct {
 // CreateForwarderInput is the input for AuditForwarders.Create.
 type CreateForwarderInput struct {
 	Name          string
-	ForwarderType string
+	ForwarderType ForwarderType
 	HTTP          ForwarderHttp
 	Enabled       bool
 	Filter        map[string]interface{}
@@ -131,7 +169,7 @@ type UpdateForwarderInput = CreateForwarderInput
 
 // ListForwardersInput is the filter + pagination input for List.
 type ListForwardersInput struct {
-	ForwarderType string
+	ForwarderType ForwarderType
 	Enabled       *bool
 	PageSize      int
 	PageAfter     string
