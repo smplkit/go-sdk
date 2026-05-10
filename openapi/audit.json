@@ -1313,9 +1313,7 @@
             "title": "Name"
           },
           "forwarder_type": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Forwarder Type"
+            "$ref": "#/components/schemas/ForwarderType"
           },
           "enabled": {
             "type": "boolean",
@@ -1794,6 +1792,20 @@
           "data"
         ],
         "title": "ForwarderResponse"
+      },
+      "ForwarderType": {
+        "type": "string",
+        "enum": [
+          "http",
+          "datadog",
+          "splunk_hec",
+          "sumo_logic",
+          "new_relic",
+          "honeycomb",
+          "elastic"
+        ],
+        "title": "ForwarderType",
+        "description": "Supported forwarder destination types.\n\nCarried as a typed enum so the OpenAPI spec emits an ``enum``\nconstraint and the auto-generated SDK clients (in all 6 languages)\nsurface a typed enum to customers rather than free-form strings.\nSubclassing ``str`` keeps JSON serialization byte-identical to the\nprior ``str`` field \u2014 no migration of stored ``forwarder.type``\nvalues needed.\n\nAdding a new destination here requires a corresponding implementation\nin ``app.services.forwarding`` and a regeneration of the OpenAPI\nspec so the SDK clients pick up the new variant."
       },
       "HttpHeader": {
         "properties": {

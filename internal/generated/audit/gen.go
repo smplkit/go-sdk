@@ -46,6 +46,39 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 	}
 }
 
+// Defines values for ForwarderType.
+const (
+	Datadog   ForwarderType = "datadog"
+	Elastic   ForwarderType = "elastic"
+	Honeycomb ForwarderType = "honeycomb"
+	Http      ForwarderType = "http"
+	NewRelic  ForwarderType = "new_relic"
+	SplunkHec ForwarderType = "splunk_hec"
+	SumoLogic ForwarderType = "sumo_logic"
+)
+
+// Valid indicates whether the value is a known member of the ForwarderType enum.
+func (e ForwarderType) Valid() bool {
+	switch e {
+	case Datadog:
+		return true
+	case Elastic:
+		return true
+	case Honeycomb:
+		return true
+	case Http:
+		return true
+	case NewRelic:
+		return true
+	case SplunkHec:
+		return true
+	case SumoLogic:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActionAttributes defines model for ActionAttributes.
 type ActionAttributes struct {
 	// Action The action slug. Same as the JSON:API ``id``.
@@ -174,12 +207,25 @@ type EventResponse struct {
 // The slug is server-derived from name on create; it is immutable on
 // update because consumers (UI, observability) key off it.
 type Forwarder struct {
-	CreatedAt     *time.Time              `json:"created_at,omitempty"`
-	Data          *map[string]interface{} `json:"data,omitempty"`
-	DeletedAt     *time.Time              `json:"deleted_at,omitempty"`
-	Enabled       *bool                   `json:"enabled,omitempty"`
-	Filter        *map[string]interface{} `json:"filter,omitempty"`
-	ForwarderType string                  `json:"forwarder_type"`
+	CreatedAt *time.Time              `json:"created_at,omitempty"`
+	Data      *map[string]interface{} `json:"data,omitempty"`
+	DeletedAt *time.Time              `json:"deleted_at,omitempty"`
+	Enabled   *bool                   `json:"enabled,omitempty"`
+	Filter    *map[string]interface{} `json:"filter,omitempty"`
+
+	// ForwarderType Supported forwarder destination types.
+	//
+	// Carried as a typed enum so the OpenAPI spec emits an ``enum``
+	// constraint and the auto-generated SDK clients (in all 6 languages)
+	// surface a typed enum to customers rather than free-form strings.
+	// Subclassing ``str`` keeps JSON serialization byte-identical to the
+	// prior ``str`` field — no migration of stored ``forwarder.type``
+	// values needed.
+	//
+	// Adding a new destination here requires a corresponding implementation
+	// in ``app.services.forwarding`` and a regeneration of the OpenAPI
+	// spec so the SDK clients pick up the new variant.
+	ForwarderType ForwarderType `json:"forwarder_type"`
 
 	// Http The destination HTTP request shape stored encrypted on a forwarder.
 	//
@@ -296,6 +342,20 @@ type ForwarderResource struct {
 type ForwarderResponse struct {
 	Data ForwarderResource `json:"data"`
 }
+
+// ForwarderType Supported forwarder destination types.
+//
+// Carried as a typed enum so the OpenAPI spec emits an “enum“
+// constraint and the auto-generated SDK clients (in all 6 languages)
+// surface a typed enum to customers rather than free-form strings.
+// Subclassing “str“ keeps JSON serialization byte-identical to the
+// prior “str“ field — no migration of stored “forwarder.type“
+// values needed.
+//
+// Adding a new destination here requires a corresponding implementation
+// in “app.services.forwarding“ and a regeneration of the OpenAPI
+// spec so the SDK clients pick up the new variant.
+type ForwarderType string
 
 // HttpHeader A single header on a forwarder's HTTP destination.
 type HttpHeader struct {
