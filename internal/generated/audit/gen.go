@@ -46,6 +46,33 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 	}
 }
 
+// Defines values for ForwarderHttpMethod.
+const (
+	ForwarderHttpMethodDELETE ForwarderHttpMethod = "DELETE"
+	ForwarderHttpMethodGET    ForwarderHttpMethod = "GET"
+	ForwarderHttpMethodPATCH  ForwarderHttpMethod = "PATCH"
+	ForwarderHttpMethodPOST   ForwarderHttpMethod = "POST"
+	ForwarderHttpMethodPUT    ForwarderHttpMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the ForwarderHttpMethod enum.
+func (e ForwarderHttpMethod) Valid() bool {
+	switch e {
+	case ForwarderHttpMethodDELETE:
+		return true
+	case ForwarderHttpMethodGET:
+		return true
+	case ForwarderHttpMethodPATCH:
+		return true
+	case ForwarderHttpMethodPOST:
+		return true
+	case ForwarderHttpMethodPUT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ForwarderType.
 const (
 	DATADOG   ForwarderType = "DATADOG"
@@ -73,6 +100,33 @@ func (e ForwarderType) Valid() bool {
 	case SPLUNKHEC:
 		return true
 	case SUMOLOGIC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TestForwarderRequestMethod.
+const (
+	TestForwarderRequestMethodDELETE TestForwarderRequestMethod = "DELETE"
+	TestForwarderRequestMethodGET    TestForwarderRequestMethod = "GET"
+	TestForwarderRequestMethodPATCH  TestForwarderRequestMethod = "PATCH"
+	TestForwarderRequestMethodPOST   TestForwarderRequestMethod = "POST"
+	TestForwarderRequestMethodPUT    TestForwarderRequestMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the TestForwarderRequestMethod enum.
+func (e TestForwarderRequestMethod) Valid() bool {
+	switch e {
+	case TestForwarderRequestMethodDELETE:
+		return true
+	case TestForwarderRequestMethodGET:
+		return true
+	case TestForwarderRequestMethodPATCH:
+		return true
+	case TestForwarderRequestMethodPOST:
+		return true
+	case TestForwarderRequestMethodPUT:
 		return true
 	default:
 		return false
@@ -114,37 +168,45 @@ type ActionResource struct {
 	Type *string `json:"type,omitempty"`
 }
 
-// Event Public-facing event resource.
+// Event An audit event — a record that something happened, attributed to
+// an actor and a resource.
 //
-// Attribute set on POST /api/v1/events:
-//   - action (required)
-//   - resource_type (required)
-//   - resource_id (required)
-//   - occurred_at (optional; defaults to “created_at“)
-//   - data (optional; defaults to “{}“)
-//
-// There is no top-level “snapshot“ attribute. Customers wishing to
-// record a resource snapshot place it inside “data“ -- smplkit's
-// internal convention nests it at “data.snapshot“, but customers may
-// follow their own convention.
-//
-// Attribute set on GET responses includes everything above plus the
-// server-populated fields: “created_at“, “actor_type“, “actor_id“,
-// “actor_label“, “idempotency_key“.
+// When recording a snapshot of the resource at the time of the event,
+// place it inside `data`. smplkit's own integrations nest it under
+// `data.snapshot`, but the slot is yours to use however you like.
 type Event struct {
-	Action     string                  `json:"action"`
-	ActorId    *openapi_types.UUID     `json:"actor_id,omitempty"`
-	ActorLabel *string                 `json:"actor_label,omitempty"`
-	ActorType  *string                 `json:"actor_type,omitempty"`
-	CreatedAt  *time.Time              `json:"created_at,omitempty"`
-	Data       *map[string]interface{} `json:"data,omitempty"`
+	// Action Slug for what happened, e.g. `user.created`. Lowercase, dot-separated.
+	Action string `json:"action"`
 
-	// DoNotForward When true, this event is recorded normally but is not forwarded to any configured SIEM forwarder. A forwarder_delivery row with status=skipped_do_not_forward is recorded for each enabled forwarder so the skip is visible in the delivery log.
-	DoNotForward   *bool      `json:"do_not_forward,omitempty"`
-	IdempotencyKey *string    `json:"idempotency_key,omitempty"`
-	OccurredAt     *time.Time `json:"occurred_at,omitempty"`
-	ResourceId     string     `json:"resource_id"`
-	ResourceType   string     `json:"resource_type"`
+	// ActorId Identifier of the actor that emitted the event.
+	ActorId *openapi_types.UUID `json:"actor_id,omitempty"`
+
+	// ActorLabel Human-readable label for the actor (e.g. the user's email address or the API key name) at the time the event was recorded.
+	ActorLabel *string `json:"actor_label,omitempty"`
+
+	// ActorType Kind of credential that emitted the event, e.g. `USER` or `API_KEY`. Resolved server-side from the request credential.
+	ActorType *string `json:"actor_type,omitempty"`
+
+	// CreatedAt When the event was received and recorded.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Data Free-form payload attached to the event. Use it for resource snapshots (by convention under `data.snapshot`), request identifiers, or any other context the event needs to carry.
+	Data *map[string]interface{} `json:"data,omitempty"`
+
+	// DoNotForward When `true`, the event is recorded but not delivered to any forwarder. A delivery log entry with status `SKIPPED_DO_NOT_FORWARD` is written for each enabled forwarder so the skip is visible in the delivery log.
+	DoNotForward *bool `json:"do_not_forward,omitempty"`
+
+	// IdempotencyKey The idempotency key used to deduplicate the record. Echoes the `Idempotency-Key` header if one was supplied, otherwise a key derived from the event's content.
+	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+
+	// OccurredAt When the event actually happened. Defaults to the server receipt time (`created_at`).
+	OccurredAt *time.Time `json:"occurred_at,omitempty"`
+
+	// ResourceId Identifier of the specific resource the event is about.
+	ResourceId string `json:"resource_id"`
+
+	// ResourceType Slug for the kind of resource the event is about, e.g. `user`. Lowercase, dot-separated.
+	ResourceType string `json:"resource_type"`
 }
 
 // EventListLinks defines model for EventListLinks.
@@ -157,153 +219,163 @@ type EventListMeta struct {
 	PageSize int `json:"page_size"`
 }
 
-// EventListResponse JSON:API collection response with cursor pagination metadata.
+// EventListResponse JSON:API collection response for audit events.
 type EventListResponse struct {
 	Data  []EventResource `json:"data"`
 	Links *EventListLinks `json:"links,omitempty"`
 	Meta  EventListMeta   `json:"meta"`
 }
 
-// EventResource JSON:API resource envelope for an audit event.
-type EventResource struct {
-	// Attributes Public-facing event resource.
-	//
-	// Attribute set on POST /api/v1/events:
-	//     - action (required)
-	//     - resource_type (required)
-	//     - resource_id (required)
-	//     - occurred_at (optional; defaults to ``created_at``)
-	//     - data (optional; defaults to ``{}``)
-	//
-	// There is no top-level ``snapshot`` attribute. Customers wishing to
-	// record a resource snapshot place it inside ``data`` -- smplkit's
-	// internal convention nests it at ``data.snapshot``, but customers may
-	// follow their own convention.
-	//
-	// Attribute set on GET responses includes everything above plus the
-	// server-populated fields: ``created_at``, ``actor_type``, ``actor_id``,
-	// ``actor_label``, ``idempotency_key``.
-	Attributes Event   `json:"attributes"`
-	Id         string  `json:"id"`
-	Type       *string `json:"type,omitempty"`
-}
-
-// EventResponse JSON:API single-resource response.
-type EventResponse struct {
+// EventRequest JSON:API request envelope for recording an audit event.
+type EventRequest struct {
 	// Data JSON:API resource envelope for an audit event.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data EventResource `json:"data"`
 }
 
-// Forwarder Public-facing forwarder resource.
+// EventResource JSON:API resource envelope for an audit event.
 //
-// Attribute set on POST /api/v1/forwarders:
-//   - name (required)
-//   - forwarder_type (required)
-//   - http (required)
-//   - enabled (optional, defaults true)
-//   - filter (optional, JSON Logic)
-//   - transform (optional, JSONata)
+// `id` must not be specified for create requests (the server assigns it).
+type EventResource struct {
+	// Attributes An audit event — a record that something happened, attributed to
+	// an actor and a resource.
+	//
+	// When recording a snapshot of the resource at the time of the event,
+	// place it inside `data`. smplkit's own integrations nest it under
+	// `data.snapshot`, but the slot is yours to use however you like.
+	Attributes Event   `json:"attributes"`
+	Id         *string `json:"id,omitempty"`
+	Type       *string `json:"type,omitempty"`
+}
+
+// EventResponse JSON:API single-resource response for an audit event.
+type EventResponse struct {
+	// Data JSON:API resource envelope for an audit event.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
+	Data EventResource `json:"data"`
+}
+
+// Forwarder A destination that receives audit events recorded for the account.
 //
-// The slug is server-derived from name on create; it is immutable on
-// update because consumers (UI, observability) key off it.
+// Each event recorded for the account is evaluated against every enabled
+// forwarder. If the filter expression evaluates truthy — or is absent —
+// the event is delivered to the destination using the configured HTTP
+// request. The slug, derived from `name` at create time, is the stable
+// identifier used by the console and other tooling.
 type Forwarder struct {
-	CreatedAt *time.Time              `json:"created_at,omitempty"`
-	Data      *map[string]interface{} `json:"data,omitempty"`
-	DeletedAt *time.Time              `json:"deleted_at,omitempty"`
-	Enabled   *bool                   `json:"enabled,omitempty"`
-	Filter    *map[string]interface{} `json:"filter,omitempty"`
+	// CreatedAt When the forwarder was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// DeletedAt When the forwarder was deleted. `null` for active forwarders.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+
+	// Enabled Whether the forwarder is currently delivering events. Set to `false` to pause deliveries without deleting the forwarder.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Filter JSON Logic expression evaluated against each event. The event is delivered only if the expression returns truthy. Omit to deliver every event.
+	Filter *map[string]interface{} `json:"filter,omitempty"`
 
 	// ForwarderType Supported forwarder destination types.
-	//
-	// Carried as a typed enum so the OpenAPI spec emits an ``enum``
-	// constraint and the auto-generated SDK clients (in all 6 languages)
-	// surface a typed enum to customers rather than free-form strings.
-	// Subclassing ``str`` keeps JSON serialization byte-identical to the
-	// prior ``str`` field — no migration of stored ``forwarder.type``
-	// values needed.
-	//
-	// Values are SCREAMING_SNAKE_CASE per ADR-014. The Forwarder schema
-	// accepts any casing on input via _normalize_forwarder_type.
-	//
-	// Adding a new destination here requires a corresponding implementation
-	// in ``app.services.forwarding`` and a regeneration of the OpenAPI
-	// spec so the SDK clients pick up the new variant.
 	ForwarderType ForwarderType `json:"forwarder_type"`
 
-	// Http The destination HTTP request shape stored encrypted on a forwarder.
-	//
-	// ``success_status`` is a string: either a single status code (e.g.
-	// ``"200"``, ``"204"``) or a class (e.g. ``"2xx"``, ``"3xx"``). The
-	// string-only contract is intentional — a Pydantic ``int | str`` union
-	// confused several SDK code generators (Java in particular wrote the
-	// default ``"2xx"`` unquoted into a typed enum). String covers both
-	// shapes universally with a single wire type.
-	Http      ForwarderHttp `json:"http"`
-	Name      string        `json:"name"`
-	Slug      *string       `json:"slug,omitempty"`
-	Transform *string       `json:"transform,omitempty"`
-	UpdatedAt *time.Time    `json:"updated_at,omitempty"`
-	Version   *int          `json:"version,omitempty"`
+	// Http HTTP request configuration used to deliver an event to the destination.
+	Http ForwarderHttp `json:"http"`
+
+	// Name Human-readable name for the forwarder.
+	Name string `json:"name"`
+
+	// Slug URL-safe identifier derived from `name` at create time. Stable for the lifetime of the forwarder.
+	Slug *string `json:"slug,omitempty"`
+
+	// Transform JSONata template applied to each event before delivery. Omit to deliver the event unchanged.
+	Transform *string `json:"transform,omitempty"`
+
+	// UpdatedAt When the forwarder was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+
+	// Version Monotonic counter incremented on every update, starting at 1.
+	Version *int `json:"version,omitempty"`
 }
 
-// ForwarderDelivery Read-only delivery log row.
-//
-// All fields are server-populated. Headers in “request“ always show
-// redacted values, regardless of who configured them.
+// ForwarderDelivery A log entry for one attempt to deliver an event to a forwarder.
 type ForwarderDelivery struct {
-	AttemptNumber  int                     `json:"attempt_number"`
-	CreatedAt      *time.Time              `json:"created_at,omitempty"`
-	Error          *string                 `json:"error,omitempty"`
-	EventId        openapi_types.UUID      `json:"event_id"`
-	ForwarderId    openapi_types.UUID      `json:"forwarder_id"`
-	LatencyMs      *int                    `json:"latency_ms,omitempty"`
-	Request        *map[string]interface{} `json:"request,omitempty"`
-	ResponseBody   *string                 `json:"response_body,omitempty"`
-	ResponseStatus *int                    `json:"response_status,omitempty"`
-	Status         ForwarderDeliveryStatus `json:"status"`
+	// AttemptNumber 1 for the initial delivery, incremented for each retry.
+	AttemptNumber int `json:"attempt_number"`
+
+	// CreatedAt When the delivery attempt was recorded.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Error Error message if the delivery did not complete.
+	Error *string `json:"error,omitempty"`
+
+	// EventId Event that was being delivered.
+	EventId openapi_types.UUID `json:"event_id"`
+
+	// ForwarderId Forwarder the delivery belongs to.
+	ForwarderId openapi_types.UUID `json:"forwarder_id"`
+
+	// LatencyMs Elapsed time of the delivery attempt in milliseconds.
+	LatencyMs *int `json:"latency_ms,omitempty"`
+
+	// Request The HTTP request as it was sent to the destination. Header values are redacted.
+	Request *map[string]interface{} `json:"request,omitempty"`
+
+	// ResponseBody Response body returned by the destination.
+	ResponseBody *string `json:"response_body,omitempty"`
+
+	// ResponseStatus HTTP status code returned by the destination.
+	ResponseStatus *int `json:"response_status,omitempty"`
+
+	// Status Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event; `SKIPPED_DO_NOT_FORWARD` is recorded when the event was emitted with `do_not_forward=true`.
+	Status ForwarderDeliveryStatus `json:"status"`
 }
 
-// ForwarderDeliveryStatus defines model for ForwarderDelivery.Status.
+// ForwarderDeliveryStatus Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event; `SKIPPED_DO_NOT_FORWARD` is recorded when the event was emitted with `do_not_forward=true`.
 type ForwarderDeliveryStatus string
 
-// ForwarderDeliveryListResponse defines model for ForwarderDeliveryListResponse.
+// ForwarderDeliveryListResponse JSON:API collection response for forwarder deliveries.
 type ForwarderDeliveryListResponse struct {
 	Data  []ForwarderDeliveryResource `json:"data"`
 	Links *ForwarderListLinks         `json:"links,omitempty"`
 	Meta  ForwarderListMeta           `json:"meta"`
 }
 
-// ForwarderDeliveryResource defines model for ForwarderDeliveryResource.
+// ForwarderDeliveryResource JSON:API resource envelope for a forwarder delivery log entry.
 type ForwarderDeliveryResource struct {
-	// Attributes Read-only delivery log row.
-	//
-	// All fields are server-populated. Headers in ``request`` always show
-	// redacted values, regardless of who configured them.
+	// Attributes A log entry for one attempt to deliver an event to a forwarder.
 	Attributes ForwarderDelivery `json:"attributes"`
 	Id         string            `json:"id"`
 	Type       *string           `json:"type,omitempty"`
 }
 
-// ForwarderDeliveryResponse defines model for ForwarderDeliveryResponse.
+// ForwarderDeliveryResponse JSON:API single-resource response for a forwarder delivery.
 type ForwarderDeliveryResponse struct {
+	// Data JSON:API resource envelope for a forwarder delivery log entry.
 	Data ForwarderDeliveryResource `json:"data"`
 }
 
-// ForwarderHttp The destination HTTP request shape stored encrypted on a forwarder.
-//
-// “success_status“ is a string: either a single status code (e.g.
-// “"200"“, “"204"“) or a class (e.g. “"2xx"“, “"3xx"“). The
-// string-only contract is intentional — a Pydantic “int | str“ union
-// confused several SDK code generators (Java in particular wrote the
-// default “"2xx"“ unquoted into a typed enum). String covers both
-// shapes universally with a single wire type.
+// ForwarderHttp HTTP request configuration used to deliver an event to the destination.
 type ForwarderHttp struct {
-	Body          *string       `json:"body,omitempty"`
-	Headers       *[]HttpHeader `json:"headers,omitempty"`
-	Method        *string       `json:"method,omitempty"`
-	SuccessStatus *string       `json:"success_status,omitempty"`
-	Url           string        `json:"url"`
+	// Body Request body sent to the destination. If omitted, the event JSON is sent as the body.
+	Body *string `json:"body,omitempty"`
+
+	// Headers HTTP headers attached to each delivery request.
+	Headers *[]HttpHeader `json:"headers,omitempty"`
+
+	// Method HTTP method used when delivering an event.
+	Method *ForwarderHttpMethod `json:"method,omitempty"`
+
+	// SuccessStatus HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
+	SuccessStatus *string `json:"success_status,omitempty"`
+
+	// Url Destination URL.
+	Url string `json:"url"`
 }
+
+// ForwarderHttpMethod HTTP method used when delivering an event.
+type ForwarderHttpMethod string
 
 // ForwarderListLinks defines model for ForwarderListLinks.
 type ForwarderListLinks struct {
@@ -315,57 +387,54 @@ type ForwarderListMeta struct {
 	PageSize int `json:"page_size"`
 }
 
-// ForwarderListResponse defines model for ForwarderListResponse.
+// ForwarderListResponse JSON:API collection response for forwarders.
 type ForwarderListResponse struct {
 	Data  []ForwarderResource `json:"data"`
 	Links *ForwarderListLinks `json:"links,omitempty"`
 	Meta  ForwarderListMeta   `json:"meta"`
 }
 
-// ForwarderResource defines model for ForwarderResource.
+// ForwarderRequest JSON:API request envelope for creating or updating a forwarder.
+type ForwarderRequest struct {
+	// Data JSON:API resource envelope for a forwarder.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
+	Data ForwarderResource `json:"data"`
+}
+
+// ForwarderResource JSON:API resource envelope for a forwarder.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type ForwarderResource struct {
-	// Attributes Public-facing forwarder resource.
+	// Attributes A destination that receives audit events recorded for the account.
 	//
-	// Attribute set on POST /api/v1/forwarders:
-	//     - name (required)
-	//     - forwarder_type (required)
-	//     - http (required)
-	//     - enabled (optional, defaults true)
-	//     - filter (optional, JSON Logic)
-	//     - transform (optional, JSONata)
-	//
-	// The slug is server-derived from name on create; it is immutable on
-	// update because consumers (UI, observability) key off it.
+	// Each event recorded for the account is evaluated against every enabled
+	// forwarder. If the filter expression evaluates truthy — or is absent —
+	// the event is delivered to the destination using the configured HTTP
+	// request. The slug, derived from `name` at create time, is the stable
+	// identifier used by the console and other tooling.
 	Attributes Forwarder `json:"attributes"`
-	Id         string    `json:"id"`
+	Id         *string   `json:"id,omitempty"`
 	Type       *string   `json:"type,omitempty"`
 }
 
-// ForwarderResponse defines model for ForwarderResponse.
+// ForwarderResponse JSON:API single-resource response envelope for a forwarder.
 type ForwarderResponse struct {
+	// Data JSON:API resource envelope for a forwarder.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data ForwarderResource `json:"data"`
 }
 
 // ForwarderType Supported forwarder destination types.
-//
-// Carried as a typed enum so the OpenAPI spec emits an “enum“
-// constraint and the auto-generated SDK clients (in all 6 languages)
-// surface a typed enum to customers rather than free-form strings.
-// Subclassing “str“ keeps JSON serialization byte-identical to the
-// prior “str“ field — no migration of stored “forwarder.type“
-// values needed.
-//
-// Values are SCREAMING_SNAKE_CASE per ADR-014. The Forwarder schema
-// accepts any casing on input via _normalize_forwarder_type.
-//
-// Adding a new destination here requires a corresponding implementation
-// in “app.services.forwarding“ and a regeneration of the OpenAPI
-// spec so the SDK clients pick up the new variant.
 type ForwarderType string
 
-// HttpHeader A single header on a forwarder's HTTP destination.
+// HttpHeader A single HTTP header attached to a forwarder delivery request.
 type HttpHeader struct {
-	Name  string `json:"name"`
+	// Name Header name.
+	Name string `json:"name"`
+
+	// Value Header value.
 	Value string `json:"value"`
 }
 
@@ -404,58 +473,81 @@ type ResourceTypeResource struct {
 	Type *string `json:"type,omitempty"`
 }
 
-// RetryFailedDeliveriesSummary defines model for RetryFailedDeliveriesSummary.
+// RetryFailedDeliveriesSummary Counts returned by the retry-failed-deliveries action.
 type RetryFailedDeliveriesSummary struct {
+	// Attempted Number of failed deliveries that were re-attempted.
 	Attempted int `json:"attempted"`
-	Failed    int `json:"failed"`
+
+	// Failed Number of re-attempts that failed again.
+	Failed int `json:"failed"`
+
+	// Succeeded Number of re-attempts that succeeded.
 	Succeeded int `json:"succeeded"`
 }
 
-// TestForwarderRequest Plain-JSON body for the test_forwarder execute action.
+// TestForwarderRequest Inputs to the test-forwarder action.
 //
-// Mirrors the encrypted “ForwarderHttp“ shape with one addition —
-// “timeout_ms“, capped server-side.
+// Mirrors a forwarder's HTTP destination configuration with one
+// addition: `timeout_ms`, applied per-request and capped server-side.
 type TestForwarderRequest struct {
-	Body          *string       `json:"body,omitempty"`
-	Headers       *[]HttpHeader `json:"headers,omitempty"`
-	Method        *string       `json:"method,omitempty"`
-	SuccessStatus *string       `json:"success_status,omitempty"`
-	TimeoutMs     *int          `json:"timeout_ms,omitempty"`
-	Url           string        `json:"url"`
+	// Body Request body. If omitted, an empty body is sent.
+	Body *string `json:"body,omitempty"`
+
+	// Headers HTTP headers attached to the test request.
+	Headers *[]HttpHeader `json:"headers,omitempty"`
+
+	// Method HTTP method used for the test request.
+	Method *TestForwarderRequestMethod `json:"method,omitempty"`
+
+	// SuccessStatus HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
+	SuccessStatus *string `json:"success_status,omitempty"`
+
+	// TimeoutMs Per-request timeout in milliseconds. Capped at 30 seconds.
+	TimeoutMs *int `json:"timeout_ms,omitempty"`
+
+	// Url Destination URL.
+	Url string `json:"url"`
 }
 
-// TestForwarderResponse Plain-JSON response body. Headers are echoed back unredacted because
-// the caller already supplied them — the response is for the caller, not
-// persisted into the delivery log.
+// TestForwarderRequestMethod HTTP method used for the test request.
+type TestForwarderRequestMethod string
+
+// TestForwarderResponse Result of a test-forwarder execution.
 type TestForwarderResponse struct {
-	Error           *string            `json:"error,omitempty"`
-	LatencyMs       *int               `json:"latency_ms"`
-	ResponseBody    *string            `json:"response_body,omitempty"`
+	// Error Error message if the request did not complete.
+	Error *string `json:"error,omitempty"`
+
+	// LatencyMs Elapsed time of the request in milliseconds.
+	LatencyMs *int `json:"latency_ms"`
+
+	// ResponseBody Response body returned by the destination.
+	ResponseBody *string `json:"response_body,omitempty"`
+
+	// ResponseHeaders Headers returned by the destination.
 	ResponseHeaders *map[string]string `json:"response_headers,omitempty"`
-	ResponseStatus  *int               `json:"response_status"`
-	Succeeded       bool               `json:"succeeded"`
+
+	// ResponseStatus HTTP status code returned by the destination.
+	ResponseStatus *int `json:"response_status"`
+
+	// Succeeded True if the destination responded with a status matching `success_status`.
+	Succeeded bool `json:"succeeded"`
 }
 
-// UsageAttributes Attribute set for a usage resource.
-//
-// The shape mirrors the “/api/v1/usage“ contract used by config, flags,
-// and logging — three fields, no per-product extras. Per-period limits
-// live in the product catalog (“GET /api/v1/products“); the usage
-// endpoint reports counts only.
+// UsageAttributes Usage counter for a single metered limit.
 type UsageAttributes struct {
+	// LimitKey Identifier of the metered limit, e.g. `audit.customer_events_per_month`.
 	LimitKey string `json:"limit_key"`
-	Period   string `json:"period"`
-	Value    int    `json:"value"`
+
+	// Period Period the counter covers. `current` is the only supported value.
+	Period string `json:"period"`
+
+	// Value Count for the period.
+	Value int `json:"value"`
 }
 
 // UsageResource defines model for UsageResource.
 type UsageResource struct {
-	// Attributes Attribute set for a usage resource.
-	//
-	// The shape mirrors the ``/api/v1/usage`` contract used by config, flags,
-	// and logging — three fields, no per-product extras. Per-period limits
-	// live in the product catalog (``GET /api/v1/products``); the usage
-	// endpoint reports counts only.
+	// Attributes Usage counter for a single metered limit.
 	Attributes UsageAttributes `json:"attributes"`
 	Id         string          `json:"id"`
 	Type       *string         `json:"type,omitempty"`
@@ -466,24 +558,40 @@ type UsageResponse struct {
 	Data []UsageResource `json:"data"`
 }
 
-// WipeRequest Empty body — the action requires no parameters.
+// WipeRequest Empty body — the action takes no parameters.
 type WipeRequest = map[string]interface{}
 
-// WipeResponse defines model for WipeResponse.
+// WipeResponse Summary of a completed wipe action.
 type WipeResponse struct {
-	CompletedAt time.Time         `json:"completed_at"`
-	Tables      WipeTablesSummary `json:"tables"`
-	Wiped       *bool             `json:"wiped,omitempty"`
+	// CompletedAt When the wipe completed.
+	CompletedAt time.Time `json:"completed_at"`
+
+	// Tables Counts of records deleted, broken down by record kind.
+	Tables WipeTablesSummary `json:"tables"`
+
+	// Wiped Always `true` for a successful wipe.
+	Wiped *bool `json:"wiped,omitempty"`
 }
 
-// WipeTablesSummary defines model for WipeTablesSummary.
+// WipeTablesSummary Counts of records deleted, broken down by record kind.
 type WipeTablesSummary struct {
-	Action            int `json:"action"`
-	AuditEvent        int `json:"audit_event"`
-	AuditEventQuota   int `json:"audit_event_quota"`
-	Forwarder         int `json:"forwarder"`
+	// Action Number of distinct `action` entries deleted.
+	Action int `json:"action"`
+
+	// AuditEvent Number of audit events deleted.
+	AuditEvent int `json:"audit_event"`
+
+	// AuditEventQuota Number of monthly usage-quota counters deleted.
+	AuditEventQuota int `json:"audit_event_quota"`
+
+	// Forwarder Number of forwarders deleted.
+	Forwarder int `json:"forwarder"`
+
+	// ForwarderDelivery Number of forwarder delivery log entries deleted.
 	ForwarderDelivery int `json:"forwarder_delivery"`
-	ResourceType      int `json:"resource_type"`
+
+	// ResourceType Number of distinct `resource_type` entries deleted.
+	ResourceType int `json:"resource_type"`
 }
 
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
@@ -505,7 +613,7 @@ type ListEventsParams struct {
 	FilterResourceType *string             `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 	FilterResourceId   *string             `form:"filter[resource_id],omitempty" json:"filter[resource_id],omitempty"`
 
-	// FilterSearch Case-insensitive substring match. Searches against ``resource_id`` only — see ADR-014 for the platform-wide ``filter[search]`` convention. Use ``filter[resource_id]`` for an exact match.
+	// FilterSearch Case-insensitive substring match against `resource_id`. Use `filter[resource_id]` for an exact match.
 	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
 	PageSize     *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter    *string `form:"page[after],omitempty" json:"page[after],omitempty"`
@@ -541,17 +649,18 @@ type ListResourceTypesParams struct {
 
 // ListUsageParams defines parameters for ListUsage.
 type ListUsageParams struct {
+	// FilterPeriod Period to report. `current` is the only supported value.
 	FilterPeriod string `form:"filter[period]" json:"filter[period]"`
 }
 
 // RecordEventApplicationVndAPIPlusJSONRequestBody defines body for RecordEvent for application/vnd.api+json ContentType.
-type RecordEventApplicationVndAPIPlusJSONRequestBody = EventResponse
+type RecordEventApplicationVndAPIPlusJSONRequestBody = EventRequest
 
 // CreateForwarderApplicationVndAPIPlusJSONRequestBody defines body for CreateForwarder for application/vnd.api+json ContentType.
-type CreateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderResponse
+type CreateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderRequest
 
 // UpdateForwarderApplicationVndAPIPlusJSONRequestBody defines body for UpdateForwarder for application/vnd.api+json ContentType.
-type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderResponse
+type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderRequest
 
 // ExecuteTestForwarderJSONRequestBody defines body for ExecuteTestForwarder for application/json ContentType.
 type ExecuteTestForwarderJSONRequestBody = TestForwarderRequest
