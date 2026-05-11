@@ -22,13 +22,13 @@ type ForwarderType = genaudit.ForwarderType
 // the codegen but are re-exported here so customer code stays inside
 // the public “smplkit“ package.
 const (
-	ForwarderTypeHTTP      = genaudit.Http
-	ForwarderTypeDatadog   = genaudit.Datadog
-	ForwarderTypeSplunkHEC = genaudit.SplunkHec
-	ForwarderTypeSumoLogic = genaudit.SumoLogic
-	ForwarderTypeNewRelic  = genaudit.NewRelic
-	ForwarderTypeHoneycomb = genaudit.Honeycomb
-	ForwarderTypeElastic   = genaudit.Elastic
+	ForwarderTypeHTTP      = genaudit.HTTP
+	ForwarderTypeDatadog   = genaudit.DATADOG
+	ForwarderTypeSplunkHEC = genaudit.SPLUNKHEC
+	ForwarderTypeSumoLogic = genaudit.SUMOLOGIC
+	ForwarderTypeNewRelic  = genaudit.NEWRELIC
+	ForwarderTypeHoneycomb = genaudit.HONEYCOMB
+	ForwarderTypeElastic   = genaudit.ELASTIC
 )
 
 // ForwarderTypes lists every supported ForwarderType value, in spec
@@ -95,6 +95,7 @@ type ListEventsInput struct {
 	ActorType       string
 	ActorID         string
 	OccurredAtRange string // e.g. "[2026-01-01T00:00:00Z,*)" (ADR-014)
+	Search          string // case-insensitive substring match against resource_id
 	PageSize        int
 	PageAfter       string
 }
@@ -185,10 +186,10 @@ type ListForwardersPage struct {
 type ForwarderDeliveryStatus string
 
 const (
-	ForwarderDeliverySucceeded           ForwarderDeliveryStatus = "succeeded"
-	ForwarderDeliveryFailed              ForwarderDeliveryStatus = "failed"
-	ForwarderDeliveryFilteredOut         ForwarderDeliveryStatus = "filtered_out"
-	ForwarderDeliverySkippedDoNotForward ForwarderDeliveryStatus = "skipped_do_not_forward"
+	ForwarderDeliverySucceeded           ForwarderDeliveryStatus = "SUCCEEDED"
+	ForwarderDeliveryFailed              ForwarderDeliveryStatus = "FAILED"
+	ForwarderDeliveryFilteredOut         ForwarderDeliveryStatus = "FILTERED_OUT"
+	ForwarderDeliverySkippedDoNotForward ForwarderDeliveryStatus = "SKIPPED_DO_NOT_FORWARD"
 )
 
 // ForwarderDelivery is one row in the append-only delivery log.
@@ -210,6 +211,7 @@ type ForwarderDelivery struct {
 type ListDeliveriesInput struct {
 	Status         ForwarderDeliveryStatus
 	CreatedAtRange string // ADR-014 range syntax
+	EventID        uuid.UUID
 	PageSize       int
 	PageAfter      string
 }

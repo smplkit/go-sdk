@@ -574,7 +574,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarder Deliveries",
-        "description": "List delivery rows for a forwarder.\n\nDefault sort is ``-created_at``. Cursor pagination via ``page[after]``.\nFilter by status (``succeeded`` / ``failed`` / ``filtered_out`` /\n``skipped_do_not_forward``) or by a ``created_at`` range using the\nplatform's interval notation (``[2026-01-01T00:00:00Z,*)``). Reads do\nnot require the entitlement \u2014 a downgraded account can still inspect\nhistorical deliveries from when the forwarder was active.",
+        "description": "List delivery rows for a forwarder.\n\nDefault sort is ``-created_at``. Cursor pagination via ``page[after]``.\nFilter by status (``SUCCEEDED`` / ``FAILED`` / ``FILTERED_OUT`` /\n``SKIPPED_DO_NOT_FORWARD``, case-insensitive) or by a ``created_at`` range using the\nplatform's interval notation (``[2026-01-01T00:00:00Z,*)``). Reads do\nnot require the entitlement \u2014 a downgraded account can still inspect\nhistorical deliveries from when the forwarder was active.",
         "operationId": "list_forwarder_deliveries",
         "security": [
           {
@@ -622,6 +622,22 @@
                 }
               ],
               "title": "Filter[Created At]"
+            }
+          },
+          {
+            "name": "filter[event_id]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Event Id]"
             }
           },
           {
@@ -1462,10 +1478,10 @@
           "status": {
             "type": "string",
             "enum": [
-              "succeeded",
-              "failed",
-              "filtered_out",
-              "skipped_do_not_forward"
+              "SUCCEEDED",
+              "FAILED",
+              "FILTERED_OUT",
+              "SKIPPED_DO_NOT_FORWARD"
             ],
             "title": "Status"
           },
@@ -1619,7 +1635,7 @@
             },
             "response_body": "",
             "response_status": 202,
-            "status": "succeeded"
+            "status": "SUCCEEDED"
           },
           "id": "22222222-3333-4444-5555-666666666666",
           "type": "forwarder_delivery"
@@ -1778,7 +1794,7 @@
                 "user.created"
               ]
             },
-            "forwarder_type": "datadog",
+            "forwarder_type": "DATADOG",
             "http": {
               "headers": [
                 {
@@ -1814,16 +1830,16 @@
       "ForwarderType": {
         "type": "string",
         "enum": [
-          "http",
-          "datadog",
-          "splunk_hec",
-          "sumo_logic",
-          "new_relic",
-          "honeycomb",
-          "elastic"
+          "HTTP",
+          "DATADOG",
+          "SPLUNK_HEC",
+          "SUMO_LOGIC",
+          "NEW_RELIC",
+          "HONEYCOMB",
+          "ELASTIC"
         ],
         "title": "ForwarderType",
-        "description": "Supported forwarder destination types.\n\nCarried as a typed enum so the OpenAPI spec emits an ``enum``\nconstraint and the auto-generated SDK clients (in all 6 languages)\nsurface a typed enum to customers rather than free-form strings.\nSubclassing ``str`` keeps JSON serialization byte-identical to the\nprior ``str`` field \u2014 no migration of stored ``forwarder.type``\nvalues needed.\n\nAdding a new destination here requires a corresponding implementation\nin ``app.services.forwarding`` and a regeneration of the OpenAPI\nspec so the SDK clients pick up the new variant."
+        "description": "Supported forwarder destination types.\n\nCarried as a typed enum so the OpenAPI spec emits an ``enum``\nconstraint and the auto-generated SDK clients (in all 6 languages)\nsurface a typed enum to customers rather than free-form strings.\nSubclassing ``str`` keeps JSON serialization byte-identical to the\nprior ``str`` field \u2014 no migration of stored ``forwarder.type``\nvalues needed.\n\nValues are SCREAMING_SNAKE_CASE per ADR-014. The Forwarder schema\naccepts any casing on input via _normalize_forwarder_type.\n\nAdding a new destination here requires a corresponding implementation\nin ``app.services.forwarding`` and a regeneration of the OpenAPI\nspec so the SDK clients pick up the new variant."
       },
       "HttpHeader": {
         "properties": {

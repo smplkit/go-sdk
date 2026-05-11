@@ -95,7 +95,7 @@ func writeForwarderResource(w http.ResponseWriter, status int, name, slug string
 			"attributes": map[string]any{
 				"name":           name,
 				"slug":           slug,
-				"forwarder_type": "datadog",
+				"forwarder_type": "DATADOG",
 				"enabled":        true,
 				"http": map[string]any{
 					"method": "POST",
@@ -164,7 +164,7 @@ func TestAuditForwarders_Create_RoundTrip(t *testing.T) {
 	body := `{"action":"user.created"}`
 	fwd, err := c.Forwarders().Create(context.Background(), CreateForwarderInput{
 		Name:          "Datadog production",
-		ForwarderType: "datadog",
+		ForwarderType: ForwarderTypeDatadog,
 		HTTP: ForwarderHttp{
 			Method: "POST",
 			URL:    "https://siem.example.com/in",
@@ -197,7 +197,7 @@ func TestAuditForwarders_Create_NonSuccessReturnsError(t *testing.T) {
 	})
 	defer cleanup()
 	_, err := c.Forwarders().Create(context.Background(), CreateForwarderInput{
-		Name: "x", ForwarderType: "http",
+		Name: "x", ForwarderType: ForwarderTypeHTTP,
 		HTTP: ForwarderHttp{URL: "https://x", SuccessStatus: "2xx"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "402") {
@@ -212,16 +212,16 @@ func TestAuditForwarders_List_PaginatesAndExtractsCursor(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if calls == 1 {
-			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"A","slug":"a","forwarder_type":"http","enabled":true,"http":{"url":"https://x"}}}],"links":{"next":"/api/v1/forwarders?page[size]=1&page[after]=tok-2"},"meta":{"page_size":1}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"A","slug":"a","forwarder_type":"HTTP","enabled":true,"http":{"url":"https://x"}}}],"links":{"next":"/api/v1/forwarders?page[size]=1&page[after]=tok-2"},"meta":{"page_size":1}}`))
 		} else {
-			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"B","slug":"b","forwarder_type":"http","enabled":true,"http":{"url":"https://y"}}}],"meta":{"page_size":1}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"B","slug":"b","forwarder_type":"HTTP","enabled":true,"http":{"url":"https://y"}}}],"meta":{"page_size":1}}`))
 		}
 	})
 	defer cleanup()
 
 	enabled := true
 	first, err := c.Forwarders().List(context.Background(), ListForwardersInput{
-		ForwarderType: "datadog", Enabled: &enabled, PageSize: 1,
+		ForwarderType: ForwarderTypeDatadog, Enabled: &enabled, PageSize: 1,
 	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -275,7 +275,7 @@ func TestAuditForwarders_Update(t *testing.T) {
 	defer cleanup()
 	fwd, err := c.Forwarders().Update(context.Background(), parseUUID(t, fwdIDStr), UpdateForwarderInput{
 		Name:          "Renamed",
-		ForwarderType: "datadog",
+		ForwarderType: ForwarderTypeDatadog,
 		HTTP:          ForwarderHttp{URL: "https://x"},
 	})
 	if err != nil {
@@ -322,7 +322,7 @@ func TestAuditForwarders_Deliveries_List(t *testing.T) {
 	c, cleanup := newTestAuditClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"` + deliveryIDStr + `","type":"forwarder_delivery","attributes":{"forwarder_id":"` + fwdIDStr + `","event_id":"33333333-4444-5555-6666-777777777777","attempt_number":1,"status":"succeeded","response_status":202}}],"meta":{"page_size":1}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"` + deliveryIDStr + `","type":"forwarder_delivery","attributes":{"forwarder_id":"` + fwdIDStr + `","event_id":"33333333-4444-5555-6666-777777777777","attempt_number":1,"status":"SUCCEEDED","response_status":202}}],"meta":{"page_size":1}}`))
 	})
 	defer cleanup()
 	page, err := c.Forwarders().Deliveries().List(context.Background(), parseUUID(t, fwdIDStr), ListDeliveriesInput{
@@ -338,9 +338,34 @@ func TestAuditForwarders_Deliveries_List(t *testing.T) {
 	}
 }
 
+func TestAuditForwarders_Deliveries_List_FilterEventID(t *testing.T) {
+	const eventIDStr = "33333333-4444-5555-6666-777777777777"
+	var capturedQuery string
+	c, cleanup := newTestAuditClient(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"` + deliveryIDStr + `","type":"forwarder_delivery","attributes":{"forwarder_id":"` + fwdIDStr + `","event_id":"` + eventIDStr + `","attempt_number":1,"status":"SUCCEEDED"}}],"meta":{"page_size":1}}`))
+	})
+	defer cleanup()
+	page, err := c.Forwarders().Deliveries().List(context.Background(), parseUUID(t, fwdIDStr), ListDeliveriesInput{
+		EventID: parseUUID(t, eventIDStr),
+	})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page.Deliveries) != 1 {
+		t.Fatalf("expected 1 delivery, got %d", len(page.Deliveries))
+	}
+	if !strings.Contains(capturedQuery, "filter%5Bevent_id%5D="+eventIDStr) &&
+		!strings.Contains(capturedQuery, "filter[event_id]="+eventIDStr) {
+		t.Errorf("expected filter[event_id] in query, got %q", capturedQuery)
+	}
+}
+
 func TestAuditForwarders_Deliveries_Retry(t *testing.T) {
 	c, cleanup := newTestAuditClient(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeDeliveryResource(w, http.StatusOK, "succeeded")
+		writeDeliveryResource(w, http.StatusOK, "SUCCEEDED")
 	})
 	defer cleanup()
 	row, err := c.Forwarders().Deliveries().Actions().Retry(context.Background(),
@@ -416,7 +441,7 @@ func TestAuditForwarders_Update_NonSuccess(t *testing.T) {
 	})
 	defer cleanup()
 	if _, err := c.Forwarders().Update(context.Background(), parseUUID(t, fwdIDStr), UpdateForwarderInput{
-		Name: "x", ForwarderType: "http",
+		Name: "x", ForwarderType: ForwarderTypeHTTP,
 		HTTP: ForwarderHttp{URL: "https://x"},
 	}); err == nil {
 		t.Fatal("expected error on 404")
@@ -517,7 +542,7 @@ func TestAuditEvents_Record_PassesDoNotForward(t *testing.T) {
 func TestAuditForwarders_Create_TransportError(t *testing.T) {
 	c := newClosedAuditClient(t)
 	if _, err := c.Forwarders().Create(context.Background(), CreateForwarderInput{
-		Name: "x", ForwarderType: "http",
+		Name: "x", ForwarderType: ForwarderTypeHTTP,
 		HTTP: ForwarderHttp{URL: "https://x", SuccessStatus: "2xx"},
 	}); err == nil || !strings.Contains(err.Error(), "Forwarders.Create") {
 		t.Fatalf("expected wrapped Create transport error, got %v", err)
@@ -543,7 +568,7 @@ func TestAuditForwarders_Get_TransportError(t *testing.T) {
 func TestAuditForwarders_Update_TransportError(t *testing.T) {
 	c := newClosedAuditClient(t)
 	if _, err := c.Forwarders().Update(context.Background(), parseUUID(t, fwdIDStr), UpdateForwarderInput{
-		Name: "x", ForwarderType: "http",
+		Name: "x", ForwarderType: ForwarderTypeHTTP,
 		HTTP: ForwarderHttp{URL: "https://x"},
 	}); err == nil || !strings.Contains(err.Error(), "Forwarders.Update") {
 		t.Fatalf("expected wrapped Update transport error, got %v", err)
@@ -605,7 +630,7 @@ func TestAuditForwarders_Create_Empty201Body(t *testing.T) {
 	})
 	defer cleanup()
 	if _, err := c.Forwarders().Create(context.Background(), CreateForwarderInput{
-		Name: "x", ForwarderType: "http",
+		Name: "x", ForwarderType: ForwarderTypeHTTP,
 		HTTP: ForwarderHttp{URL: "https://x", SuccessStatus: "2xx"},
 	}); err == nil || !strings.Contains(err.Error(), "empty 201 body") {
 		t.Fatalf("expected empty-201-body error, got %v", err)
@@ -658,7 +683,7 @@ func TestForwarderFromResource_PopulatesOptionalFields(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data":{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{` +
-			`"name":"X","slug":"x","forwarder_type":"http","enabled":true,` +
+			`"name":"X","slug":"x","forwarder_type":"HTTP","enabled":true,` +
 			`"http":{"url":"https://x","method":"POST","success_status":"2xx",` +
 			`"body":"{\"hello\":\"world\"}","headers":[{"name":"H","value":"v"}]},` +
 			`"filter":{"==":["a","a"]},"transform":"$","data":{"team":"x"}` +
