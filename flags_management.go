@@ -230,7 +230,7 @@ func (m *FlagsManagement) Delete(ctx context.Context, id string) error {
 
 // CreateContextType creates a new context type.
 func (m *FlagsManagement) CreateContextType(ctx context.Context, id string, name string) (*ContextType, error) {
-	reqBody := genapp.ContextTypeResponse{
+	reqBody := genapp.ContextTypeRequest{
 		Data: genapp.ContextTypeResource{
 			Type:       "context_type",
 			Id:         &id,
@@ -257,7 +257,7 @@ func (m *FlagsManagement) CreateContextType(ctx context.Context, id string, name
 
 // UpdateContextType updates a context type's attributes.
 func (m *FlagsManagement) UpdateContextType(ctx context.Context, ctID string, attributes map[string]interface{}) (*ContextType, error) {
-	reqBody := genapp.ContextTypeResponse{
+	reqBody := genapp.ContextTypeRequest{
 		Data: genapp.ContextTypeResource{
 			Type:       "context_type",
 			Attributes: genapp.ContextType{Attributes: &attributes},

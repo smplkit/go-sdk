@@ -216,7 +216,7 @@ func (m *EnvironmentsManagement) update(ctx context.Context, e *Environment) err
 	return nil
 }
 
-func environmentToRequest(e *Environment) genapp.EnvironmentResponse {
+func environmentToRequest(e *Environment) genapp.EnvironmentRequest {
 	cls := genapp.EnvironmentClassification(e.Classification)
 	attrs := genapp.Environment{
 		Name:           e.Name,
@@ -224,7 +224,7 @@ func environmentToRequest(e *Environment) genapp.EnvironmentResponse {
 		Classification: &cls,
 	}
 	id := e.ID
-	return genapp.EnvironmentResponse{
+	return genapp.EnvironmentRequest{
 		Data: genapp.EnvironmentResource{
 			Type:       genapp.EnvironmentResourceTypeEnvironment,
 			Id:         &id,
@@ -383,7 +383,7 @@ func (m *ContextTypesManagement) update(ctx context.Context, ct *ContextType) er
 	return nil
 }
 
-func contextTypeToRequest(ct *ContextType) genapp.ContextTypeResponse {
+func contextTypeToRequest(ct *ContextType) genapp.ContextTypeRequest {
 	attrMeta := map[string]interface{}{}
 	for k, v := range ct.Attributes {
 		attrMeta[k] = v
@@ -393,7 +393,7 @@ func contextTypeToRequest(ct *ContextType) genapp.ContextTypeResponse {
 		Attributes: &attrMeta,
 	}
 	id := ct.ID
-	return genapp.ContextTypeResponse{
+	return genapp.ContextTypeRequest{
 		Data: genapp.ContextTypeResource{
 			Type:       "context_type",
 			Id:         &id,
