@@ -498,8 +498,11 @@ type ListEventsParams struct {
 	FilterAction       *string             `form:"filter[action],omitempty" json:"filter[action],omitempty"`
 	FilterResourceType *string             `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 	FilterResourceId   *string             `form:"filter[resource_id],omitempty" json:"filter[resource_id],omitempty"`
-	PageSize           *int                `form:"page[size],omitempty" json:"page[size],omitempty"`
-	PageAfter          *string             `form:"page[after],omitempty" json:"page[after],omitempty"`
+
+	// FilterSearch Case-insensitive substring match. Searches against ``resource_id`` only — see ADR-014 for the platform-wide ``filter[search]`` convention. Use ``filter[resource_id]`` for an exact match.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+	PageSize     *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
+	PageAfter    *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 }
 
 // RecordEventParams defines parameters for RecordEvent.
@@ -1102,6 +1105,18 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 		if params.FilterResourceId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[resource_id]", *params.FilterResourceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

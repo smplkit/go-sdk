@@ -75,7 +75,7 @@
           "Events"
         ],
         "summary": "List Events",
-        "description": "List audit events for the authenticated account.\n\nDefault sort is ``-created_at``; cursor pagination via ``page[after]``\n(the opaque cursor returned in ``links.next``). Filters are exact-match\nexcept ``filter[occurred_at]`` which uses the platform's range\nnotation (``[2026-01-01T00:00:00Z,*)``).",
+        "description": "List audit events for the authenticated account.\n\nDefault sort is ``-created_at``; cursor pagination via ``page[after]``\n(the opaque cursor returned in ``links.next``). Filters are exact-match\nexcept ``filter[occurred_at]`` which uses the platform's range\nnotation (``[2026-01-01T00:00:00Z,*)``) and ``filter[search]`` which\nis a case-insensitive substring match (per ADR-014; targets\n``resource_id`` only at this revision).",
         "operationId": "list_events",
         "security": [
           {
@@ -179,6 +179,24 @@
               ],
               "title": "Filter[Resource Id]"
             }
+          },
+          {
+            "name": "filter[search]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match. Searches against ``resource_id`` only \u2014 see ADR-014 for the platform-wide ``filter[search]`` convention. Use ``filter[resource_id]`` for an exact match.",
+              "title": "Filter[Search]"
+            },
+            "description": "Case-insensitive substring match. Searches against ``resource_id`` only \u2014 see ADR-014 for the platform-wide ``filter[search]`` convention. Use ``filter[resource_id]`` for an exact match."
           },
           {
             "name": "page[size]",
