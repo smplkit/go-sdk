@@ -148,16 +148,10 @@ func main() {
 	// simulate someone making changes to a flag to trigger listeners
 	updateRules(ctx, client)
 
-	// poll for the WebSocket-delivered events. The round trip can exceed
-	// any hard-coded sleep when the platform is under load, so wait up to
-	// 5s for both counters to advance and bail out early if they do.
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if atomic.LoadInt64(&allChanges) >= 1 && atomic.LoadInt64(&bannerChanges) >= 1 {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	// wait a moment for the event to be delivered (typical WS round-trip
+	// is well under 200ms; 400ms is plenty of headroom and anything past
+	// that is a real signal, not noise to absorb).
+	time.Sleep(400 * time.Millisecond)
 
 	// verify both listeners fired
 	if atomic.LoadInt64(&allChanges) < 1 {

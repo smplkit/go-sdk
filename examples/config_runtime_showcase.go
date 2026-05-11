@@ -85,16 +85,10 @@ func main() {
 	// simulate someone making a change to trigger listeners
 	updateMaxRetries(ctx, client, 7)
 
-	// poll for the WebSocket-delivered cache refresh. A hard-coded sleep
-	// races with platform broadcast latency; wait up to 5s for both
-	// listeners to fire and the cache to reflect the new value.
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if atomic.LoadInt64(&anyChanges) >= 1 && atomic.LoadInt64(&retriesChanges) >= 1 {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	// wait a moment for the event to be delivered (typical WS round-trip
+	// is well under 200ms; 400ms is plenty of headroom and anything past
+	// that is a real signal, not noise to absorb).
+	time.Sleep(400 * time.Millisecond)
 
 	// userSvc always reflects the latest values — same proxy, same id,
 	// no re-fetch needed
