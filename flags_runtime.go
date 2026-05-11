@@ -807,7 +807,7 @@ func (rt *FlagsRuntime) flushFlagBuffer(ctx context.Context) {
 	for _, entry := range batch {
 		item := genflags.FlagBulkItem{
 			Id:      entry.id,
-			Type:    entry.flagType,
+			Type:    genflags.FlagBulkItemType(entry.flagType),
 			Default: entry.defaultVal,
 		}
 		if entry.service != "" {

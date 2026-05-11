@@ -54,7 +54,7 @@ func resourceToFlag(r genflags.FlagResource, m *FlagsManagement) *Flag {
 
 	envs := extractFlagEnvironments(attrs.Environments)
 
-	flagTypeStr := attrs.Type
+	flagTypeStr := string(attrs.Type)
 
 	return &Flag{
 		ID:           id,
@@ -105,8 +105,8 @@ func extractFlagEnvironments(envs *map[string]genflags.FlagEnvironment) map[stri
 	return result
 }
 
-// buildFlagRequest constructs a FlagResponse for create or update.
-func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.FlagResponse {
+// buildFlagRequest constructs a FlagRequest for create or update.
+func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.FlagRequest {
 	var genValues *[]genflags.FlagValue
 	if values != nil {
 		gv := make([]genflags.FlagValue, len(*values))
@@ -118,13 +118,13 @@ func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]Fla
 
 	genEnvs := buildGenFlagEnvironments(envs)
 
-	return genflags.FlagResponse{
+	return genflags.FlagRequest{
 		Data: genflags.FlagResource{
 			Id:   &id,
 			Type: genflags.FlagResourceTypeFlag,
 			Attributes: genflags.Flag{
 				Name:         name,
-				Type:         flagType,
+				Type:         genflags.FlagType(flagType),
 				Default:      dflt,
 				Values:       genValues,
 				Description:  desc,
