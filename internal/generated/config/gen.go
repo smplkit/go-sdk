@@ -75,43 +75,86 @@ func (e UsageResourceType) Valid() bool {
 	}
 }
 
-// Config defines model for Config.
-type Config struct {
-	CreatedAt    *time.Time                       `json:"created_at,omitempty"`
-	Description  *string                          `json:"description,omitempty"`
-	Environments *map[string]EnvironmentOverride  `json:"environments,omitempty"`
-	Items        *map[string]ConfigItemDefinition `json:"items,omitempty"`
-	Name         string                           `json:"name"`
-	Parent       *string                          `json:"parent,omitempty"`
-	UpdatedAt    *time.Time                       `json:"updated_at,omitempty"`
-}
-
-// ConfigItemDefinition Schema for a single config item.
+// Config A named bag of configuration items, optionally inheriting from another config.
 //
-// “value“ may be “None“ to represent a cleared (typed but unset)
-// slot — e.g. after a type change that could not coerce the previous
-// value. See ADR-024.
-type ConfigItemDefinition struct {
-	Description *string                   `json:"description,omitempty"`
-	Type        *ConfigItemDefinitionType `json:"type,omitempty"`
-	Value       interface{}               `json:"value,omitempty"`
+// Items are typed key/value pairs (`STRING`, `NUMBER`, `BOOLEAN`,
+// `JSON`). Configs may declare per-environment overrides for any item
+// declared on the config itself or anywhere in its inheritance chain;
+// resolving a config against an environment merges the chain top-down
+// and then applies the matching overrides.
+type Config struct {
+	// CreatedAt When the config was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Description Optional human-readable description of what this config holds.
+	Description *string `json:"description,omitempty"`
+
+	// Environments Map of environment keys to per-environment override sets. An environment override applies when this config is resolved against that environment.
+	Environments *map[string]EnvironmentOverride `json:"environments,omitempty"`
+
+	// Items Map of item keys to item definitions declared on this config. Keys must be unique within the config; declared types are immutable once set and must match any type declared for the same key on an ancestor.
+	Items *map[string]ConfigItemDefinition `json:"items,omitempty"`
+
+	// Name Human-readable name for the config.
+	Name string `json:"name"`
+
+	// Parent Key of another config to inherit items from. Inherited items appear as if declared on this config; locally declared items with the same key shadow them. Omit or set to `null` for a standalone config with no parent.
+	Parent *string `json:"parent,omitempty"`
+
+	// UpdatedAt When the config was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// ConfigItemDefinitionType defines model for ConfigItemDefinition.Type.
-type ConfigItemDefinitionType string
+// ConfigItemDefinition Type-declared item within a config.
+//
+// Each item carries a value plus a declared type that constrains the
+// value and any per-environment overrides for the same key.
+type ConfigItemDefinition struct {
+	// Description Optional human-readable explanation of what this item controls.
+	Description *string `json:"description,omitempty"`
 
-// ConfigItemOverride Schema for an environment override — value only, no type/description.
-type ConfigItemOverride struct {
+	// Type Declared value type. Constrains the JSON shape of `value` and of every override of this key in the `environments` map.
+	Type *ConfigItemDefinitionType `json:"type,omitempty"`
+
+	// Value Current value for the item. May be `null` to represent a cleared (typed but unset) slot — for example, after a type change where the prior value could not be coerced.
 	Value interface{} `json:"value,omitempty"`
 }
 
-// ConfigListResponse defines model for ConfigListResponse.
+// ConfigItemDefinitionType Declared value type. Constrains the JSON shape of `value` and of every override of this key in the `environments` map.
+type ConfigItemDefinitionType string
+
+// ConfigItemOverride Per-environment override of a single item value.
+type ConfigItemOverride struct {
+	// Value Override value for this environment. Must conform to the type declared for the item in the inheritance chain.
+	Value interface{} `json:"value,omitempty"`
+}
+
+// ConfigListResponse JSON:API collection response for configs.
 type ConfigListResponse struct {
 	Data []ConfigResource `json:"data"`
 }
 
-// ConfigResource defines model for ConfigResource.
+// ConfigRequest JSON:API request envelope for creating or updating a config.
+type ConfigRequest struct {
+	// Data JSON:API resource envelope for a config.
+	//
+	// `id` is the human-readable key for the config and must be supplied
+	// by the caller on create. It is unique within the account.
+	Data ConfigResource `json:"data"`
+}
+
+// ConfigResource JSON:API resource envelope for a config.
+//
+// `id` is the human-readable key for the config and must be supplied
+// by the caller on create. It is unique within the account.
 type ConfigResource struct {
+	// Attributes A named bag of configuration items, optionally inheriting from another config.
+	//
+	// Items are typed key/value pairs (`STRING`, `NUMBER`, `BOOLEAN`,
+	// `JSON`). Configs may declare per-environment overrides for any item
+	// declared on the config itself or anywhere in its inheritance chain;
+	// resolving a config against an environment merges the chain top-down
+	// and then applies the matching overrides.
 	Attributes Config             `json:"attributes"`
 	Id         *string            `json:"id,omitempty"`
 	Type       ConfigResourceType `json:"type"`
@@ -120,30 +163,41 @@ type ConfigResource struct {
 // ConfigResourceType defines model for ConfigResource.Type.
 type ConfigResourceType string
 
-// ConfigResponse defines model for ConfigResponse.
+// ConfigResponse JSON:API single-resource response envelope for a config.
 type ConfigResponse struct {
+	// Data JSON:API resource envelope for a config.
+	//
+	// `id` is the human-readable key for the config and must be supplied
+	// by the caller on create. It is unique within the account.
 	Data ConfigResource `json:"data"`
 }
 
-// EnvironmentOverride Schema for per-environment overrides.
+// EnvironmentOverride Per-environment override set for a config.
 type EnvironmentOverride struct {
+	// Values Map of item keys to override values that apply when this environment is resolved. Each key must already be declared (with a type) on this config or one of its ancestors.
 	Values *map[string]ConfigItemOverride `json:"values,omitempty"`
 }
 
-// UsageAttributes defines model for UsageAttributes.
+// UsageAttributes Usage counter for a single metered limit.
 type UsageAttributes struct {
+	// LimitKey Identifier of the metered limit, e.g. `config.items` or `config.inheritance_depth`.
 	LimitKey string `json:"limit_key"`
-	Period   string `json:"period"`
-	Value    int    `json:"value"`
+
+	// Period Period the counter covers. `current` is the only supported value.
+	Period string `json:"period"`
+
+	// Value Count for the period.
+	Value int `json:"value"`
 }
 
-// UsageListResponse defines model for UsageListResponse.
+// UsageListResponse JSON:API collection response for usage counters.
 type UsageListResponse struct {
 	Data []UsageResource `json:"data"`
 }
 
-// UsageResource defines model for UsageResource.
+// UsageResource JSON:API resource envelope for a usage counter.
 type UsageResource struct {
+	// Attributes Usage counter for a single metered limit.
 	Attributes UsageAttributes   `json:"attributes"`
 	Id         string            `json:"id"`
 	Type       UsageResourceType `json:"type"`
@@ -162,14 +216,15 @@ type ListConfigsParams struct {
 
 // ListConfigUsageParams defines parameters for ListConfigUsage.
 type ListConfigUsageParams struct {
+	// FilterPeriod Period to report. `current` is the only supported value.
 	FilterPeriod *string `form:"filter[period],omitempty" json:"filter[period],omitempty"`
 }
 
 // CreateConfigApplicationVndAPIPlusJSONRequestBody defines body for CreateConfig for application/vnd.api+json ContentType.
-type CreateConfigApplicationVndAPIPlusJSONRequestBody = ConfigResponse
+type CreateConfigApplicationVndAPIPlusJSONRequestBody = ConfigRequest
 
 // UpdateConfigApplicationVndAPIPlusJSONRequestBody defines body for UpdateConfig for application/vnd.api+json ContentType.
-type UpdateConfigApplicationVndAPIPlusJSONRequestBody = ConfigResponse
+type UpdateConfigApplicationVndAPIPlusJSONRequestBody = ConfigRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error

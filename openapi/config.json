@@ -12,7 +12,7 @@
           "Configs"
         ],
         "summary": "Create Config",
-        "description": "Create a new configuration. The caller provides the id (key) in the request body.",
+        "description": "Create a config for this account.\n\nThe caller supplies the config's key as `data.id`. Keys are unique\nwithin an account and immutable for the lifetime of the config.",
         "operationId": "create_config",
         "security": [
           {
@@ -24,7 +24,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ConfigResponse"
+                "$ref": "#/components/schemas/ConfigRequest"
               }
             }
           }
@@ -47,7 +47,7 @@
           "Configs"
         ],
         "summary": "List Configs",
-        "description": "List all configurations for the authenticated account.",
+        "description": "List configs for this account.\n\nPass `filter[parent]=<parent_key>` to return only the direct children\nof a specific config.",
         "operationId": "list_configs",
         "security": [
           {
@@ -92,7 +92,7 @@
           "Configs"
         ],
         "summary": "Get Config",
-        "description": "Return a configuration by its key.",
+        "description": "Retrieve a single config by its key.",
         "operationId": "get_config",
         "security": [
           {
@@ -128,7 +128,7 @@
           "Configs"
         ],
         "summary": "Update Config",
-        "description": "Replace a configuration entirely.",
+        "description": "Replace a config entirely. Every writable field is overwritten.",
         "operationId": "update_config",
         "security": [
           {
@@ -151,7 +151,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ConfigResponse"
+                "$ref": "#/components/schemas/ConfigRequest"
               }
             }
           }
@@ -174,7 +174,7 @@
           "Configs"
         ],
         "summary": "Delete Config",
-        "description": "Delete a configuration by its key.",
+        "description": "Delete a config by its key.\n\nA config that is referenced as `parent` by another config cannot be\ndeleted; reparent or remove the parent reference on every child\nfirst. The `common` config cannot be deleted.",
         "operationId": "delete_config",
         "security": [
           {
@@ -205,7 +205,7 @@
           "Usage"
         ],
         "summary": "List Config Usage",
-        "description": "Return current resource usage counts for the authenticated account.",
+        "description": "Report the current-period usage counters for this account.",
         "operationId": "list_config_usage",
         "security": [
           {
@@ -226,8 +226,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Period to report. `current` is the only supported value.",
               "title": "Filter[Period]"
-            }
+            },
+            "description": "Period to report. `current` is the only supported value."
           }
         ],
         "responses": {
@@ -255,7 +257,8 @@
           "name": {
             "type": "string",
             "maxLength": 255,
-            "title": "Name"
+            "title": "Name",
+            "description": "Human-readable name for the config."
           },
           "description": {
             "anyOf": [
@@ -267,7 +270,8 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "Optional human-readable description of what this config holds."
           },
           "parent": {
             "anyOf": [
@@ -278,7 +282,8 @@
                 "type": "null"
               }
             ],
-            "title": "Parent"
+            "title": "Parent",
+            "description": "Key of another config to inherit items from. Inherited items appear as if declared on this config; locally declared items with the same key shadow them. Omit or set to `null` for a standalone config with no parent."
           },
           "items": {
             "anyOf": [
@@ -292,7 +297,8 @@
                 "type": "null"
               }
             ],
-            "title": "Items"
+            "title": "Items",
+            "description": "Map of item keys to item definitions declared on this config. Keys must be unique within the config; declared types are immutable once set and must match any type declared for the same key on an ancestor."
           },
           "environments": {
             "anyOf": [
@@ -306,7 +312,8 @@
                 "type": "null"
               }
             ],
-            "title": "Environments"
+            "title": "Environments",
+            "description": "Map of environment keys to per-environment override sets. An environment override applies when this config is resolved against that environment."
           },
           "created_at": {
             "anyOf": [
@@ -319,6 +326,7 @@
               }
             ],
             "title": "Created At",
+            "description": "When the config was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -332,6 +340,7 @@
               }
             ],
             "title": "Updated At",
+            "description": "When the config was last modified.",
             "readOnly": true
           }
         },
@@ -340,9 +349,10 @@
           "name"
         ],
         "title": "Config",
+        "description": "A named bag of configuration items, optionally inheriting from another config.\n\nItems are typed key/value pairs (`STRING`, `NUMBER`, `BOOLEAN`,\n`JSON`). Configs may declare per-environment overrides for any item\ndeclared on the config itself or anywhere in its inheritance chain;\nresolving a config against an environment merges the chain top-down\nand then applies the matching overrides.",
         "example": {
-          "created_at": "2026-03-27T10:00:00Z",
-          "description": "Database configuration",
+          "created_at": "2026-05-11T12:00:00Z",
+          "description": "Database connection settings.",
           "environments": {
             "prod": {
               "values": {
@@ -357,24 +367,26 @@
           },
           "items": {
             "host": {
-              "description": "Primary database hostname",
+              "description": "Primary database hostname.",
               "type": "STRING",
               "value": "db.internal"
             },
             "pool_size": {
-              "description": "Connection pool size",
+              "description": "Connection pool size.",
               "type": "NUMBER",
               "value": 10
             }
           },
           "name": "Database",
-          "updated_at": "2026-03-27T10:00:00Z"
+          "parent": "common",
+          "updated_at": "2026-05-11T12:00:00Z"
         }
       },
       "ConfigItemDefinition": {
         "properties": {
           "value": {
-            "title": "Value"
+            "title": "Value",
+            "description": "Current value for the item. May be `null` to represent a cleared (typed but unset) slot \u2014 for example, after a type change where the prior value could not be coerced."
           },
           "type": {
             "anyOf": [
@@ -391,7 +403,8 @@
                 "type": "null"
               }
             ],
-            "title": "Type"
+            "title": "Type",
+            "description": "Declared value type. Constrains the JSON shape of `value` and of every override of this key in the `environments` map."
           },
           "description": {
             "anyOf": [
@@ -403,22 +416,24 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "Optional human-readable explanation of what this item controls."
           }
         },
         "type": "object",
         "title": "ConfigItemDefinition",
-        "description": "Schema for a single config item.\n\n``value`` may be ``None`` to represent a cleared (typed but unset)\nslot \u2014 e.g. after a type change that could not coerce the previous\nvalue. See ADR-024."
+        "description": "Type-declared item within a config.\n\nEach item carries a value plus a declared type that constrains the\nvalue and any per-environment overrides for the same key."
       },
       "ConfigItemOverride": {
         "properties": {
           "value": {
-            "title": "Value"
+            "title": "Value",
+            "description": "Override value for this environment. Must conform to the type declared for the item in the inheritance chain."
           }
         },
         "type": "object",
         "title": "ConfigItemOverride",
-        "description": "Schema for an environment override \u2014 value only, no type/description."
+        "description": "Per-environment override of a single item value."
       },
       "ConfigListResponse": {
         "properties": {
@@ -434,7 +449,21 @@
         "required": [
           "data"
         ],
-        "title": "ConfigListResponse"
+        "title": "ConfigListResponse",
+        "description": "JSON:API collection response for configs."
+      },
+      "ConfigRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ConfigResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ConfigRequest",
+        "description": "JSON:API request envelope for creating or updating a config."
       },
       "ConfigResource": {
         "properties": {
@@ -464,10 +493,11 @@
           "attributes"
         ],
         "title": "ConfigResource",
+        "description": "JSON:API resource envelope for a config.\n\n`id` is the human-readable key for the config and must be supplied\nby the caller on create. It is unique within the account.",
         "example": {
           "attributes": {
-            "created_at": "2026-03-27T10:00:00Z",
-            "description": "Database configuration",
+            "created_at": "2026-05-11T12:00:00Z",
+            "description": "Database connection settings.",
             "environments": {
               "prod": {
                 "values": {
@@ -479,14 +509,14 @@
             },
             "items": {
               "host": {
-                "description": "Primary database hostname",
+                "description": "Primary database hostname.",
                 "type": "STRING",
                 "value": "db.internal"
               }
             },
             "name": "Database",
             "parent": "common",
-            "updated_at": "2026-03-27T10:00:00Z"
+            "updated_at": "2026-05-11T12:00:00Z"
           },
           "id": "database",
           "type": "config"
@@ -502,7 +532,8 @@
         "required": [
           "data"
         ],
-        "title": "ConfigResponse"
+        "title": "ConfigResponse",
+        "description": "JSON:API single-resource response envelope for a config."
       },
       "EnvironmentOverride": {
         "properties": {
@@ -518,26 +549,30 @@
                 "type": "null"
               }
             ],
-            "title": "Values"
+            "title": "Values",
+            "description": "Map of item keys to override values that apply when this environment is resolved. Each key must already be declared (with a type) on this config or one of its ancestors."
           }
         },
         "type": "object",
         "title": "EnvironmentOverride",
-        "description": "Schema for per-environment overrides."
+        "description": "Per-environment override set for a config."
       },
       "UsageAttributes": {
         "properties": {
           "limit_key": {
             "type": "string",
-            "title": "Limit Key"
+            "title": "Limit Key",
+            "description": "Identifier of the metered limit, e.g. `config.items` or `config.inheritance_depth`."
           },
           "period": {
             "type": "string",
-            "title": "Period"
+            "title": "Period",
+            "description": "Period the counter covers. `current` is the only supported value."
           },
           "value": {
             "type": "integer",
-            "title": "Value"
+            "title": "Value",
+            "description": "Count for the period."
           }
         },
         "type": "object",
@@ -546,7 +581,8 @@
           "period",
           "value"
         ],
-        "title": "UsageAttributes"
+        "title": "UsageAttributes",
+        "description": "Usage counter for a single metered limit."
       },
       "UsageListResponse": {
         "properties": {
@@ -563,6 +599,7 @@
           "data"
         ],
         "title": "UsageListResponse",
+        "description": "JSON:API collection response for usage counters.",
         "example": {
           "data": [
             {
@@ -608,6 +645,7 @@
           "attributes"
         ],
         "title": "UsageResource",
+        "description": "JSON:API resource envelope for a usage counter.",
         "example": {
           "attributes": {
             "limit_key": "config.items",
@@ -629,6 +667,9 @@
   "tags": [
     {
       "name": "Configs"
+    },
+    {
+      "name": "Usage"
     }
   ]
 }

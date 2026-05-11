@@ -506,9 +506,9 @@ func resourceToConfig(r genconfig.ConfigResource, m *ConfigManagement) *ConfigEn
 	}
 }
 
-// buildConfigRequest constructs a ConfigResponse for create or update.
-func buildConfigRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigResponse {
-	return genconfig.ConfigResponse{
+// buildConfigRequest constructs a ConfigRequest for create or update.
+func buildConfigRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigRequest {
+	return genconfig.ConfigRequest{
 		Data: genconfig.ConfigResource{
 			Id:   &id,
 			Type: genconfig.ConfigResourceTypeConfig,
