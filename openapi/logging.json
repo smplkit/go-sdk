@@ -12,7 +12,7 @@
           "Loggers"
         ],
         "summary": "List Loggers",
-        "description": "List all loggers for the authenticated account. Optionally filter by managed status,\nservice, or last-seen time window.",
+        "description": "List loggers for this account.\n\nSupports `filter[managed]` to narrow to managed (or unmanaged) loggers,\n`filter[service]` to keep only loggers observed in a specific service,\nand `filter[last_seen]` (interval notation `[<from>,*)`) to keep only\nloggers with a source observation at or after the given timestamp.",
         "operationId": "list_loggers",
         "security": [
           {
@@ -129,7 +129,7 @@
           "Loggers"
         ],
         "summary": "Get Logger",
-        "description": "Return a logger by its key.",
+        "description": "Retrieve a logger by its key.",
         "operationId": "get_logger",
         "security": [
           {
@@ -205,7 +205,7 @@
           "Loggers"
         ],
         "summary": "Update or Create Logger",
-        "description": "Create or update a logger (upsert). If the logger does not exist it is created.\nFields absent from the body are preserved on update; explicit null clears them.",
+        "description": "Create or replace a logger at the given key.\n\nIf the logger does not yet exist, it is created. Fields omitted from\nthe request body are preserved; explicit `null` clears them. Setting\n`level`, `group`, or `environments` on an unmanaged logger promotes\nit to managed automatically.",
         "operationId": "update_logger",
         "security": [
           {
@@ -228,7 +228,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/LoggerResponse"
+                "$ref": "#/components/schemas/LoggerRequest"
               }
             }
           }
@@ -291,7 +291,7 @@
           "Loggers"
         ],
         "summary": "Delete Logger",
-        "description": "Delete a logger by its key.",
+        "description": "Delete a logger.",
         "operationId": "delete_logger",
         "security": [
           {
@@ -362,7 +362,7 @@
           "Loggers"
         ],
         "summary": "Bulk Register Loggers",
-        "description": "Register loggers discovered by an SDK. Creates new loggers or updates source observations on existing ones.",
+        "description": "Register loggers discovered by an SDK.\n\nCreates new logger entries for previously unseen keys and refreshes\nthe per-(service, environment) observation for keys already known.\nReturns the number of items processed.",
         "operationId": "bulk_register_loggers",
         "requestBody": {
           "content": {
@@ -439,7 +439,7 @@
           "Log Groups"
         ],
         "summary": "List Log Groups",
-        "description": "List all log groups for the authenticated account.",
+        "description": "List log groups for this account.",
         "operationId": "list_log_groups",
         "responses": {
           "200": {
@@ -504,13 +504,13 @@
           "Log Groups"
         ],
         "summary": "Create Log Group",
-        "description": "Create a new log group. The caller provides the key in data.id, or it is auto-generated from name.",
+        "description": "Create a log group.\n\nThe caller may supply a key in `data.id`; if omitted, the server\ngenerates one from `name`.",
         "operationId": "create_log_group",
         "requestBody": {
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/LogGroupResponse"
+                "$ref": "#/components/schemas/LogGroupRequest"
               }
             }
           },
@@ -581,7 +581,7 @@
           "Log Groups"
         ],
         "summary": "Get Log Group",
-        "description": "Return a log group by its key.",
+        "description": "Retrieve a log group by its key.",
         "operationId": "get_log_group",
         "security": [
           {
@@ -657,7 +657,7 @@
           "Log Groups"
         ],
         "summary": "Update Log Group",
-        "description": "Replace a log group entirely.",
+        "description": "Replace a log group. Every writable field is overwritten.",
         "operationId": "update_log_group",
         "security": [
           {
@@ -680,7 +680,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/LogGroupResponse"
+                "$ref": "#/components/schemas/LogGroupRequest"
               }
             }
           }
@@ -743,7 +743,7 @@
           "Log Groups"
         ],
         "summary": "Delete Log Group",
-        "description": "Delete a log group by its key.",
+        "description": "Delete a log group.\n\nLoggers that referenced this group are detached; they remain in the\naccount with no group assignment.",
         "operationId": "delete_log_group",
         "security": [
           {
@@ -814,7 +814,7 @@
           "Logger Sources"
         ],
         "summary": "List Logger Sources",
-        "description": "List all sources (service/environment observations) for a specific logger.",
+        "description": "List the service / environment observations recorded for a logger.",
         "operationId": "list_logger_sources",
         "security": [
           {
@@ -892,7 +892,7 @@
           "Logger Sources"
         ],
         "summary": "List All Logger Sources",
-        "description": "List all logger sources across all loggers. Optionally filter by environment or service.",
+        "description": "List every logger source observation for this account.\n\nSupports `filter[environment]` and `filter[service]` to narrow to a\nspecific environment or service.",
         "operationId": "list_all_logger_sources",
         "security": [
           {
@@ -993,7 +993,7 @@
           "Services"
         ],
         "summary": "List Services",
-        "description": "Return the distinct service names observed across all logger sources for the account.",
+        "description": "List the services that have reported a logger for this account.",
         "operationId": "list_services",
         "responses": {
           "200": {
@@ -1060,7 +1060,7 @@
           "Usage"
         ],
         "summary": "List Logging Usage",
-        "description": "Return current resource usage counts for the authenticated account.",
+        "description": "Report the current-period usage counters for this account.",
         "operationId": "list_logging_usage",
         "security": [
           {
@@ -1206,19 +1206,29 @@
           "name": {
             "type": "string",
             "maxLength": 255,
-            "title": "Name"
+            "title": "Name",
+            "description": "Human-readable label for the group."
           },
           "level": {
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 10
+                "enum": [
+                  "TRACE",
+                  "DEBUG",
+                  "INFO",
+                  "WARN",
+                  "ERROR",
+                  "FATAL",
+                  "SILENT"
+                ]
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Level"
+            "title": "Level",
+            "description": "Default level applied to every logger in the group. `null` leaves member loggers to inherit from elsewhere."
           },
           "parent_id": {
             "anyOf": [
@@ -1229,7 +1239,8 @@
                 "type": "null"
               }
             ],
-            "title": "Parent Id"
+            "title": "Parent Id",
+            "description": "Reserved for nested groups. Must be `null` in this version; nested groups are not yet supported."
           },
           "environments": {
             "anyOf": [
@@ -1241,7 +1252,8 @@
                 "type": "null"
               }
             ],
-            "title": "Environments"
+            "title": "Environments",
+            "description": "Per-environment level overrides keyed by environment name. Each value is an object with an optional `level` field, e.g. `{\"production\": {\"level\": \"ERROR\"}}`. Member loggers inherit the per-environment level unless they set their own override."
           },
           "created_at": {
             "anyOf": [
@@ -1254,6 +1266,7 @@
               }
             ],
             "title": "Created At",
+            "description": "When the group was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -1267,6 +1280,7 @@
               }
             ],
             "title": "Updated At",
+            "description": "When the group was last modified.",
             "readOnly": true
           }
         },
@@ -1275,6 +1289,7 @@
           "name"
         ],
         "title": "LogGroup",
+        "description": "A named collection of loggers that share a level configuration.\n\nAssigning a logger to a group ties the logger's effective level to\nthe group's level (and per-environment overrides). Loggers can move\nbetween groups or be detached from a group entirely.",
         "example": {
           "created_at": "2026-04-01T10:00:00Z",
           "environments": {
@@ -1301,7 +1316,21 @@
         "required": [
           "data"
         ],
-        "title": "LogGroupListResponse"
+        "title": "LogGroupListResponse",
+        "description": "JSON:API collection response for log groups."
+      },
+      "LogGroupRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LogGroupResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "LogGroupRequest",
+        "description": "JSON:API request envelope for creating or updating a log group."
       },
       "LogGroupResource": {
         "properties": {
@@ -1331,6 +1360,7 @@
           "attributes"
         ],
         "title": "LogGroupResource",
+        "description": "JSON:API resource envelope for a log group.\n\n`id` is the group's key (e.g. `database-loggers`). On a create\nrequest the id may be supplied; if omitted, the server generates\none from `name`.",
         "example": {
           "attributes": {
             "created_at": "2026-04-01T10:00:00Z",
@@ -1357,26 +1387,37 @@
         "required": [
           "data"
         ],
-        "title": "LogGroupResponse"
+        "title": "LogGroupResponse",
+        "description": "JSON:API single-resource response envelope for a log group."
       },
       "Logger": {
         "properties": {
           "name": {
             "type": "string",
             "maxLength": 255,
-            "title": "Name"
+            "title": "Name",
+            "description": "Human-readable label for the logger."
           },
           "level": {
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 10
+                "enum": [
+                  "TRACE",
+                  "DEBUG",
+                  "INFO",
+                  "WARN",
+                  "ERROR",
+                  "FATAL",
+                  "SILENT"
+                ]
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Level"
+            "title": "Level",
+            "description": "Account-wide log level applied to this logger. `null` means no override at the logger level \u2014 the level is inherited from the logger's group or the framework default."
           },
           "group": {
             "anyOf": [
@@ -1387,7 +1428,8 @@
                 "type": "null"
               }
             ],
-            "title": "Group"
+            "title": "Group",
+            "description": "Key of the log group this logger belongs to, or `null` if the logger is not grouped. Assigning a logger to a group promotes it to managed; assigning a group cascades to unmanaged descendants by clearing their group reference."
           },
           "managed": {
             "anyOf": [
@@ -1398,7 +1440,8 @@
                 "type": "null"
               }
             ],
-            "title": "Managed"
+            "title": "Managed",
+            "description": "When `true`, the logger is part of the account's managed configuration and counts toward the managed-loggers usage counter. Setting `level`, `group`, or `environments` on an unmanaged logger promotes it to managed automatically."
           },
           "sources": {
             "anyOf": [
@@ -1414,6 +1457,7 @@
               }
             ],
             "title": "Sources",
+            "description": "Service / environment observations reported by SDKs for this logger. Each entry carries the service name, environment, the level the SDK saw, the resolved level after framework inheritance, and timestamps for the first and most recent sighting.",
             "readOnly": true
           },
           "environments": {
@@ -1426,7 +1470,8 @@
                 "type": "null"
               }
             ],
-            "title": "Environments"
+            "title": "Environments",
+            "description": "Per-environment level overrides keyed by environment name. Each value is an object with an optional `level` field, e.g. `{\"production\": {\"level\": \"WARN\"}}`. An environment may be present with no `level` to record that the logger applies there without changing the resolved level."
           },
           "effective_levels": {
             "anyOf": [
@@ -1439,6 +1484,7 @@
               }
             ],
             "title": "Effective Levels",
+            "description": "Per-environment summary of what runtimes are reporting for this logger. Keyed by environment name; each entry is one of `{\"status\": \"none\"}`, `{\"status\": \"agrees\", \"level\": \"<LEVEL>\"}`, or `{\"status\": \"varies\"}`. `agrees` means every observed source in that environment reports the same resolved level; `varies` means at least two sources disagree.",
             "readOnly": true
           },
           "created_at": {
@@ -1452,6 +1498,7 @@
               }
             ],
             "title": "Created At",
+            "description": "When the logger was first created or discovered.",
             "readOnly": true
           },
           "updated_at": {
@@ -1465,6 +1512,7 @@
               }
             ],
             "title": "Updated At",
+            "description": "When the logger was last modified.",
             "readOnly": true
           }
         },
@@ -1473,6 +1521,7 @@
           "name"
         ],
         "title": "Logger",
+        "description": "A logger configured for the account.\n\nLoggers are organized by dot-separated key (for example, `sqlalchemy.engine`),\nmatching the hierarchical naming convention used by most logging\nframeworks. A managed logger applies the configured level to every\nruntime where the logger appears; unmanaged loggers are tracked only\nas observations from SDKs.",
         "example": {
           "created_at": "2026-04-01T10:00:00Z",
           "environments": {
@@ -1495,7 +1544,7 @@
           "id": {
             "type": "string",
             "title": "Id",
-            "description": "Normalized logger name"
+            "description": "Dot-separated logger key as the SDK saw it."
           },
           "level": {
             "anyOf": [
@@ -1507,7 +1556,7 @@
               }
             ],
             "title": "Level",
-            "description": "The explicitly-set level on this logger. Null if inherited."
+            "description": "Level explicitly set on the logger by application code. `null` when the level is inherited."
           },
           "resolved_level": {
             "anyOf": [
@@ -1519,7 +1568,7 @@
               }
             ],
             "title": "Resolved Level",
-            "description": "The effective level after framework inheritance. Never null in compliant SDKs."
+            "description": "Effective level after framework inheritance. SDKs should always report this; the server falls back to `level` when `resolved_level` is missing."
           },
           "service": {
             "anyOf": [
@@ -1531,7 +1580,7 @@
               }
             ],
             "title": "Service",
-            "description": "Service name that discovered this logger"
+            "description": "Service name that observed the logger."
           },
           "environment": {
             "anyOf": [
@@ -1543,7 +1592,7 @@
               }
             ],
             "title": "Environment",
-            "description": "Environment where this logger was observed"
+            "description": "Environment where the logger was observed."
           }
         },
         "type": "object",
@@ -1551,6 +1600,7 @@
           "id"
         ],
         "title": "LoggerBulkItem",
+        "description": "One logger discovered by an SDK during a bulk registration call.",
         "example": {
           "environment": "production",
           "id": "sqlalchemy.engine",
@@ -1566,7 +1616,8 @@
               "$ref": "#/components/schemas/LoggerBulkItem"
             },
             "type": "array",
-            "title": "Loggers"
+            "title": "Loggers",
+            "description": "Loggers to register or refresh observations for."
           }
         },
         "type": "object",
@@ -1574,6 +1625,7 @@
           "loggers"
         ],
         "title": "LoggerBulkRequest",
+        "description": "Payload for bulk registration of loggers discovered by an SDK.",
         "example": {
           "loggers": [
             {
@@ -1595,7 +1647,8 @@
         "properties": {
           "registered": {
             "type": "integer",
-            "title": "Registered"
+            "title": "Registered",
+            "description": "Number of loggers that were created or had a source observation refreshed."
           }
         },
         "type": "object",
@@ -1603,6 +1656,7 @@
           "registered"
         ],
         "title": "LoggerBulkResponse",
+        "description": "Result of a bulk registration call.",
         "example": {
           "registered": 5
         }
@@ -1621,7 +1675,21 @@
         "required": [
           "data"
         ],
-        "title": "LoggerListResponse"
+        "title": "LoggerListResponse",
+        "description": "JSON:API collection response for loggers."
+      },
+      "LoggerRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LoggerResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "LoggerRequest",
+        "description": "JSON:API request envelope for creating or updating a logger."
       },
       "LoggerResource": {
         "properties": {
@@ -1651,6 +1719,7 @@
           "attributes"
         ],
         "title": "LoggerResource",
+        "description": "JSON:API resource envelope for a logger.\n\n`id` is the logger's dot-separated key (e.g. `sqlalchemy.engine`).\nOn a `PUT /api/v1/loggers/{id}` create, the id is taken from the URL\npath; on update, an `id` in the body renames the logger.",
         "example": {
           "attributes": {
             "created_at": "2026-04-01T10:00:00Z",
@@ -1682,18 +1751,21 @@
         "required": [
           "data"
         ],
-        "title": "LoggerResponse"
+        "title": "LoggerResponse",
+        "description": "JSON:API single-resource response envelope for a logger."
       },
       "LoggerSource": {
         "properties": {
           "service": {
             "type": "string",
             "title": "Service",
+            "description": "Service that reported the logger.",
             "readOnly": true
           },
           "environment": {
             "type": "string",
             "title": "Environment",
+            "description": "Environment the service was running in when it reported the logger.",
             "readOnly": true
           },
           "level": {
@@ -1706,11 +1778,13 @@
               }
             ],
             "title": "Level",
+            "description": "Level explicitly set on the logger in the source runtime. `null` when the runtime inherits its level.",
             "readOnly": true
           },
           "resolved_level": {
             "type": "string",
             "title": "Resolved Level",
+            "description": "Effective level the runtime resolved for the logger.",
             "readOnly": true
           },
           "first_observed": {
@@ -1724,6 +1798,7 @@
               }
             ],
             "title": "First Observed",
+            "description": "When this service / environment combination first reported the logger.",
             "readOnly": true
           },
           "last_seen": {
@@ -1737,6 +1812,7 @@
               }
             ],
             "title": "Last Seen",
+            "description": "Most recent report received for this service / environment combination.",
             "readOnly": true
           },
           "created_at": {
@@ -1750,6 +1826,7 @@
               }
             ],
             "title": "Created At",
+            "description": "When the source row was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -1763,11 +1840,13 @@
               }
             ],
             "title": "Updated At",
+            "description": "When the source row was last refreshed.",
             "readOnly": true
           }
         },
         "type": "object",
         "title": "LoggerSource",
+        "description": "A single service / environment observation of a logger.\n\nA source row exists for every (service, environment) pair that has\nreported the logger via the bulk registration endpoint. The row's\nlevels reflect what the SDK saw on the most recent report.",
         "example": {
           "created_at": "2026-04-01T10:00:00Z",
           "environment": "production",
@@ -1792,7 +1871,8 @@
         "required": [
           "data"
         ],
-        "title": "LoggerSourceListResponse"
+        "title": "LoggerSourceListResponse",
+        "description": "JSON:API collection response for logger sources."
       },
       "LoggerSourceResource": {
         "properties": {
@@ -1822,6 +1902,7 @@
           "attributes"
         ],
         "title": "LoggerSourceResource",
+        "description": "JSON:API resource envelope for a logger source observation.",
         "example": {
           "attributes": {
             "created_at": "2026-04-01T10:00:00Z",
@@ -1839,7 +1920,8 @@
       "ServiceAttributes": {
         "properties": {},
         "type": "object",
-        "title": "ServiceAttributes"
+        "title": "ServiceAttributes",
+        "description": "A discovered service has no attributes beyond its name (the `id`)."
       },
       "ServiceListResponse": {
         "properties": {
@@ -1855,7 +1937,8 @@
         "required": [
           "data"
         ],
-        "title": "ServiceListResponse"
+        "title": "ServiceListResponse",
+        "description": "JSON:API collection response for discovered services."
       },
       "ServiceResource": {
         "properties": {
@@ -1879,6 +1962,7 @@
           "type"
         ],
         "title": "ServiceResource",
+        "description": "JSON:API resource envelope for a discovered service.\n\n`id` is the service name as reported by an SDK during bulk\nregistration. The resource carries no additional attributes \u2014 it\nrepresents the existence of the service in the account's\nobservations, nothing more.",
         "example": {
           "attributes": {},
           "id": "api-gateway",
@@ -1889,15 +1973,18 @@
         "properties": {
           "limit_key": {
             "type": "string",
-            "title": "Limit Key"
+            "title": "Limit Key",
+            "description": "Identifier of the metered limit, e.g. `logging.managed_loggers` or `logging.groups`."
           },
           "period": {
             "type": "string",
-            "title": "Period"
+            "title": "Period",
+            "description": "Period the counter covers. `current` is the only supported value."
           },
           "value": {
             "type": "integer",
-            "title": "Value"
+            "title": "Value",
+            "description": "Count for the period."
           }
         },
         "type": "object",
@@ -1906,7 +1993,8 @@
           "period",
           "value"
         ],
-        "title": "UsageAttributes"
+        "title": "UsageAttributes",
+        "description": "Usage counter for a single metered limit."
       },
       "UsageListResponse": {
         "properties": {
@@ -1923,6 +2011,7 @@
           "data"
         ],
         "title": "UsageListResponse",
+        "description": "JSON:API collection response for usage counters.",
         "example": {
           "data": [
             {
@@ -1968,6 +2057,7 @@
           "attributes"
         ],
         "title": "UsageResource",
+        "description": "JSON:API resource envelope for a single usage counter.",
         "example": {
           "attributes": {
             "limit_key": "logging.managed_loggers",
@@ -1998,6 +2088,9 @@
     },
     {
       "name": "Services"
+    },
+    {
+      "name": "Usage"
     }
   ]
 }
