@@ -8052,14 +8052,14 @@
           "entry_point": {
             "type": "string",
             "enum": [
-              "login",
-              "get_started",
-              "live_demo",
-              "unknown"
+              "LOGIN",
+              "GET_STARTED",
+              "LIVE_DEMO",
+              "UNKNOWN"
             ],
             "nullable": true,
             "title": "Entry Point",
-            "description": "Registration entry point. Allowed: login, get_started, live_demo, unknown. Defaults to unknown when omitted."
+            "description": "Registration entry point. Allowed: LOGIN, GET_STARTED, LIVE_DEMO, UNKNOWN. Defaults to UNKNOWN when omitted. Case-insensitive."
           }
         },
         "type": "object",
@@ -8070,7 +8070,7 @@
         "title": "RegisterRequest",
         "example": {
           "email": "jane@example.com",
-          "entry_point": "get_started",
+          "entry_point": "GET_STARTED",
           "password": "correct-horse-battery-staple"
         }
       },
@@ -8331,8 +8331,8 @@
           "discount_source": {
             "type": "string",
             "enum": [
-              "volume",
-              "override"
+              "VOLUME",
+              "OVERRIDE"
             ],
             "title": "Discount Source"
           },
