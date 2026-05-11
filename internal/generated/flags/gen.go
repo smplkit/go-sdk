@@ -21,6 +21,54 @@ const (
 	HTTPBearerScopes hTTPBearerContextKey = "HTTPBearer.Scopes"
 )
 
+// Defines values for FlagType.
+const (
+	FlagTypeBOOLEAN FlagType = "BOOLEAN"
+	FlagTypeJSON    FlagType = "JSON"
+	FlagTypeNUMERIC FlagType = "NUMERIC"
+	FlagTypeSTRING  FlagType = "STRING"
+)
+
+// Valid indicates whether the value is a known member of the FlagType enum.
+func (e FlagType) Valid() bool {
+	switch e {
+	case FlagTypeBOOLEAN:
+		return true
+	case FlagTypeJSON:
+		return true
+	case FlagTypeNUMERIC:
+		return true
+	case FlagTypeSTRING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FlagBulkItemType.
+const (
+	FlagBulkItemTypeBOOLEAN FlagBulkItemType = "BOOLEAN"
+	FlagBulkItemTypeJSON    FlagBulkItemType = "JSON"
+	FlagBulkItemTypeNUMERIC FlagBulkItemType = "NUMERIC"
+	FlagBulkItemTypeSTRING  FlagBulkItemType = "STRING"
+)
+
+// Valid indicates whether the value is a known member of the FlagBulkItemType enum.
+func (e FlagBulkItemType) Valid() bool {
+	switch e {
+	case FlagBulkItemTypeBOOLEAN:
+		return true
+	case FlagBulkItemTypeJSON:
+		return true
+	case FlagBulkItemTypeNUMERIC:
+		return true
+	case FlagBulkItemTypeSTRING:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FlagResourceType.
 const (
 	FlagResourceTypeFlag FlagResourceType = "flag"
@@ -30,6 +78,30 @@ const (
 func (e FlagResourceType) Valid() bool {
 	switch e {
 	case FlagResourceTypeFlag:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FlagSourceDeclaredType.
+const (
+	BOOLEAN FlagSourceDeclaredType = "BOOLEAN"
+	JSON    FlagSourceDeclaredType = "JSON"
+	NUMERIC FlagSourceDeclaredType = "NUMERIC"
+	STRING  FlagSourceDeclaredType = "STRING"
+)
+
+// Valid indicates whether the value is a known member of the FlagSourceDeclaredType enum.
+func (e FlagSourceDeclaredType) Valid() bool {
+	switch e {
+	case BOOLEAN:
+		return true
+	case JSON:
+		return true
+	case NUMERIC:
+		return true
+	case STRING:
 		return true
 	default:
 		return false
@@ -81,72 +153,125 @@ func (e UsageResourceType) Valid() bool {
 	}
 }
 
-// Flag defines model for Flag.
+// Flag A feature flag whose value is resolved at runtime from environment
+// rules and a default.
+//
+// A flag has a value type (`BOOLEAN`, `STRING`, `NUMERIC`, or `JSON`)
+// and either a fixed set of allowed values (constrained) or accepts
+// any value matching the type (unconstrained). Each environment can
+// enable or disable the flag, set its own default, and define
+// targeting rules that override the default for specific evaluation
+// contexts.
 type Flag struct {
+	// CreatedAt When the flag was created.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
-	// Default Default value; must reference a value in the values array (constrained) or match the flag type (unconstrained)
-	Default      interface{}                 `json:"default"`
-	Description  *string                     `json:"description,omitempty"`
+	// Default Default value returned when no environment rule fires and the environment has no `default`. For constrained flags (non-null `values`), must equal one of the entries in the `values` array. For unconstrained flags, must match `type`.
+	Default interface{} `json:"default"`
+
+	// Description Human-readable description of the flag's purpose.
+	Description *string `json:"description,omitempty"`
+
+	// Environments Per-environment configuration keyed by environment name (`production`, `staging`, etc.). Environments not listed fall back to the flag's global `default`.
 	Environments *map[string]FlagEnvironment `json:"environments,omitempty"`
 
-	// Managed True if admin-managed, false if auto-discovered
+	// Managed `true` when the flag was created through the API, `false` when it was auto-discovered from a bulk-register call. Auto-discovered flags can be edited and converted to managed by setting this to `true`.
 	Managed *bool `json:"managed,omitempty"`
 
-	// Name Human-readable display name
-	Name    string                    `json:"name"`
-	Sources *[]map[string]interface{} `json:"sources,omitempty"`
+	// Name Human-readable display name for the flag.
+	Name string `json:"name"`
 
-	// Type Value type: STRING, BOOLEAN, NUMERIC, or JSON
-	Type      string     `json:"type"`
+	// Sources SDK-reported observations of this flag, grouped by service and environment. Populated automatically by the bulk-register endpoint.
+	Sources *[]FlagSource `json:"sources,omitempty"`
+
+	// Type Value type of the flag. Accepted case-insensitively. Changing the type cascades to `values`, `default`, and every environment's rules and default.
+	Type FlagType `json:"type"`
+
+	// UpdatedAt When the flag was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 
-	// Values Ordered set of allowed values (constrained), or null (unconstrained)
+	// Values Ordered set of allowed values for a constrained flag, or `null` for an unconstrained flag. `BOOLEAN` flags, if constrained, must declare exactly two values.
 	Values *[]FlagValue `json:"values,omitempty"`
 }
 
-// FlagBulkItem defines model for FlagBulkItem.
+// FlagType Value type of the flag. Accepted case-insensitively. Changing the type cascades to `values`, `default`, and every environment's rules and default.
+type FlagType string
+
+// FlagBulkItem One flag declaration reported by an SDK during bulk registration.
 type FlagBulkItem struct {
-	// Default Default value declared in code
+	// Default Default value the SDK declared for the flag. Used to create the flag if it does not already exist.
 	Default interface{} `json:"default"`
 
-	// Environment Environment where observed
+	// Environment Environment reporting the declaration. Defaults to `unknown`.
 	Environment *string `json:"environment,omitempty"`
 
-	// Id Flag key as declared in code
+	// Id Flag key as declared in code. URL-safe and stable for the lifetime of the flag.
 	Id string `json:"id"`
 
-	// Service Service that declared this flag
+	// Service Service reporting the declaration. Defaults to `unknown`.
 	Service *string `json:"service,omitempty"`
 
-	// Type Flag type: BOOLEAN, STRING, NUMERIC, or JSON
-	Type string `json:"type"`
+	// Type Value type the SDK declared for the flag. Accepted case-insensitively.
+	Type FlagBulkItemType `json:"type"`
 }
 
-// FlagBulkRequest defines model for FlagBulkRequest.
+// FlagBulkItemType Value type the SDK declared for the flag. Accepted case-insensitively.
+type FlagBulkItemType string
+
+// FlagBulkRequest Inputs to the bulk-register-flags action.
 type FlagBulkRequest struct {
+	// Flags Flags reported by the SDK in this batch.
 	Flags []FlagBulkItem `json:"flags"`
 }
 
-// FlagBulkResponse defines model for FlagBulkResponse.
+// FlagBulkResponse Result of a bulk-register-flags action.
 type FlagBulkResponse struct {
+	// Registered Number of items in the batch that were registered or refreshed.
 	Registered int `json:"registered"`
 }
 
-// FlagEnvironment defines model for FlagEnvironment.
+// FlagEnvironment Per-environment evaluation configuration for a flag.
 type FlagEnvironment struct {
+	// Default Environment-level default returned when no rule fires. If `null`, evaluation falls back to the flag's global `default`.
 	Default interface{} `json:"default,omitempty"`
-	Enabled *bool       `json:"enabled,omitempty"`
-	Rules   *[]FlagRule `json:"rules,omitempty"`
+
+	// Enabled Whether the flag is active in this environment. When `false`, evaluation skips rules and returns the flag's global `default`.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Rules Targeting rules evaluated top-down. The first rule whose logic returns truthy provides the result.
+	Rules *[]FlagRule `json:"rules,omitempty"`
 }
 
-// FlagListResponse defines model for FlagListResponse.
+// FlagListResponse JSON:API collection response envelope for flags.
 type FlagListResponse struct {
 	Data []FlagResource `json:"data"`
 }
 
-// FlagResource defines model for FlagResource.
+// FlagRequest JSON:API request envelope for creating or updating a flag.
+type FlagRequest struct {
+	// Data JSON:API resource envelope for a flag.
+	//
+	// `id` is the flag key. For create requests, `id` is required and is
+	// chosen by the caller. For update requests, `id` may be omitted (the
+	// server reads the key from the URL) or supplied to rename the flag.
+	Data FlagResource `json:"data"`
+}
+
+// FlagResource JSON:API resource envelope for a flag.
+//
+// `id` is the flag key. For create requests, `id` is required and is
+// chosen by the caller. For update requests, `id` may be omitted (the
+// server reads the key from the URL) or supplied to rename the flag.
 type FlagResource struct {
+	// Attributes A feature flag whose value is resolved at runtime from environment
+	// rules and a default.
+	//
+	// A flag has a value type (`BOOLEAN`, `STRING`, `NUMERIC`, or `JSON`)
+	// and either a fixed set of allowed values (constrained) or accepts
+	// any value matching the type (unconstrained). Each environment can
+	// enable or disable the flag, set its own default, and define
+	// targeting rules that override the default for specific evaluation
+	// contexts.
 	Attributes Flag             `json:"attributes"`
 	Id         *string          `json:"id,omitempty"`
 	Type       FlagResourceType `json:"type"`
@@ -155,36 +280,86 @@ type FlagResource struct {
 // FlagResourceType defines model for FlagResource.Type.
 type FlagResourceType string
 
-// FlagResponse defines model for FlagResponse.
+// FlagResponse JSON:API single-resource response envelope for a flag.
 type FlagResponse struct {
+	// Data JSON:API resource envelope for a flag.
+	//
+	// `id` is the flag key. For create requests, `id` is required and is
+	// chosen by the caller. For update requests, `id` may be omitted (the
+	// server reads the key from the URL) or supplied to rename the flag.
 	Data FlagResource `json:"data"`
 }
 
-// FlagRule defines model for FlagRule.
+// FlagRule A targeting rule that overrides the default within an environment.
 type FlagRule struct {
-	Description *string                `json:"description,omitempty"`
-	Logic       map[string]interface{} `json:"logic"`
-	Value       interface{}            `json:"value"`
+	// Description Human-readable description of the rule.
+	Description *string `json:"description,omitempty"`
+
+	// Logic JSON Logic expression evaluated against the evaluation context. The rule fires when the expression is truthy.
+	Logic map[string]interface{} `json:"logic"`
+
+	// Value Value returned when the rule fires. Must reference a value from the flag's `values` array (constrained flags) or match the flag's `type` (unconstrained flags).
+	Value interface{} `json:"value"`
 }
 
-// FlagSource defines model for FlagSource.
+// FlagSource A record of an SDK observing a feature flag from a particular
+// service and environment.
+//
+// The flags service auto-registers a source the first time an SDK
+// reports a flag from a given service/environment pair and refreshes
+// `last_seen` on every subsequent report. Each source captures the
+// value type and default value the SDK declared in source code at
+// that location, which makes it possible to detect when service code
+// has drifted from the flag's authoritative configuration.
 type FlagSource struct {
-	CreatedAt     *time.Time              `json:"created_at,omitempty"`
-	Data          *map[string]interface{} `json:"data,omitempty"`
-	Environment   *string                 `json:"environment,omitempty"`
-	FirstObserved *time.Time              `json:"first_observed,omitempty"`
-	LastSeen      *time.Time              `json:"last_seen,omitempty"`
-	Service       *string                 `json:"service,omitempty"`
-	UpdatedAt     *time.Time              `json:"updated_at,omitempty"`
+	// CreatedAt When the source record was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// DeclaredDefault Default value the SDK reported when registering the flag from this service/environment. May differ from the flag's authoritative `default` if the service is running stale code.
+	DeclaredDefault interface{} `json:"declared_default,omitempty"`
+
+	// DeclaredType Value type the SDK reported when registering the flag from this service/environment. May differ from the flag's authoritative `type` if the service is running stale code.
+	DeclaredType *FlagSourceDeclaredType `json:"declared_type,omitempty"`
+
+	// Environment Environment in which the service declared the flag.
+	Environment *string `json:"environment,omitempty"`
+
+	// FirstObserved When this source was first observed.
+	FirstObserved *time.Time `json:"first_observed,omitempty"`
+
+	// LastSeen Most recent time the SDK re-registered this source.
+	LastSeen *time.Time `json:"last_seen,omitempty"`
+
+	// Service Service that declared the flag.
+	Service *string `json:"service,omitempty"`
+
+	// UpdatedAt When the source record was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// FlagSourceListResponse defines model for FlagSourceListResponse.
+// FlagSourceDeclaredType Value type the SDK reported when registering the flag from this service/environment. May differ from the flag's authoritative `type` if the service is running stale code.
+type FlagSourceDeclaredType string
+
+// FlagSourceListResponse JSON:API collection response envelope for flag sources.
 type FlagSourceListResponse struct {
 	Data []FlagSourceResource `json:"data"`
 }
 
-// FlagSourceResource defines model for FlagSourceResource.
+// FlagSourceResource JSON:API resource envelope for a flag source.
+//
+// `id` is the source record's UUID. Sources are not created or
+// modified directly — the flags service registers and refreshes them
+// in response to SDK bulk-register requests.
 type FlagSourceResource struct {
+	// Attributes A record of an SDK observing a feature flag from a particular
+	// service and environment.
+	//
+	// The flags service auto-registers a source the first time an SDK
+	// reports a flag from a given service/environment pair and refreshes
+	// `last_seen` on every subsequent report. Each source captures the
+	// value type and default value the SDK declared in source code at
+	// that location, which makes it possible to detect when service code
+	// has drifted from the flag's authoritative configuration.
 	Attributes FlagSource             `json:"attributes"`
 	Id         *string                `json:"id,omitempty"`
 	Type       FlagSourceResourceType `json:"type"`
@@ -193,40 +368,64 @@ type FlagSourceResource struct {
 // FlagSourceResourceType defines model for FlagSourceResource.Type.
 type FlagSourceResourceType string
 
-// FlagValue defines model for FlagValue.
+// FlagValue A named value in a constrained flag's value set.
 type FlagValue struct {
-	Name  string      `json:"name"`
+	// Name Human-readable label for the value.
+	Name string `json:"name"`
+
+	// Value The value itself. Must match the flag's `type`.
 	Value interface{} `json:"value"`
 }
 
-// ManualReviewItem defines model for ManualReviewItem.
+// ManualReviewItem A flag rule that could not be safely modified by the bulk
+// remove-references action.
 type ManualReviewItem struct {
+	// Environment Environment containing the rule.
 	Environment string `json:"environment"`
-	Flag        string `json:"flag"`
-	Reason      string `json:"reason"`
-	RuleIndex   int    `json:"rule_index"`
+
+	// Flag Key of the flag containing the rule.
+	Flag string `json:"flag"`
+
+	// Reason Why the rule needs manual review.
+	Reason string `json:"reason"`
+
+	// RuleIndex Position of the rule within the environment's `rules` array.
+	RuleIndex int `json:"rule_index"`
 }
 
-// RemoveReferencesAttributes defines model for RemoveReferencesAttributes.
+// RemoveReferencesAttributes Counts and follow-ups returned by the remove-references action.
 type RemoveReferencesAttributes struct {
-	FlagsModified            []string           `json:"flags_modified"`
+	// FlagsModified Keys of flags whose rules were modified.
+	FlagsModified []string `json:"flags_modified"`
+
+	// RulesNeedingManualReview Rules that referenced the context but could not be removed automatically (typically because the reference is inside an `and` expression where removal would broaden the rule).
 	RulesNeedingManualReview []ManualReviewItem `json:"rules_needing_manual_review"`
-	RulesRemoved             int                `json:"rules_removed"`
+
+	// RulesRemoved Total number of rules removed across all flags.
+	RulesRemoved int `json:"rules_removed"`
 }
 
-// RemoveReferencesRequest defines model for RemoveReferencesRequest.
+// RemoveReferencesRequest Inputs to the remove-references action.
+//
+// Exactly one of `context` or `context_type` must be provided.
 type RemoveReferencesRequest struct {
-	Context     *string `json:"context,omitempty"`
+	// Context Identifier of the context instance to remove references to, formatted as `{type}:{key}` (e.g. `customer:c-123`).
+	Context *string `json:"context,omitempty"`
+
+	// ContextType Context type to remove all references to (any attribute of this type).
 	ContextType *string `json:"context_type,omitempty"`
 }
 
-// RemoveReferencesResultEnvelope defines model for RemoveReferencesResultEnvelope.
+// RemoveReferencesResultEnvelope JSON:API single-resource response envelope for the
+// remove-references action.
 type RemoveReferencesResultEnvelope struct {
+	// Data JSON:API resource envelope for the remove-references result.
 	Data RemoveReferencesResultResource `json:"data"`
 }
 
-// RemoveReferencesResultResource defines model for RemoveReferencesResultResource.
+// RemoveReferencesResultResource JSON:API resource envelope for the remove-references result.
 type RemoveReferencesResultResource struct {
+	// Attributes Counts and follow-ups returned by the remove-references action.
 	Attributes RemoveReferencesAttributes          `json:"attributes"`
 	Type       *RemoveReferencesResultResourceType `json:"type,omitempty"`
 }
@@ -234,20 +433,26 @@ type RemoveReferencesResultResource struct {
 // RemoveReferencesResultResourceType defines model for RemoveReferencesResultResource.Type.
 type RemoveReferencesResultResourceType string
 
-// UsageAttributes defines model for UsageAttributes.
+// UsageAttributes Usage counter for a single metered limit.
 type UsageAttributes struct {
+	// LimitKey Identifier of the metered limit, e.g. `flags.items`.
 	LimitKey string `json:"limit_key"`
-	Period   string `json:"period"`
-	Value    int    `json:"value"`
+
+	// Period Period the counter covers. `current` is the only supported value.
+	Period string `json:"period"`
+
+	// Value Count for the period.
+	Value int `json:"value"`
 }
 
-// UsageListResponse defines model for UsageListResponse.
+// UsageListResponse JSON:API collection response envelope for usage counters.
 type UsageListResponse struct {
 	Data []UsageResource `json:"data"`
 }
 
-// UsageResource defines model for UsageResource.
+// UsageResource JSON:API resource envelope for a usage counter.
 type UsageResource struct {
+	// Attributes Usage counter for a single metered limit.
 	Attributes UsageAttributes   `json:"attributes"`
 	Id         string            `json:"id"`
 	Type       UsageResourceType `json:"type"`
@@ -283,13 +488,13 @@ type ListFlagsUsageParams struct {
 }
 
 // CreateFlagApplicationVndAPIPlusJSONRequestBody defines body for CreateFlag for application/vnd.api+json ContentType.
-type CreateFlagApplicationVndAPIPlusJSONRequestBody = FlagResponse
+type CreateFlagApplicationVndAPIPlusJSONRequestBody = FlagRequest
 
 // BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterFlags for application/vnd.api+json ContentType.
 type BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody = FlagBulkRequest
 
 // UpdateFlagApplicationVndAPIPlusJSONRequestBody defines body for UpdateFlag for application/vnd.api+json ContentType.
-type UpdateFlagApplicationVndAPIPlusJSONRequestBody = FlagResponse
+type UpdateFlagApplicationVndAPIPlusJSONRequestBody = FlagRequest
 
 // RemoveReferencesApplicationVndAPIPlusJSONRequestBody defines body for RemoveReferences for application/vnd.api+json ContentType.
 type RemoveReferencesApplicationVndAPIPlusJSONRequestBody = RemoveReferencesRequest
