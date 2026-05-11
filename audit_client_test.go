@@ -325,6 +325,7 @@ func TestAuditEvents_List_AllFilters(t *testing.T) {
 		ActorType:       "USER",
 		ActorID:         "11111111-2222-3333-4444-555555555555",
 		OccurredAtRange: "[2026-04-01T00:00:00Z,*)",
+		Search:          "inv-",
 		PageSize:        1,
 		PageAfter:       "abc",
 	})

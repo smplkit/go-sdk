@@ -126,6 +126,9 @@ func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEve
 	if input.OccurredAtRange != "" {
 		params.FilterOccurredAt = &input.OccurredAtRange
 	}
+	if input.Search != "" {
+		params.FilterSearch = &input.Search
+	}
 	if input.PageSize > 0 {
 		params.PageSize = &input.PageSize
 	}

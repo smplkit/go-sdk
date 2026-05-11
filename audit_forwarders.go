@@ -220,6 +220,10 @@ func (d *AuditForwarderDeliveries) List(
 	if input.CreatedAtRange != "" {
 		params.FilterCreatedAt = &input.CreatedAtRange
 	}
+	if input.EventID != (uuid.UUID{}) {
+		s := input.EventID.String()
+		params.FilterEventId = &s
+	}
 	if input.PageSize > 0 {
 		params.PageSize = &input.PageSize
 	}
