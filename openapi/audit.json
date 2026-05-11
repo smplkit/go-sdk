@@ -12,7 +12,7 @@
           "Events"
         ],
         "summary": "Record Event",
-        "description": "Record an audit event for the authenticated account.\n\nReturns ``201 Created`` on first write, ``200 OK`` if the request was a\nduplicate (matched by ``Idempotency-Key`` or auto-derived key).\n\nCustomers may not emit events whose ``resource_type`` starts with\n``smpl.`` \u2014 that namespace is reserved for smplkit-emitted events\nabout platform resources.",
+        "description": "Record an audit event for this account.\n\nReturns `201 Created` on first write, `200 OK` if the request was a\nduplicate (matched by `Idempotency-Key` or a key derived from the\nevent's content).\n\n`resource_type` values beginning with `smpl.` are reserved for events\nthat smplkit emits about its own resources and cannot be used here.",
         "operationId": "record_event",
         "security": [
           {
@@ -42,7 +42,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/EventResponse"
+                "$ref": "#/components/schemas/EventRequest"
               }
             }
           }
@@ -75,7 +75,7 @@
           "Events"
         ],
         "summary": "List Events",
-        "description": "List audit events for the authenticated account.\n\nDefault sort is ``-created_at``; cursor pagination via ``page[after]``\n(the opaque cursor returned in ``links.next``). Filters are exact-match\nexcept ``filter[occurred_at]`` which uses the platform's range\nnotation (``[2026-01-01T00:00:00Z,*)``) and ``filter[search]`` which\nis a case-insensitive substring match (per ADR-014; targets\n``resource_id`` only at this revision).",
+        "description": "List audit events for this account.\n\nDefault sort is newest first. Filters are exact-match except\n`filter[occurred_at]`, which uses interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`), and `filter[search]`, which is a\ncase-insensitive substring match against `resource_id`.",
         "operationId": "list_events",
         "security": [
           {
@@ -193,10 +193,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Case-insensitive substring match. Searches against ``resource_id`` only \u2014 see ADR-014 for the platform-wide ``filter[search]`` convention. Use ``filter[resource_id]`` for an exact match.",
+              "description": "Case-insensitive substring match against `resource_id`. Use `filter[resource_id]` for an exact match.",
               "title": "Filter[Search]"
             },
-            "description": "Case-insensitive substring match. Searches against ``resource_id`` only \u2014 see ADR-014 for the platform-wide ``filter[search]`` convention. Use ``filter[resource_id]`` for an exact match."
+            "description": "Case-insensitive substring match against `resource_id`. Use `filter[resource_id]` for an exact match."
           },
           {
             "name": "page[size]",
@@ -252,7 +252,7 @@
           "Events"
         ],
         "summary": "Get Event",
-        "description": "Retrieve a single audit event by id.\n\nReturns 404 if no event with that id exists in the caller's account \u2014\nRLS enforces tenant isolation; this endpoint never leaks the existence\nof another tenant's event.",
+        "description": "Retrieve a single audit event by id.",
         "operationId": "get_event",
         "security": [
           {
@@ -291,7 +291,7 @@
           "Usage"
         ],
         "summary": "List Usage",
-        "description": "Current-period usage and quota for the audit product.\n\nOnly ``filter[period]=current`` is supported; historical usage is a\nfollow-up.",
+        "description": "Report the current-period usage counters for this account.",
         "operationId": "list_usage",
         "security": [
           {
@@ -305,8 +305,10 @@
             "required": true,
             "schema": {
               "type": "string",
+              "description": "Period to report. `current` is the only supported value.",
               "title": "Filter[Period]"
-            }
+            },
+            "description": "Period to report. `current` is the only supported value."
           }
         ],
         "responses": {
@@ -329,7 +331,7 @@
           "Forwarders"
         ],
         "summary": "Create Forwarder",
-        "description": "Create a forwarder. Requires the ``audit.siem_streaming`` entitlement\non the account; lower-tier accounts get 402.",
+        "description": "Create a forwarder for this account.",
         "operationId": "create_forwarder",
         "security": [
           {
@@ -341,7 +343,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ForwarderResponse"
+                "$ref": "#/components/schemas/ForwarderRequest"
               }
             }
           }
@@ -364,7 +366,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarders",
-        "description": "List forwarders for the authenticated account.\n\nReads do not require the entitlement \u2014 a downgraded account can still\ninspect what they configured, they just can't create new ones.",
+        "description": "List forwarders for this account.",
         "operationId": "list_forwarders",
         "security": [
           {
@@ -458,7 +460,7 @@
           "Forwarders"
         ],
         "summary": "Get Forwarder",
-        "description": "Retrieve a single forwarder by id.\n\nReturns 404 if no forwarder with that id exists in the caller's\naccount, including if the forwarder is soft-deleted. Header values\nin the response are returned in plaintext so callers can perform a\nGET-modify-PUT round-trip without re-entering secrets (ADR-014).\nThe persisted ``forwarder_delivery.request`` log column is what\nkeeps redaction; that read path is unaffected by this route.",
+        "description": "Retrieve a single forwarder by id.\n\nHeader values are returned in plaintext so the resource can be\nround-tripped with `GET`, mutate, `PUT` without re-entering secrets.",
         "operationId": "get_forwarder",
         "security": [
           {
@@ -495,7 +497,7 @@
           "Forwarders"
         ],
         "summary": "Update Forwarder",
-        "description": "Full-replace update. PUT semantics \u2014 every field is overwritten.\n\nThe GET path returns plaintext header values, so the standard\nget-mutate-put round-trip (ADR-014) preserves secrets without any\nextra work from the caller: GET, change one field, PUT the result.",
+        "description": "Replace an existing forwarder. Every writable field is overwritten.",
         "operationId": "update_forwarder",
         "security": [
           {
@@ -519,7 +521,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ForwarderResponse"
+                "$ref": "#/components/schemas/ForwarderRequest"
               }
             }
           }
@@ -542,7 +544,7 @@
           "Forwarders"
         ],
         "summary": "Delete Forwarder",
-        "description": "Soft-delete a forwarder. Delivery rows are retained per the normal\nforwarder_delivery retention; a future create with the same slug is\nallowed (the unique index is partial on deleted_at IS NULL).",
+        "description": "Delete a forwarder.\n\nPast delivery log entries are retained. A new forwarder may be\ncreated later under the same name.",
         "operationId": "delete_forwarder",
         "security": [
           {
@@ -574,7 +576,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarder Deliveries",
-        "description": "List delivery rows for a forwarder.\n\nDefault sort is ``-created_at``. Cursor pagination via ``page[after]``.\nFilter by status (``SUCCEEDED`` / ``FAILED`` / ``FILTERED_OUT`` /\n``SKIPPED_DO_NOT_FORWARD``, case-insensitive) or by a ``created_at`` range using the\nplatform's interval notation (``[2026-01-01T00:00:00Z,*)``). Reads do\nnot require the entitlement \u2014 a downgraded account can still inspect\nhistorical deliveries from when the forwarder was active.",
+        "description": "List delivery log entries for a forwarder.\n\nDefault sort is newest first. Filter by `status` (one of `SUCCEEDED`,\n`FAILED`, `FILTERED_OUT`, `SKIPPED_DO_NOT_FORWARD` \u2014 case-insensitive),\nby `event_id`, or by a `created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
         "operationId": "list_forwarder_deliveries",
         "security": [
           {
@@ -694,7 +696,7 @@
           "Forwarders"
         ],
         "summary": "Retry Forwarder Delivery",
-        "description": "Retry a single failed delivery. Returns the new delivery row with\nits outcome. Prior delivery rows are not modified.",
+        "description": "Retry a single failed delivery.\n\nReturns the new delivery log entry. The prior entry is left in place.",
         "operationId": "retry_forwarder_delivery",
         "security": [
           {
@@ -743,7 +745,7 @@
           "Forwarders"
         ],
         "summary": "Retry Failed Forwarder Deliveries",
-        "description": "Retry every failed delivery for the forwarder.\n\nFor each failed delivery row, re-attempt with the latest forwarder\nconfiguration and the original event payload. Returns counts.",
+        "description": "Retry every failed delivery for this forwarder.\n\nEach failed delivery is re-attempted using the forwarder's current\nconfiguration and the original event. Returns the counts.",
         "operationId": "retry_failed_forwarder_deliveries",
         "security": [
           {
@@ -782,7 +784,7 @@
           "Forwarders"
         ],
         "summary": "Execute Test Forwarder",
-        "description": "Execute a prepared HTTP request server-side and return the response.\n\nThe same SSRF guard that gates the in-line forwarder loop is applied\nhere \u2014 internal/private addresses, link-local IPs (including the EC2\nmetadata service at 169.254.169.254), unique-local IPv6, and ports\noutside the configured allowlist are all rejected.",
+        "description": "Send a test HTTP request to a forwarder destination and return the result.\n\nUseful for verifying a destination URL, credentials, or transform\nbefore saving the forwarder. The same network-safety rules that\napply to live deliveries (private/internal address blocking, port\nallowlist) apply here.",
         "operationId": "execute_test_forwarder",
         "requestBody": {
           "content": {
@@ -816,11 +818,10 @@
     "/api/v1/resource_types": {
       "get": {
         "tags": [
-          "Resource Types",
-          "Actions"
+          "Resource Types"
         ],
         "summary": "List Resource Types",
-        "description": "List the distinct ``resource_type`` slugs seen in the account.\n\nEach row's ``id`` is the slug itself, mirroring the smplkit\nconvention of using customer-provided identifiers as the\npublic-facing resource id (ADR-014).",
+        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Useful for populating filter\ndropdowns in a UI.",
         "operationId": "list_resource_types",
         "security": [
           {
@@ -879,11 +880,10 @@
     "/api/v1/actions": {
       "get": {
         "tags": [
-          "Resource Types",
           "Actions"
         ],
         "summary": "List Actions",
-        "description": "List the distinct ``action`` slugs seen in the account.\n\nWithout ``filter[resource_type]``, returns one row per distinct\naction \u2014 the same action may have been recorded with multiple\nresource types and the unfiltered dropdown shows it once.\n\nWith ``filter[resource_type]``, returns the actions seen with\nthat specific resource type, powering the Activity tab's\ncascading filter behavior.",
+        "description": "List the distinct `action` slugs recorded for this account.\n\nWithout `filter[resource_type]`, returns one row per distinct\naction. With `filter[resource_type]`, returns the actions recorded\nfor that specific resource type.",
         "operationId": "list_actions",
         "security": [
           {
@@ -961,7 +961,7 @@
           "Functions"
         ],
         "summary": "Execute Wipe",
-        "description": "Delete every audit-database row scoped to the authenticated account.\n\nReturns the per-table row counts that were deleted along with the\ncompletion timestamp. The action is atomic within the audit\ndatabase \u2014 either every account-scoped row is gone, or none is.\nThe body is required to be ``{}``; no parameters are accepted.",
+        "description": "Delete every audit record this account has stored.\n\nAtomic: either every record is deleted, or none is. Returns the\nper-table counts and the completion timestamp. The request body\nmust be `{}`.",
         "operationId": "execute_wipe",
         "requestBody": {
           "content": {
@@ -1112,17 +1112,20 @@
           "action": {
             "type": "string",
             "minLength": 1,
-            "title": "Action"
+            "title": "Action",
+            "description": "Slug for what happened, e.g. `user.created`. Lowercase, dot-separated."
           },
           "resource_type": {
             "type": "string",
             "minLength": 1,
-            "title": "Resource Type"
+            "title": "Resource Type",
+            "description": "Slug for the kind of resource the event is about, e.g. `user`. Lowercase, dot-separated."
           },
           "resource_id": {
             "type": "string",
             "minLength": 1,
-            "title": "Resource Id"
+            "title": "Resource Id",
+            "description": "Identifier of the specific resource the event is about."
           },
           "occurred_at": {
             "anyOf": [
@@ -1134,17 +1137,19 @@
                 "type": "null"
               }
             ],
-            "title": "Occurred At"
+            "title": "Occurred At",
+            "description": "When the event actually happened. Defaults to the server receipt time (`created_at`)."
           },
           "data": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Data"
+            "title": "Data",
+            "description": "Free-form payload attached to the event. Use it for resource snapshots (by convention under `data.snapshot`), request identifiers, or any other context the event needs to carry."
           },
           "do_not_forward": {
             "type": "boolean",
             "title": "Do Not Forward",
-            "description": "When true, this event is recorded normally but is not forwarded to any configured SIEM forwarder. A forwarder_delivery row with status=skipped_do_not_forward is recorded for each enabled forwarder so the skip is visible in the delivery log.",
+            "description": "When `true`, the event is recorded but not delivered to any forwarder. A delivery log entry with status `SKIPPED_DO_NOT_FORWARD` is written for each enabled forwarder so the skip is visible in the delivery log.",
             "default": false
           },
           "created_at": {
@@ -1158,6 +1163,7 @@
               }
             ],
             "title": "Created At",
+            "description": "When the event was received and recorded.",
             "readOnly": true
           },
           "actor_type": {
@@ -1170,6 +1176,7 @@
               }
             ],
             "title": "Actor Type",
+            "description": "Kind of credential that emitted the event, e.g. `USER` or `API_KEY`. Resolved server-side from the request credential.",
             "readOnly": true
           },
           "actor_id": {
@@ -1183,6 +1190,7 @@
               }
             ],
             "title": "Actor Id",
+            "description": "Identifier of the actor that emitted the event.",
             "readOnly": true
           },
           "actor_label": {
@@ -1195,6 +1203,7 @@
               }
             ],
             "title": "Actor Label",
+            "description": "Human-readable label for the actor (e.g. the user's email address or the API key name) at the time the event was recorded.",
             "readOnly": true
           },
           "idempotency_key": {
@@ -1207,6 +1216,7 @@
               }
             ],
             "title": "Idempotency Key",
+            "description": "The idempotency key used to deduplicate the record. Echoes the `Idempotency-Key` header if one was supplied, otherwise a key derived from the event's content.",
             "readOnly": true
           }
         },
@@ -1217,7 +1227,7 @@
           "resource_id"
         ],
         "title": "Event",
-        "description": "Public-facing event resource.\n\nAttribute set on POST /api/v1/events:\n    - action (required)\n    - resource_type (required)\n    - resource_id (required)\n    - occurred_at (optional; defaults to ``created_at``)\n    - data (optional; defaults to ``{}``)\n\nThere is no top-level ``snapshot`` attribute. Customers wishing to\nrecord a resource snapshot place it inside ``data`` -- smplkit's\ninternal convention nests it at ``data.snapshot``, but customers may\nfollow their own convention.\n\nAttribute set on GET responses includes everything above plus the\nserver-populated fields: ``created_at``, ``actor_type``, ``actor_id``,\n``actor_label``, ``idempotency_key``."
+        "description": "An audit event \u2014 a record that something happened, attributed to\nan actor and a resource.\n\nWhen recording a snapshot of the resource at the time of the event,\nplace it inside `data`. smplkit's own integrations nest it under\n`data.snapshot`, but the slot is yours to use however you like."
       },
       "EventListLinks": {
         "properties": {
@@ -1278,12 +1288,32 @@
           "meta"
         ],
         "title": "EventListResponse",
-        "description": "JSON:API collection response with cursor pagination metadata."
+        "description": "JSON:API collection response for audit events."
+      },
+      "EventRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EventResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "EventRequest",
+        "description": "JSON:API request envelope for recording an audit event."
       },
       "EventResource": {
         "properties": {
           "id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Id"
           },
           "type": {
@@ -1297,11 +1327,10 @@
         },
         "type": "object",
         "required": [
-          "id",
           "attributes"
         ],
         "title": "EventResource",
-        "description": "JSON:API resource envelope for an audit event.",
+        "description": "JSON:API resource envelope for an audit event.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "action": "user.created",
@@ -1336,7 +1365,7 @@
           "data"
         ],
         "title": "EventResponse",
-        "description": "JSON:API single-resource response."
+        "description": "JSON:API single-resource response for an audit event."
       },
       "Forwarder": {
         "properties": {
@@ -1344,14 +1373,17 @@
             "type": "string",
             "maxLength": 200,
             "minLength": 1,
-            "title": "Name"
+            "title": "Name",
+            "description": "Human-readable name for the forwarder."
           },
           "forwarder_type": {
-            "$ref": "#/components/schemas/ForwarderType"
+            "$ref": "#/components/schemas/ForwarderType",
+            "description": "Destination type."
           },
           "enabled": {
             "type": "boolean",
             "title": "Enabled",
+            "description": "Whether the forwarder is currently delivering events. Set to `false` to pause deliveries without deleting the forwarder.",
             "default": true
           },
           "filter": {
@@ -1364,7 +1396,8 @@
                 "type": "null"
               }
             ],
-            "title": "Filter"
+            "title": "Filter",
+            "description": "JSON Logic expression evaluated against each event. The event is delivered only if the expression returns truthy. Omit to deliver every event."
           },
           "transform": {
             "anyOf": [
@@ -1376,10 +1409,12 @@
                 "type": "null"
               }
             ],
-            "title": "Transform"
+            "title": "Transform",
+            "description": "JSONata template applied to each event before delivery. Omit to deliver the event unchanged."
           },
           "http": {
-            "$ref": "#/components/schemas/ForwarderHttp"
+            "$ref": "#/components/schemas/ForwarderHttp",
+            "description": "HTTP request used to deliver each event to the destination."
           },
           "slug": {
             "anyOf": [
@@ -1391,7 +1426,8 @@
               }
             ],
             "title": "Slug",
-            "x-immutable": true
+            "description": "URL-safe identifier derived from `name` at create time. Stable for the lifetime of the forwarder.",
+            "readOnly": true
           },
           "created_at": {
             "anyOf": [
@@ -1404,6 +1440,7 @@
               }
             ],
             "title": "Created At",
+            "description": "When the forwarder was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -1417,6 +1454,7 @@
               }
             ],
             "title": "Updated At",
+            "description": "When the forwarder was last modified.",
             "readOnly": true
           },
           "deleted_at": {
@@ -1430,6 +1468,7 @@
               }
             ],
             "title": "Deleted At",
+            "description": "When the forwarder was deleted. `null` for active forwarders.",
             "readOnly": true
           },
           "version": {
@@ -1442,12 +1481,8 @@
               }
             ],
             "title": "Version",
+            "description": "Monotonic counter incremented on every update, starting at 1.",
             "readOnly": true
-          },
-          "data": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Data"
           }
         },
         "type": "object",
@@ -1457,23 +1492,26 @@
           "http"
         ],
         "title": "Forwarder",
-        "description": "Public-facing forwarder resource.\n\nAttribute set on POST /api/v1/forwarders:\n    - name (required)\n    - forwarder_type (required)\n    - http (required)\n    - enabled (optional, defaults true)\n    - filter (optional, JSON Logic)\n    - transform (optional, JSONata)\n\nThe slug is server-derived from name on create; it is immutable on\nupdate because consumers (UI, observability) key off it."
+        "description": "A destination that receives audit events recorded for the account.\n\nEach event recorded for the account is evaluated against every enabled\nforwarder. If the filter expression evaluates truthy \u2014 or is absent \u2014\nthe event is delivered to the destination using the configured HTTP\nrequest. The slug, derived from `name` at create time, is the stable\nidentifier used by the console and other tooling."
       },
       "ForwarderDelivery": {
         "properties": {
           "forwarder_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Forwarder Id"
+            "title": "Forwarder Id",
+            "description": "Forwarder the delivery belongs to."
           },
           "event_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Event Id"
+            "title": "Event Id",
+            "description": "Event that was being delivered."
           },
           "attempt_number": {
             "type": "integer",
-            "title": "Attempt Number"
+            "title": "Attempt Number",
+            "description": "1 for the initial delivery, incremented for each retry."
           },
           "status": {
             "type": "string",
@@ -1483,7 +1521,8 @@
               "FILTERED_OUT",
               "SKIPPED_DO_NOT_FORWARD"
             ],
-            "title": "Status"
+            "title": "Status",
+            "description": "Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event; `SKIPPED_DO_NOT_FORWARD` is recorded when the event was emitted with `do_not_forward=true`."
           },
           "request": {
             "anyOf": [
@@ -1495,7 +1534,8 @@
                 "type": "null"
               }
             ],
-            "title": "Request"
+            "title": "Request",
+            "description": "The HTTP request as it was sent to the destination. Header values are redacted."
           },
           "response_status": {
             "anyOf": [
@@ -1506,7 +1546,8 @@
                 "type": "null"
               }
             ],
-            "title": "Response Status"
+            "title": "Response Status",
+            "description": "HTTP status code returned by the destination."
           },
           "response_body": {
             "anyOf": [
@@ -1517,7 +1558,8 @@
                 "type": "null"
               }
             ],
-            "title": "Response Body"
+            "title": "Response Body",
+            "description": "Response body returned by the destination."
           },
           "latency_ms": {
             "anyOf": [
@@ -1528,7 +1570,8 @@
                 "type": "null"
               }
             ],
-            "title": "Latency Ms"
+            "title": "Latency Ms",
+            "description": "Elapsed time of the delivery attempt in milliseconds."
           },
           "error": {
             "anyOf": [
@@ -1539,7 +1582,8 @@
                 "type": "null"
               }
             ],
-            "title": "Error"
+            "title": "Error",
+            "description": "Error message if the delivery did not complete."
           },
           "created_at": {
             "anyOf": [
@@ -1551,7 +1595,8 @@
                 "type": "null"
               }
             ],
-            "title": "Created At"
+            "title": "Created At",
+            "description": "When the delivery attempt was recorded."
           }
         },
         "type": "object",
@@ -1562,7 +1607,7 @@
           "status"
         ],
         "title": "ForwarderDelivery",
-        "description": "Read-only delivery log row.\n\nAll fields are server-populated. Headers in ``request`` always show\nredacted values, regardless of who configured them."
+        "description": "A log entry for one attempt to deliver an event to a forwarder."
       },
       "ForwarderDeliveryListResponse": {
         "properties": {
@@ -1592,7 +1637,8 @@
           "data",
           "meta"
         ],
-        "title": "ForwarderDeliveryListResponse"
+        "title": "ForwarderDeliveryListResponse",
+        "description": "JSON:API collection response for forwarder deliveries."
       },
       "ForwarderDeliveryResource": {
         "properties": {
@@ -1615,6 +1661,7 @@
           "attributes"
         ],
         "title": "ForwarderDeliveryResource",
+        "description": "JSON:API resource envelope for a forwarder delivery log entry.",
         "example": {
           "attributes": {
             "attempt_number": 1,
@@ -1651,27 +1698,38 @@
         "required": [
           "data"
         ],
-        "title": "ForwarderDeliveryResponse"
+        "title": "ForwarderDeliveryResponse",
+        "description": "JSON:API single-resource response for a forwarder delivery."
       },
       "ForwarderHttp": {
         "properties": {
           "method": {
             "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
             "title": "Method",
+            "description": "HTTP method used when delivering an event.",
             "default": "POST"
           },
           "url": {
             "type": "string",
             "maxLength": 2048,
             "minLength": 1,
-            "title": "Url"
+            "title": "Url",
+            "description": "Destination URL."
           },
           "headers": {
             "items": {
               "$ref": "#/components/schemas/HttpHeader"
             },
             "type": "array",
-            "title": "Headers"
+            "title": "Headers",
+            "description": "HTTP headers attached to each delivery request."
           },
           "body": {
             "anyOf": [
@@ -1683,12 +1741,14 @@
                 "type": "null"
               }
             ],
-            "title": "Body"
+            "title": "Body",
+            "description": "Request body sent to the destination. If omitted, the event JSON is sent as the body."
           },
           "success_status": {
             "type": "string",
             "maxLength": 3,
             "title": "Success Status",
+            "description": "HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
             "default": "2xx"
           }
         },
@@ -1698,7 +1758,7 @@
           "url"
         ],
         "title": "ForwarderHttp",
-        "description": "The destination HTTP request shape stored encrypted on a forwarder.\n\n``success_status`` is a string: either a single status code (e.g.\n``\"200\"``, ``\"204\"``) or a class (e.g. ``\"2xx\"``, ``\"3xx\"``). The\nstring-only contract is intentional \u2014 a Pydantic ``int | str`` union\nconfused several SDK code generators (Java in particular wrote the\ndefault ``\"2xx\"`` unquoted into a typed enum). String covers both\nshapes universally with a single wire type."
+        "description": "HTTP request configuration used to deliver an event to the destination."
       },
       "ForwarderListLinks": {
         "properties": {
@@ -1758,12 +1818,33 @@
           "data",
           "meta"
         ],
-        "title": "ForwarderListResponse"
+        "title": "ForwarderListResponse",
+        "description": "JSON:API collection response for forwarders."
+      },
+      "ForwarderRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ForwarderResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ForwarderRequest",
+        "description": "JSON:API request envelope for creating or updating a forwarder."
       },
       "ForwarderResource": {
         "properties": {
           "id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Id"
           },
           "type": {
@@ -1777,14 +1858,13 @@
         },
         "type": "object",
         "required": [
-          "id",
           "attributes"
         ],
         "title": "ForwarderResource",
+        "description": "JSON:API resource envelope for a forwarder.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "created_at": "2026-05-07T12:00:00Z",
-            "data": {},
             "enabled": true,
             "filter": {
               "==": [
@@ -1825,7 +1905,8 @@
         "required": [
           "data"
         ],
-        "title": "ForwarderResponse"
+        "title": "ForwarderResponse",
+        "description": "JSON:API single-resource response envelope for a forwarder."
       },
       "ForwarderType": {
         "type": "string",
@@ -1839,7 +1920,7 @@
           "ELASTIC"
         ],
         "title": "ForwarderType",
-        "description": "Supported forwarder destination types.\n\nCarried as a typed enum so the OpenAPI spec emits an ``enum``\nconstraint and the auto-generated SDK clients (in all 6 languages)\nsurface a typed enum to customers rather than free-form strings.\nSubclassing ``str`` keeps JSON serialization byte-identical to the\nprior ``str`` field \u2014 no migration of stored ``forwarder.type``\nvalues needed.\n\nValues are SCREAMING_SNAKE_CASE per ADR-014. The Forwarder schema\naccepts any casing on input via _normalize_forwarder_type.\n\nAdding a new destination here requires a corresponding implementation\nin ``app.services.forwarding`` and a regeneration of the OpenAPI\nspec so the SDK clients pick up the new variant."
+        "description": "Supported forwarder destination types."
       },
       "HttpHeader": {
         "properties": {
@@ -1847,12 +1928,14 @@
             "type": "string",
             "maxLength": 200,
             "minLength": 1,
-            "title": "Name"
+            "title": "Name",
+            "description": "Header name."
           },
           "value": {
             "type": "string",
             "maxLength": 8192,
-            "title": "Value"
+            "title": "Value",
+            "description": "Header value."
           }
         },
         "type": "object",
@@ -1861,7 +1944,7 @@
           "value"
         ],
         "title": "HttpHeader",
-        "description": "A single header on a forwarder's HTTP destination."
+        "description": "A single HTTP header attached to a forwarder delivery request."
       },
       "ResourceTypeAttributes": {
         "properties": {
@@ -1979,15 +2062,18 @@
         "properties": {
           "attempted": {
             "type": "integer",
-            "title": "Attempted"
+            "title": "Attempted",
+            "description": "Number of failed deliveries that were re-attempted."
           },
           "succeeded": {
             "type": "integer",
-            "title": "Succeeded"
+            "title": "Succeeded",
+            "description": "Number of re-attempts that succeeded."
           },
           "failed": {
             "type": "integer",
-            "title": "Failed"
+            "title": "Failed",
+            "description": "Number of re-attempts that failed again."
           }
         },
         "type": "object",
@@ -1996,27 +2082,38 @@
           "succeeded",
           "failed"
         ],
-        "title": "RetryFailedDeliveriesSummary"
+        "title": "RetryFailedDeliveriesSummary",
+        "description": "Counts returned by the retry-failed-deliveries action."
       },
       "TestForwarderRequest": {
         "properties": {
           "method": {
             "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
             "title": "Method",
+            "description": "HTTP method used for the test request.",
             "default": "POST"
           },
           "url": {
             "type": "string",
             "maxLength": 2048,
             "minLength": 1,
-            "title": "Url"
+            "title": "Url",
+            "description": "Destination URL."
           },
           "headers": {
             "items": {
               "$ref": "#/components/schemas/HttpHeader"
             },
             "type": "array",
-            "title": "Headers"
+            "title": "Headers",
+            "description": "HTTP headers attached to the test request."
           },
           "body": {
             "anyOf": [
@@ -2028,12 +2125,14 @@
                 "type": "null"
               }
             ],
-            "title": "Body"
+            "title": "Body",
+            "description": "Request body. If omitted, an empty body is sent."
           },
           "success_status": {
             "type": "string",
             "maxLength": 3,
             "title": "Success Status",
+            "description": "HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
             "default": "2xx"
           },
           "timeout_ms": {
@@ -2047,7 +2146,8 @@
                 "type": "null"
               }
             ],
-            "title": "Timeout Ms"
+            "title": "Timeout Ms",
+            "description": "Per-request timeout in milliseconds. Capped at 30 seconds."
           }
         },
         "additionalProperties": false,
@@ -2056,13 +2156,14 @@
           "url"
         ],
         "title": "TestForwarderRequest",
-        "description": "Plain-JSON body for the test_forwarder execute action.\n\nMirrors the encrypted ``ForwarderHttp`` shape with one addition \u2014\n``timeout_ms``, capped server-side."
+        "description": "Inputs to the test-forwarder action.\n\nMirrors a forwarder's HTTP destination configuration with one\naddition: `timeout_ms`, applied per-request and capped server-side."
       },
       "TestForwarderResponse": {
         "properties": {
           "succeeded": {
             "type": "boolean",
-            "title": "Succeeded"
+            "title": "Succeeded",
+            "description": "True if the destination responded with a status matching `success_status`."
           },
           "response_status": {
             "anyOf": [
@@ -2073,14 +2174,16 @@
                 "type": "null"
               }
             ],
-            "title": "Response Status"
+            "title": "Response Status",
+            "description": "HTTP status code returned by the destination."
           },
           "response_headers": {
             "additionalProperties": {
               "type": "string"
             },
             "type": "object",
-            "title": "Response Headers"
+            "title": "Response Headers",
+            "description": "Headers returned by the destination."
           },
           "response_body": {
             "anyOf": [
@@ -2091,7 +2194,8 @@
                 "type": "null"
               }
             ],
-            "title": "Response Body"
+            "title": "Response Body",
+            "description": "Response body returned by the destination."
           },
           "latency_ms": {
             "anyOf": [
@@ -2102,7 +2206,8 @@
                 "type": "null"
               }
             ],
-            "title": "Latency Ms"
+            "title": "Latency Ms",
+            "description": "Elapsed time of the request in milliseconds."
           },
           "error": {
             "anyOf": [
@@ -2113,7 +2218,8 @@
                 "type": "null"
               }
             ],
-            "title": "Error"
+            "title": "Error",
+            "description": "Error message if the request did not complete."
           }
         },
         "type": "object",
@@ -2123,21 +2229,24 @@
           "latency_ms"
         ],
         "title": "TestForwarderResponse",
-        "description": "Plain-JSON response body. Headers are echoed back unredacted because\nthe caller already supplied them \u2014 the response is for the caller, not\npersisted into the delivery log."
+        "description": "Result of a test-forwarder execution."
       },
       "UsageAttributes": {
         "properties": {
           "limit_key": {
             "type": "string",
-            "title": "Limit Key"
+            "title": "Limit Key",
+            "description": "Identifier of the metered limit, e.g. `audit.customer_events_per_month`."
           },
           "period": {
             "type": "string",
-            "title": "Period"
+            "title": "Period",
+            "description": "Period the counter covers. `current` is the only supported value."
           },
           "value": {
             "type": "integer",
-            "title": "Value"
+            "title": "Value",
+            "description": "Count for the period."
           }
         },
         "type": "object",
@@ -2147,7 +2256,7 @@
           "value"
         ],
         "title": "UsageAttributes",
-        "description": "Attribute set for a usage resource.\n\nThe shape mirrors the ``/api/v1/usage`` contract used by config, flags,\nand logging \u2014 three fields, no per-product extras. Per-period limits\nlive in the product catalog (``GET /api/v1/products``); the usage\nendpoint reports counts only."
+        "description": "Usage counter for a single metered limit."
       },
       "UsageResource": {
         "properties": {
@@ -2201,13 +2310,14 @@
         "additionalProperties": false,
         "type": "object",
         "title": "WipeRequest",
-        "description": "Empty body \u2014 the action requires no parameters."
+        "description": "Empty body \u2014 the action takes no parameters."
       },
       "WipeResponse": {
         "properties": {
           "wiped": {
             "type": "boolean",
             "title": "Wiped",
+            "description": "Always `true` for a successful wipe.",
             "default": true
           },
           "tables": {
@@ -2216,7 +2326,8 @@
           "completed_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Completed At"
+            "title": "Completed At",
+            "description": "When the wipe completed."
           }
         },
         "type": "object",
@@ -2225,6 +2336,7 @@
           "completed_at"
         ],
         "title": "WipeResponse",
+        "description": "Summary of a completed wipe action.",
         "example": {
           "completed_at": "2026-05-08T19:31:24Z",
           "tables": {
@@ -2243,32 +2355,38 @@
           "audit_event": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Audit Event"
+            "title": "Audit Event",
+            "description": "Number of audit events deleted."
           },
           "audit_event_quota": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Audit Event Quota"
+            "title": "Audit Event Quota",
+            "description": "Number of monthly usage-quota counters deleted."
           },
           "forwarder": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Forwarder"
+            "title": "Forwarder",
+            "description": "Number of forwarders deleted."
           },
           "forwarder_delivery": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Forwarder Delivery"
+            "title": "Forwarder Delivery",
+            "description": "Number of forwarder delivery log entries deleted."
           },
           "resource_type": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Resource Type"
+            "title": "Resource Type",
+            "description": "Number of distinct `resource_type` entries deleted."
           },
           "action": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Action"
+            "title": "Action",
+            "description": "Number of distinct `action` entries deleted."
           }
         },
         "type": "object",
@@ -2280,7 +2398,8 @@
           "resource_type",
           "action"
         ],
-        "title": "WipeTablesSummary"
+        "title": "WipeTablesSummary",
+        "description": "Counts of records deleted, broken down by record kind."
       }
     },
     "securitySchemes": {
@@ -2292,22 +2411,22 @@
   },
   "tags": [
     {
-      "name": "Events"
-    },
-    {
-      "name": "Resource Types"
-    },
-    {
       "name": "Actions"
     },
     {
-      "name": "Usage"
+      "name": "Events"
     },
     {
       "name": "Forwarders"
     },
     {
       "name": "Functions"
+    },
+    {
+      "name": "Resource Types"
+    },
+    {
+      "name": "Usage"
     }
   ]
 }
