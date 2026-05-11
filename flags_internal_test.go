@@ -2649,7 +2649,7 @@ func flagResource(id, flagType, name, vType string, dflt interface{}, desc strin
 		Type: genflags.FlagResourceType(flagType),
 		Attributes: genflags.Flag{
 			Name:         name,
-			Type:         vType,
+			Type:         genflags.FlagType(vType),
 			Default:      dflt,
 			Values:       &vals,
 			Description:  &desc,
@@ -2666,7 +2666,7 @@ func flagResourceNoID(name, vType string, dflt interface{}, created time.Time) g
 		Type: genflags.FlagResourceTypeFlag,
 		Attributes: genflags.Flag{
 			Name:      name,
-			Type:      vType,
+			Type:      genflags.FlagType(vType),
 			Default:   dflt,
 			Values:    &vals,
 			CreatedAt: &created,
@@ -3676,7 +3676,7 @@ func TestFlushFlagBuffer_Success(t *testing.T) {
 	for _, item := range reqBody.Flags {
 		byID[item.Id] = item
 	}
-	assert.Equal(t, "BOOLEAN", byID["flag-a"].Type)
+	assert.Equal(t, genflags.FlagBulkItemType("BOOLEAN"), byID["flag-a"].Type)
 	assert.NotNil(t, byID["flag-a"].Service)
 	assert.Equal(t, "my-svc", *byID["flag-a"].Service)
 	assert.NotNil(t, byID["flag-a"].Environment)

@@ -11,7 +11,7 @@
           "Flags"
         ],
         "summary": "Create Flag",
-        "description": "Create a new feature flag. The caller provides the id (key) in the request body.",
+        "description": "Create a new feature flag. The caller provides the id (the flag key) in the request body.",
         "operationId": "create_flag",
         "security": [
           {
@@ -23,7 +23,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/FlagResponse"
+                "$ref": "#/components/schemas/FlagRequest"
               }
             }
           }
@@ -46,7 +46,7 @@
           "Flags"
         ],
         "summary": "List Flags",
-        "description": "List all feature flags for the authenticated account.",
+        "description": "List feature flags for this account.",
         "operationId": "list_flags",
         "security": [
           {
@@ -143,7 +143,7 @@
           "Flags"
         ],
         "summary": "Get Flag",
-        "description": "Return a feature flag by its key.",
+        "description": "Retrieve a feature flag by its key.",
         "operationId": "get_flag",
         "security": [
           {
@@ -179,7 +179,7 @@
           "Flags"
         ],
         "summary": "Update Flag",
-        "description": "Replace a feature flag entirely.",
+        "description": "Replace a feature flag entirely. Every writable field is overwritten.",
         "operationId": "update_flag",
         "security": [
           {
@@ -202,7 +202,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/FlagResponse"
+                "$ref": "#/components/schemas/FlagRequest"
               }
             }
           }
@@ -256,7 +256,7 @@
           "Flags"
         ],
         "summary": "Bulk Register Flags",
-        "description": "Register flags discovered by an SDK. Creates new flags or updates source observations on existing ones.",
+        "description": "Register flags discovered by an SDK.\n\nCreates a new flag for each unreported key and refreshes the\nservice/environment source observation on each already-known key.",
         "operationId": "bulk_register_flags",
         "requestBody": {
           "content": {
@@ -293,7 +293,7 @@
           "Flag Sources"
         ],
         "summary": "List Flag Sources",
-        "description": "List all sources (service/environment observations) for a specific flag.",
+        "description": "List the service/environment observations recorded for a single flag.",
         "operationId": "list_flag_sources",
         "security": [
           {
@@ -331,7 +331,7 @@
           "Flag Sources"
         ],
         "summary": "List All Flag Sources",
-        "description": "List all flag sources across all flags. Optionally filter by environment or service.",
+        "description": "List service/environment observations across all flags for this account.\n\nFilter by `environment` or `service` (or both) to narrow the result.",
         "operationId": "list_all_flag_sources",
         "security": [
           {
@@ -392,7 +392,7 @@
           "Functions"
         ],
         "summary": "Execute Remove References",
-        "description": "Bulk-remove context references from flag rules.\n\nTraverses every flag in the account, removes rules that reference the\nspecified context, and emits a single flags_changed event when done.",
+        "description": "Remove every rule that references a specific context across every flag.\n\nProvide exactly one of `context` (matches a single instance,\nformatted as `{type}:{key}`) or `context_type` (matches any\nattribute of that context type). Rules whose reference sits inside\nan AND expression are not removed automatically; they are returned\nin `rules_needing_manual_review` for the caller to handle.",
         "operationId": "remove_references",
         "requestBody": {
           "content": {
@@ -429,7 +429,7 @@
           "Usage"
         ],
         "summary": "List Flags Usage",
-        "description": "Return current resource usage counts for the authenticated account.",
+        "description": "Report current-period usage counters for this account.",
         "operationId": "list_flags_usage",
         "security": [
           {
@@ -479,7 +479,7 @@
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Human-readable display name"
+            "description": "Human-readable display name for the flag."
           },
           "description": {
             "anyOf": [
@@ -490,16 +490,23 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "Human-readable description of the flag's purpose."
           },
           "type": {
             "type": "string",
+            "enum": [
+              "BOOLEAN",
+              "STRING",
+              "NUMERIC",
+              "JSON"
+            ],
             "title": "Type",
-            "description": "Value type: STRING, BOOLEAN, NUMERIC, or JSON"
+            "description": "Value type of the flag. Accepted case-insensitively. Changing the type cascades to `values`, `default`, and every environment's rules and default."
           },
           "default": {
             "title": "Default",
-            "description": "Default value; must reference a value in the values array (constrained) or match the flag type (unconstrained)"
+            "description": "Default value returned when no environment rule fires and the environment has no `default`. For constrained flags (non-null `values`), must equal one of the entries in the `values` array. For unconstrained flags, must match `type`."
           },
           "values": {
             "anyOf": [
@@ -514,14 +521,15 @@
               }
             ],
             "title": "Values",
-            "description": "Ordered set of allowed values (constrained), or null (unconstrained)"
+            "description": "Ordered set of allowed values for a constrained flag, or `null` for an unconstrained flag. `BOOLEAN` flags, if constrained, must declare exactly two values."
           },
           "environments": {
             "additionalProperties": {
               "$ref": "#/components/schemas/FlagEnvironment"
             },
             "type": "object",
-            "title": "Environments"
+            "title": "Environments",
+            "description": "Per-environment configuration keyed by environment name (`production`, `staging`, etc.). Environments not listed fall back to the flag's global `default`."
           },
           "managed": {
             "anyOf": [
@@ -533,14 +541,13 @@
               }
             ],
             "title": "Managed",
-            "description": "True if admin-managed, false if auto-discovered"
+            "description": "`true` when the flag was created through the API, `false` when it was auto-discovered from a bulk-register call. Auto-discovered flags can be edited and converted to managed by setting this to `true`."
           },
           "sources": {
             "anyOf": [
               {
                 "items": {
-                  "additionalProperties": true,
-                  "type": "object"
+                  "$ref": "#/components/schemas/FlagSource"
                 },
                 "type": "array"
               },
@@ -549,6 +556,7 @@
               }
             ],
             "title": "Sources",
+            "description": "SDK-reported observations of this flag, grouped by service and environment. Populated automatically by the bulk-register endpoint.",
             "readOnly": true
           },
           "created_at": {
@@ -562,6 +570,7 @@
               }
             ],
             "title": "Created At",
+            "description": "When the flag was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -575,6 +584,7 @@
               }
             ],
             "title": "Updated At",
+            "description": "When the flag was last modified.",
             "readOnly": true
           }
         },
@@ -585,6 +595,7 @@
           "default"
         ],
         "title": "Flag",
+        "description": "A feature flag whose value is resolved at runtime from environment\nrules and a default.\n\nA flag has a value type (`BOOLEAN`, `STRING`, `NUMERIC`, or `JSON`)\nand either a fixed set of allowed values (constrained) or accepts\nany value matching the type (unconstrained). Each environment can\nenable or disable the flag, set its own default, and define\ntargeting rules that override the default for specific evaluation\ncontexts.",
         "example": {
           "created_at": "2026-03-27T10:00:00Z",
           "default": false,
@@ -597,9 +608,12 @@
                 {
                   "description": "Beta users get dark mode",
                   "logic": {
-                    "attribute": "beta",
-                    "op": "eq",
-                    "value": true
+                    "==": [
+                      {
+                        "var": "customer.beta"
+                      },
+                      true
+                    ]
                   },
                   "value": true
                 }
@@ -632,16 +646,22 @@
           "id": {
             "type": "string",
             "title": "Id",
-            "description": "Flag key as declared in code"
+            "description": "Flag key as declared in code. URL-safe and stable for the lifetime of the flag."
           },
           "type": {
             "type": "string",
+            "enum": [
+              "BOOLEAN",
+              "STRING",
+              "NUMERIC",
+              "JSON"
+            ],
             "title": "Type",
-            "description": "Flag type: BOOLEAN, STRING, NUMERIC, or JSON"
+            "description": "Value type the SDK declared for the flag. Accepted case-insensitively."
           },
           "default": {
             "title": "Default",
-            "description": "Default value declared in code"
+            "description": "Default value the SDK declared for the flag. Used to create the flag if it does not already exist."
           },
           "service": {
             "anyOf": [
@@ -653,7 +673,7 @@
               }
             ],
             "title": "Service",
-            "description": "Service that declared this flag"
+            "description": "Service reporting the declaration. Defaults to `unknown`."
           },
           "environment": {
             "anyOf": [
@@ -665,7 +685,7 @@
               }
             ],
             "title": "Environment",
-            "description": "Environment where observed"
+            "description": "Environment reporting the declaration. Defaults to `unknown`."
           }
         },
         "type": "object",
@@ -675,6 +695,7 @@
           "default"
         ],
         "title": "FlagBulkItem",
+        "description": "One flag declaration reported by an SDK during bulk registration.",
         "example": {
           "default": false,
           "environment": "production",
@@ -690,7 +711,8 @@
               "$ref": "#/components/schemas/FlagBulkItem"
             },
             "type": "array",
-            "title": "Flags"
+            "title": "Flags",
+            "description": "Flags reported by the SDK in this batch."
           }
         },
         "type": "object",
@@ -698,6 +720,7 @@
           "flags"
         ],
         "title": "FlagBulkRequest",
+        "description": "Inputs to the bulk-register-flags action.",
         "example": {
           "flags": [
             {
@@ -721,7 +744,8 @@
         "properties": {
           "registered": {
             "type": "integer",
-            "title": "Registered"
+            "title": "Registered",
+            "description": "Number of items in the batch that were registered or refreshed."
           }
         },
         "type": "object",
@@ -729,6 +753,7 @@
           "registered"
         ],
         "title": "FlagBulkResponse",
+        "description": "Result of a bulk-register-flags action.",
         "example": {
           "registered": 5
         }
@@ -738,6 +763,7 @@
           "enabled": {
             "type": "boolean",
             "title": "Enabled",
+            "description": "Whether the flag is active in this environment. When `false`, evaluation skips rules and returns the flag's global `default`.",
             "default": true
           },
           "default": {
@@ -747,18 +773,21 @@
                 "type": "null"
               }
             ],
-            "title": "Default"
+            "title": "Default",
+            "description": "Environment-level default returned when no rule fires. If `null`, evaluation falls back to the flag's global `default`."
           },
           "rules": {
             "items": {
               "$ref": "#/components/schemas/FlagRule"
             },
             "type": "array",
-            "title": "Rules"
+            "title": "Rules",
+            "description": "Targeting rules evaluated top-down. The first rule whose logic returns truthy provides the result."
           }
         },
         "type": "object",
-        "title": "FlagEnvironment"
+        "title": "FlagEnvironment",
+        "description": "Per-environment evaluation configuration for a flag."
       },
       "FlagListResponse": {
         "properties": {
@@ -774,7 +803,21 @@
         "required": [
           "data"
         ],
-        "title": "FlagListResponse"
+        "title": "FlagListResponse",
+        "description": "JSON:API collection response envelope for flags."
+      },
+      "FlagRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/FlagResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "FlagRequest",
+        "description": "JSON:API request envelope for creating or updating a flag."
       },
       "FlagResource": {
         "properties": {
@@ -804,6 +847,7 @@
           "attributes"
         ],
         "title": "FlagResource",
+        "description": "JSON:API resource envelope for a flag.\n\n`id` is the flag key. For create requests, `id` is required and is\nchosen by the caller. For update requests, `id` may be omitted (the\nserver reads the key from the URL) or supplied to rename the flag.",
         "example": {
           "attributes": {
             "created_at": "2026-03-27T10:00:00Z",
@@ -817,9 +861,12 @@
                   {
                     "description": "Beta users get dark mode",
                     "logic": {
-                      "attribute": "beta",
-                      "op": "eq",
-                      "value": true
+                      "==": [
+                        {
+                          "var": "customer.beta"
+                        },
+                        true
+                      ]
                     },
                     "value": true
                   }
@@ -855,7 +902,8 @@
         "required": [
           "data"
         ],
-        "title": "FlagResponse"
+        "title": "FlagResponse",
+        "description": "JSON:API single-resource response envelope for a flag."
       },
       "FlagRule": {
         "properties": {
@@ -868,15 +916,18 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "Human-readable description of the rule."
           },
           "logic": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Logic"
+            "title": "Logic",
+            "description": "JSON Logic expression evaluated against the evaluation context. The rule fires when the expression is truthy."
           },
           "value": {
-            "title": "Value"
+            "title": "Value",
+            "description": "Value returned when the rule fires. Must reference a value from the flag's `values` array (constrained flags) or match the flag's `type` (unconstrained flags)."
           }
         },
         "type": "object",
@@ -884,18 +935,59 @@
           "logic",
           "value"
         ],
-        "title": "FlagRule"
+        "title": "FlagRule",
+        "description": "A targeting rule that overrides the default within an environment."
       },
       "FlagSource": {
         "properties": {
           "service": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Service",
+            "description": "Service that declared the flag.",
             "readOnly": true
           },
           "environment": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Environment",
+            "description": "Environment in which the service declared the flag.",
+            "readOnly": true
+          },
+          "declared_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "BOOLEAN",
+                  "STRING",
+                  "NUMERIC",
+                  "JSON"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Type",
+            "description": "Value type the SDK reported when registering the flag from this service/environment. May differ from the flag's authoritative `type` if the service is running stale code.",
+            "readOnly": true
+          },
+          "declared_default": {
+            "title": "Declared Default",
+            "description": "Default value the SDK reported when registering the flag from this service/environment. May differ from the flag's authoritative `default` if the service is running stale code.",
             "readOnly": true
           },
           "first_observed": {
@@ -909,6 +1001,7 @@
               }
             ],
             "title": "First Observed",
+            "description": "When this source was first observed.",
             "readOnly": true
           },
           "last_seen": {
@@ -922,19 +1015,7 @@
               }
             ],
             "title": "Last Seen",
-            "readOnly": true
-          },
-          "data": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data",
+            "description": "Most recent time the SDK re-registered this source.",
             "readOnly": true
           },
           "created_at": {
@@ -948,6 +1029,7 @@
               }
             ],
             "title": "Created At",
+            "description": "When the source record was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -961,23 +1043,13 @@
               }
             ],
             "title": "Updated At",
+            "description": "When the source record was last modified.",
             "readOnly": true
           }
         },
         "type": "object",
         "title": "FlagSource",
-        "example": {
-          "created_at": "2026-04-17T10:00:00Z",
-          "data": {
-            "default": true,
-            "type": "BOOLEAN"
-          },
-          "environment": "production",
-          "first_observed": "2026-04-17T10:00:00Z",
-          "last_seen": "2026-04-17T15:30:00Z",
-          "service": "api-gateway",
-          "updated_at": "2026-04-17T15:30:00Z"
-        }
+        "description": "A record of an SDK observing a feature flag from a particular\nservice and environment.\n\nThe flags service auto-registers a source the first time an SDK\nreports a flag from a given service/environment pair and refreshes\n`last_seen` on every subsequent report. Each source captures the\nvalue type and default value the SDK declared in source code at\nthat location, which makes it possible to detect when service code\nhas drifted from the flag's authoritative configuration."
       },
       "FlagSourceListResponse": {
         "properties": {
@@ -993,7 +1065,8 @@
         "required": [
           "data"
         ],
-        "title": "FlagSourceListResponse"
+        "title": "FlagSourceListResponse",
+        "description": "JSON:API collection response envelope for flag sources."
       },
       "FlagSourceResource": {
         "properties": {
@@ -1023,13 +1096,12 @@
           "attributes"
         ],
         "title": "FlagSourceResource",
+        "description": "JSON:API resource envelope for a flag source.\n\n`id` is the source record's UUID. Sources are not created or\nmodified directly \u2014 the flags service registers and refreshes them\nin response to SDK bulk-register requests.",
         "example": {
           "attributes": {
             "created_at": "2026-04-17T10:00:00Z",
-            "data": {
-              "default": true,
-              "type": "BOOLEAN"
-            },
+            "declared_default": true,
+            "declared_type": "BOOLEAN",
             "environment": "production",
             "first_observed": "2026-04-17T10:00:00Z",
             "last_seen": "2026-04-17T15:30:00Z",
@@ -1044,10 +1116,12 @@
         "properties": {
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Human-readable label for the value."
           },
           "value": {
-            "title": "Value"
+            "title": "Value",
+            "description": "The value itself. Must match the flag's `type`."
           }
         },
         "type": "object",
@@ -1055,25 +1129,30 @@
           "name",
           "value"
         ],
-        "title": "FlagValue"
+        "title": "FlagValue",
+        "description": "A named value in a constrained flag's value set."
       },
       "ManualReviewItem": {
         "properties": {
           "flag": {
             "type": "string",
-            "title": "Flag"
+            "title": "Flag",
+            "description": "Key of the flag containing the rule."
           },
           "environment": {
             "type": "string",
-            "title": "Environment"
+            "title": "Environment",
+            "description": "Environment containing the rule."
           },
           "rule_index": {
             "type": "integer",
-            "title": "Rule Index"
+            "title": "Rule Index",
+            "description": "Position of the rule within the environment's `rules` array."
           },
           "reason": {
             "type": "string",
-            "title": "Reason"
+            "title": "Reason",
+            "description": "Why the rule needs manual review."
           }
         },
         "type": "object",
@@ -1083,7 +1162,8 @@
           "rule_index",
           "reason"
         ],
-        "title": "ManualReviewItem"
+        "title": "ManualReviewItem",
+        "description": "A flag rule that could not be safely modified by the bulk\nremove-references action."
       },
       "RemoveReferencesAttributes": {
         "properties": {
@@ -1092,18 +1172,21 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Flags Modified"
+            "title": "Flags Modified",
+            "description": "Keys of flags whose rules were modified."
           },
           "rules_removed": {
             "type": "integer",
-            "title": "Rules Removed"
+            "title": "Rules Removed",
+            "description": "Total number of rules removed across all flags."
           },
           "rules_needing_manual_review": {
             "items": {
               "$ref": "#/components/schemas/ManualReviewItem"
             },
             "type": "array",
-            "title": "Rules Needing Manual Review"
+            "title": "Rules Needing Manual Review",
+            "description": "Rules that referenced the context but could not be removed automatically (typically because the reference is inside an `and` expression where removal would broaden the rule)."
           }
         },
         "type": "object",
@@ -1112,7 +1195,8 @@
           "rules_removed",
           "rules_needing_manual_review"
         ],
-        "title": "RemoveReferencesAttributes"
+        "title": "RemoveReferencesAttributes",
+        "description": "Counts and follow-ups returned by the remove-references action."
       },
       "RemoveReferencesRequest": {
         "properties": {
@@ -1125,7 +1209,8 @@
                 "type": "null"
               }
             ],
-            "title": "Context"
+            "title": "Context",
+            "description": "Identifier of the context instance to remove references to, formatted as `{type}:{key}` (e.g. `customer:c-123`)."
           },
           "context_type": {
             "anyOf": [
@@ -1136,11 +1221,13 @@
                 "type": "null"
               }
             ],
-            "title": "Context Type"
+            "title": "Context Type",
+            "description": "Context type to remove all references to (any attribute of this type)."
           }
         },
         "type": "object",
-        "title": "RemoveReferencesRequest"
+        "title": "RemoveReferencesRequest",
+        "description": "Inputs to the remove-references action.\n\nExactly one of `context` or `context_type` must be provided."
       },
       "RemoveReferencesResultEnvelope": {
         "properties": {
@@ -1152,7 +1239,8 @@
         "required": [
           "data"
         ],
-        "title": "RemoveReferencesResultEnvelope"
+        "title": "RemoveReferencesResultEnvelope",
+        "description": "JSON:API single-resource response envelope for the\nremove-references action."
       },
       "RemoveReferencesResultResource": {
         "properties": {
@@ -1171,6 +1259,7 @@
           "attributes"
         ],
         "title": "RemoveReferencesResultResource",
+        "description": "JSON:API resource envelope for the remove-references result.",
         "example": {
           "attributes": {
             "flags_modified": [
@@ -1194,15 +1283,18 @@
         "properties": {
           "limit_key": {
             "type": "string",
-            "title": "Limit Key"
+            "title": "Limit Key",
+            "description": "Identifier of the metered limit, e.g. `flags.items`."
           },
           "period": {
             "type": "string",
-            "title": "Period"
+            "title": "Period",
+            "description": "Period the counter covers. `current` is the only supported value."
           },
           "value": {
             "type": "integer",
-            "title": "Value"
+            "title": "Value",
+            "description": "Count for the period."
           }
         },
         "type": "object",
@@ -1211,7 +1303,8 @@
           "period",
           "value"
         ],
-        "title": "UsageAttributes"
+        "title": "UsageAttributes",
+        "description": "Usage counter for a single metered limit."
       },
       "UsageListResponse": {
         "properties": {
@@ -1228,6 +1321,7 @@
           "data"
         ],
         "title": "UsageListResponse",
+        "description": "JSON:API collection response envelope for usage counters.",
         "example": {
           "data": [
             {
@@ -1264,6 +1358,7 @@
           "attributes"
         ],
         "title": "UsageResource",
+        "description": "JSON:API resource envelope for a usage counter.",
         "example": {
           "attributes": {
             "limit_key": "flags.items",
@@ -1284,10 +1379,16 @@
   },
   "tags": [
     {
+      "name": "Flag Sources"
+    },
+    {
       "name": "Flags"
     },
     {
-      "name": "Flag Sources"
+      "name": "Functions"
+    },
+    {
+      "name": "Usage"
     }
   ]
 }
