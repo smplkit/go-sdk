@@ -21,6 +21,39 @@ const (
 	HTTPBearerScopes hTTPBearerContextKey = "HTTPBearer.Scopes"
 )
 
+// Defines values for LogGroupLevel.
+const (
+	LogGroupLevelDEBUG  LogGroupLevel = "DEBUG"
+	LogGroupLevelERROR  LogGroupLevel = "ERROR"
+	LogGroupLevelFATAL  LogGroupLevel = "FATAL"
+	LogGroupLevelINFO   LogGroupLevel = "INFO"
+	LogGroupLevelSILENT LogGroupLevel = "SILENT"
+	LogGroupLevelTRACE  LogGroupLevel = "TRACE"
+	LogGroupLevelWARN   LogGroupLevel = "WARN"
+)
+
+// Valid indicates whether the value is a known member of the LogGroupLevel enum.
+func (e LogGroupLevel) Valid() bool {
+	switch e {
+	case LogGroupLevelDEBUG:
+		return true
+	case LogGroupLevelERROR:
+		return true
+	case LogGroupLevelFATAL:
+		return true
+	case LogGroupLevelINFO:
+		return true
+	case LogGroupLevelSILENT:
+		return true
+	case LogGroupLevelTRACE:
+		return true
+	case LogGroupLevelWARN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogGroupResourceType.
 const (
 	LogGroupResourceTypeLogGroup LogGroupResourceType = "log_group"
@@ -30,6 +63,39 @@ const (
 func (e LogGroupResourceType) Valid() bool {
 	switch e {
 	case LogGroupResourceTypeLogGroup:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LoggerLevel.
+const (
+	LoggerLevelDEBUG  LoggerLevel = "DEBUG"
+	LoggerLevelERROR  LoggerLevel = "ERROR"
+	LoggerLevelFATAL  LoggerLevel = "FATAL"
+	LoggerLevelINFO   LoggerLevel = "INFO"
+	LoggerLevelSILENT LoggerLevel = "SILENT"
+	LoggerLevelTRACE  LoggerLevel = "TRACE"
+	LoggerLevelWARN   LoggerLevel = "WARN"
+)
+
+// Valid indicates whether the value is a known member of the LoggerLevel enum.
+func (e LoggerLevel) Valid() bool {
+	switch e {
+	case LoggerLevelDEBUG:
+		return true
+	case LoggerLevelERROR:
+		return true
+	case LoggerLevelFATAL:
+		return true
+	case LoggerLevelINFO:
+		return true
+	case LoggerLevelSILENT:
+		return true
+	case LoggerLevelTRACE:
+		return true
+	case LoggerLevelWARN:
 		return true
 	default:
 		return false
@@ -109,23 +175,60 @@ type ErrorResponse struct {
 	Errors []Error `json:"errors"`
 }
 
-// LogGroup defines model for LogGroup.
+// LogGroup A named collection of loggers that share a level configuration.
+//
+// Assigning a logger to a group ties the logger's effective level to
+// the group's level (and per-environment overrides). Loggers can move
+// between groups or be detached from a group entirely.
 type LogGroup struct {
-	CreatedAt    *time.Time              `json:"created_at,omitempty"`
+	// CreatedAt When the group was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Environments Per-environment level overrides keyed by environment name. Each value is an object with an optional `level` field, e.g. `{"production": {"level": "ERROR"}}`. Member loggers inherit the per-environment level unless they set their own override.
 	Environments *map[string]interface{} `json:"environments,omitempty"`
-	Level        *string                 `json:"level,omitempty"`
-	Name         string                  `json:"name"`
-	ParentId     *string                 `json:"parent_id,omitempty"`
-	UpdatedAt    *time.Time              `json:"updated_at,omitempty"`
+
+	// Level Default level applied to every logger in the group. `null` leaves member loggers to inherit from elsewhere.
+	Level *LogGroupLevel `json:"level,omitempty"`
+
+	// Name Human-readable label for the group.
+	Name string `json:"name"`
+
+	// ParentId Reserved for nested groups. Must be `null` in this version; nested groups are not yet supported.
+	ParentId *string `json:"parent_id,omitempty"`
+
+	// UpdatedAt When the group was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// LogGroupListResponse defines model for LogGroupListResponse.
+// LogGroupLevel Default level applied to every logger in the group. `null` leaves member loggers to inherit from elsewhere.
+type LogGroupLevel string
+
+// LogGroupListResponse JSON:API collection response for log groups.
 type LogGroupListResponse struct {
 	Data []LogGroupResource `json:"data"`
 }
 
-// LogGroupResource defines model for LogGroupResource.
+// LogGroupRequest JSON:API request envelope for creating or updating a log group.
+type LogGroupRequest struct {
+	// Data JSON:API resource envelope for a log group.
+	//
+	// `id` is the group's key (e.g. `database-loggers`). On a create
+	// request the id may be supplied; if omitted, the server generates
+	// one from `name`.
+	Data LogGroupResource `json:"data"`
+}
+
+// LogGroupResource JSON:API resource envelope for a log group.
+//
+// `id` is the group's key (e.g. `database-loggers`). On a create
+// request the id may be supplied; if omitted, the server generates
+// one from `name`.
 type LogGroupResource struct {
+	// Attributes A named collection of loggers that share a level configuration.
+	//
+	// Assigning a logger to a group ties the logger's effective level to
+	// the group's level (and per-environment overrides). Loggers can move
+	// between groups or be detached from a group entirely.
 	Attributes LogGroup             `json:"attributes"`
 	Id         *string              `json:"id,omitempty"`
 	Type       LogGroupResourceType `json:"type"`
@@ -134,59 +237,113 @@ type LogGroupResource struct {
 // LogGroupResourceType defines model for LogGroupResource.Type.
 type LogGroupResourceType string
 
-// LogGroupResponse defines model for LogGroupResponse.
+// LogGroupResponse JSON:API single-resource response envelope for a log group.
 type LogGroupResponse struct {
+	// Data JSON:API resource envelope for a log group.
+	//
+	// `id` is the group's key (e.g. `database-loggers`). On a create
+	// request the id may be supplied; if omitted, the server generates
+	// one from `name`.
 	Data LogGroupResource `json:"data"`
 }
 
-// Logger defines model for Logger.
+// Logger A logger configured for the account.
+//
+// Loggers are organized by dot-separated key (for example, `sqlalchemy.engine`),
+// matching the hierarchical naming convention used by most logging
+// frameworks. A managed logger applies the configured level to every
+// runtime where the logger appears; unmanaged loggers are tracked only
+// as observations from SDKs.
 type Logger struct {
-	CreatedAt       *time.Time                `json:"created_at,omitempty"`
-	EffectiveLevels *map[string]interface{}   `json:"effective_levels,omitempty"`
-	Environments    *map[string]interface{}   `json:"environments,omitempty"`
-	Group           *string                   `json:"group,omitempty"`
-	Level           *string                   `json:"level,omitempty"`
-	Managed         *bool                     `json:"managed,omitempty"`
-	Name            string                    `json:"name"`
-	Sources         *[]map[string]interface{} `json:"sources,omitempty"`
-	UpdatedAt       *time.Time                `json:"updated_at,omitempty"`
+	// CreatedAt When the logger was first created or discovered.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// EffectiveLevels Per-environment summary of what runtimes are reporting for this logger. Keyed by environment name; each entry is one of `{"status": "none"}`, `{"status": "agrees", "level": "<LEVEL>"}`, or `{"status": "varies"}`. `agrees` means every observed source in that environment reports the same resolved level; `varies` means at least two sources disagree.
+	EffectiveLevels *map[string]interface{} `json:"effective_levels,omitempty"`
+
+	// Environments Per-environment level overrides keyed by environment name. Each value is an object with an optional `level` field, e.g. `{"production": {"level": "WARN"}}`. An environment may be present with no `level` to record that the logger applies there without changing the resolved level.
+	Environments *map[string]interface{} `json:"environments,omitempty"`
+
+	// Group Key of the log group this logger belongs to, or `null` if the logger is not grouped. Assigning a logger to a group promotes it to managed; assigning a group cascades to unmanaged descendants by clearing their group reference.
+	Group *string `json:"group,omitempty"`
+
+	// Level Account-wide log level applied to this logger. `null` means no override at the logger level — the level is inherited from the logger's group or the framework default.
+	Level *LoggerLevel `json:"level,omitempty"`
+
+	// Managed When `true`, the logger is part of the account's managed configuration and counts toward the managed-loggers usage counter. Setting `level`, `group`, or `environments` on an unmanaged logger promotes it to managed automatically.
+	Managed *bool `json:"managed,omitempty"`
+
+	// Name Human-readable label for the logger.
+	Name string `json:"name"`
+
+	// Sources Service / environment observations reported by SDKs for this logger. Each entry carries the service name, environment, the level the SDK saw, the resolved level after framework inheritance, and timestamps for the first and most recent sighting.
+	Sources *[]map[string]interface{} `json:"sources,omitempty"`
+
+	// UpdatedAt When the logger was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// LoggerBulkItem defines model for LoggerBulkItem.
+// LoggerLevel Account-wide log level applied to this logger. `null` means no override at the logger level — the level is inherited from the logger's group or the framework default.
+type LoggerLevel string
+
+// LoggerBulkItem One logger discovered by an SDK during a bulk registration call.
 type LoggerBulkItem struct {
-	// Environment Environment where this logger was observed
+	// Environment Environment where the logger was observed.
 	Environment *string `json:"environment,omitempty"`
 
-	// Id Normalized logger name
+	// Id Dot-separated logger key as the SDK saw it.
 	Id string `json:"id"`
 
-	// Level The explicitly-set level on this logger. Null if inherited.
+	// Level Level explicitly set on the logger by application code. `null` when the level is inherited.
 	Level *string `json:"level,omitempty"`
 
-	// ResolvedLevel The effective level after framework inheritance. Never null in compliant SDKs.
+	// ResolvedLevel Effective level after framework inheritance. SDKs should always report this; the server falls back to `level` when `resolved_level` is missing.
 	ResolvedLevel *string `json:"resolved_level,omitempty"`
 
-	// Service Service name that discovered this logger
+	// Service Service name that observed the logger.
 	Service *string `json:"service,omitempty"`
 }
 
-// LoggerBulkRequest defines model for LoggerBulkRequest.
+// LoggerBulkRequest Payload for bulk registration of loggers discovered by an SDK.
 type LoggerBulkRequest struct {
+	// Loggers Loggers to register or refresh observations for.
 	Loggers []LoggerBulkItem `json:"loggers"`
 }
 
-// LoggerBulkResponse defines model for LoggerBulkResponse.
+// LoggerBulkResponse Result of a bulk registration call.
 type LoggerBulkResponse struct {
+	// Registered Number of loggers that were created or had a source observation refreshed.
 	Registered int `json:"registered"`
 }
 
-// LoggerListResponse defines model for LoggerListResponse.
+// LoggerListResponse JSON:API collection response for loggers.
 type LoggerListResponse struct {
 	Data []LoggerResource `json:"data"`
 }
 
-// LoggerResource defines model for LoggerResource.
+// LoggerRequest JSON:API request envelope for creating or updating a logger.
+type LoggerRequest struct {
+	// Data JSON:API resource envelope for a logger.
+	//
+	// `id` is the logger's dot-separated key (e.g. `sqlalchemy.engine`).
+	// On a `PUT /api/v1/loggers/{id}` create, the id is taken from the URL
+	// path; on update, an `id` in the body renames the logger.
+	Data LoggerResource `json:"data"`
+}
+
+// LoggerResource JSON:API resource envelope for a logger.
+//
+// `id` is the logger's dot-separated key (e.g. `sqlalchemy.engine`).
+// On a `PUT /api/v1/loggers/{id}` create, the id is taken from the URL
+// path; on update, an `id` in the body renames the logger.
 type LoggerResource struct {
+	// Attributes A logger configured for the account.
+	//
+	// Loggers are organized by dot-separated key (for example, `sqlalchemy.engine`),
+	// matching the hierarchical naming convention used by most logging
+	// frameworks. A managed logger applies the configured level to every
+	// runtime where the logger appears; unmanaged loggers are tracked only
+	// as observations from SDKs.
 	Attributes Logger             `json:"attributes"`
 	Id         *string            `json:"id,omitempty"`
 	Type       LoggerResourceType `json:"type"`
@@ -195,30 +352,59 @@ type LoggerResource struct {
 // LoggerResourceType defines model for LoggerResource.Type.
 type LoggerResourceType string
 
-// LoggerResponse defines model for LoggerResponse.
+// LoggerResponse JSON:API single-resource response envelope for a logger.
 type LoggerResponse struct {
+	// Data JSON:API resource envelope for a logger.
+	//
+	// `id` is the logger's dot-separated key (e.g. `sqlalchemy.engine`).
+	// On a `PUT /api/v1/loggers/{id}` create, the id is taken from the URL
+	// path; on update, an `id` in the body renames the logger.
 	Data LoggerResource `json:"data"`
 }
 
-// LoggerSource defines model for LoggerSource.
+// LoggerSource A single service / environment observation of a logger.
+//
+// A source row exists for every (service, environment) pair that has
+// reported the logger via the bulk registration endpoint. The row's
+// levels reflect what the SDK saw on the most recent report.
 type LoggerSource struct {
-	CreatedAt     *time.Time `json:"created_at,omitempty"`
-	Environment   *string    `json:"environment,omitempty"`
+	// CreatedAt When the source row was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Environment Environment the service was running in when it reported the logger.
+	Environment *string `json:"environment,omitempty"`
+
+	// FirstObserved When this service / environment combination first reported the logger.
 	FirstObserved *time.Time `json:"first_observed,omitempty"`
-	LastSeen      *time.Time `json:"last_seen,omitempty"`
-	Level         *string    `json:"level,omitempty"`
-	ResolvedLevel *string    `json:"resolved_level,omitempty"`
-	Service       *string    `json:"service,omitempty"`
-	UpdatedAt     *time.Time `json:"updated_at,omitempty"`
+
+	// LastSeen Most recent report received for this service / environment combination.
+	LastSeen *time.Time `json:"last_seen,omitempty"`
+
+	// Level Level explicitly set on the logger in the source runtime. `null` when the runtime inherits its level.
+	Level *string `json:"level,omitempty"`
+
+	// ResolvedLevel Effective level the runtime resolved for the logger.
+	ResolvedLevel *string `json:"resolved_level,omitempty"`
+
+	// Service Service that reported the logger.
+	Service *string `json:"service,omitempty"`
+
+	// UpdatedAt When the source row was last refreshed.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// LoggerSourceListResponse defines model for LoggerSourceListResponse.
+// LoggerSourceListResponse JSON:API collection response for logger sources.
 type LoggerSourceListResponse struct {
 	Data []LoggerSourceResource `json:"data"`
 }
 
-// LoggerSourceResource defines model for LoggerSourceResource.
+// LoggerSourceResource JSON:API resource envelope for a logger source observation.
 type LoggerSourceResource struct {
+	// Attributes A single service / environment observation of a logger.
+	//
+	// A source row exists for every (service, environment) pair that has
+	// reported the logger via the bulk registration endpoint. The row's
+	// levels reflect what the SDK saw on the most recent report.
 	Attributes LoggerSource             `json:"attributes"`
 	Id         *string                  `json:"id,omitempty"`
 	Type       LoggerSourceResourceType `json:"type"`
@@ -227,16 +413,22 @@ type LoggerSourceResource struct {
 // LoggerSourceResourceType defines model for LoggerSourceResource.Type.
 type LoggerSourceResourceType string
 
-// ServiceAttributes defines model for ServiceAttributes.
+// ServiceAttributes A discovered service has no attributes beyond its name (the `id`).
 type ServiceAttributes = map[string]interface{}
 
-// ServiceListResponse defines model for ServiceListResponse.
+// ServiceListResponse JSON:API collection response for discovered services.
 type ServiceListResponse struct {
 	Data []ServiceResource `json:"data"`
 }
 
-// ServiceResource defines model for ServiceResource.
+// ServiceResource JSON:API resource envelope for a discovered service.
+//
+// `id` is the service name as reported by an SDK during bulk
+// registration. The resource carries no additional attributes — it
+// represents the existence of the service in the account's
+// observations, nothing more.
 type ServiceResource struct {
+	// Attributes A discovered service has no attributes beyond its name (the `id`).
 	Attributes *ServiceAttributes  `json:"attributes,omitempty"`
 	Id         string              `json:"id"`
 	Type       ServiceResourceType `json:"type"`
@@ -245,20 +437,26 @@ type ServiceResource struct {
 // ServiceResourceType defines model for ServiceResource.Type.
 type ServiceResourceType string
 
-// UsageAttributes defines model for UsageAttributes.
+// UsageAttributes Usage counter for a single metered limit.
 type UsageAttributes struct {
+	// LimitKey Identifier of the metered limit, e.g. `logging.managed_loggers` or `logging.groups`.
 	LimitKey string `json:"limit_key"`
-	Period   string `json:"period"`
-	Value    int    `json:"value"`
+
+	// Period Period the counter covers. `current` is the only supported value.
+	Period string `json:"period"`
+
+	// Value Count for the period.
+	Value int `json:"value"`
 }
 
-// UsageListResponse defines model for UsageListResponse.
+// UsageListResponse JSON:API collection response for usage counters.
 type UsageListResponse struct {
 	Data []UsageResource `json:"data"`
 }
 
-// UsageResource defines model for UsageResource.
+// UsageResource JSON:API resource envelope for a single usage counter.
 type UsageResource struct {
+	// Attributes Usage counter for a single metered limit.
 	Attributes UsageAttributes   `json:"attributes"`
 	Id         string            `json:"id"`
 	Type       UsageResourceType `json:"type"`
@@ -289,16 +487,16 @@ type ListLoggingUsageParams struct {
 }
 
 // CreateLogGroupApplicationVndAPIPlusJSONRequestBody defines body for CreateLogGroup for application/vnd.api+json ContentType.
-type CreateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupResponse
+type CreateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupRequest
 
 // UpdateLogGroupApplicationVndAPIPlusJSONRequestBody defines body for UpdateLogGroup for application/vnd.api+json ContentType.
-type UpdateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupResponse
+type UpdateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupRequest
 
 // BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterLoggers for application/vnd.api+json ContentType.
 type BulkRegisterLoggersApplicationVndAPIPlusJSONRequestBody = LoggerBulkRequest
 
 // UpdateLoggerApplicationVndAPIPlusJSONRequestBody defines body for UpdateLogger for application/vnd.api+json ContentType.
-type UpdateLoggerApplicationVndAPIPlusJSONRequestBody = LoggerResponse
+type UpdateLoggerApplicationVndAPIPlusJSONRequestBody = LoggerRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error

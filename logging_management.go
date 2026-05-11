@@ -139,7 +139,7 @@ func (m *LoggingManagement) Delete(ctx context.Context, id string) error {
 // updateLogger persists changes to an existing logger. Called from
 // Logger.Save.
 func (m *LoggingManagement) updateLogger(ctx context.Context, l *Logger) error {
-	reqBody := genlogging.LoggerResponse{
+	reqBody := genlogging.LoggerRequest{
 		Data: genlogging.LoggerResource{
 			Id:         &l.ID,
 			Type:       genlogging.LoggerResourceTypeLogger,
@@ -169,7 +169,7 @@ func (m *LoggingManagement) updateLogger(ctx context.Context, l *Logger) error {
 // createGroup persists a new log group. Called from LogGroup.Save when
 // CreatedAt is nil.
 func (m *LoggingManagement) createGroup(ctx context.Context, g *LogGroup) error {
-	reqBody := genlogging.LogGroupResponse{
+	reqBody := genlogging.LogGroupRequest{
 		Data: genlogging.LogGroupResource{
 			Id:         &g.ID,
 			Type:       genlogging.LogGroupResourceTypeLogGroup,
@@ -199,7 +199,7 @@ func (m *LoggingManagement) createGroup(ctx context.Context, g *LogGroup) error 
 // updateGroup persists changes to an existing log group. Called from
 // LogGroup.Save when CreatedAt is set.
 func (m *LoggingManagement) updateGroup(ctx context.Context, g *LogGroup) error {
-	reqBody := genlogging.LogGroupResponse{
+	reqBody := genlogging.LogGroupRequest{
 		Data: genlogging.LogGroupResource{
 			Id:         &g.ID,
 			Type:       genlogging.LogGroupResourceTypeLogGroup,
