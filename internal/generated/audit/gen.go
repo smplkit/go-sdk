@@ -24,22 +24,22 @@ const (
 
 // Defines values for ForwarderDeliveryStatus.
 const (
-	Failed              ForwarderDeliveryStatus = "failed"
-	FilteredOut         ForwarderDeliveryStatus = "filtered_out"
-	SkippedDoNotForward ForwarderDeliveryStatus = "skipped_do_not_forward"
-	Succeeded           ForwarderDeliveryStatus = "succeeded"
+	FAILED              ForwarderDeliveryStatus = "FAILED"
+	FILTEREDOUT         ForwarderDeliveryStatus = "FILTERED_OUT"
+	SKIPPEDDONOTFORWARD ForwarderDeliveryStatus = "SKIPPED_DO_NOT_FORWARD"
+	SUCCEEDED           ForwarderDeliveryStatus = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the ForwarderDeliveryStatus enum.
 func (e ForwarderDeliveryStatus) Valid() bool {
 	switch e {
-	case Failed:
+	case FAILED:
 		return true
-	case FilteredOut:
+	case FILTEREDOUT:
 		return true
-	case SkippedDoNotForward:
+	case SKIPPEDDONOTFORWARD:
 		return true
-	case Succeeded:
+	case SUCCEEDED:
 		return true
 	default:
 		return false
@@ -48,31 +48,31 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 
 // Defines values for ForwarderType.
 const (
-	Datadog   ForwarderType = "datadog"
-	Elastic   ForwarderType = "elastic"
-	Honeycomb ForwarderType = "honeycomb"
-	Http      ForwarderType = "http"
-	NewRelic  ForwarderType = "new_relic"
-	SplunkHec ForwarderType = "splunk_hec"
-	SumoLogic ForwarderType = "sumo_logic"
+	DATADOG   ForwarderType = "DATADOG"
+	ELASTIC   ForwarderType = "ELASTIC"
+	HONEYCOMB ForwarderType = "HONEYCOMB"
+	HTTP      ForwarderType = "HTTP"
+	NEWRELIC  ForwarderType = "NEW_RELIC"
+	SPLUNKHEC ForwarderType = "SPLUNK_HEC"
+	SUMOLOGIC ForwarderType = "SUMO_LOGIC"
 )
 
 // Valid indicates whether the value is a known member of the ForwarderType enum.
 func (e ForwarderType) Valid() bool {
 	switch e {
-	case Datadog:
+	case DATADOG:
 		return true
-	case Elastic:
+	case ELASTIC:
 		return true
-	case Honeycomb:
+	case HONEYCOMB:
 		return true
-	case Http:
+	case HTTP:
 		return true
-	case NewRelic:
+	case NEWRELIC:
 		return true
-	case SplunkHec:
+	case SPLUNKHEC:
 		return true
-	case SumoLogic:
+	case SUMOLOGIC:
 		return true
 	default:
 		return false
@@ -222,6 +222,9 @@ type Forwarder struct {
 	// prior ``str`` field — no migration of stored ``forwarder.type``
 	// values needed.
 	//
+	// Values are SCREAMING_SNAKE_CASE per ADR-014. The Forwarder schema
+	// accepts any casing on input via _normalize_forwarder_type.
+	//
 	// Adding a new destination here requires a corresponding implementation
 	// in ``app.services.forwarding`` and a regeneration of the OpenAPI
 	// spec so the SDK clients pick up the new variant.
@@ -351,6 +354,9 @@ type ForwarderResponse struct {
 // Subclassing “str“ keeps JSON serialization byte-identical to the
 // prior “str“ field — no migration of stored “forwarder.type“
 // values needed.
+//
+// Values are SCREAMING_SNAKE_CASE per ADR-014. The Forwarder schema
+// accepts any casing on input via _normalize_forwarder_type.
 //
 // Adding a new destination here requires a corresponding implementation
 // in “app.services.forwarding“ and a regeneration of the OpenAPI
@@ -522,6 +528,7 @@ type ListForwardersParams struct {
 type ListForwarderDeliveriesParams struct {
 	FilterStatus    *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
 	FilterCreatedAt *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
+	FilterEventId   *string `form:"filter[event_id],omitempty" json:"filter[event_id],omitempty"`
 	PageSize        *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter       *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 }
@@ -1582,6 +1589,18 @@ func NewListForwarderDeliveriesRequest(server string, forwarderId openapi_types.
 		if params.FilterCreatedAt != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[created_at]", *params.FilterCreatedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterEventId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[event_id]", *params.FilterEventId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
