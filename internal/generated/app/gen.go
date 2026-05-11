@@ -397,37 +397,63 @@ func (e UserResourceType) Valid() bool {
 	}
 }
 
-// Account defines model for Account.
+// Account A tenant of smplkit — the unit of isolation that owns all of a
+// customer's resources (environments, contexts, API keys, and so on).
 type Account struct {
+	// CreatedAt When the account was created.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// DeletedAt When the account was deleted. `null` for active accounts.
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 
-	// DiscountOverridePct Custom discount percentage that overrides the volume schedule. Null means the volume schedule applies.
+	// DiscountOverridePct Custom discount percentage applied to the account in place of the volume-based discount schedule. `null` means the volume schedule applies.
 	DiscountOverridePct *int `json:"discount_override_pct,omitempty"`
 
 	// DiscountOverrideReason Free-form note explaining why the override was set.
 	DiscountOverrideReason *string `json:"discount_override_reason,omitempty"`
 
-	// DiscountOverrideSetAt Timestamp when the override was last changed.
+	// DiscountOverrideSetAt When the override was last changed.
 	DiscountOverrideSetAt *time.Time `json:"discount_override_set_at,omitempty"`
 
-	// DiscountOverrideSetByUserId UUID of the admin user who set the override.
+	// DiscountOverrideSetByUserId UUID of the user who set the override.
 	DiscountOverrideSetByUserId *string `json:"discount_override_set_by_user_id,omitempty"`
 
-	// EntryPoint Registration entry point (from account.data)
-	EntryPoint           *string                 `json:"entry_point,omitempty"`
-	ExpiresAt            *time.Time              `json:"expires_at,omitempty"`
-	HasStripeCustomer    *bool                   `json:"has_stripe_customer,omitempty"`
-	Key                  string                  `json:"key"`
-	Name                 string                  `json:"name"`
+	// EntryPoint How the account first reached smplkit (e.g. `LOGIN`, `GET_STARTED`, `LIVE_DEMO`).
+	EntryPoint *string `json:"entry_point,omitempty"`
+
+	// ExpiresAt When the account is scheduled to expire. `null` for accounts with no expiry.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// HasStripeCustomer `true` once the account has been linked to a billing provider customer record.
+	HasStripeCustomer *bool `json:"has_stripe_customer,omitempty"`
+
+	// Key Stable URL-safe identifier for the account, derived from the account name at creation. Used in console URLs and other places that prefer a human-readable handle.
+	Key *string `json:"key,omitempty"`
+
+	// Name Human-readable name for the account.
+	Name string `json:"name"`
+
+	// ProductSubscriptions Map of product key to the account's subscription summary for that product, including plan, status, and entitlement limits.
 	ProductSubscriptions *map[string]interface{} `json:"product_subscriptions,omitempty"`
 
-	// ShowSampleData Whether sample data is active (from account.settings)
+	// ShowSampleData Whether the account is currently configured to display the sample dataset alongside the customer's own resources.
 	ShowSampleData *bool `json:"show_sample_data,omitempty"`
 }
 
-// AccountResource defines model for AccountResource.
+// AccountRequest JSON:API request envelope for creating or updating an account.
+type AccountRequest struct {
+	// Data JSON:API resource envelope for an account.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
+	Data AccountResource `json:"data"`
+}
+
+// AccountResource JSON:API resource envelope for an account.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type AccountResource struct {
+	// Attributes A tenant of smplkit — the unit of isolation that owns all of a
+	// customer's resources (environments, contexts, API keys, and so on).
 	Attributes Account             `json:"attributes"`
 	Id         *string             `json:"id,omitempty"`
 	Type       AccountResourceType `json:"type"`
@@ -436,42 +462,49 @@ type AccountResource struct {
 // AccountResourceType defines model for AccountResource.Type.
 type AccountResourceType string
 
-// AccountResponse defines model for AccountResponse.
+// AccountResponse JSON:API single-resource response envelope for an account.
 type AccountResponse struct {
+	// Data JSON:API resource envelope for an account.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data AccountResource `json:"data"`
 }
 
-// AccountWipeRequest Confirmation envelope for “POST /accounts/current/actions/wipe“.
+// AccountWipeRequest Confirmation envelope for the wipe-account action.
 type AccountWipeRequest struct {
-	// Confirm Must be ``true`` to proceed. Anything else returns 400. The frontend gates the call behind a confirmation dialog; this field is the server-side seatbelt.
+	// Confirm Must be `true` for the wipe to proceed. Any other value returns 400.
 	Confirm bool `json:"confirm"`
 
-	// GenerateSampleData When ``true``, the wipe re-seeds the account with the same Acme Commerce sample dataset that new accounts are bootstrapped with. Best-effort: any seeding failures are logged but do not fail the wipe.
+	// GenerateSampleData When `true`, re-seed the account with the standard sample dataset after wiping. Best-effort: any seeding failure is logged but does not fail the wipe.
 	GenerateSampleData *bool `json:"generate_sample_data,omitempty"`
 }
 
-// AddPaymentMethodAttributes Attributes for POST /api/v1/payment_methods.
+// AddPaymentMethodAttributes Attributes accepted when registering a new payment method.
 //
-// Distinct from “PaymentMethod“ because this shape takes the Stripe
-// “pm_...“ ID at registration time; the persistent resource does not
-// expose that ID.
+// The customer first creates a Stripe payment method client-side using
+// Stripe Elements, then submits its `pm_...` identifier here to persist
+// it on the account.
 type AddPaymentMethodAttributes struct {
-	Default               *bool  `json:"default,omitempty"`
+	// Default When `true`, make the newly registered payment method the account's default. The first payment method on an account is always set as default regardless of this field.
+	Default *bool `json:"default,omitempty"`
+
+	// StripePaymentMethodId Identifier of the Stripe payment method to register on the account, e.g. `pm_1234567890abcdef`.
 	StripePaymentMethodId string `json:"stripe_payment_method_id"`
 }
 
-// AddPaymentMethodBody defines model for AddPaymentMethodBody.
+// AddPaymentMethodBody JSON:API request envelope for registering a new payment method.
 type AddPaymentMethodBody struct {
+	// Data Resource object for the add-payment-method request.
 	Data AddPaymentMethodData `json:"data"`
 }
 
-// AddPaymentMethodData defines model for AddPaymentMethodData.
+// AddPaymentMethodData Resource object for the add-payment-method request.
 type AddPaymentMethodData struct {
-	// Attributes Attributes for POST /api/v1/payment_methods.
+	// Attributes Attributes accepted when registering a new payment method.
 	//
-	// Distinct from ``PaymentMethod`` because this shape takes the Stripe
-	// ``pm_...`` ID at registration time; the persistent resource does not
-	// expose that ID.
+	// The customer first creates a Stripe payment method client-side using
+	// Stripe Elements, then submits its `pm_...` identifier here to persist
+	// it on the account.
 	Attributes AddPaymentMethodAttributes `json:"attributes"`
 	Type       AddPaymentMethodDataType   `json:"type"`
 }
@@ -479,27 +512,64 @@ type AddPaymentMethodData struct {
 // AddPaymentMethodDataType defines model for AddPaymentMethodData.Type.
 type AddPaymentMethodDataType string
 
-// ApiKey defines model for ApiKey.
+// ApiKey An API key used by SDKs, scripts, and other programmatic clients to
+// authenticate with the smplkit API on behalf of the account.
+//
+// The full key value is returned in plaintext on the create response and
+// is otherwise unavailable — record it somewhere safe immediately after
+// creation.
 type ApiKey struct {
-	CreatedAt  *time.Time              `json:"created_at,omitempty"`
-	CreatedBy  *string                 `json:"created_by,omitempty"`
-	Data       *map[string]interface{} `json:"data,omitempty"`
-	ExpiresAt  *time.Time              `json:"expires_at,omitempty"`
-	Key        *string                 `json:"key,omitempty"`
-	LastUsedAt *time.Time              `json:"last_used_at,omitempty"`
-	Name       string                  `json:"name"`
-	Scopes     *map[string]interface{} `json:"scopes,omitempty"`
-	Status     *string                 `json:"status,omitempty"`
-	UpdatedAt  *time.Time              `json:"updated_at,omitempty"`
+	// CreatedAt When the key was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// CreatedBy UUID of the user who created the key.
+	CreatedBy *string `json:"created_by,omitempty"`
+
+	// ExpiresAt Optional expiry timestamp. After this time, the key is rejected. Omit for keys that do not expire.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// Key The bearer token value. Returned in plaintext on the create response so the caller can capture it; subsequent reads return the same value for round-tripping.
+	Key *string `json:"key,omitempty"`
+
+	// LastUsedAt When the key was most recently used to authenticate.
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	// Name Human-readable name for the key.
+	Name string `json:"name"`
+
+	// Scopes Scope restrictions applied to the key. Empty object grants full account access; populated forms are reserved for future scope syntax.
+	Scopes *map[string]interface{} `json:"scopes,omitempty"`
+
+	// Status Lifecycle state of the key. `ACTIVE` keys may be used to authenticate; `REVOKED` keys are rejected.
+	Status *string `json:"status,omitempty"`
+
+	// UpdatedAt When the key was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// ApiKeyListResponse defines model for ApiKeyListResponse.
+// ApiKeyListResponse JSON:API collection response for API keys.
 type ApiKeyListResponse struct {
 	Data []ApiKeyResource `json:"data"`
 }
 
-// ApiKeyResource defines model for ApiKeyResource.
+// ApiKeyRequest JSON:API request envelope for creating or updating an API key.
+type ApiKeyRequest struct {
+	// Data JSON:API resource envelope for an API key.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
+	Data ApiKeyResource `json:"data"`
+}
+
+// ApiKeyResource JSON:API resource envelope for an API key.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type ApiKeyResource struct {
+	// Attributes An API key used by SDKs, scripts, and other programmatic clients to
+	// authenticate with the smplkit API on behalf of the account.
+	//
+	// The full key value is returned in plaintext on the create response and
+	// is otherwise unavailable — record it somewhere safe immediately after
+	// creation.
 	Attributes ApiKey             `json:"attributes"`
 	Id         *string            `json:"id,omitempty"`
 	Type       ApiKeyResourceType `json:"type"`
@@ -508,62 +578,96 @@ type ApiKeyResource struct {
 // ApiKeyResourceType defines model for ApiKeyResource.Type.
 type ApiKeyResourceType string
 
-// ApiKeyResponse defines model for ApiKeyResponse.
+// ApiKeyResponse JSON:API single-resource response envelope for an API key.
 type ApiKeyResponse struct {
+	// Data JSON:API resource envelope for an API key.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data ApiKeyResource `json:"data"`
 }
 
-// AuthTokenResponse defines model for AuthTokenResponse.
+// AuthTokenResponse Authentication token issued on successful login or registration.
 type AuthTokenResponse struct {
-	ExpiresIn int    `json:"expires_in"`
-	Token     string `json:"token"`
+	// ExpiresIn Seconds until the token expires.
+	ExpiresIn int `json:"expires_in"`
+
+	// Token Bearer token to pass in the `Authorization` header.
+	Token string `json:"token"`
 }
 
-// ContactTopic Server-validated contact-us topics. Frontend dropdown values must match.
+// ContactTopic Topic options accepted on contact-us submissions.
 type ContactTopic string
 
-// Context defines model for Context.
+// Context A specific instance of a context type — for example, a particular
+// user, account, or device — together with the attributes observed on it.
+//
+// Context instances are addressed by a composite identifier of the form
+// `context_type:key` (e.g. `user:alice-123`).
 type Context struct {
-	// Attributes Observed attributes
+	// Attributes Observed attribute values for this context instance. The key set is conventionally aligned with the parent context type's known attribute keys, but additional keys are accepted.
 	Attributes *map[string]interface{} `json:"attributes,omitempty"`
 
-	// ContextType Context type key (e.g., 'user', 'account')
-	ContextType string     `json:"context_type"`
-	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	// ContextType Key of the context type this instance belongs to (e.g. `user`, `account`).
+	ContextType string `json:"context_type"`
 
-	// Name Human-readable display name
-	Name      *string    `json:"name,omitempty"`
+	// CreatedAt When the context instance was first registered.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Name Human-readable display name for the context instance.
+	Name *string `json:"name,omitempty"`
+
+	// UpdatedAt When the context instance was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// ContextBatchResponse defines model for ContextBatchResponse.
+// ContextBatchResponse Summary returned by the bulk context registration endpoint.
 type ContextBatchResponse struct {
+	// Registered Number of context instances that were created or updated.
 	Registered int `json:"registered"`
 }
 
-// ContextBulkItem defines model for ContextBulkItem.
+// ContextBulkItem One context instance in a bulk registration payload.
 type ContextBulkItem struct {
+	// Attributes Observed attribute values for this context instance.
 	Attributes *map[string]interface{} `json:"attributes,omitempty"`
 
-	// Key Entity identifier: 'user-123', 'acme-corp'
+	// Key Entity identifier within the context type, e.g. `user-123`.
 	Key string `json:"key"`
 
-	// Type Context type key: 'user', 'account', 'device'
+	// Type Key of the context type this instance belongs to (e.g. `user`, `account`, `device`).
 	Type string `json:"type"`
 }
 
-// ContextBulkRegister defines model for ContextBulkRegister.
+// ContextBulkRegister Bulk registration request body for the contexts endpoint.
 type ContextBulkRegister struct {
+	// Contexts One context instance per entry.
 	Contexts []ContextBulkItem `json:"contexts"`
 }
 
-// ContextListResponse defines model for ContextListResponse.
+// ContextListResponse JSON:API collection response for context instances.
 type ContextListResponse struct {
 	Data []ContextResource `json:"data"`
 }
 
-// ContextResource defines model for ContextResource.
+// ContextRequest JSON:API request envelope for creating or updating a context instance.
+type ContextRequest struct {
+	// Data JSON:API resource envelope for a context instance.
+	//
+	// `id` is the composite identifier `context_type:key`. It must not be
+	// specified for create requests (the server assigns it).
+	Data ContextResource `json:"data"`
+}
+
+// ContextResource JSON:API resource envelope for a context instance.
+//
+// `id` is the composite identifier `context_type:key`. It must not be
+// specified for create requests (the server assigns it).
 type ContextResource struct {
+	// Attributes A specific instance of a context type — for example, a particular
+	// user, account, or device — together with the attributes observed on it.
+	//
+	// Context instances are addressed by a composite identifier of the form
+	// `context_type:key` (e.g. `user:alice-123`).
 	Attributes Context             `json:"attributes"`
 	Id         *string             `json:"id,omitempty"`
 	Type       ContextResourceType `json:"type"`
@@ -572,29 +676,56 @@ type ContextResource struct {
 // ContextResourceType defines model for ContextResource.Type.
 type ContextResourceType string
 
-// ContextResponse defines model for ContextResponse.
+// ContextResponse JSON:API single-resource response envelope for a context instance.
 type ContextResponse struct {
+	// Data JSON:API resource envelope for a context instance.
+	//
+	// `id` is the composite identifier `context_type:key`. It must not be
+	// specified for create requests (the server assigns it).
 	Data ContextResource `json:"data"`
 }
 
-// ContextType defines model for ContextType.
+// ContextType A kind of context — for example, `user`, `account`, or `device` — that
+// groups together context instances sharing a common set of attributes.
+//
+// The known attribute keys for the type accumulate as instances are
+// registered; each key carries an optional metadata object describing it.
 type ContextType struct {
-	// Attributes Known attribute keys with metadata objects
+	// Attributes Map of known attribute key to per-attribute metadata. The metadata object is free-form and may be empty. Keys grow as new attributes are observed on context instances of this type.
 	Attributes *map[string]interface{} `json:"attributes,omitempty"`
-	CreatedAt  *time.Time              `json:"created_at,omitempty"`
 
-	// Name Display label: User, Account, Device
-	Name      string     `json:"name"`
+	// CreatedAt When the context type was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Name Display label for the context type, e.g. `User`, `Account`, or `Device`.
+	Name string `json:"name"`
+
+	// UpdatedAt When the context type was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// ContextTypeListResponse defines model for ContextTypeListResponse.
+// ContextTypeListResponse JSON:API collection response for context types.
 type ContextTypeListResponse struct {
 	Data []ContextTypeResource `json:"data"`
 }
 
-// ContextTypeResource defines model for ContextTypeResource.
+// ContextTypeRequest JSON:API request envelope for creating or updating a context type.
+type ContextTypeRequest struct {
+	// Data JSON:API resource envelope for a context type.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
+	Data ContextTypeResource `json:"data"`
+}
+
+// ContextTypeResource JSON:API resource envelope for a context type.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type ContextTypeResource struct {
+	// Attributes A kind of context — for example, `user`, `account`, or `device` — that
+	// groups together context instances sharing a common set of attributes.
+	//
+	// The known attribute keys for the type accumulate as instances are
+	// registered; each key carries an optional metadata object describing it.
 	Attributes ContextType             `json:"attributes"`
 	Id         *string                 `json:"id,omitempty"`
 	Type       ContextTypeResourceType `json:"type"`
@@ -603,47 +734,62 @@ type ContextTypeResource struct {
 // ContextTypeResourceType defines model for ContextTypeResource.Type.
 type ContextTypeResourceType string
 
-// ContextTypeResponse defines model for ContextTypeResponse.
+// ContextTypeResponse JSON:API single-resource response envelope for a context type.
 type ContextTypeResponse struct {
+	// Data JSON:API resource envelope for a context type.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data ContextTypeResource `json:"data"`
 }
 
-// CreateSubscriptionAttributes defines model for CreateSubscriptionAttributes.
+// CreateSubscriptionAttributes Attributes accepted when creating a new subscription.
 type CreateSubscriptionAttributes struct {
+	// PaymentMethod UUID of a payment method on file to bill against. If omitted, the account's default payment method is used.
 	PaymentMethod *string `json:"payment_method,omitempty"`
-	Plan          string  `json:"plan"`
-	Product       string  `json:"product"`
+
+	// Plan Plan key to subscribe on, e.g. `pro`.
+	Plan string `json:"plan"`
+
+	// Product Product key to subscribe to, e.g. `flags`.
+	Product string `json:"product"`
 }
 
-// CreateSubscriptionBody defines model for CreateSubscriptionBody.
+// CreateSubscriptionBody JSON:API request envelope for creating a subscription.
 type CreateSubscriptionBody struct {
+	// Data Resource object for the create-subscription request.
 	Data CreateSubscriptionData `json:"data"`
 }
 
-// CreateSubscriptionData defines model for CreateSubscriptionData.
+// CreateSubscriptionData Resource object for the create-subscription request.
 type CreateSubscriptionData struct {
+	// Attributes Attributes accepted when creating a new subscription.
 	Attributes CreateSubscriptionAttributes `json:"attributes"`
-	Type       string                       `json:"type"`
+
+	// Type Resource type; must be `subscription`.
+	Type string `json:"type"`
 }
 
-// Email Contact-us email resource attributes.
-//
-// This resource is a pure action — it is not persisted. The id returned in
-// the response is a per-request uuid4 for correlation only.
+// Email A contact-us submission. Sending the resource delivers a support
+// ticket and an auto-response email; nothing is persisted. The `id`
+// returned on the response is a per-request correlation identifier.
 type Email struct {
-	Body   string     `json:"body"`
+	// Body Free-form text of the message. Trimmed before validation.
+	Body string `json:"body"`
+
+	// SentAt When the message was accepted by the server.
 	SentAt *time.Time `json:"sent_at,omitempty"`
 
-	// Topic Server-validated contact-us topics. Frontend dropdown values must match.
+	// Topic Topic options accepted on contact-us submissions.
 	Topic ContactTopic `json:"topic"`
 }
 
-// EmailResource defines model for EmailResource.
+// EmailResource JSON:API resource envelope for a contact-us submission.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type EmailResource struct {
-	// Attributes Contact-us email resource attributes.
-	//
-	// This resource is a pure action — it is not persisted. The id returned in
-	// the response is a per-request uuid4 for correlation only.
+	// Attributes A contact-us submission. Sending the resource delivers a support
+	// ticket and an auto-response email; nothing is persisted. The `id`
+	// returned on the response is a per-request correlation identifier.
 	Attributes Email             `json:"attributes"`
 	Id         *string           `json:"id,omitempty"`
 	Type       EmailResourceType `json:"type"`
@@ -652,30 +798,57 @@ type EmailResource struct {
 // EmailResourceType defines model for EmailResource.Type.
 type EmailResourceType string
 
-// EmailResponse defines model for EmailResponse.
+// EmailResponse JSON:API single-resource response envelope for a contact-us message.
 type EmailResponse struct {
+	// Data JSON:API resource envelope for a contact-us submission.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data EmailResource `json:"data"`
 }
 
-// Environment defines model for Environment.
+// Environment A named deployment context — for example, `production`, `staging`, or
+// `development`. Resources scoped to an environment (such as config items
+// and feature flags) are evaluated against environment-specific values.
 type Environment struct {
+	// Classification `STANDARD` for environments the customer explicitly manages; `AD_HOC` for environments auto-created from SDK traffic. Case-insensitive on input.
 	Classification *EnvironmentClassification `json:"classification,omitempty"`
-	Color          *string                    `json:"color,omitempty"`
-	CreatedAt      *time.Time                 `json:"created_at,omitempty"`
-	Name           string                     `json:"name"`
-	UpdatedAt      *time.Time                 `json:"updated_at,omitempty"`
+
+	// Color Display color used by the console to badge the environment. Accepts any CSS color string.
+	Color *string `json:"color,omitempty"`
+
+	// CreatedAt When the environment was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Name Human-readable name for the environment.
+	Name string `json:"name"`
+
+	// UpdatedAt When the environment was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// EnvironmentClassification defines model for Environment.Classification.
+// EnvironmentClassification `STANDARD` for environments the customer explicitly manages; `AD_HOC` for environments auto-created from SDK traffic. Case-insensitive on input.
 type EnvironmentClassification string
 
-// EnvironmentListResponse defines model for EnvironmentListResponse.
+// EnvironmentListResponse JSON:API collection response for environments.
 type EnvironmentListResponse struct {
 	Data []EnvironmentResource `json:"data"`
 }
 
-// EnvironmentResource defines model for EnvironmentResource.
+// EnvironmentRequest JSON:API request envelope for creating or updating an environment.
+type EnvironmentRequest struct {
+	// Data JSON:API resource envelope for an environment.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
+	Data EnvironmentResource `json:"data"`
+}
+
+// EnvironmentResource JSON:API resource envelope for an environment.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type EnvironmentResource struct {
+	// Attributes A named deployment context — for example, `production`, `staging`, or
+	// `development`. Resources scoped to an environment (such as config items
+	// and feature flags) are evaluated against environment-specific values.
 	Attributes Environment             `json:"attributes"`
 	Id         *string                 `json:"id,omitempty"`
 	Type       EnvironmentResourceType `json:"type"`
@@ -684,8 +857,11 @@ type EnvironmentResource struct {
 // EnvironmentResourceType defines model for EnvironmentResource.Type.
 type EnvironmentResourceType string
 
-// EnvironmentResponse defines model for EnvironmentResponse.
+// EnvironmentResponse JSON:API single-resource response envelope for an environment.
 type EnvironmentResponse struct {
+	// Data JSON:API resource envelope for an environment.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data EnvironmentResource `json:"data"`
 }
 
@@ -702,43 +878,76 @@ type ErrorResponse struct {
 	Errors []Error `json:"errors"`
 }
 
-// Invitation defines model for Invitation.
+// Invitation An invitation for a person to join an account.
+//
+// Invitations carry a time-limited token; the recipient redeems the
+// token to become a member of the inviting account at the assigned role.
 type Invitation struct {
-	AccountName        *string    `json:"account_name,omitempty"`
-	CreatedAt          *time.Time `json:"created_at,omitempty"`
-	Email              *string    `json:"email,omitempty"`
-	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
-	InvitedBy          *string    `json:"invited_by,omitempty"`
-	InviterDisplayName *string    `json:"inviter_display_name,omitempty"`
-	Role               *string    `json:"role,omitempty"`
-	Status             *string    `json:"status,omitempty"`
-	Token              *string    `json:"token,omitempty"`
-	UpdatedAt          *time.Time `json:"updated_at,omitempty"`
+	// AccountName Name of the account the recipient is being invited to join.
+	AccountName *string `json:"account_name,omitempty"`
+
+	// CreatedAt When the invitation was issued.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Email Email address the invitation was sent to.
+	Email *string `json:"email,omitempty"`
+
+	// ExpiresAt When the invitation token stops being redeemable.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// InvitedBy UUID of the user who sent the invitation.
+	InvitedBy *string `json:"invited_by,omitempty"`
+
+	// InviterDisplayName Display name of the user who sent the invitation.
+	InviterDisplayName *string `json:"inviter_display_name,omitempty"`
+
+	// Role Role to assign on acceptance. One of `ADMIN`, `MEMBER`, or `VIEWER`.
+	Role *string `json:"role,omitempty"`
+
+	// Status Lifecycle state of the invitation. One of `PENDING`, `ACCEPTED`, `REVOKED`, or `EXPIRED`.
+	Status *string `json:"status,omitempty"`
+
+	// Token Single-use token that the recipient redeems to accept the invitation. Echoed on responses so the inviting client can construct the acceptance link.
+	Token *string `json:"token,omitempty"`
+
+	// UpdatedAt When the invitation record was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// InvitationAcceptRequest defines model for InvitationAcceptRequest.
+// InvitationAcceptRequest Body for the invitation-accept endpoint.
 type InvitationAcceptRequest struct {
+	// Token Invitation token from the email link.
 	Token string `json:"token"`
 }
 
-// InvitationBulkCreateRequest defines model for InvitationBulkCreateRequest.
+// InvitationBulkCreateRequest Bulk-create request body for the invitations endpoint.
 type InvitationBulkCreateRequest struct {
+	// Invitations One to fifty invitations to send in a single request.
 	Invitations []InvitationCreateItem `json:"invitations"`
 }
 
-// InvitationCreateItem defines model for InvitationCreateItem.
+// InvitationCreateItem One invitation in a bulk-create request.
 type InvitationCreateItem struct {
+	// Email Email address to send the invitation to.
 	Email openapi_types.Email `json:"email"`
-	Role  *string             `json:"role,omitempty"`
+
+	// Role Role to assign on acceptance. One of `ADMIN`, `MEMBER`, or `VIEWER`. `OWNER` cannot be assigned via invitation. Case-insensitive on input.
+	Role *string `json:"role,omitempty"`
 }
 
-// InvitationListResponse defines model for InvitationListResponse.
+// InvitationListResponse JSON:API collection response for invitations.
 type InvitationListResponse struct {
 	Data []InvitationResource `json:"data"`
 }
 
-// InvitationResource defines model for InvitationResource.
+// InvitationResource JSON:API resource envelope for an invitation.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type InvitationResource struct {
+	// Attributes An invitation for a person to join an account.
+	//
+	// Invitations carry a time-limited token; the recipient redeems the
+	// token to become a member of the inviting account at the assigned role.
 	Attributes Invitation             `json:"attributes"`
 	Id         *string                `json:"id,omitempty"`
 	Type       InvitationResourceType `json:"type"`
@@ -747,34 +956,61 @@ type InvitationResource struct {
 // InvitationResourceType defines model for InvitationResource.Type.
 type InvitationResourceType string
 
-// InvitationResponse defines model for InvitationResponse.
+// InvitationResponse JSON:API single-resource response envelope for an invitation.
 type InvitationResponse struct {
+	// Data JSON:API resource envelope for an invitation.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data InvitationResource `json:"data"`
 }
 
-// Invoice defines model for Invoice.
+// Invoice A billing invoice issued for the account.
 type Invoice struct {
-	AmountDue        int     `json:"amount_due"`
-	AmountPaid       int     `json:"amount_paid"`
-	CreatedAt        *string `json:"created_at"`
-	Currency         string  `json:"currency"`
-	Description      *string `json:"description"`
+	// AmountDue Amount owed on the invoice in the smallest currency unit (e.g. cents).
+	AmountDue int `json:"amount_due"`
+
+	// AmountPaid Amount paid against the invoice in the smallest currency unit.
+	AmountPaid int `json:"amount_paid"`
+
+	// CreatedAt When the invoice was created (ISO 8601).
+	CreatedAt *string `json:"created_at"`
+
+	// Currency ISO 4217 currency code, e.g. `usd`.
+	Currency string `json:"currency"`
+
+	// Description Human-readable summary of the invoice's line items.
+	Description *string `json:"description"`
+
+	// HostedInvoiceUrl Link to the hosted invoice page.
 	HostedInvoiceUrl *string `json:"hosted_invoice_url"`
-	InvoicePdf       *string `json:"invoice_pdf"`
-	Number           *string `json:"number"`
-	PaidAt           *string `json:"paid_at"`
-	PeriodEnd        *string `json:"period_end"`
-	PeriodStart      *string `json:"period_start"`
-	Status           string  `json:"status"`
+
+	// InvoicePdf Link to the PDF rendering of the invoice.
+	InvoicePdf *string `json:"invoice_pdf"`
+
+	// Number Invoice number assigned by the billing provider.
+	Number *string `json:"number"`
+
+	// PaidAt When the invoice was paid in full (ISO 8601), or `null` if unpaid.
+	PaidAt *string `json:"paid_at"`
+
+	// PeriodEnd End of the service period the invoice covers (ISO 8601).
+	PeriodEnd *string `json:"period_end"`
+
+	// PeriodStart Start of the service period the invoice covers (ISO 8601).
+	PeriodStart *string `json:"period_start"`
+
+	// Status Invoice lifecycle state, e.g. `draft`, `open`, `paid`, `uncollectible`, `void`.
+	Status string `json:"status"`
 }
 
-// InvoiceListResponse defines model for InvoiceListResponse.
+// InvoiceListResponse JSON:API collection response for invoices.
 type InvoiceListResponse struct {
 	Data []InvoiceResource `json:"data"`
 }
 
-// InvoiceResource defines model for InvoiceResource.
+// InvoiceResource JSON:API resource envelope for an invoice.
 type InvoiceResource struct {
+	// Attributes A billing invoice issued for the account.
 	Attributes Invoice             `json:"attributes"`
 	Id         *string             `json:"id,omitempty"`
 	Type       InvoiceResourceType `json:"type"`
@@ -783,34 +1019,58 @@ type InvoiceResource struct {
 // InvoiceResourceType defines model for InvoiceResource.Type.
 type InvoiceResourceType string
 
-// InvoiceSingleResponse defines model for InvoiceSingleResponse.
+// InvoiceSingleResponse JSON:API single-resource response envelope for an invoice.
 type InvoiceSingleResponse struct {
+	// Data JSON:API resource envelope for an invoice.
 	Data InvoiceResource `json:"data"`
 }
 
-// LimitDefinition defines model for LimitDefinition.
+// LimitDefinition Description of a single metered limit on a product.
 type LimitDefinition struct {
-	Description   string  `json:"description"`
+	// Description Long-form description of what the limit controls.
+	Description string `json:"description"`
+
+	// DisplayFormat Optional formatter hint for rendering the limit value in customer-facing UI.
 	DisplayFormat *string `json:"display_format,omitempty"`
-	DisplayName   string  `json:"display_name"`
-	Unit          string  `json:"unit"`
+
+	// DisplayName Human-readable name for the limit.
+	DisplayName string `json:"display_name"`
+
+	// Unit Unit the limit is measured in, e.g. `flags`, `events`.
+	Unit string `json:"unit"`
 }
 
-// LoginRequest defines model for LoginRequest.
+// LoginRequest Body for the email + password login endpoint.
 type LoginRequest struct {
-	Email    openapi_types.Email `json:"email"`
-	Password string              `json:"password"`
+	// Email Email address of the user signing in.
+	Email openapi_types.Email `json:"email"`
+
+	// Password Password supplied for authentication.
+	Password string `json:"password"`
 }
 
-// MetricAttributes defines model for MetricAttributes.
+// MetricAttributes A pre-aggregated metric data point recorded for the account.
 type MetricAttributes struct {
-	CreatedAt     *time.Time             `json:"created_at,omitempty"`
-	Dimensions    *map[string]string     `json:"dimensions,omitempty"`
-	Name          string                 `json:"name"`
-	PeriodSeconds int                    `json:"period_seconds"`
-	RecordedAt    time.Time              `json:"recorded_at"`
-	Unit          *string                `json:"unit,omitempty"`
-	Value         MetricAttributes_Value `json:"value"`
+	// CreatedAt When the data point was ingested.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Dimensions Optional dimension keys that scope the data point, e.g. `environment`, `service`. Used as filter targets on the list endpoint via `filter[dimensions.<key>]=...`.
+	Dimensions *map[string]string `json:"dimensions,omitempty"`
+
+	// Name Metric series name, e.g. `flags.evaluations`. Dot-separated.
+	Name string `json:"name"`
+
+	// PeriodSeconds Length of the aggregation window in seconds (e.g. `60` for a one-minute roll-up).
+	PeriodSeconds int `json:"period_seconds"`
+
+	// RecordedAt Start of the aggregation window this data point covers.
+	RecordedAt time.Time `json:"recorded_at"`
+
+	// Unit Unit the value is expressed in, e.g. `evaluations`, `ms`, `bytes`.
+	Unit *string `json:"unit,omitempty"`
+
+	// Value Aggregated value for this data point over `period_seconds`.
+	Value MetricAttributes_Value `json:"value"`
 }
 
 // MetricAttributesValue0 defines model for .
@@ -819,34 +1079,41 @@ type MetricAttributesValue0 = float32
 // MetricAttributesValue1 defines model for .
 type MetricAttributesValue1 = string
 
-// MetricAttributes_Value defines model for MetricAttributes.Value.
+// MetricAttributes_Value Aggregated value for this data point over `period_seconds`.
 type MetricAttributes_Value struct {
 	union json.RawMessage
 }
 
-// MetricBulkRequest defines model for MetricBulkRequest.
+// MetricBulkRequest Bulk-ingest request envelope for metric data points.
 type MetricBulkRequest struct {
+	// Data Metric data points to ingest in a single request.
 	Data []MetricResource `json:"data"`
 }
 
-// MetricListResponse defines model for MetricListResponse.
+// MetricListResponse JSON:API collection response for metric data points.
 type MetricListResponse struct {
 	Data []MetricResource `json:"data"`
 }
 
-// MetricNameItem defines model for MetricNameItem.
+// MetricNameItem One distinct metric name with a representative unit.
 type MetricNameItem struct {
-	Name string  `json:"name"`
+	// Name Distinct metric series name.
+	Name string `json:"name"`
+
+	// Unit Representative unit observed for this series.
 	Unit *string `json:"unit,omitempty"`
 }
 
-// MetricNamesResponse defines model for MetricNamesResponse.
+// MetricNamesResponse Plain-JSON response listing distinct metric names for the account.
 type MetricNamesResponse struct {
 	Data []MetricNameItem `json:"data"`
 }
 
-// MetricResource defines model for MetricResource.
+// MetricResource JSON:API resource envelope for a metric data point.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type MetricResource struct {
+	// Attributes A pre-aggregated metric data point recorded for the account.
 	Attributes MetricAttributes   `json:"attributes"`
 	Id         *string            `json:"id,omitempty"`
 	Type       MetricResourceType `json:"type"`
@@ -855,22 +1122,32 @@ type MetricResource struct {
 // MetricResourceType defines model for MetricResource.Type.
 type MetricResourceType string
 
-// MetricRollupAttributes defines model for MetricRollupAttributes.
+// MetricRollupAttributes An aggregated metric value over a fixed-size time bucket.
 type MetricRollupAttributes struct {
+	// Bucket Start of the time bucket this rollup covers.
 	Bucket time.Time `json:"bucket"`
-	Name   string    `json:"name"`
-	Rollup string    `json:"rollup"`
-	Unit   *string   `json:"unit,omitempty"`
-	Value  string    `json:"value"`
+
+	// Name Metric series name the rollup is computed from.
+	Name string `json:"name"`
+
+	// Rollup Rollup interval. One of `1m`, `5m`, `15m`, `1h`, `6h`, `1d`.
+	Rollup string `json:"rollup"`
+
+	// Unit Unit the value is expressed in.
+	Unit *string `json:"unit,omitempty"`
+
+	// Value Sum of the underlying metric values over the bucket.
+	Value string `json:"value"`
 }
 
-// MetricRollupListResponse defines model for MetricRollupListResponse.
+// MetricRollupListResponse JSON:API collection response for metric rollups.
 type MetricRollupListResponse struct {
 	Data []MetricRollupResource `json:"data"`
 }
 
-// MetricRollupResource defines model for MetricRollupResource.
+// MetricRollupResource JSON:API resource envelope for a metric rollup.
 type MetricRollupResource struct {
+	// Attributes An aggregated metric value over a fixed-size time bucket.
 	Attributes MetricRollupAttributes   `json:"attributes"`
 	Type       MetricRollupResourceType `json:"type"`
 }
@@ -878,57 +1155,89 @@ type MetricRollupResource struct {
 // MetricRollupResourceType defines model for MetricRollupResource.Type.
 type MetricRollupResourceType string
 
-// NextTierMeta defines model for NextTierMeta.
+// NextTierMeta Information about the next volume-discount tier.
 type NextTierMeta struct {
+	// AdditionalSavingsCents Additional monthly savings in cents at the next tier.
 	AdditionalSavingsCents int `json:"additional_savings_cents"`
-	DiscountPct            int `json:"discount_pct"`
-	ProductsNeeded         int `json:"products_needed"`
+
+	// DiscountPct Discount percentage that would apply at the next tier.
+	DiscountPct int `json:"discount_pct"`
+
+	// ProductsNeeded Number of additional subscribed products needed to reach the next tier.
+	ProductsNeeded int `json:"products_needed"`
 }
 
 // OidcProvider defines model for OidcProvider.
 type OidcProvider string
 
-// PageMeta defines model for PageMeta.
+// PageMeta Pagination metadata returned with a collection response.
 type PageMeta struct {
-	// Number 1-based page number returned
+	// Number 1-based page number returned.
 	Number int `json:"number"`
 
-	// Size Page size used for this response
+	// Size Page size used for this response.
 	Size int `json:"size"`
 
-	// TotalItems Total number of matching items across all pages
+	// TotalItems Total number of matching items across all pages.
 	TotalItems int `json:"total_items"`
 
-	// TotalPages Total number of pages at the current page size
+	// TotalPages Total number of pages at the current page size.
 	TotalPages int `json:"total_pages"`
 }
 
-// PaymentMethod Attributes for a saved card payment method.
+// PaymentMethod A saved card on file for the account, used to charge subscription
+// invoices.
 //
-// “default“ is the API-facing name; the underlying column is “is_default“
-// per ADR-013 (reserved-word exception) and ADR-014 (unprefixed API fields).
+// The default payment method is changed via the `set_default` action
+// rather than by updating this field through PUT.
 type PaymentMethod struct {
+	// BillingDetails Billing details (name, email, phone, address) associated with the card.
 	BillingDetails *map[string]interface{} `json:"billing_details,omitempty"`
-	Brand          *string                 `json:"brand,omitempty"`
-	CreatedAt      *time.Time              `json:"created_at,omitempty"`
-	Default        *bool                   `json:"default,omitempty"`
-	ExpMonth       *int                    `json:"exp_month,omitempty"`
-	ExpYear        *int                    `json:"exp_year,omitempty"`
-	Last4          *string                 `json:"last4,omitempty"`
-	UpdatedAt      *time.Time              `json:"updated_at,omitempty"`
+
+	// Brand Card network brand, e.g. `visa`, `mastercard`, `amex`.
+	Brand *string `json:"brand,omitempty"`
+
+	// CreatedAt When the payment method was registered.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Default Whether this payment method is the account's default for subscription charges. Use the `set_default` action to change which payment method is default — this field is not writable via PUT.
+	Default *bool `json:"default,omitempty"`
+
+	// ExpMonth Expiry month (1-12).
+	ExpMonth *int `json:"exp_month,omitempty"`
+
+	// ExpYear Expiry year (four-digit).
+	ExpYear *int `json:"exp_year,omitempty"`
+
+	// Last4 Last four digits of the card number.
+	Last4 *string `json:"last4,omitempty"`
+
+	// UpdatedAt When the payment method was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// PaymentMethodListResponse defines model for PaymentMethodListResponse.
+// PaymentMethodListResponse JSON:API collection response for payment methods.
 type PaymentMethodListResponse struct {
 	Data []PaymentMethodResource `json:"data"`
 }
 
-// PaymentMethodResource defines model for PaymentMethodResource.
-type PaymentMethodResource struct {
-	// Attributes Attributes for a saved card payment method.
+// PaymentMethodRequest JSON:API request envelope for updating a payment method.
+type PaymentMethodRequest struct {
+	// Data JSON:API resource envelope for a payment method.
 	//
-	// ``default`` is the API-facing name; the underlying column is ``is_default``
-	// per ADR-013 (reserved-word exception) and ADR-014 (unprefixed API fields).
+	// `id` must not be specified for create requests (the server assigns it).
+	Data PaymentMethodResource `json:"data"`
+}
+
+// PaymentMethodResource JSON:API resource envelope for a payment method.
+//
+// `id` must not be specified for create requests (the server assigns it).
+type PaymentMethodResource struct {
+	// Attributes A saved card on file for the account, used to charge subscription
+	// invoices.
+	//
+	// The default payment method is changed via the `set_default` action
+	// rather than by updating this field through PUT.
 	Attributes PaymentMethod             `json:"attributes"`
 	Id         *string                   `json:"id,omitempty"`
 	Type       PaymentMethodResourceType `json:"type"`
@@ -937,36 +1246,49 @@ type PaymentMethodResource struct {
 // PaymentMethodResourceType defines model for PaymentMethodResource.Type.
 type PaymentMethodResourceType string
 
-// PaymentMethodResponse defines model for PaymentMethodResponse.
+// PaymentMethodResponse JSON:API single-resource response envelope for a payment method.
 type PaymentMethodResponse struct {
+	// Data JSON:API resource envelope for a payment method.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data PaymentMethodResource `json:"data"`
 }
 
-// Plan defines model for Plan.
+// Plan A plan tier offered across smplkit products.
 type Plan struct {
+	// Description Long-form plan description.
 	Description string `json:"description"`
+
+	// DisplayName Human-readable plan name.
 	DisplayName string `json:"display_name"`
-	SortOrder   int    `json:"sort_order"`
+
+	// SortOrder Order in which the plan should be shown in customer-facing lists. Lower values sort first.
+	SortOrder int `json:"sort_order"`
 }
 
-// PlanChangeRequest defines model for PlanChangeRequest.
+// PlanChangeRequest Body for the subscription upgrade and downgrade actions.
 type PlanChangeRequest struct {
+	// Plan Plan key to change the subscription to.
 	Plan string `json:"plan"`
 }
 
-// PlanDefinition defines model for PlanDefinition.
+// PlanDefinition Per-plan pricing and limits for a product.
 type PlanDefinition struct {
-	Limits            map[string]int `json:"limits"`
-	PriceMonthlyCents int            `json:"price_monthly_cents"`
+	// Limits Map of limit key to the cap that applies on this plan. `-1` indicates an unlimited cap.
+	Limits map[string]int `json:"limits"`
+
+	// PriceMonthlyCents Monthly list price in cents. `0` for free plans.
+	PriceMonthlyCents int `json:"price_monthly_cents"`
 }
 
-// PlanListResponse defines model for PlanListResponse.
+// PlanListResponse JSON:API collection response for plan tiers.
 type PlanListResponse struct {
 	Data []PlanResource `json:"data"`
 }
 
-// PlanResource defines model for PlanResource.
+// PlanResource JSON:API resource envelope for a plan tier.
 type PlanResource struct {
+	// Attributes A plan tier offered across smplkit products.
 	Attributes Plan             `json:"attributes"`
 	Id         *string          `json:"id,omitempty"`
 	Type       PlanResourceType `json:"type"`
@@ -975,24 +1297,38 @@ type PlanResource struct {
 // PlanResourceType defines model for PlanResource.Type.
 type PlanResourceType string
 
-// Product defines model for Product.
+// Product A smplkit product, with its plans, metered limits, and marketing copy.
 type Product struct {
-	ComingSoon  *bool                      `json:"coming_soon,omitempty"`
-	Description string                     `json:"description"`
-	DisplayName string                     `json:"display_name"`
-	Features    *[]string                  `json:"features,omitempty"`
-	Limits      map[string]LimitDefinition `json:"limits"`
-	Plans       map[string]PlanDefinition  `json:"plans"`
-	Tagline     *string                    `json:"tagline,omitempty"`
+	// ComingSoon When `true`, the product is listed but not yet available for subscription.
+	ComingSoon *bool `json:"coming_soon,omitempty"`
+
+	// Description Long-form product description.
+	Description string `json:"description"`
+
+	// DisplayName Human-readable product name.
+	DisplayName string `json:"display_name"`
+
+	// Features Bullet-list feature highlights for the product.
+	Features *[]string `json:"features,omitempty"`
+
+	// Limits Map of limit key to limit definition for this product.
+	Limits map[string]LimitDefinition `json:"limits"`
+
+	// Plans Map of plan key to plan definition for this product.
+	Plans map[string]PlanDefinition `json:"plans"`
+
+	// Tagline Short marketing tagline shown on plan-selection surfaces.
+	Tagline *string `json:"tagline,omitempty"`
 }
 
-// ProductListResponse defines model for ProductListResponse.
+// ProductListResponse JSON:API collection response for products.
 type ProductListResponse struct {
 	Data []ProductResource `json:"data"`
 }
 
-// ProductResource defines model for ProductResource.
+// ProductResource JSON:API resource envelope for a product catalog entry.
 type ProductResource struct {
+	// Attributes A smplkit product, with its plans, metered limits, and marketing copy.
 	Attributes Product             `json:"attributes"`
 	Id         *string             `json:"id,omitempty"`
 	Type       ProductResourceType `json:"type"`
@@ -1001,32 +1337,53 @@ type ProductResource struct {
 // ProductResourceType defines model for ProductResource.Type.
 type ProductResourceType string
 
-// RegisterRequest defines model for RegisterRequest.
+// RegisterRequest Body for the email + password registration endpoint.
 type RegisterRequest struct {
+	// Email Email address that becomes the new user's login identifier.
 	Email openapi_types.Email `json:"email"`
 
-	// EntryPoint Registration entry point. Allowed: LOGIN, GET_STARTED, LIVE_DEMO, UNKNOWN. Defaults to UNKNOWN when omitted. Case-insensitive.
+	// EntryPoint How the customer arrived at the registration page. Allowed values: `LOGIN`, `GET_STARTED`, `LIVE_DEMO`, `UNKNOWN`. Defaults to `UNKNOWN` when omitted. Case-insensitive on input.
 	EntryPoint *RegisterRequestEntryPoint `json:"entry_point,omitempty"`
-	Password   string                     `json:"password"`
+
+	// Password Password for the new account. Must be at least 8 characters.
+	Password string `json:"password"`
 }
 
-// RegisterRequestEntryPoint Registration entry point. Allowed: LOGIN, GET_STARTED, LIVE_DEMO, UNKNOWN. Defaults to UNKNOWN when omitted. Case-insensitive.
+// RegisterRequestEntryPoint How the customer arrived at the registration page. Allowed values: `LOGIN`, `GET_STARTED`, `LIVE_DEMO`, `UNKNOWN`. Defaults to `UNKNOWN` when omitted. Case-insensitive on input.
 type RegisterRequestEntryPoint string
 
-// Service defines model for Service.
+// Service A service that contexts can be evaluated against — for example, a
+// backend application or microservice in the customer's stack.
 type Service struct {
+	// CreatedAt When the service was created.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
-	Name      string     `json:"name"`
+
+	// Name Human-readable name for the service.
+	Name string `json:"name"`
+
+	// UpdatedAt When the service was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// ServiceListResponse defines model for ServiceListResponse.
+// ServiceListResponse JSON:API collection response for services.
 type ServiceListResponse struct {
 	Data []ServiceResource `json:"data"`
 }
 
-// ServiceResource defines model for ServiceResource.
+// ServiceRequest JSON:API request envelope for creating or updating a service.
+type ServiceRequest struct {
+	// Data JSON:API resource envelope for a service.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
+	Data ServiceResource `json:"data"`
+}
+
+// ServiceResource JSON:API resource envelope for a service.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type ServiceResource struct {
+	// Attributes A service that contexts can be evaluated against — for example, a
+	// backend application or microservice in the customer's stack.
 	Attributes Service             `json:"attributes"`
 	Id         *string             `json:"id,omitempty"`
 	Type       ServiceResourceType `json:"type"`
@@ -1035,18 +1392,23 @@ type ServiceResource struct {
 // ServiceResourceType defines model for ServiceResource.Type.
 type ServiceResourceType string
 
-// ServiceResponse defines model for ServiceResponse.
+// ServiceResponse JSON:API single-resource response envelope for a service.
 type ServiceResponse struct {
+	// Data JSON:API resource envelope for a service.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data ServiceResource `json:"data"`
 }
 
-// SetupIntentAttributes defines model for SetupIntentAttributes.
+// SetupIntentAttributes Result of executing the setup-intent function.
 type SetupIntentAttributes struct {
+	// ClientSecret Client secret to pass to Stripe Elements so the customer can complete payment-method setup in the browser.
 	ClientSecret string `json:"client_secret"`
 }
 
 // SetupIntentResource defines model for SetupIntentResource.
 type SetupIntentResource struct {
+	// Attributes Result of executing the setup-intent function.
 	Attributes SetupIntentAttributes   `json:"attributes"`
 	Type       SetupIntentResourceType `json:"type"`
 }
@@ -1054,45 +1416,72 @@ type SetupIntentResource struct {
 // SetupIntentResourceType defines model for SetupIntentResource.Type.
 type SetupIntentResourceType string
 
-// SetupIntentResponse defines model for SetupIntentResponse.
+// SetupIntentResponse JSON:API single-resource response envelope for a setup-intent result.
 type SetupIntentResponse struct {
 	Data SetupIntentResource `json:"data"`
 }
 
-// SubscriptionAttributes defines model for SubscriptionAttributes.
+// SubscriptionAttributes A subscription that grants the account access to a product on a plan.
 type SubscriptionAttributes struct {
-	ClientSecret     *string `json:"client_secret,omitempty"`
-	Comped           bool    `json:"comped"`
+	// ClientSecret Stripe payment intent client secret returned when a subscription create requires additional authentication (3DS). Returned only on create.
+	ClientSecret *string `json:"client_secret,omitempty"`
+
+	// Comped When `true`, the subscription is complimentary and is not billed through the billing provider.
+	Comped bool `json:"comped"`
+
+	// CurrentPeriodEnd End of the current billing period (ISO 8601 timestamp).
 	CurrentPeriodEnd *string `json:"current_period_end,omitempty"`
-	Plan             string  `json:"plan"`
-	Product          string  `json:"product"`
-	Status           *string `json:"status,omitempty"`
-	StripeManaged    bool    `json:"stripe_managed"`
+
+	// Plan Plan key the subscription is on, e.g. `pro`.
+	Plan string `json:"plan"`
+
+	// Product Product key the subscription is for, e.g. `flags`.
+	Product string `json:"product"`
+
+	// Status Lifecycle state of the subscription, e.g. `active`, `trialing`, `past_due`, `canceled`.
+	Status *string `json:"status,omitempty"`
+
+	// StripeManaged When `true`, the subscription is billed through Stripe; otherwise it is a free or complimentary subscription that does not produce invoices.
+	StripeManaged bool `json:"stripe_managed"`
 }
 
-// SubscriptionListMeta Discount and totals summary attached to GET /api/v1/subscriptions.
+// SubscriptionListMeta Discount and totals summary attached to a subscription collection response.
 type SubscriptionListMeta struct {
-	DiscountAmountCents int                                `json:"discount_amount_cents"`
-	DiscountPct         int                                `json:"discount_pct"`
-	DiscountSource      SubscriptionListMetaDiscountSource `json:"discount_source"`
-	NextTier            *NextTierMeta                      `json:"next_tier,omitempty"`
-	SubtotalCents       int                                `json:"subtotal_cents"`
-	TotalCents          int                                `json:"total_cents"`
+	// DiscountAmountCents Discount amount in cents.
+	DiscountAmountCents int `json:"discount_amount_cents"`
+
+	// DiscountPct Effective discount percentage applied.
+	DiscountPct int `json:"discount_pct"`
+
+	// DiscountSource Source of the discount. `VOLUME` indicates the standard volume-discount schedule; `OVERRIDE` indicates a custom discount set on the account.
+	DiscountSource SubscriptionListMetaDiscountSource `json:"discount_source"`
+
+	// NextTier Information about the next volume-discount tier.
+	NextTier *NextTierMeta `json:"next_tier,omitempty"`
+
+	// SubtotalCents Sum of list prices across all subscriptions in cents.
+	SubtotalCents int `json:"subtotal_cents"`
+
+	// TotalCents Final monthly total in cents after the discount.
+	TotalCents int `json:"total_cents"`
 }
 
-// SubscriptionListMetaDiscountSource defines model for SubscriptionListMeta.DiscountSource.
+// SubscriptionListMetaDiscountSource Source of the discount. `VOLUME` indicates the standard volume-discount schedule; `OVERRIDE` indicates a custom discount set on the account.
 type SubscriptionListMetaDiscountSource string
 
-// SubscriptionListResponse defines model for SubscriptionListResponse.
+// SubscriptionListResponse JSON:API collection response for subscriptions.
 type SubscriptionListResponse struct {
 	Data []SubscriptionResource `json:"data"`
 
-	// Meta Discount and totals summary attached to GET /api/v1/subscriptions.
+	// Meta Discount and totals summary attached to a subscription collection response.
 	Meta *SubscriptionListMeta `json:"meta,omitempty"`
 }
 
-// SubscriptionResource defines model for SubscriptionResource.
+// SubscriptionResource JSON:API resource envelope for a subscription.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type SubscriptionResource struct {
+	// Attributes A subscription that grants the account access to a product on a plan.
 	Attributes SubscriptionAttributes   `json:"attributes"`
 	Id         *string                  `json:"id,omitempty"`
 	Type       SubscriptionResourceType `json:"type"`
@@ -1101,44 +1490,69 @@ type SubscriptionResource struct {
 // SubscriptionResourceType defines model for SubscriptionResource.Type.
 type SubscriptionResourceType string
 
-// SubscriptionResponse defines model for SubscriptionResponse.
+// SubscriptionResponse JSON:API single-resource response envelope for a subscription.
 type SubscriptionResponse struct {
+	// Data JSON:API resource envelope for a subscription.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data SubscriptionResource `json:"data"`
 }
 
-// User defines model for User.
+// User A person with access to one or more accounts in smplkit.
 type User struct {
-	// Account Account UUID
-	Account      *string `json:"account,omitempty"`
+	// Account UUID of the account the user is acting within.
+	Account *string `json:"account,omitempty"`
+
+	// AuthProvider Identity provider that authenticates the user, e.g. `google`, `microsoft`, or `email`.
 	AuthProvider *string `json:"auth_provider,omitempty"`
 
-	// AvatarUrl Server-computed ``data:`` URL when an OIDC provider supplied a profile picture. Null otherwise — callers should fall back to Gravatar or initials.
-	AvatarUrl   *string    `json:"avatar_url,omitempty"`
-	CreatedAt   *time.Time `json:"created_at,omitempty"`
-	DisplayName string     `json:"display_name"`
+	// AvatarUrl Server-generated `data:` URL containing the user's avatar image bytes when one has been captured. `null` when no avatar is available — callers should fall back to Gravatar or initials.
+	AvatarUrl *string `json:"avatar_url,omitempty"`
 
-	// Email User's email address
-	Email         openapi_types.Email `json:"email"`
-	EmailVerified *bool               `json:"email_verified,omitempty"`
-	ProfilePic    *string             `json:"profile_pic,omitempty"`
+	// CreatedAt When the user record was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 
-	// Role Role in current account context
+	// DisplayName Human-readable display name shown in the console and on shared resources.
+	DisplayName string `json:"display_name"`
+
+	// Email Email address used to sign in to the user account.
+	Email *openapi_types.Email `json:"email,omitempty"`
+
+	// EmailVerified Whether the user has completed email verification.
+	EmailVerified *bool `json:"email_verified,omitempty"`
+
+	// ProfilePic URL of an external profile picture (e.g. the value supplied by the user's identity provider).
+	ProfilePic *string `json:"profile_pic,omitempty"`
+
+	// Role Role the user holds in the current account context. One of `OWNER`, `ADMIN`, `MEMBER`, or `VIEWER`.
 	Role *string `json:"role,omitempty"`
 }
 
 // UserListMeta defines model for UserListMeta.
 type UserListMeta struct {
+	// Page Pagination metadata returned with a collection response.
 	Page PageMeta `json:"page"`
 }
 
-// UserListResponse defines model for UserListResponse.
+// UserListResponse JSON:API collection response for users.
 type UserListResponse struct {
 	Data []UserResource `json:"data"`
 	Meta *UserListMeta  `json:"meta,omitempty"`
 }
 
-// UserResource defines model for UserResource.
+// UserRequest JSON:API request envelope for creating or updating a user.
+type UserRequest struct {
+	// Data JSON:API resource envelope for a user.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
+	Data UserResource `json:"data"`
+}
+
+// UserResource JSON:API resource envelope for a user.
+//
+// `id` must not be specified for create requests (the server assigns it).
 type UserResource struct {
+	// Attributes A person with access to one or more accounts in smplkit.
 	Attributes User             `json:"attributes"`
 	Id         *string          `json:"id,omitempty"`
 	Type       UserResourceType `json:"type"`
@@ -1147,13 +1561,17 @@ type UserResource struct {
 // UserResourceType defines model for UserResource.Type.
 type UserResourceType string
 
-// UserResponse defines model for UserResponse.
+// UserResponse JSON:API single-resource response envelope for a user.
 type UserResponse struct {
+	// Data JSON:API resource envelope for a user.
+	//
+	// `id` must not be specified for create requests (the server assigns it).
 	Data UserResource `json:"data"`
 }
 
-// VerifyEmailRequest defines model for VerifyEmailRequest.
+// VerifyEmailRequest Body for the email-verification endpoint.
 type VerifyEmailRequest struct {
+	// Token Verification token previously delivered to the user's email.
 	Token string `json:"token"`
 }
 
@@ -1226,16 +1644,16 @@ type ListUsersParams struct {
 }
 
 // UpdateAccountApplicationVndAPIPlusJSONRequestBody defines body for UpdateAccount for application/vnd.api+json ContentType.
-type UpdateAccountApplicationVndAPIPlusJSONRequestBody = AccountResponse
+type UpdateAccountApplicationVndAPIPlusJSONRequestBody = AccountRequest
 
 // WipeAccountDataApplicationVndAPIPlusJSONRequestBody defines body for WipeAccountData for application/vnd.api+json ContentType.
 type WipeAccountDataApplicationVndAPIPlusJSONRequestBody = AccountWipeRequest
 
 // CreateApiKeyApplicationVndAPIPlusJSONRequestBody defines body for CreateApiKey for application/vnd.api+json ContentType.
-type CreateApiKeyApplicationVndAPIPlusJSONRequestBody = ApiKeyResponse
+type CreateApiKeyApplicationVndAPIPlusJSONRequestBody = ApiKeyRequest
 
 // UpdateApiKeyApplicationVndAPIPlusJSONRequestBody defines body for UpdateApiKey for application/vnd.api+json ContentType.
-type UpdateApiKeyApplicationVndAPIPlusJSONRequestBody = ApiKeyResponse
+type UpdateApiKeyApplicationVndAPIPlusJSONRequestBody = ApiKeyRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
@@ -1247,16 +1665,16 @@ type RegisterJSONRequestBody = RegisterRequest
 type VerifyEmailJSONRequestBody = VerifyEmailRequest
 
 // CreateContextTypeApplicationVndAPIPlusJSONRequestBody defines body for CreateContextType for application/vnd.api+json ContentType.
-type CreateContextTypeApplicationVndAPIPlusJSONRequestBody = ContextTypeResponse
+type CreateContextTypeApplicationVndAPIPlusJSONRequestBody = ContextTypeRequest
 
 // UpdateContextTypeApplicationVndAPIPlusJSONRequestBody defines body for UpdateContextType for application/vnd.api+json ContentType.
-type UpdateContextTypeApplicationVndAPIPlusJSONRequestBody = ContextTypeResponse
+type UpdateContextTypeApplicationVndAPIPlusJSONRequestBody = ContextTypeRequest
 
 // BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterContexts for application/vnd.api+json ContentType.
 type BulkRegisterContextsApplicationVndAPIPlusJSONRequestBody = ContextBulkRegister
 
 // UpdateContextApplicationVndAPIPlusJSONRequestBody defines body for UpdateContext for application/vnd.api+json ContentType.
-type UpdateContextApplicationVndAPIPlusJSONRequestBody = ContextResponse
+type UpdateContextApplicationVndAPIPlusJSONRequestBody = ContextRequest
 
 // CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody defines body for CreateEmailRegistration for application/vnd.api+json ContentType.
 type CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody CreateEmailRegistrationApplicationVndAPIPlusJSONBody
@@ -1265,10 +1683,10 @@ type CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody CreateEmailRegi
 type SendContactEmailApplicationVndAPIPlusJSONRequestBody SendContactEmailApplicationVndAPIPlusJSONBody
 
 // CreateEnvironmentApplicationVndAPIPlusJSONRequestBody defines body for CreateEnvironment for application/vnd.api+json ContentType.
-type CreateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentResponse
+type CreateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentRequest
 
 // UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody defines body for UpdateEnvironment for application/vnd.api+json ContentType.
-type UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentResponse
+type UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentRequest
 
 // CreateInvitationsApplicationVndAPIPlusJSONRequestBody defines body for CreateInvitations for application/vnd.api+json ContentType.
 type CreateInvitationsApplicationVndAPIPlusJSONRequestBody = InvitationBulkCreateRequest
@@ -1283,13 +1701,13 @@ type BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody = MetricBulkRequest
 type CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody = AddPaymentMethodBody
 
 // UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody defines body for UpdatePaymentMethod for application/vnd.api+json ContentType.
-type UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody = PaymentMethodResponse
+type UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody = PaymentMethodRequest
 
 // CreateServiceApplicationVndAPIPlusJSONRequestBody defines body for CreateService for application/vnd.api+json ContentType.
-type CreateServiceApplicationVndAPIPlusJSONRequestBody = ServiceResponse
+type CreateServiceApplicationVndAPIPlusJSONRequestBody = ServiceRequest
 
 // UpdateServiceApplicationVndAPIPlusJSONRequestBody defines body for UpdateService for application/vnd.api+json ContentType.
-type UpdateServiceApplicationVndAPIPlusJSONRequestBody = ServiceResponse
+type UpdateServiceApplicationVndAPIPlusJSONRequestBody = ServiceRequest
 
 // CreateSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for CreateSubscription for application/vnd.api+json ContentType.
 type CreateSubscriptionApplicationVndAPIPlusJSONRequestBody = CreateSubscriptionBody
@@ -1301,10 +1719,10 @@ type DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody = PlanChangeReque
 type UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody = PlanChangeRequest
 
 // UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody defines body for UpdateCurrentUser for application/vnd.api+json ContentType.
-type UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody = UserResponse
+type UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody = UserRequest
 
 // UpdateUserRoleApplicationVndAPIPlusJSONRequestBody defines body for UpdateUserRole for application/vnd.api+json ContentType.
-type UpdateUserRoleApplicationVndAPIPlusJSONRequestBody = UserResponse
+type UpdateUserRoleApplicationVndAPIPlusJSONRequestBody = UserRequest
 
 // AsMetricAttributesValue0 returns the union data inside the MetricAttributes_Value as a MetricAttributesValue0
 func (t MetricAttributes_Value) AsMetricAttributesValue0() (MetricAttributesValue0, error) {
