@@ -86,7 +86,7 @@ func main() {
 	fwdName := "showcase-" + randomHex(3)
 	fwd, err := client.Audit().Forwarders().Create(ctx, smplkit.CreateForwarderInput{
 		Name:          fwdName,
-		ForwarderType: "http",
+		ForwarderType: "HTTP",
 		Enabled:       true,
 		HTTP: smplkit.ForwarderHttp{
 			Method:        "POST",
