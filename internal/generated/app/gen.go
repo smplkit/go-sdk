@@ -297,22 +297,22 @@ func (e ProductResourceType) Valid() bool {
 
 // Defines values for RegisterRequestEntryPoint.
 const (
-	GetStarted RegisterRequestEntryPoint = "get_started"
-	LiveDemo   RegisterRequestEntryPoint = "live_demo"
-	Login      RegisterRequestEntryPoint = "login"
-	Unknown    RegisterRequestEntryPoint = "unknown"
+	GETSTARTED RegisterRequestEntryPoint = "GET_STARTED"
+	LIVEDEMO   RegisterRequestEntryPoint = "LIVE_DEMO"
+	LOGIN      RegisterRequestEntryPoint = "LOGIN"
+	UNKNOWN    RegisterRequestEntryPoint = "UNKNOWN"
 )
 
 // Valid indicates whether the value is a known member of the RegisterRequestEntryPoint enum.
 func (e RegisterRequestEntryPoint) Valid() bool {
 	switch e {
-	case GetStarted:
+	case GETSTARTED:
 		return true
-	case LiveDemo:
+	case LIVEDEMO:
 		return true
-	case Login:
+	case LOGIN:
 		return true
-	case Unknown:
+	case UNKNOWN:
 		return true
 	default:
 		return false
@@ -351,16 +351,16 @@ func (e SetupIntentResourceType) Valid() bool {
 
 // Defines values for SubscriptionListMetaDiscountSource.
 const (
-	Override SubscriptionListMetaDiscountSource = "override"
-	Volume   SubscriptionListMetaDiscountSource = "volume"
+	OVERRIDE SubscriptionListMetaDiscountSource = "OVERRIDE"
+	VOLUME   SubscriptionListMetaDiscountSource = "VOLUME"
 )
 
 // Valid indicates whether the value is a known member of the SubscriptionListMetaDiscountSource enum.
 func (e SubscriptionListMetaDiscountSource) Valid() bool {
 	switch e {
-	case Override:
+	case OVERRIDE:
 		return true
-	case Volume:
+	case VOLUME:
 		return true
 	default:
 		return false
@@ -1005,12 +1005,12 @@ type ProductResourceType string
 type RegisterRequest struct {
 	Email openapi_types.Email `json:"email"`
 
-	// EntryPoint Registration entry point. Allowed: login, get_started, live_demo, unknown. Defaults to unknown when omitted.
+	// EntryPoint Registration entry point. Allowed: LOGIN, GET_STARTED, LIVE_DEMO, UNKNOWN. Defaults to UNKNOWN when omitted. Case-insensitive.
 	EntryPoint *RegisterRequestEntryPoint `json:"entry_point,omitempty"`
 	Password   string                     `json:"password"`
 }
 
-// RegisterRequestEntryPoint Registration entry point. Allowed: login, get_started, live_demo, unknown. Defaults to unknown when omitted.
+// RegisterRequestEntryPoint Registration entry point. Allowed: LOGIN, GET_STARTED, LIVE_DEMO, UNKNOWN. Defaults to UNKNOWN when omitted. Case-insensitive.
 type RegisterRequestEntryPoint string
 
 // Service defines model for Service.
