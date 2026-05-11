@@ -230,4 +230,3 @@ func forwarderHttpFromWire(h genaudit.ForwarderHttp) ForwarderHttp {
 	}
 	return out
 }
-

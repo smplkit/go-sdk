@@ -162,9 +162,9 @@ func TestAuditForwarders_Create_RoundTrip(t *testing.T) {
 			SuccessStatus: "2xx",
 			Body:          &body,
 		},
-		Filter:  map[string]interface{}{"==": []any{"x", "x"}},
+		Filter:    map[string]interface{}{"==": []any{"x", "x"}},
 		Transform: "$",
-		Enabled: true,
+		Enabled:   true,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
