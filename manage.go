@@ -7,6 +7,7 @@ import (
 
 	"github.com/smplkit/go-sdk/v3/internal/debug"
 	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
+	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
 	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
 	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
@@ -57,7 +58,8 @@ func NewManagementClient(cfg ManagementConfig, opts ...ClientOption) (*Managemen
 	}
 
 	httpClient, genApp, genCfg, genFlags, genLogging := buildGenClients(optCfg, rc)
-	return assembleManagementClient(true, optCfg, rc, httpClient, genApp, genCfg, genFlags, genLogging), nil
+	genAudit := buildAuditGenClient(optCfg, rc, httpClient)
+	return assembleManagementClient(true, optCfg, rc, httpClient, genApp, genCfg, genFlags, genLogging, genAudit), nil
 }
 
 // buildGenClients constructs the four generated API clients and wires
@@ -109,8 +111,23 @@ func buildGenClients(optCfg clientConfig, rc *resolvedConfig) (
 	return httpClient, genApp, genCfg, genFlags, genLogging
 }
 
-// assembleManagementClient wires the eight sub-management surfaces
-// directly against the generated API clients — no runtime skeleton.
+// buildAuditGenClient constructs the generated audit API client for the
+// management plane. Unlike the runtime path, no extra environment/service
+// headers are injected — management callers authenticate via the API key
+// only (set by authTransport on httpClient).
+func buildAuditGenClient(optCfg clientConfig, rc *resolvedConfig, httpClient *http.Client) *genaudit.ClientWithResponses {
+	auditURL := serviceURL(optCfg, "audit", rc)
+	headerEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	raw, _ := genaudit.NewClient(auditURL, genaudit.WithHTTPClient(httpClient), headerEditor)
+	return &genaudit.ClientWithResponses{ClientInterface: raw}
+}
+
+// assembleManagementClient wires the management surfaces directly against
+// the generated API clients — no runtime skeleton.
 func assembleManagementClient(
 	standalone bool,
 	_ clientConfig,
@@ -120,6 +137,7 @@ func assembleManagementClient(
 	genCfg genconfig.ClientInterface,
 	genFlags genflags.ClientInterface,
 	genLogging genlogging.ClientInterface,
+	genAudit *genaudit.ClientWithResponses,
 ) *ManagementClient {
 	mgmt := &ManagementClient{
 		appClient:  genApp,
@@ -136,6 +154,9 @@ func assembleManagementClient(
 	mgmt.loggersMgmt = &LoggersManagement{logging: loggingMgmt}
 	mgmt.logGroupsMgmt = &LogGroupsManagement{logging: loggingMgmt}
 	mgmt.loggingMgmt = loggingMgmt
+	mgmt.auditMgmt = &AuditManagement{
+		forwarders: &AuditForwarders{gen: genAudit},
+	}
 
 	return mgmt
 }
@@ -180,6 +201,11 @@ func (m *ManagementClient) Loggers() *LoggersManagement {
 // LogGroups returns the sub-client for log-group CRUD (mgmt.log_groups).
 func (m *ManagementClient) LogGroups() *LogGroupsManagement {
 	return m.logGroupsMgmt
+}
+
+// Audit returns the sub-client for audit forwarder CRUD (mgmt.audit).
+func (m *ManagementClient) Audit() *AuditManagement {
+	return m.auditMgmt
 }
 
 // Close releases HTTP resources held by this management client.

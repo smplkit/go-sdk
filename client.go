@@ -222,27 +222,12 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	c.flags.runtime = newFlagsRuntime(c.flags, ctxBuf)
 	c.logging = newLoggingClient(c, genLoggingClient)
 	auditEvents := &AuditEvents{gen: genAuditClient, buffer: newAuditEventBuffer(genAuditClient)}
-	auditDeliveries := &AuditForwarderDeliveries{
-		gen:     genAuditClient,
-		actions: &AuditDeliveryActions{gen: genAuditClient},
-	}
-	auditForwarders := &AuditForwarders{
-		gen:        genAuditClient,
-		deliveries: auditDeliveries,
-		actions:    &AuditForwarderActions{gen: genAuditClient},
-	}
-	auditFunctions := &AuditFunctions{
-		gen: genAuditClient,
-		testForwarder: &AuditTestForwarder{
-			actions: &AuditTestForwarderActions{gen: genAuditClient},
-		},
-	}
 	c.audit = &AuditClient{
-		client:     c,
-		gen:        genAuditClient,
-		events:     auditEvents,
-		forwarders: auditForwarders,
-		functions:  auditFunctions,
+		client:        c,
+		gen:           genAuditClient,
+		events:        auditEvents,
+		resourceTypes: &AuditResourceTypes{gen: genAuditClient},
+		actions:       &AuditActions{gen: genAuditClient},
 	}
 
 	// Build the management surface directly against the generated API
@@ -250,7 +235,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	// sub-clients (rule 1 — no skeleton inversion). The runtime
 	// sub-clients then attach themselves to the same management
 	// instances so .Management() returns the same object.
-	c.management = assembleManagementClient(false, optCfg, rc, httpClient, genAppClient, genConfigClient, genFlagsClient, genLoggingClient)
+	c.management = assembleManagementClient(false, optCfg, rc, httpClient, genAppClient, genConfigClient, genFlagsClient, genLoggingClient, genAuditClient)
 	c.management.client = c
 	c.management.contextBuf = ctxBuf // share the runtime's buffer so context registration coalesces
 	c.config.management = c.management.configMgmt

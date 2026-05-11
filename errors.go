@@ -122,6 +122,18 @@ func (e *ValidationError) Error() string { return e.Base.Error() }
 // Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
 func (e *ValidationError) Unwrap() error { return &e.Base }
 
+// PaymentRequiredError is raised when the account's subscription plan does not
+// include the required entitlement.
+type PaymentRequiredError struct {
+	Base Error
+}
+
+// Error implements the error interface.
+func (e *PaymentRequiredError) Error() string { return e.Base.Error() }
+
+// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
+func (e *PaymentRequiredError) Unwrap() error { return &e.Base }
+
 // ─── Backward-compatibility aliases ──────────────────────────────────────────
 //
 // The original error types had a SmplXxxError name to match the Python

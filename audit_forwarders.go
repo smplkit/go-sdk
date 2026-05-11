@@ -3,7 +3,6 @@ package smplkit
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -11,73 +10,9 @@ import (
 )
 
 // AuditForwarders manages SIEM streaming destinations for the
-// authenticated account. Pro tier only — methods return wrapped 402
-// errors on lower tiers.
+// authenticated account. Accessed via Client.Manage().Audit().Forwarders().
 type AuditForwarders struct {
-	gen        *genaudit.ClientWithResponses
-	deliveries *AuditForwarderDeliveries
-	actions    *AuditForwarderActions
-}
-
-// AuditForwarderDeliveries handles the per-forwarder delivery log and
-// the per-delivery retry action.
-type AuditForwarderDeliveries struct {
-	gen     *genaudit.ClientWithResponses
-	actions *AuditDeliveryActions
-}
-
-// AuditDeliveryActions exposes the single-delivery retry action.
-type AuditDeliveryActions struct {
 	gen *genaudit.ClientWithResponses
-}
-
-// AuditForwarderActions exposes forwarder-scoped actions like the bulk
-// retry of failed deliveries.
-type AuditForwarderActions struct {
-	gen *genaudit.ClientWithResponses
-}
-
-// AuditFunctions exposes server-side function endpoints. Today this
-// surface contains the test_forwarder/execute proxy.
-type AuditFunctions struct {
-	gen           *genaudit.ClientWithResponses
-	testForwarder *AuditTestForwarder
-}
-
-// AuditTestForwarder is the namespace for the test_forwarder/execute
-// proxy and any future test-forwarder-related actions.
-type AuditTestForwarder struct {
-	actions *AuditTestForwarderActions
-}
-
-// AuditTestForwarderActions exposes the Execute action.
-type AuditTestForwarderActions struct {
-	gen *genaudit.ClientWithResponses
-}
-
-// Deliveries returns the delivery log + retry namespace.
-func (f *AuditForwarders) Deliveries() *AuditForwarderDeliveries {
-	return f.deliveries
-}
-
-// Actions returns the forwarder-scoped actions namespace.
-func (f *AuditForwarders) Actions() *AuditForwarderActions {
-	return f.actions
-}
-
-// Actions returns the per-delivery actions namespace.
-func (d *AuditForwarderDeliveries) Actions() *AuditDeliveryActions {
-	return d.actions
-}
-
-// TestForwarder returns the test_forwarder namespace.
-func (fn *AuditFunctions) TestForwarder() *AuditTestForwarder {
-	return fn.testForwarder
-}
-
-// Actions returns the test_forwarder actions namespace.
-func (t *AuditTestForwarder) Actions() *AuditTestForwarderActions {
-	return t.actions
 }
 
 // ---------------------------------------------------------------------------
@@ -94,10 +29,7 @@ func (f *AuditForwarders) Create(ctx context.Context, input CreateForwarderInput
 		return nil, fmt.Errorf("audit Forwarders.Create: %w", err)
 	}
 	if resp.StatusCode() != 201 {
-		return nil, fmt.Errorf(
-			"audit Forwarders.Create failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
 	if resp.ApplicationvndApiJSON201 == nil {
 		return nil, fmt.Errorf("audit Forwarders.Create: empty 201 body")
@@ -110,8 +42,6 @@ func (f *AuditForwarders) Create(ctx context.Context, input CreateForwarderInput
 func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (*ListForwardersPage, error) {
 	params := &genaudit.ListForwardersParams{}
 	if input.ForwarderType != "" {
-		// Generated client typed FilterForwarderType as *string; convert
-		// to drop the typed alias before taking its address.
 		ft := string(input.ForwarderType)
 		params.FilterForwarderType = &ft
 	}
@@ -129,10 +59,7 @@ func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (
 		return nil, fmt.Errorf("audit Forwarders.List: %w", err)
 	}
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf(
-			"audit Forwarders.List failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
 	body := resp.ApplicationvndApiJSON200
 	page := &ListForwardersPage{
@@ -141,7 +68,9 @@ func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (
 	for _, r := range body.Data {
 		page.Forwarders = append(page.Forwarders, forwarderFromResource(r))
 	}
-	page.NextCursor = nextCursorFromForwarderLinks(body.Links)
+	if body.Links != nil && body.Links.Next != nil {
+		page.NextCursor = extractNextCursor(body.Links.Next)
+	}
 	return page, nil
 }
 
@@ -151,14 +80,8 @@ func (f *AuditForwarders) Get(ctx context.Context, forwarderID uuid.UUID) (*Forw
 	if err != nil {
 		return nil, fmt.Errorf("audit Forwarders.Get: %w", err)
 	}
-	if resp.StatusCode() == 404 {
-		return nil, fmt.Errorf("audit Forwarders.Get: forwarder not found (status=404)")
-	}
-	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf(
-			"audit Forwarders.Get failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
+	if resp.StatusCode() != 200 {
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
 	out := forwarderFromResource(resp.ApplicationvndApiJSON200.Data)
 	return &out, nil
@@ -180,10 +103,7 @@ func (f *AuditForwarders) Update(
 		return nil, fmt.Errorf("audit Forwarders.Update: %w", err)
 	}
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf(
-			"audit Forwarders.Update failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
 	out := forwarderFromResource(resp.ApplicationvndApiJSON200.Data)
 	return &out, nil
@@ -196,171 +116,9 @@ func (f *AuditForwarders) Delete(ctx context.Context, forwarderID uuid.UUID) err
 		return fmt.Errorf("audit Forwarders.Delete: %w", err)
 	}
 	if resp.StatusCode() != 204 {
-		return fmt.Errorf(
-			"audit Forwarders.Delete failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
+		return checkStatus(resp.StatusCode(), resp.Body)
 	}
 	return nil
-}
-
-// ---------------------------------------------------------------------------
-// Deliveries
-// ---------------------------------------------------------------------------
-
-// List returns one page of deliveries for a forwarder.
-func (d *AuditForwarderDeliveries) List(
-	ctx context.Context, forwarderID uuid.UUID, input ListDeliveriesInput,
-) (*ListDeliveriesPage, error) {
-	params := &genaudit.ListForwarderDeliveriesParams{}
-	if input.Status != "" {
-		s := string(input.Status)
-		params.FilterStatus = &s
-	}
-	if input.CreatedAtRange != "" {
-		params.FilterCreatedAt = &input.CreatedAtRange
-	}
-	if input.EventID != (uuid.UUID{}) {
-		s := input.EventID.String()
-		params.FilterEventId = &s
-	}
-	if input.PageSize > 0 {
-		params.PageSize = &input.PageSize
-	}
-	if input.PageAfter != "" {
-		params.PageAfter = &input.PageAfter
-	}
-	resp, err := d.gen.ListForwarderDeliveriesWithResponse(ctx, forwarderID, params)
-	if err != nil {
-		return nil, fmt.Errorf("audit Deliveries.List: %w", err)
-	}
-	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf(
-			"audit Deliveries.List failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
-	}
-	body := resp.ApplicationvndApiJSON200
-	page := &ListDeliveriesPage{
-		Deliveries: make([]ForwarderDelivery, 0, len(body.Data)),
-	}
-	for _, r := range body.Data {
-		page.Deliveries = append(page.Deliveries, deliveryFromResource(r))
-	}
-	page.NextCursor = nextCursorFromForwarderLinks(body.Links)
-	return page, nil
-}
-
-// Retry retries a single failed delivery. Records a new delivery row
-// with attempt_number = prior + 1; the prior row is unchanged.
-func (a *AuditDeliveryActions) Retry(
-	ctx context.Context, forwarderID, deliveryID uuid.UUID,
-) (*ForwarderDelivery, error) {
-	resp, err := a.gen.RetryForwarderDeliveryWithResponse(
-		ctx, forwarderID, deliveryID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("audit Deliveries.Actions.Retry: %w", err)
-	}
-	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf(
-			"audit Deliveries.Actions.Retry failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
-	}
-	out := deliveryFromResource(resp.ApplicationvndApiJSON200.Data)
-	return &out, nil
-}
-
-// RetryFailedDeliveries retries every failed delivery for a forwarder
-// and returns counts.
-func (a *AuditForwarderActions) RetryFailedDeliveries(
-	ctx context.Context, forwarderID uuid.UUID,
-) (*RetryFailedDeliveriesSummary, error) {
-	resp, err := a.gen.RetryFailedForwarderDeliveriesWithResponse(ctx, forwarderID)
-	if err != nil {
-		return nil, fmt.Errorf("audit Forwarders.Actions.RetryFailedDeliveries: %w", err)
-	}
-	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf(
-			"audit Forwarders.Actions.RetryFailedDeliveries failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
-	}
-	body := resp.ApplicationvndApiJSON200
-	return &RetryFailedDeliveriesSummary{
-		Attempted: body.Attempted,
-		Succeeded: body.Succeeded,
-		Failed:    body.Failed,
-	}, nil
-}
-
-// ---------------------------------------------------------------------------
-// functions.test_forwarder.actions.Execute
-// ---------------------------------------------------------------------------
-
-// Execute proxies an HTTP request to a customer-supplied destination
-// from inside the audit service, returning the response. The audit
-// service applies its SSRF guard before resolving — private,
-// loopback, link-local (incl. 169.254.169.254 IMDS), unique-local,
-// and disallowed-port targets are rejected with Result.Succeeded=false
-// and a descriptive Error.
-func (a *AuditTestForwarderActions) Execute(
-	ctx context.Context, input TestForwarderInput,
-) (*TestForwarderResult, error) {
-	body := genaudit.ExecuteTestForwarderJSONRequestBody{
-		Url: input.URL,
-	}
-	if input.Method != "" {
-		m := input.Method
-		body.Method = &m
-	}
-	if len(input.Headers) > 0 {
-		hh := make([]genaudit.HttpHeader, 0, len(input.Headers))
-		for _, h := range input.Headers {
-			hh = append(hh, genaudit.HttpHeader{Name: h.Name, Value: h.Value})
-		}
-		body.Headers = &hh
-	}
-	if input.Body != nil {
-		body.Body = input.Body
-	}
-	if input.SuccessStatus != "" {
-		s := input.SuccessStatus
-		body.SuccessStatus = &s
-	}
-	if input.TimeoutMs != nil {
-		body.TimeoutMs = input.TimeoutMs
-	}
-	resp, err := a.gen.ExecuteTestForwarderWithResponse(ctx, body)
-	if err != nil {
-		return nil, fmt.Errorf("audit Functions.TestForwarder.Actions.Execute: %w", err)
-	}
-	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf(
-			"audit Functions.TestForwarder.Actions.Execute failed: status=%d body=%s",
-			resp.StatusCode(), string(resp.Body),
-		)
-	}
-	body200 := resp.JSON200
-	out := &TestForwarderResult{
-		ResponseHeaders: map[string]string{},
-	}
-	if body200 != nil {
-		out.Succeeded = body200.Succeeded
-		out.ResponseStatus = body200.ResponseStatus
-		if body200.ResponseBody != nil {
-			out.ResponseBody = *body200.ResponseBody
-		}
-		out.LatencyMs = body200.LatencyMs
-		out.Error = body200.Error
-		if body200.ResponseHeaders != nil {
-			for k, v := range *body200.ResponseHeaders {
-				out.ResponseHeaders[k] = v
-			}
-		}
-	}
-	return out, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -384,12 +142,12 @@ func forwarderResourceFromInput(id string, input CreateForwarderInput) genaudit.
 		t := input.Transform
 		attrs.Transform = &t
 	}
-	if input.Data != nil {
-		d := input.Data
-		attrs.Data = &d
+	var idPtr *string
+	if id != "" {
+		idPtr = &id
 	}
 	return genaudit.ForwarderResource{
-		Id:         id,
+		Id:         idPtr,
 		Type:       &rt,
 		Attributes: attrs,
 	}
@@ -400,7 +158,7 @@ func forwarderHttpToWire(h ForwarderHttp) genaudit.ForwarderHttp {
 		Url: h.URL,
 	}
 	if h.Method != "" {
-		m := h.Method
+		m := genaudit.ForwarderHttpMethod(h.Method)
 		out.Method = &m
 	}
 	if h.SuccessStatus != "" {
@@ -421,7 +179,10 @@ func forwarderHttpToWire(h ForwarderHttp) genaudit.ForwarderHttp {
 }
 
 func forwarderFromResource(r genaudit.ForwarderResource) Forwarder {
-	id, _ := uuid.Parse(r.Id)
+	var id uuid.UUID
+	if r.Id != nil {
+		id, _ = uuid.Parse(*r.Id)
+	}
 	a := r.Attributes
 	out := Forwarder{
 		ID:            id,
@@ -445,9 +206,6 @@ func forwarderFromResource(r genaudit.ForwarderResource) Forwarder {
 	if a.Transform != nil {
 		out.Transform = a.Transform
 	}
-	if a.Data != nil {
-		out.Data = *a.Data
-	}
 	return out
 }
 
@@ -456,7 +214,7 @@ func forwarderHttpFromWire(h genaudit.ForwarderHttp) ForwarderHttp {
 		URL: h.Url,
 	}
 	if h.Method != nil {
-		out.Method = *h.Method
+		out.Method = string(*h.Method)
 	}
 	if h.SuccessStatus != nil {
 		out.SuccessStatus = *h.SuccessStatus
@@ -473,40 +231,3 @@ func forwarderHttpFromWire(h genaudit.ForwarderHttp) ForwarderHttp {
 	return out
 }
 
-func deliveryFromResource(r genaudit.ForwarderDeliveryResource) ForwarderDelivery {
-	id, _ := uuid.Parse(r.Id)
-	a := r.Attributes
-	fid, _ := uuid.Parse(a.ForwarderId.String())
-	eid, _ := uuid.Parse(a.EventId.String())
-	out := ForwarderDelivery{
-		ID:             id,
-		ForwarderID:    fid,
-		EventID:        eid,
-		AttemptNumber:  a.AttemptNumber,
-		Status:         ForwarderDeliveryStatus(a.Status),
-		ResponseStatus: a.ResponseStatus,
-		ResponseBody:   a.ResponseBody,
-		LatencyMs:      a.LatencyMs,
-		Error:          a.Error,
-		CreatedAt:      a.CreatedAt,
-	}
-	if a.Request != nil {
-		out.Request = *a.Request
-	}
-	return out
-}
-
-func nextCursorFromForwarderLinks(links *genaudit.ForwarderListLinks) string {
-	if links == nil || links.Next == nil {
-		return ""
-	}
-	next := *links.Next
-	if i := strings.Index(next, "page[after]="); i >= 0 {
-		token := next[i+len("page[after]="):]
-		if amp := strings.Index(token, "&"); amp >= 0 {
-			token = token[:amp]
-		}
-		return token
-	}
-	return ""
-}

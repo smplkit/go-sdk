@@ -10,7 +10,7 @@ import (
 
 // ForwarderType is a SIEM streaming destination type. Aliases the
 // generated typed string so customers refer to it as
-// “smplkit.ForwarderType“ without reaching into the internal
+// "smplkit.ForwarderType" without reaching into the internal
 // generated package, while still satisfying the generated client's
 // type constraints.
 //
@@ -20,7 +20,7 @@ type ForwarderType = genaudit.ForwarderType
 
 // Constants for every supported ForwarderType value. The names match
 // the codegen but are re-exported here so customer code stays inside
-// the public “smplkit“ package.
+// the public "smplkit" package.
 const (
 	ForwarderTypeHTTP      = genaudit.HTTP
 	ForwarderTypeDatadog   = genaudit.DATADOG
@@ -64,9 +64,9 @@ type AuditEvent struct {
 	DoNotForward   bool
 }
 
-// CreateEventInput is the input for AuditEvents.Create.
+// CreateEventInput is the input for AuditEvents.Record.
 //
-// Customers must NOT use a ResourceType prefixed with “smpl.“ — the
+// Customers must NOT use a ResourceType prefixed with "smpl." — the
 // server returns 403 for those because that namespace is reserved for
 // smplkit-emitted events.
 //
@@ -110,7 +110,48 @@ type ListEventsPage struct {
 }
 
 // ---------------------------------------------------------------------------
-// Forwarders (SIEM streaming, Pro tier)
+// Resource types and actions (read-only index surfaces)
+// ---------------------------------------------------------------------------
+
+// AuditResourceType is one row from the resource-type index.
+type AuditResourceType struct {
+	ID           string // the resource_type slug, e.g. "invoice"
+	ResourceType string // same as ID; both fields are populated for clarity
+}
+
+// ListResourceTypesInput is the pagination input for AuditResourceTypes.List.
+type ListResourceTypesInput struct {
+	PageSize  int
+	PageAfter string
+}
+
+// ResourceTypeListPage is one page of resource-type slugs.
+type ResourceTypeListPage struct {
+	ResourceTypes []AuditResourceType
+	NextCursor    string
+}
+
+// AuditAction is one row from the actions index.
+type AuditAction struct {
+	ID     string // the action slug, e.g. "invoice.created"
+	Action string // same as ID; both fields are populated for clarity
+}
+
+// ListActionsInput is the filter + pagination input for AuditActions.List.
+type ListActionsInput struct {
+	FilterResourceType string // when set, returns only actions for that resource type
+	PageSize           int
+	PageAfter          string
+}
+
+// ActionListPage is one page of action slugs.
+type ActionListPage struct {
+	Actions    []AuditAction
+	NextCursor string
+}
+
+// ---------------------------------------------------------------------------
+// Forwarders (SIEM streaming — management plane)
 // ---------------------------------------------------------------------------
 
 // HttpHeader is one header on a forwarder destination request.
@@ -143,7 +184,6 @@ type Forwarder struct {
 	Filter        map[string]interface{}
 	Transform     *string
 	HTTP          ForwarderHttp
-	Data          map[string]interface{}
 	CreatedAt     *time.Time
 	UpdatedAt     *time.Time
 	DeletedAt     *time.Time
@@ -158,7 +198,6 @@ type CreateForwarderInput struct {
 	Enabled       bool
 	Filter        map[string]interface{}
 	Transform     string
-	Data          map[string]interface{}
 }
 
 // UpdateForwarderInput is the full-replace input for AuditForwarders.Update.
@@ -180,72 +219,4 @@ type ListForwardersInput struct {
 type ListForwardersPage struct {
 	Forwarders []Forwarder
 	NextCursor string
-}
-
-// ForwarderDeliveryStatus is one of the delivery outcome statuses.
-type ForwarderDeliveryStatus string
-
-const (
-	ForwarderDeliverySucceeded           ForwarderDeliveryStatus = "SUCCEEDED"
-	ForwarderDeliveryFailed              ForwarderDeliveryStatus = "FAILED"
-	ForwarderDeliveryFilteredOut         ForwarderDeliveryStatus = "FILTERED_OUT"
-	ForwarderDeliverySkippedDoNotForward ForwarderDeliveryStatus = "SKIPPED_DO_NOT_FORWARD"
-)
-
-// ForwarderDelivery is one row in the append-only delivery log.
-type ForwarderDelivery struct {
-	ID             uuid.UUID
-	ForwarderID    uuid.UUID
-	EventID        uuid.UUID
-	AttemptNumber  int
-	Status         ForwarderDeliveryStatus
-	Request        map[string]interface{}
-	ResponseStatus *int
-	ResponseBody   *string
-	LatencyMs      *int
-	Error          *string
-	CreatedAt      *time.Time
-}
-
-// ListDeliveriesInput is the filter + pagination input for the delivery log.
-type ListDeliveriesInput struct {
-	Status         ForwarderDeliveryStatus
-	CreatedAtRange string // ADR-014 range syntax
-	EventID        uuid.UUID
-	PageSize       int
-	PageAfter      string
-}
-
-// ListDeliveriesPage is one page of forwarder delivery rows.
-type ListDeliveriesPage struct {
-	Deliveries []ForwarderDelivery
-	NextCursor string
-}
-
-// RetryFailedDeliveriesSummary is the response shape from the bulk
-// retry action.
-type RetryFailedDeliveriesSummary struct {
-	Attempted int
-	Succeeded int
-	Failed    int
-}
-
-// TestForwarderInput is the body for the test_forwarder/execute proxy.
-type TestForwarderInput struct {
-	URL           string
-	Method        string
-	Headers       []HttpHeader
-	Body          *string
-	SuccessStatus string
-	TimeoutMs     *int
-}
-
-// TestForwarderResult is the proxied response from the destination.
-type TestForwarderResult struct {
-	Succeeded       bool
-	ResponseStatus  *int
-	ResponseHeaders map[string]string
-	ResponseBody    string
-	LatencyMs       *int
-	Error           *string
 }

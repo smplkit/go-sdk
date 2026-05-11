@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,25 +12,38 @@ import (
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
 
-// AuditClient is the audit-product surface — accessed via Client.Audit().
+// AuditClient is the runtime audit surface — accessed via Client.Audit().
 //
 // Sub-clients: Events for event recording / listing / retrieval,
-// Forwarders for SIEM streaming destinations and the delivery log,
-// Functions for server-side proxy actions like test_forwarder.
+// ResourceTypes for the distinct resource-type index,
+// Actions for the distinct action index.
+//
+// SIEM forwarder CRUD lives on the management plane:
+// Client.Manage().Audit().Forwarders().
 type AuditClient struct {
-	client     *Client
-	gen        *genaudit.ClientWithResponses
-	events     *AuditEvents
-	forwarders *AuditForwarders
-	functions  *AuditFunctions
+	client        *Client
+	gen           *genaudit.ClientWithResponses
+	events        *AuditEvents
+	resourceTypes *AuditResourceTypes
+	actions       *AuditActions
 }
 
-// AuditEvents handles event creation, listing, and retrieval. Reads are
-// synchronous; writes are fire-and-forget by default and return as soon
-// as the event is enqueued onto the in-process buffer (ADR-047 §2.6).
+// AuditEvents handles event recording, listing, and retrieval. Writes are
+// fire-and-forget by default and return as soon as the event is enqueued
+// onto the in-process buffer (ADR-047 §2.6).
 type AuditEvents struct {
 	gen    *genaudit.ClientWithResponses
 	buffer *auditEventBuffer
+}
+
+// AuditResourceTypes lists the distinct resource-type slugs seen in the account.
+type AuditResourceTypes struct {
+	gen *genaudit.ClientWithResponses
+}
+
+// AuditActions lists the distinct action slugs seen in the account.
+type AuditActions struct {
+	gen *genaudit.ClientWithResponses
 }
 
 // Audit returns the audit-product sub-client. Same instance every call.
@@ -44,24 +56,21 @@ func (a *AuditClient) Events() *AuditEvents {
 	return a.events
 }
 
-// Forwarders returns the SIEM forwarders sub-client (Pro tier only —
-// every method returns a wrapped 402 error on lower tiers).
-func (a *AuditClient) Forwarders() *AuditForwarders {
-	return a.forwarders
+// ResourceTypes returns the resource-types index sub-client.
+func (a *AuditClient) ResourceTypes() *AuditResourceTypes {
+	return a.resourceTypes
 }
 
-// Functions returns the server-side functions sub-client. Today this
-// surface contains the test_forwarder/execute proxy that bypasses
-// browser CORS for the console's "try it out" preview.
-func (a *AuditClient) Functions() *AuditFunctions {
-	return a.functions
+// Actions returns the actions index sub-client.
+func (a *AuditClient) Actions() *AuditActions {
+	return a.actions
 }
 
 // Record enqueues an audit event for asynchronous delivery.
 //
 // Returns nil immediately. The buffer worker handles the actual POST
 // and retries on transient failures. ResourceType beginning with
-// “smpl.“ is rejected by the server with 403 — that namespace is
+// "smpl." is rejected by the server with 403 — that namespace is
 // reserved for smplkit-emitted events.
 func (e *AuditEvents) Record(input CreateEventInput) error {
 	if input.Action == "" || input.ResourceType == "" || input.ResourceID == "" {
@@ -85,11 +94,8 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 		attrs.DoNotForward = &dnf
 	}
 
-	resourceType := "event"
-	body := genaudit.EventResponse{
+	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{
-			Id:         "", // server assigns
-			Type:       &resourceType,
 			Attributes: attrs,
 		},
 	}
@@ -100,7 +106,7 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 // List returns one page of audit events scoped to the caller's account.
 //
 // Filters are exact-match except OccurredAtRange which uses the
-// platform's range syntax (e.g. “[2026-01-01T00:00:00Z,*)“). Pass
+// platform's range syntax (e.g. "[2026-01-01T00:00:00Z,*)"). Pass
 // the previous page's NextCursor as PageAfter to walk subsequent pages.
 func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEventsPage, error) {
 	params := &genaudit.ListEventsParams{}
@@ -141,7 +147,7 @@ func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEve
 		return nil, fmt.Errorf("audit List: %w", err)
 	}
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf("audit List failed: status=%d body=%s", resp.StatusCode(), string(resp.Body))
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
 
 	body := resp.ApplicationvndApiJSON200
@@ -152,32 +158,21 @@ func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEve
 		page.Events = append(page.Events, eventFromResource(r))
 	}
 	if body.Links != nil && body.Links.Next != nil {
-		// Extract the cursor token from the link; the server emits a
-		// relative URL like ``/api/v1/events?page[size]=50&page[after]=<token>``.
-		if i := strings.Index(*body.Links.Next, "page[after]="); i >= 0 {
-			page.NextCursor = (*body.Links.Next)[i+len("page[after]="):]
-			if amp := strings.Index(page.NextCursor, "&"); amp >= 0 {
-				page.NextCursor = page.NextCursor[:amp]
-			}
-		}
+		page.NextCursor = extractNextCursor(body.Links.Next)
 	}
 	return page, nil
 }
 
 // Get retrieves a single audit event by id.
 //
-// Returns an error wrapping HTTP status 404 if no event with that id
-// exists in the caller's account.
+// Returns a *NotFoundError if no event with that id exists in the caller's account.
 func (e *AuditEvents) Get(ctx context.Context, eventID uuid.UUID) (*AuditEvent, error) {
 	resp, err := e.gen.GetEventWithResponse(ctx, eventID)
 	if err != nil {
 		return nil, fmt.Errorf("audit Get: %w", err)
 	}
-	if resp.StatusCode() == 404 {
-		return nil, fmt.Errorf("audit Get: event not found (status=404)")
-	}
-	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
-		return nil, fmt.Errorf("audit Get failed: status=%d body=%s", resp.StatusCode(), string(resp.Body))
+	if resp.StatusCode() != 200 {
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
 	ev := eventFromResource(resp.ApplicationvndApiJSON200.Data)
 	return &ev, nil
@@ -197,10 +192,88 @@ func (e *AuditEvents) close() {
 	}
 }
 
+// List returns one page of distinct resource-type slugs seen in the account.
+//
+// Backed by a maintain-by-write side table (ADR-047 §2.5), so the
+// response time is independent of event volume. Sorted alphabetically;
+// cursor pagination via PageAfter.
+func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesInput) (*ResourceTypeListPage, error) {
+	params := &genaudit.ListResourceTypesParams{}
+	if input.PageSize > 0 {
+		params.PageSize = &input.PageSize
+	}
+	if input.PageAfter != "" {
+		params.PageAfter = &input.PageAfter
+	}
+	resp, err := rt.gen.ListResourceTypesWithResponse(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("audit ResourceTypes.List: %w", err)
+	}
+	if resp.StatusCode() != 200 {
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
+	}
+	body := resp.ApplicationvndApiJSON200
+	page := &ResourceTypeListPage{
+		ResourceTypes: make([]AuditResourceType, 0, len(body.Data)),
+	}
+	for _, r := range body.Data {
+		page.ResourceTypes = append(page.ResourceTypes, AuditResourceType{
+			ID:           r.Id,
+			ResourceType: r.Attributes.ResourceType,
+		})
+	}
+	if body.Links != nil && body.Links.Next != nil {
+		page.NextCursor = extractNextCursor(body.Links.Next)
+	}
+	return page, nil
+}
+
+// List returns one page of distinct action slugs seen in the account.
+//
+// Without FilterResourceType, returns one row per distinct action. With
+// the filter, returns only the actions seen with that specific resource
+// type. Sorted alphabetically; cursor pagination via PageAfter.
+func (ac *AuditActions) List(ctx context.Context, input ListActionsInput) (*ActionListPage, error) {
+	params := &genaudit.ListActionsParams{}
+	if input.FilterResourceType != "" {
+		params.FilterResourceType = &input.FilterResourceType
+	}
+	if input.PageSize > 0 {
+		params.PageSize = &input.PageSize
+	}
+	if input.PageAfter != "" {
+		params.PageAfter = &input.PageAfter
+	}
+	resp, err := ac.gen.ListActionsWithResponse(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("audit Actions.List: %w", err)
+	}
+	if resp.StatusCode() != 200 {
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
+	}
+	body := resp.ApplicationvndApiJSON200
+	page := &ActionListPage{
+		Actions: make([]AuditAction, 0, len(body.Data)),
+	}
+	for _, r := range body.Data {
+		page.Actions = append(page.Actions, AuditAction{
+			ID:     r.Id,
+			Action: r.Attributes.Action,
+		})
+	}
+	if body.Links != nil && body.Links.Next != nil {
+		page.NextCursor = extractNextCursor(body.Links.Next)
+	}
+	return page, nil
+}
+
 // eventFromResource converts the JSON:API resource shape into the
 // flat AuditEvent struct.
 func eventFromResource(r genaudit.EventResource) AuditEvent {
-	id, _ := uuid.Parse(r.Id)
+	var id uuid.UUID
+	if r.Id != nil {
+		id, _ = uuid.Parse(*r.Id)
+	}
 	attrs := r.Attributes
 	out := AuditEvent{
 		ID:           id,
@@ -236,5 +309,18 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 	return out
 }
 
-// Silence unused-symbol lint on package-level helper used by tests.
-var _ = strconv.Itoa
+// extractNextCursor extracts the page[after] cursor value from a
+// JSON:API next-link string (e.g. "/api/v1/events?page[after]=tok&page[size]=50").
+func extractNextCursor(next *string) string {
+	if next == nil {
+		return ""
+	}
+	if i := strings.Index(*next, "page[after]="); i >= 0 {
+		token := (*next)[i+len("page[after]="):]
+		if amp := strings.Index(token, "&"); amp >= 0 {
+			token = token[:amp]
+		}
+		return token
+	}
+	return ""
+}

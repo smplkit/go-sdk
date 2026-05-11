@@ -2,6 +2,7 @@
 	config_runtime_showcase config_management_showcase \
 	flags_runtime_showcase flags_management_showcase \
 	logging_runtime_showcase logging_management_showcase \
+	audit_runtime_showcase audit_management_showcase \
 	showcases
 
 install:
@@ -57,7 +58,11 @@ audit_runtime_showcase:
 	go run examples/audit_runtime_showcase.go \
 		examples/helpers.go
 
+audit_management_showcase:
+	go run examples/audit_management_showcase.go \
+		examples/helpers.go
+
 showcases: config_management_showcase config_runtime_showcase \
 	flags_management_showcase flags_runtime_showcase \
 	logging_management_showcase logging_runtime_showcase \
-	audit_runtime_showcase
+	audit_runtime_showcase audit_management_showcase

@@ -62,6 +62,8 @@ func checkStatus(code int, body []byte) error {
 	}
 
 	switch code {
+	case http.StatusPaymentRequired:
+		return &PaymentRequiredError{Base: base}
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
 		return &ValidationError{Base: base}
 	case http.StatusNotFound:

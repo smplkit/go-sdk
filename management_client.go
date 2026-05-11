@@ -11,12 +11,23 @@ import (
 	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
 )
 
+// AuditManagement is the mgmt.audit.* surface — forwarder CRUD.
+// Obtained via ManagementClient.Audit().
+type AuditManagement struct {
+	forwarders *AuditForwarders
+}
+
+// Forwarders returns the SIEM forwarder CRUD sub-client.
+func (a *AuditManagement) Forwarders() *AuditForwarders {
+	return a.forwarders
+}
+
 // ManagementClient is the management-plane sub-client. Obtain one via
 // Client.Manage() (or via NewManagementClient for a standalone management
 // client with zero construction side effects — no service registration,
 // no metrics, no websocket).
 //
-// The eight flat namespaces mirror the Python SDK's SmplManagementClient:
+// The flat namespaces mirror the Python SDK's SmplManagementClient:
 //
 //	mgmt.Contexts()         // context entity CRUD
 //	mgmt.ContextTypes()     // context-type schemas
@@ -26,6 +37,7 @@ import (
 //	mgmt.Flags()            // flag CRUD (was client.Flags().Management())
 //	mgmt.Loggers()          // logger CRUD (split from the old logging mgmt)
 //	mgmt.LogGroups()        // log-group CRUD (split from the old logging mgmt)
+//	mgmt.Audit()            // audit forwarder CRUD
 type ManagementClient struct {
 	client     *Client
 	appClient  genapp.ClientInterface
@@ -44,6 +56,7 @@ type ManagementClient struct {
 	loggingMgmt   *LoggingManagement // legacy combined surface
 	loggersMgmt   *LoggersManagement
 	logGroupsMgmt *LogGroupsManagement
+	auditMgmt     *AuditManagement
 }
 
 // Environments returns the sub-client for environment CRUD operations.

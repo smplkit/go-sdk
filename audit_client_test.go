@@ -156,13 +156,17 @@ func TestAuditEvents_Get_RoundTrip(t *testing.T) {
 
 func TestAuditEvents_Get_404(t *testing.T) {
 	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "not found", 404)
+		w.WriteHeader(404)
 	})
 	defer cleanup()
 
 	_, err := events.Get(context.Background(), uuid.New())
-	if err == nil || !strings.Contains(err.Error(), "not found") {
-		t.Fatalf("expected 404 error, got %v", err)
+	var nfe *NotFoundError
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.As(err, &nfe) {
+		t.Fatalf("expected NotFoundError, got %T: %v", err, err)
 	}
 }
 
@@ -351,8 +355,9 @@ func TestEventFromResource_PopulatedActor(t *testing.T) {
 	actorType := "USER"
 	actorLabel := "mike@example.com"
 	idemKey := "auto-1"
+	idStr := "11111111-2222-3333-4444-555555555555"
 	res := genaudit.EventResource{
-		Id: "11111111-2222-3333-4444-555555555555",
+		Id: &idStr,
 		Attributes: genaudit.Event{
 			Action:         "user.created",
 			ResourceType:   "user",
@@ -383,8 +388,9 @@ func TestEventFromResource_PopulatedActor(t *testing.T) {
 
 func TestEventFromResource_PopulatesDoNotForward(t *testing.T) {
 	dnf := true
+	idStr2 := "11111111-2222-3333-4444-555555555555"
 	res := genaudit.EventResource{
-		Id: "11111111-2222-3333-4444-555555555555",
+		Id: &idStr2,
 		Attributes: genaudit.Event{
 			Action:       "user.created",
 			ResourceType: "user",
@@ -408,7 +414,7 @@ func TestAuditEventBuffer_EnqueueAfterCloseIsNoop(t *testing.T) {
 	buf := newAuditEventBuffer(wrapped)
 	buf.close(2 * time.Second)
 	// Subsequent enqueue is silently ignored; should not panic.
-	body := genaudit.EventResponse{
+	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
@@ -430,7 +436,7 @@ func TestAuditEventBuffer_OverflowEvictsOldest(t *testing.T) {
 	buf.watermark = 999 // suppress auto-drain
 	buf.flushEvery = 60 * time.Second
 	for i := 0; i < 10; i++ {
-		body := genaudit.EventResponse{
+		body := genaudit.EventRequest{
 			Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 		}
 		buf.enqueue(body, "")
@@ -456,7 +462,7 @@ func TestAuditEventBuffer_FlushTimesOut(t *testing.T) {
 	buf.watermark = 999
 	buf.flushEvery = 60 * time.Second
 
-	body := genaudit.EventResponse{
+	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
@@ -483,7 +489,7 @@ func TestAuditEventBuffer_GivesUpAfterMaxAttempts(t *testing.T) {
 	buf.initialBack = 50 * time.Millisecond
 	buf.flushEvery = 25 * time.Millisecond
 
-	body := genaudit.EventResponse{
+	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
@@ -523,7 +529,7 @@ func TestAuditEventBuffer_WatermarkTriggersDrain(t *testing.T) {
 	// Set watermark very low so each enqueue triggers signalWake.
 	buf.watermark = 1
 	buf.flushEvery = 60 * time.Second
-	body := genaudit.EventResponse{
+	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	for i := 0; i < 5; i++ {
@@ -585,7 +591,7 @@ func TestAuditEventBuffer_DropsPermanent4xx(t *testing.T) {
 	defer buf.close(2 * time.Second)
 	buf.watermark = 1
 
-	body := genaudit.EventResponse{
+	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
@@ -617,7 +623,7 @@ func TestAuditEventBuffer_BackoffCappedAtMax(t *testing.T) {
 	buf.maxAttempts = 3
 	buf.watermark = 1
 	buf.flushEvery = 50 * time.Millisecond
-	body := genaudit.EventResponse{
+	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
@@ -651,9 +657,8 @@ func TestAuditEventBuffer_RetriesTransient(t *testing.T) {
 	buf := newAuditEventBuffer(wrapped)
 	defer buf.close(2 * time.Second)
 
-	body := genaudit.EventResponse{
+	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{
-			Id:         "",
 			Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"},
 		},
 	}

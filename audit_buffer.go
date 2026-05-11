@@ -43,7 +43,7 @@ type auditEventBuffer struct {
 }
 
 type pendingAuditEvent struct {
-	body        genaudit.EventResponse
+	body        genaudit.EventRequest
 	idempKey    string
 	attempts    int
 	nextRetryAt time.Time
@@ -74,7 +74,7 @@ func newAuditEventBuffer(gen *genaudit.ClientWithResponses) *auditEventBuffer {
 	return b
 }
 
-func (b *auditEventBuffer) enqueue(body genaudit.EventResponse, idempKey string) {
+func (b *auditEventBuffer) enqueue(body genaudit.EventRequest, idempKey string) {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
