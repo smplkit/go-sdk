@@ -559,7 +559,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/UserResponse"
+                "$ref": "#/components/schemas/UserRequest"
               }
             }
           },
@@ -701,7 +701,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/AccountResponse"
+                "$ref": "#/components/schemas/AccountRequest"
               }
             }
           },
@@ -830,7 +830,7 @@
           "Account"
         ],
         "summary": "Wipe Account Data",
-        "description": "Delete every config, flag, logger, log group, context, context type, environment, and customer API key (except the caller's current key) on the account. The ``common`` config is preserved as a structural anchor but its items are reset. Requires ``OWNER`` role and a ``{\"confirm\": true}`` body \u2014 anything else returns 400. Pass ``\"generate_sample_data\": true`` to re-seed the account with the standard sample dataset after the wipe completes (best-effort; seed failures are logged but do not fail the wipe). Returns 204 on success; if any sub-delete fails the response is 500.",
+        "description": "Delete every config, flag, logger, log group, context, context type, environment, and customer API key (except the caller's current key) on the account. The `common` config is preserved as a structural anchor but its items are reset. Requires `OWNER` role and a body of `{\"confirm\": true}` \u2014 any other value returns 400. Pass `\"generate_sample_data\": true` to re-seed the account with the standard sample dataset after the wipe (best-effort; seeding failures are logged but do not fail the wipe). Returns 204 on success; 500 if any sub-delete fails.",
         "operationId": "wipe_account_data",
         "requestBody": {
           "content": {
@@ -1323,7 +1323,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/EnvironmentResponse"
+                "$ref": "#/components/schemas/EnvironmentRequest"
               }
             }
           },
@@ -1493,7 +1493,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/EnvironmentResponse"
+                "$ref": "#/components/schemas/EnvironmentRequest"
               }
             }
           }
@@ -1639,7 +1639,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ApiKeyResponse"
+                "$ref": "#/components/schemas/ApiKeyRequest"
               }
             }
           }
@@ -1882,7 +1882,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ApiKeyResponse"
+                "$ref": "#/components/schemas/ApiKeyRequest"
               }
             }
           }
@@ -2167,7 +2167,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ContextTypeResponse"
+                "$ref": "#/components/schemas/ContextTypeRequest"
               }
             }
           },
@@ -2337,7 +2337,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ContextTypeResponse"
+                "$ref": "#/components/schemas/ContextTypeRequest"
               }
             }
           }
@@ -2703,7 +2703,7 @@
           "Contexts"
         ],
         "summary": "Update Context",
-        "description": "Update a context instance by composite id (type:key). Only the human-readable display name is mutable through this endpoint; context_type and observed attributes are written by the SDK ingestion path.",
+        "description": "Update a context instance by composite id (type:key). Only the human-readable display name is mutable here; `context_type` and observed `attributes` are written by SDK registration and ignored on this endpoint.",
         "operationId": "update_context",
         "security": [
           {
@@ -2726,7 +2726,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ContextResponse"
+                "$ref": "#/components/schemas/ContextRequest"
               }
             }
           }
@@ -2931,7 +2931,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ServiceResponse"
+                "$ref": "#/components/schemas/ServiceRequest"
               }
             }
           },
@@ -3101,7 +3101,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ServiceResponse"
+                "$ref": "#/components/schemas/ServiceRequest"
               }
             }
           }
@@ -3837,7 +3837,7 @@
           "Metrics"
         ],
         "summary": "List Metric Names",
-        "description": "Return distinct metric names (with a representative unit) for this account.\n\nUsed by the dashboard to discover which product sections to render.\nPlain JSON response (not JSON:API) \u2014 this is metadata, not a metric resource.",
+        "description": "Return distinct metric names recorded for the account, each with a\nrepresentative unit. Plain-JSON response (not JSON:API) \u2014 this is\nmetadata for discovery, not a metric resource.",
         "operationId": "list_metric_names",
         "responses": {
           "200": {
@@ -4389,7 +4389,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/UserResponse"
+                "$ref": "#/components/schemas/UserRequest"
               }
             }
           }
@@ -5270,7 +5270,7 @@
           "Billing"
         ],
         "summary": "Add Payment Method",
-        "description": "Register a Stripe payment method (``pm_...``) as a persistent resource. The frontend obtains the Stripe ID via SetupIntent + Stripe Elements, then POSTs it here. Body shape and server behavior per ADR-044 \u00a75.1.",
+        "description": "Register a Stripe payment method (`pm_...`) on the account. The client first creates the Stripe payment method using a SetupIntent and Stripe Elements, then submits its identifier here to persist it.",
         "operationId": "create_payment_method",
         "requestBody": {
           "content": {
@@ -5424,7 +5424,7 @@
           "Billing"
         ],
         "summary": "Update Payment Method",
-        "description": "Update the mutable fields (``billing_details``, ``exp_month``, ``exp_year``). The ``default`` field is not mutable via PUT \u2014 see ADR-044 \u00a75.2; use the ``set_default`` action instead.",
+        "description": "Update the mutable fields of a payment method (`billing_details`, `exp_month`, `exp_year`). The `default` flag is not mutable via PUT \u2014 use the `set_default` action instead.",
         "operationId": "update_payment_method",
         "security": [
           {
@@ -5448,7 +5448,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/PaymentMethodResponse"
+                "$ref": "#/components/schemas/PaymentMethodRequest"
               }
             }
           }
@@ -5511,7 +5511,7 @@
           "Billing"
         ],
         "summary": "Delete Payment Method",
-        "description": "Detach the payment method from Stripe and soft-delete the local row. Returns 409 if this is the only PM and the account has an active paid subscription. If the deleted row was default, the oldest remaining row is promoted.",
+        "description": "Delete a payment method. Returns 409 if this is the only payment method on file and the account has an active paid subscription. If the deleted payment method was the default, the oldest remaining payment method is promoted to default.",
         "operationId": "delete_payment_method",
         "security": [
           {
@@ -5583,7 +5583,7 @@
           "Billing"
         ],
         "summary": "Set Default Payment Method",
-        "description": "Mark this payment method as the account's default. Idempotent \u2014 a no-op 200 if already default.",
+        "description": "Mark this payment method as the account's default. Idempotent: returns 200 with no changes when the payment method is already the default.",
         "operationId": "set_default_payment_method",
         "security": [
           {
@@ -5729,7 +5729,7 @@
           "Billing"
         ],
         "summary": "Get Invoice",
-        "description": "Return a single invoice by ID. Supports content negotiation via Accept header:\n\n- ``application/pdf`` \u2014 PDF bytes proxy-streamed from Stripe\n- ``application/vnd.api+json`` / ``application/json`` / absent \u2014 JSON:API resource\n- Any other value \u2014 406 Not Acceptable",
+        "description": "Return a single invoice by id. Supports content negotiation via the\n`Accept` header:\n\n- `application/pdf` \u2014 streams the invoice PDF.\n- `application/vnd.api+json`, `application/json`, or absent \u2014 returns\n  the JSON:API invoice resource.\n- Any other value \u2014 `406 Not Acceptable`.",
         "operationId": "get_invoice",
         "security": [
           {
@@ -5827,7 +5827,7 @@
           "Billing"
         ],
         "summary": "Execute Setup Intent",
-        "description": "Create a Stripe SetupIntent for saving a payment method.\n\nReturns a ``client_secret`` that the frontend passes to Stripe's\nPayment Element so the customer can securely enter card details\nwithout an immediate charge.",
+        "description": "Create a Stripe SetupIntent for adding a payment method without an\nimmediate charge. Returns the `client_secret` to pass to Stripe Elements\nin the browser.",
         "operationId": "execute_setup_intent",
         "responses": {
           "200": {
@@ -5896,17 +5896,20 @@
           "name": {
             "type": "string",
             "maxLength": 255,
-            "title": "Name"
+            "title": "Name",
+            "description": "Human-readable name for the account."
           },
           "key": {
             "type": "string",
-            "maxLength": 255,
+            "nullable": true,
             "title": "Key",
-            "x-immutable": true
+            "description": "Stable URL-safe identifier for the account, derived from the account name at creation. Used in console URLs and other places that prefer a human-readable handle.",
+            "readOnly": true
           },
           "has_stripe_customer": {
             "type": "boolean",
             "title": "Has Stripe Customer",
+            "description": "`true` once the account has been linked to a billing provider customer record.",
             "default": false,
             "readOnly": true
           },
@@ -5915,6 +5918,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Expires At",
+            "description": "When the account is scheduled to expire. `null` for accounts with no expiry.",
             "readOnly": true
           },
           "created_at": {
@@ -5922,6 +5926,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the account was created.",
             "readOnly": true
           },
           "deleted_at": {
@@ -5929,6 +5934,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Deleted At",
+            "description": "When the account was deleted. `null` for active accounts.",
             "readOnly": true
           },
           "product_subscriptions": {
@@ -5936,27 +5942,28 @@
             "type": "object",
             "nullable": true,
             "title": "Product Subscriptions",
+            "description": "Map of product key to the account's subscription summary for that product, including plan, status, and entitlement limits.",
             "readOnly": true
           },
           "entry_point": {
             "type": "string",
             "nullable": true,
             "title": "Entry Point",
-            "description": "Registration entry point (from account.data)",
+            "description": "How the account first reached smplkit (e.g. `LOGIN`, `GET_STARTED`, `LIVE_DEMO`).",
             "readOnly": true
           },
           "show_sample_data": {
             "type": "boolean",
             "nullable": true,
             "title": "Show Sample Data",
-            "description": "Whether sample data is active (from account.settings)",
+            "description": "Whether the account is currently configured to display the sample dataset alongside the customer's own resources.",
             "readOnly": true
           },
           "discount_override_pct": {
             "type": "integer",
             "nullable": true,
             "title": "Discount Override Pct",
-            "description": "Custom discount percentage that overrides the volume schedule. Null means the volume schedule applies.",
+            "description": "Custom discount percentage applied to the account in place of the volume-based discount schedule. `null` means the volume schedule applies.",
             "readOnly": true
           },
           "discount_override_reason": {
@@ -5970,7 +5977,7 @@
             "type": "string",
             "nullable": true,
             "title": "Discount Override Set By User Id",
-            "description": "UUID of the admin user who set the override.",
+            "description": "UUID of the user who set the override.",
             "readOnly": true
           },
           "discount_override_set_at": {
@@ -5978,22 +5985,35 @@
             "format": "date-time",
             "nullable": true,
             "title": "Discount Override Set At",
-            "description": "Timestamp when the override was last changed.",
+            "description": "When the override was last changed.",
             "readOnly": true
           }
         },
         "type": "object",
         "required": [
-          "name",
-          "key"
+          "name"
         ],
         "title": "Account",
+        "description": "A tenant of smplkit \u2014 the unit of isolation that owns all of a\ncustomer's resources (environments, contexts, API keys, and so on).",
         "example": {
           "created_at": "2026-03-20T11:02:16.616Z",
           "has_stripe_customer": false,
           "key": "acme_corp",
           "name": "Acme Corp"
         }
+      },
+      "AccountRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AccountResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "AccountRequest",
+        "description": "JSON:API request envelope for creating or updating an account."
       },
       "AccountResource": {
         "properties": {
@@ -6019,6 +6039,7 @@
           "attributes"
         ],
         "title": "AccountResource",
+        "description": "JSON:API resource envelope for an account.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "created_at": "2026-03-20T11:02:16.616Z",
@@ -6040,19 +6061,20 @@
         "required": [
           "data"
         ],
-        "title": "AccountResponse"
+        "title": "AccountResponse",
+        "description": "JSON:API single-resource response envelope for an account."
       },
       "AccountWipeRequest": {
         "properties": {
           "confirm": {
             "type": "boolean",
             "title": "Confirm",
-            "description": "Must be ``true`` to proceed. Anything else returns 400. The frontend gates the call behind a confirmation dialog; this field is the server-side seatbelt."
+            "description": "Must be `true` for the wipe to proceed. Any other value returns 400."
           },
           "generate_sample_data": {
             "type": "boolean",
             "title": "Generate Sample Data",
-            "description": "When ``true``, the wipe re-seeds the account with the same Acme Commerce sample dataset that new accounts are bootstrapped with. Best-effort: any seeding failures are logged but do not fail the wipe.",
+            "description": "When `true`, re-seed the account with the standard sample dataset after wiping. Best-effort: any seeding failure is logged but does not fail the wipe.",
             "default": false
           }
         },
@@ -6061,7 +6083,7 @@
           "confirm"
         ],
         "title": "AccountWipeRequest",
-        "description": "Confirmation envelope for ``POST /accounts/current/actions/wipe``.",
+        "description": "Confirmation envelope for the wipe-account action.",
         "example": {
           "confirm": true,
           "generate_sample_data": false
@@ -6072,11 +6094,13 @@
           "stripe_payment_method_id": {
             "type": "string",
             "minLength": 1,
-            "title": "Stripe Payment Method Id"
+            "title": "Stripe Payment Method Id",
+            "description": "Identifier of the Stripe payment method to register on the account, e.g. `pm_1234567890abcdef`."
           },
           "default": {
             "type": "boolean",
             "title": "Default",
+            "description": "When `true`, make the newly registered payment method the account's default. The first payment method on an account is always set as default regardless of this field.",
             "default": false
           }
         },
@@ -6085,7 +6109,7 @@
           "stripe_payment_method_id"
         ],
         "title": "AddPaymentMethodAttributes",
-        "description": "Attributes for POST /api/v1/payment_methods.\n\nDistinct from ``PaymentMethod`` because this shape takes the Stripe\n``pm_...`` ID at registration time; the persistent resource does not\nexpose that ID.",
+        "description": "Attributes accepted when registering a new payment method.\n\nThe customer first creates a Stripe payment method client-side using\nStripe Elements, then submits its `pm_...` identifier here to persist\nit on the account.",
         "example": {
           "default": false,
           "stripe_payment_method_id": "pm_1234567890abcdef"
@@ -6102,6 +6126,7 @@
           "data"
         ],
         "title": "AddPaymentMethodBody",
+        "description": "JSON:API request envelope for registering a new payment method.",
         "example": {
           "data": {
             "attributes": {
@@ -6130,49 +6155,57 @@
           "type",
           "attributes"
         ],
-        "title": "AddPaymentMethodData"
+        "title": "AddPaymentMethodData",
+        "description": "Resource object for the add-payment-method request."
       },
       "ApiKey": {
         "properties": {
           "name": {
             "type": "string",
             "maxLength": 255,
-            "title": "Name"
+            "title": "Name",
+            "description": "Human-readable name for the key."
           },
           "status": {
             "type": "string",
             "nullable": true,
             "title": "Status",
+            "description": "Lifecycle state of the key. `ACTIVE` keys may be used to authenticate; `REVOKED` keys are rejected.",
             "readOnly": true
           },
           "key": {
             "type": "string",
             "nullable": true,
             "title": "Key",
+            "description": "The bearer token value. Returned in plaintext on the create response so the caller can capture it; subsequent reads return the same value for round-tripping.",
             "readOnly": true
           },
           "scopes": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Scopes"
+            "title": "Scopes",
+            "description": "Scope restrictions applied to the key. Empty object grants full account access; populated forms are reserved for future scope syntax."
           },
           "created_by": {
             "type": "string",
             "nullable": true,
             "title": "Created By",
+            "description": "UUID of the user who created the key.",
             "readOnly": true
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "Optional expiry timestamp. After this time, the key is rejected. Omit for keys that do not expire."
           },
           "last_used_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true,
             "title": "Last Used At",
+            "description": "When the key was most recently used to authenticate.",
             "readOnly": true
           },
           "created_at": {
@@ -6180,6 +6213,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the key was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -6187,12 +6221,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Updated At",
-            "readOnly": true
-          },
-          "data": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Data",
+            "description": "When the key was last modified.",
             "readOnly": true
           }
         },
@@ -6201,6 +6230,7 @@
           "name"
         ],
         "title": "ApiKey",
+        "description": "An API key used by SDKs, scripts, and other programmatic clients to\nauthenticate with the smplkit API on behalf of the account.\n\nThe full key value is returned in plaintext on the create response and\nis otherwise unavailable \u2014 record it somewhere safe immediately after\ncreation.",
         "example": {
           "created_at": "2026-03-20T11:02:16.616Z",
           "created_by": "d290f1ee-6c54-4b01-90e6-d701748f0851",
@@ -6227,7 +6257,21 @@
         "required": [
           "data"
         ],
-        "title": "ApiKeyListResponse"
+        "title": "ApiKeyListResponse",
+        "description": "JSON:API collection response for API keys."
+      },
+      "ApiKeyRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ApiKeyResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ApiKeyRequest",
+        "description": "JSON:API request envelope for creating or updating an API key."
       },
       "ApiKeyResource": {
         "properties": {
@@ -6253,6 +6297,7 @@
           "attributes"
         ],
         "title": "ApiKeyResource",
+        "description": "JSON:API resource envelope for an API key.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "created_at": "2026-03-20T11:02:16.616Z",
@@ -6279,17 +6324,20 @@
         "required": [
           "data"
         ],
-        "title": "ApiKeyResponse"
+        "title": "ApiKeyResponse",
+        "description": "JSON:API single-resource response envelope for an API key."
       },
       "AuthTokenResponse": {
         "properties": {
           "token": {
             "type": "string",
-            "title": "Token"
+            "title": "Token",
+            "description": "Bearer token to pass in the `Authorization` header."
           },
           "expires_in": {
             "type": "integer",
-            "title": "Expires In"
+            "title": "Expires In",
+            "description": "Seconds until the token expires."
           }
         },
         "type": "object",
@@ -6297,7 +6345,8 @@
           "token",
           "expires_in"
         ],
-        "title": "AuthTokenResponse"
+        "title": "AuthTokenResponse",
+        "description": "Authentication token issued on successful login or registration."
       },
       "ContactTopic": {
         "type": "string",
@@ -6309,7 +6358,7 @@
           "other"
         ],
         "title": "ContactTopic",
-        "description": "Server-validated contact-us topics. Frontend dropdown values must match."
+        "description": "Topic options accepted on contact-us submissions."
       },
       "Context": {
         "properties": {
@@ -6317,24 +6366,25 @@
             "type": "string",
             "nullable": true,
             "title": "Name",
-            "description": "Human-readable display name"
+            "description": "Human-readable display name for the context instance."
           },
           "context_type": {
             "type": "string",
             "title": "Context Type",
-            "description": "Context type key (e.g., 'user', 'account')"
+            "description": "Key of the context type this instance belongs to (e.g. `user`, `account`)."
           },
           "attributes": {
             "additionalProperties": true,
             "type": "object",
             "title": "Attributes",
-            "description": "Observed attributes"
+            "description": "Observed attribute values for this context instance. The key set is conventionally aligned with the parent context type's known attribute keys, but additional keys are accepted."
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the context instance was first registered.",
             "readOnly": true
           },
           "updated_at": {
@@ -6342,6 +6392,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Updated At",
+            "description": "When the context instance was last modified.",
             "readOnly": true
           }
         },
@@ -6350,6 +6401,7 @@
           "context_type"
         ],
         "title": "Context",
+        "description": "A specific instance of a context type \u2014 for example, a particular\nuser, account, or device \u2014 together with the attributes observed on it.\n\nContext instances are addressed by a composite identifier of the form\n`context_type:key` (e.g. `user:alice-123`).",
         "example": {
           "attributes": {
             "first_name": "Alice",
@@ -6365,31 +6417,34 @@
         "properties": {
           "registered": {
             "type": "integer",
-            "title": "Registered"
+            "title": "Registered",
+            "description": "Number of context instances that were created or updated."
           }
         },
         "type": "object",
         "required": [
           "registered"
         ],
-        "title": "ContextBatchResponse"
+        "title": "ContextBatchResponse",
+        "description": "Summary returned by the bulk context registration endpoint."
       },
       "ContextBulkItem": {
         "properties": {
           "type": {
             "type": "string",
             "title": "Type",
-            "description": "Context type key: 'user', 'account', 'device'"
+            "description": "Key of the context type this instance belongs to (e.g. `user`, `account`, `device`)."
           },
           "key": {
             "type": "string",
             "title": "Key",
-            "description": "Entity identifier: 'user-123', 'acme-corp'"
+            "description": "Entity identifier within the context type, e.g. `user-123`."
           },
           "attributes": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Attributes"
+            "title": "Attributes",
+            "description": "Observed attribute values for this context instance."
           }
         },
         "type": "object",
@@ -6398,6 +6453,7 @@
           "key"
         ],
         "title": "ContextBulkItem",
+        "description": "One context instance in a bulk registration payload.",
         "example": {
           "attributes": {
             "first_name": "Alice",
@@ -6414,14 +6470,16 @@
               "$ref": "#/components/schemas/ContextBulkItem"
             },
             "type": "array",
-            "title": "Contexts"
+            "title": "Contexts",
+            "description": "One context instance per entry."
           }
         },
         "type": "object",
         "required": [
           "contexts"
         ],
-        "title": "ContextBulkRegister"
+        "title": "ContextBulkRegister",
+        "description": "Bulk registration request body for the contexts endpoint."
       },
       "ContextListResponse": {
         "properties": {
@@ -6437,7 +6495,21 @@
         "required": [
           "data"
         ],
-        "title": "ContextListResponse"
+        "title": "ContextListResponse",
+        "description": "JSON:API collection response for context instances."
+      },
+      "ContextRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ContextResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ContextRequest",
+        "description": "JSON:API request envelope for creating or updating a context instance."
       },
       "ContextResource": {
         "properties": {
@@ -6463,6 +6535,7 @@
           "attributes"
         ],
         "title": "ContextResource",
+        "description": "JSON:API resource envelope for a context instance.\n\n`id` is the composite identifier `context_type:key`. It must not be\nspecified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "attributes": {
@@ -6488,26 +6561,28 @@
         "required": [
           "data"
         ],
-        "title": "ContextResponse"
+        "title": "ContextResponse",
+        "description": "JSON:API single-resource response envelope for a context instance."
       },
       "ContextType": {
         "properties": {
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Display label: User, Account, Device"
+            "description": "Display label for the context type, e.g. `User`, `Account`, or `Device`."
           },
           "attributes": {
             "additionalProperties": true,
             "type": "object",
             "title": "Attributes",
-            "description": "Known attribute keys with metadata objects"
+            "description": "Map of known attribute key to per-attribute metadata. The metadata object is free-form and may be empty. Keys grow as new attributes are observed on context instances of this type."
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the context type was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -6515,6 +6590,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Updated At",
+            "description": "When the context type was last modified.",
             "readOnly": true
           }
         },
@@ -6523,6 +6599,7 @@
           "name"
         ],
         "title": "ContextType",
+        "description": "A kind of context \u2014 for example, `user`, `account`, or `device` \u2014 that\ngroups together context instances sharing a common set of attributes.\n\nThe known attribute keys for the type accumulate as instances are\nregistered; each key carries an optional metadata object describing it.",
         "example": {
           "attributes": {
             "beta_tester": {},
@@ -6548,7 +6625,21 @@
         "required": [
           "data"
         ],
-        "title": "ContextTypeListResponse"
+        "title": "ContextTypeListResponse",
+        "description": "JSON:API collection response for context types."
+      },
+      "ContextTypeRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ContextTypeResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ContextTypeRequest",
+        "description": "JSON:API request envelope for creating or updating a context type."
       },
       "ContextTypeResource": {
         "properties": {
@@ -6574,6 +6665,7 @@
           "attributes"
         ],
         "title": "ContextTypeResource",
+        "description": "JSON:API resource envelope for a context type.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "attributes": {
@@ -6599,22 +6691,26 @@
         "required": [
           "data"
         ],
-        "title": "ContextTypeResponse"
+        "title": "ContextTypeResponse",
+        "description": "JSON:API single-resource response envelope for a context type."
       },
       "CreateSubscriptionAttributes": {
         "properties": {
           "product": {
             "type": "string",
-            "title": "Product"
+            "title": "Product",
+            "description": "Product key to subscribe to, e.g. `flags`."
           },
           "plan": {
             "type": "string",
-            "title": "Plan"
+            "title": "Plan",
+            "description": "Plan key to subscribe on, e.g. `pro`."
           },
           "payment_method": {
             "type": "string",
             "nullable": true,
-            "title": "Payment Method"
+            "title": "Payment Method",
+            "description": "UUID of a payment method on file to bill against. If omitted, the account's default payment method is used."
           }
         },
         "type": "object",
@@ -6623,6 +6719,7 @@
           "plan"
         ],
         "title": "CreateSubscriptionAttributes",
+        "description": "Attributes accepted when creating a new subscription.",
         "example": {
           "payment_method": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
           "plan": "pro",
@@ -6640,6 +6737,7 @@
           "data"
         ],
         "title": "CreateSubscriptionBody",
+        "description": "JSON:API request envelope for creating a subscription.",
         "example": {
           "data": {
             "attributes": {
@@ -6655,7 +6753,8 @@
         "properties": {
           "type": {
             "type": "string",
-            "title": "Type"
+            "title": "Type",
+            "description": "Resource type; must be `subscription`."
           },
           "attributes": {
             "$ref": "#/components/schemas/CreateSubscriptionAttributes"
@@ -6667,6 +6766,7 @@
           "attributes"
         ],
         "title": "CreateSubscriptionData",
+        "description": "Resource object for the create-subscription request.",
         "example": {
           "attributes": {
             "payment_method": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -6679,19 +6779,22 @@
       "Email": {
         "properties": {
           "topic": {
-            "$ref": "#/components/schemas/ContactTopic"
+            "$ref": "#/components/schemas/ContactTopic",
+            "description": "Categorization of the message used to route it to the right inbox."
           },
           "body": {
             "type": "string",
             "maxLength": 10000,
             "minLength": 1,
-            "title": "Body"
+            "title": "Body",
+            "description": "Free-form text of the message. Trimmed before validation."
           },
           "sent_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true,
             "title": "Sent At",
+            "description": "When the message was accepted by the server.",
             "readOnly": true
           }
         },
@@ -6701,7 +6804,7 @@
           "body"
         ],
         "title": "Email",
-        "description": "Contact-us email resource attributes.\n\nThis resource is a pure action \u2014 it is not persisted. The id returned in\nthe response is a per-request uuid4 for correlation only.",
+        "description": "A contact-us submission. Sending the resource delivers a support\nticket and an auto-response email; nothing is persisted. The `id`\nreturned on the response is a per-request correlation identifier.",
         "example": {
           "body": "Hi, I have a question about the pro plan pricing...",
           "topic": "billing"
@@ -6731,6 +6834,7 @@
           "attributes"
         ],
         "title": "EmailResource",
+        "description": "JSON:API resource envelope for a contact-us submission.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "body": "Hi, I have a question about the pro plan pricing...",
@@ -6751,20 +6855,23 @@
         "required": [
           "data"
         ],
-        "title": "EmailResponse"
+        "title": "EmailResponse",
+        "description": "JSON:API single-resource response envelope for a contact-us message."
       },
       "Environment": {
         "properties": {
           "name": {
             "type": "string",
             "maxLength": 255,
-            "title": "Name"
+            "title": "Name",
+            "description": "Human-readable name for the environment."
           },
           "color": {
             "type": "string",
             "maxLength": 50,
             "nullable": true,
-            "title": "Color"
+            "title": "Color",
+            "description": "Display color used by the console to badge the environment. Accepts any CSS color string."
           },
           "classification": {
             "type": "string",
@@ -6773,6 +6880,7 @@
               "AD_HOC"
             ],
             "title": "Classification",
+            "description": "`STANDARD` for environments the customer explicitly manages; `AD_HOC` for environments auto-created from SDK traffic. Case-insensitive on input.",
             "default": "AD_HOC"
           },
           "created_at": {
@@ -6780,6 +6888,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the environment was created.",
             "readOnly": true
           },
           "updated_at": {
@@ -6787,6 +6896,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Updated At",
+            "description": "When the environment was last modified.",
             "readOnly": true
           }
         },
@@ -6795,6 +6905,7 @@
           "name"
         ],
         "title": "Environment",
+        "description": "A named deployment context \u2014 for example, `production`, `staging`, or\n`development`. Resources scoped to an environment (such as config items\nand feature flags) are evaluated against environment-specific values.",
         "example": {
           "classification": "STANDARD",
           "color": "#2ecc71",
@@ -6817,7 +6928,21 @@
         "required": [
           "data"
         ],
-        "title": "EnvironmentListResponse"
+        "title": "EnvironmentListResponse",
+        "description": "JSON:API collection response for environments."
+      },
+      "EnvironmentRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EnvironmentResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "EnvironmentRequest",
+        "description": "JSON:API request envelope for creating or updating an environment."
       },
       "EnvironmentResource": {
         "properties": {
@@ -6843,6 +6968,7 @@
           "attributes"
         ],
         "title": "EnvironmentResource",
+        "description": "JSON:API resource envelope for an environment.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "classification": "STANDARD",
@@ -6865,7 +6991,8 @@
         "required": [
           "data"
         ],
-        "title": "EnvironmentResponse"
+        "title": "EnvironmentResponse",
+        "description": "JSON:API single-resource response envelope for an environment."
       },
       "Error": {
         "properties": {
@@ -6920,42 +7047,49 @@
             "type": "string",
             "nullable": true,
             "title": "Email",
+            "description": "Email address the invitation was sent to.",
             "readOnly": true
           },
           "role": {
             "type": "string",
             "nullable": true,
             "title": "Role",
+            "description": "Role to assign on acceptance. One of `ADMIN`, `MEMBER`, or `VIEWER`.",
             "readOnly": true
           },
           "status": {
             "type": "string",
             "nullable": true,
             "title": "Status",
+            "description": "Lifecycle state of the invitation. One of `PENDING`, `ACCEPTED`, `REVOKED`, or `EXPIRED`.",
             "readOnly": true
           },
           "invited_by": {
             "type": "string",
             "nullable": true,
             "title": "Invited By",
+            "description": "UUID of the user who sent the invitation.",
             "readOnly": true
           },
           "account_name": {
             "type": "string",
             "nullable": true,
             "title": "Account Name",
+            "description": "Name of the account the recipient is being invited to join.",
             "readOnly": true
           },
           "inviter_display_name": {
             "type": "string",
             "nullable": true,
             "title": "Inviter Display Name",
+            "description": "Display name of the user who sent the invitation.",
             "readOnly": true
           },
           "token": {
             "type": "string",
             "nullable": true,
             "title": "Token",
+            "description": "Single-use token that the recipient redeems to accept the invitation. Echoed on responses so the inviting client can construct the acceptance link.",
             "readOnly": true
           },
           "expires_at": {
@@ -6963,6 +7097,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Expires At",
+            "description": "When the invitation token stops being redeemable.",
             "readOnly": true
           },
           "created_at": {
@@ -6970,6 +7105,7 @@
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the invitation was issued.",
             "readOnly": true
           },
           "updated_at": {
@@ -6977,11 +7113,13 @@
             "format": "date-time",
             "nullable": true,
             "title": "Updated At",
+            "description": "When the invitation record was last modified.",
             "readOnly": true
           }
         },
         "type": "object",
         "title": "Invitation",
+        "description": "An invitation for a person to join an account.\n\nInvitations carry a time-limited token; the recipient redeems the\ntoken to become a member of the inviting account at the assigned role.",
         "example": {
           "created_at": "2026-03-20T11:02:16.616Z",
           "email": "mike@example.com",
@@ -6997,7 +7135,8 @@
           "token": {
             "type": "string",
             "minLength": 1,
-            "title": "Token"
+            "title": "Token",
+            "description": "Invitation token from the email link."
           }
         },
         "type": "object",
@@ -7005,6 +7144,7 @@
           "token"
         ],
         "title": "InvitationAcceptRequest",
+        "description": "Body for the invitation-accept endpoint.",
         "example": {
           "token": "eyJhbGciOiJIUzI1NiJ9..."
         }
@@ -7018,7 +7158,8 @@
             "type": "array",
             "maxItems": 50,
             "minItems": 1,
-            "title": "Invitations"
+            "title": "Invitations",
+            "description": "One to fifty invitations to send in a single request."
           }
         },
         "type": "object",
@@ -7026,6 +7167,7 @@
           "invitations"
         ],
         "title": "InvitationBulkCreateRequest",
+        "description": "Bulk-create request body for the invitations endpoint.",
         "example": {
           "invitations": [
             {
@@ -7044,11 +7186,13 @@
           "email": {
             "type": "string",
             "format": "email",
-            "title": "Email"
+            "title": "Email",
+            "description": "Email address to send the invitation to."
           },
           "role": {
             "type": "string",
             "title": "Role",
+            "description": "Role to assign on acceptance. One of `ADMIN`, `MEMBER`, or `VIEWER`. `OWNER` cannot be assigned via invitation. Case-insensitive on input.",
             "default": "MEMBER"
           }
         },
@@ -7057,6 +7201,7 @@
           "email"
         ],
         "title": "InvitationCreateItem",
+        "description": "One invitation in a bulk-create request.",
         "example": {
           "email": "alice@example.com",
           "role": "MEMBER"
@@ -7076,7 +7221,8 @@
         "required": [
           "data"
         ],
-        "title": "InvitationListResponse"
+        "title": "InvitationListResponse",
+        "description": "JSON:API collection response for invitations."
       },
       "InvitationResource": {
         "properties": {
@@ -7102,6 +7248,7 @@
           "attributes"
         ],
         "title": "InvitationResource",
+        "description": "JSON:API resource envelope for an invitation.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "created_at": "2026-03-20T11:02:16.616Z",
@@ -7126,65 +7273,78 @@
         "required": [
           "data"
         ],
-        "title": "InvitationResponse"
+        "title": "InvitationResponse",
+        "description": "JSON:API single-resource response envelope for an invitation."
       },
       "Invoice": {
         "properties": {
           "number": {
             "type": "string",
             "nullable": true,
-            "title": "Number"
+            "title": "Number",
+            "description": "Invoice number assigned by the billing provider."
           },
           "status": {
             "type": "string",
-            "title": "Status"
+            "title": "Status",
+            "description": "Invoice lifecycle state, e.g. `draft`, `open`, `paid`, `uncollectible`, `void`."
           },
           "amount_due": {
             "type": "integer",
-            "title": "Amount Due"
+            "title": "Amount Due",
+            "description": "Amount owed on the invoice in the smallest currency unit (e.g. cents)."
           },
           "amount_paid": {
             "type": "integer",
-            "title": "Amount Paid"
+            "title": "Amount Paid",
+            "description": "Amount paid against the invoice in the smallest currency unit."
           },
           "currency": {
             "type": "string",
-            "title": "Currency"
+            "title": "Currency",
+            "description": "ISO 4217 currency code, e.g. `usd`."
           },
           "description": {
             "type": "string",
             "nullable": true,
-            "title": "Description"
+            "title": "Description",
+            "description": "Human-readable summary of the invoice's line items."
           },
           "period_start": {
             "type": "string",
             "nullable": true,
-            "title": "Period Start"
+            "title": "Period Start",
+            "description": "Start of the service period the invoice covers (ISO 8601)."
           },
           "period_end": {
             "type": "string",
             "nullable": true,
-            "title": "Period End"
+            "title": "Period End",
+            "description": "End of the service period the invoice covers (ISO 8601)."
           },
           "created_at": {
             "type": "string",
             "nullable": true,
-            "title": "Created At"
+            "title": "Created At",
+            "description": "When the invoice was created (ISO 8601)."
           },
           "paid_at": {
             "type": "string",
             "nullable": true,
-            "title": "Paid At"
+            "title": "Paid At",
+            "description": "When the invoice was paid in full (ISO 8601), or `null` if unpaid."
           },
           "hosted_invoice_url": {
             "type": "string",
             "nullable": true,
-            "title": "Hosted Invoice Url"
+            "title": "Hosted Invoice Url",
+            "description": "Link to the hosted invoice page."
           },
           "invoice_pdf": {
             "type": "string",
             "nullable": true,
-            "title": "Invoice Pdf"
+            "title": "Invoice Pdf",
+            "description": "Link to the PDF rendering of the invoice."
           }
         },
         "type": "object",
@@ -7202,7 +7362,8 @@
           "hosted_invoice_url",
           "invoice_pdf"
         ],
-        "title": "Invoice"
+        "title": "Invoice",
+        "description": "A billing invoice issued for the account."
       },
       "InvoiceListResponse": {
         "properties": {
@@ -7218,7 +7379,8 @@
         "required": [
           "data"
         ],
-        "title": "InvoiceListResponse"
+        "title": "InvoiceListResponse",
+        "description": "JSON:API collection response for invoices."
       },
       "InvoiceResource": {
         "properties": {
@@ -7244,6 +7406,7 @@
           "attributes"
         ],
         "title": "InvoiceResource",
+        "description": "JSON:API resource envelope for an invoice.",
         "example": {
           "attributes": {
             "amount_due": 2900,
@@ -7273,26 +7436,31 @@
         "required": [
           "data"
         ],
-        "title": "InvoiceSingleResponse"
+        "title": "InvoiceSingleResponse",
+        "description": "JSON:API single-resource response envelope for an invoice."
       },
       "LimitDefinition": {
         "properties": {
           "display_name": {
             "type": "string",
-            "title": "Display Name"
+            "title": "Display Name",
+            "description": "Human-readable name for the limit."
           },
           "description": {
             "type": "string",
-            "title": "Description"
+            "title": "Description",
+            "description": "Long-form description of what the limit controls."
           },
           "unit": {
             "type": "string",
-            "title": "Unit"
+            "title": "Unit",
+            "description": "Unit the limit is measured in, e.g. `flags`, `events`."
           },
           "display_format": {
             "type": "string",
             "nullable": true,
-            "title": "Display Format"
+            "title": "Display Format",
+            "description": "Optional formatter hint for rendering the limit value in customer-facing UI."
           }
         },
         "type": "object",
@@ -7301,20 +7469,23 @@
           "description",
           "unit"
         ],
-        "title": "LimitDefinition"
+        "title": "LimitDefinition",
+        "description": "Description of a single metered limit on a product."
       },
       "LoginRequest": {
         "properties": {
           "email": {
             "type": "string",
             "format": "email",
-            "title": "Email"
+            "title": "Email",
+            "description": "Email address of the user signing in."
           },
           "password": {
             "type": "string",
             "maxLength": 128,
             "minLength": 1,
-            "title": "Password"
+            "title": "Password",
+            "description": "Password supplied for authentication."
           }
         },
         "type": "object",
@@ -7323,6 +7494,7 @@
           "password"
         ],
         "title": "LoginRequest",
+        "description": "Body for the email + password login endpoint.",
         "example": {
           "email": "jane@example.com",
           "password": "correct-horse-battery-staple"
@@ -7332,7 +7504,8 @@
         "properties": {
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Metric series name, e.g. `flags.evaluations`. Dot-separated."
           },
           "value": {
             "anyOf": [
@@ -7344,34 +7517,40 @@
                 "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
               }
             ],
-            "title": "Value"
+            "title": "Value",
+            "description": "Aggregated value for this data point over `period_seconds`."
           },
           "unit": {
             "type": "string",
             "nullable": true,
-            "title": "Unit"
+            "title": "Unit",
+            "description": "Unit the value is expressed in, e.g. `evaluations`, `ms`, `bytes`."
           },
           "period_seconds": {
             "type": "integer",
-            "title": "Period Seconds"
+            "title": "Period Seconds",
+            "description": "Length of the aggregation window in seconds (e.g. `60` for a one-minute roll-up)."
           },
           "dimensions": {
             "additionalProperties": {
               "type": "string"
             },
             "type": "object",
-            "title": "Dimensions"
+            "title": "Dimensions",
+            "description": "Optional dimension keys that scope the data point, e.g. `environment`, `service`. Used as filter targets on the list endpoint via `filter[dimensions.<key>]=...`."
           },
           "recorded_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Recorded At"
+            "title": "Recorded At",
+            "description": "Start of the aggregation window this data point covers."
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the data point was ingested.",
             "readOnly": true
           }
         },
@@ -7382,7 +7561,8 @@
           "period_seconds",
           "recorded_at"
         ],
-        "title": "MetricAttributes"
+        "title": "MetricAttributes",
+        "description": "A pre-aggregated metric data point recorded for the account."
       },
       "MetricBulkRequest": {
         "properties": {
@@ -7391,7 +7571,8 @@
               "$ref": "#/components/schemas/MetricResource"
             },
             "type": "array",
-            "title": "Data"
+            "title": "Data",
+            "description": "Metric data points to ingest in a single request."
           }
         },
         "type": "object",
@@ -7399,6 +7580,7 @@
           "data"
         ],
         "title": "MetricBulkRequest",
+        "description": "Bulk-ingest request envelope for metric data points.",
         "example": {
           "data": [
             {
@@ -7431,25 +7613,29 @@
         "required": [
           "data"
         ],
-        "title": "MetricListResponse"
+        "title": "MetricListResponse",
+        "description": "JSON:API collection response for metric data points."
       },
       "MetricNameItem": {
         "properties": {
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Distinct metric series name."
           },
           "unit": {
             "type": "string",
             "nullable": true,
-            "title": "Unit"
+            "title": "Unit",
+            "description": "Representative unit observed for this series."
           }
         },
         "type": "object",
         "required": [
           "name"
         ],
-        "title": "MetricNameItem"
+        "title": "MetricNameItem",
+        "description": "One distinct metric name with a representative unit."
       },
       "MetricNamesResponse": {
         "properties": {
@@ -7465,7 +7651,8 @@
         "required": [
           "data"
         ],
-        "title": "MetricNamesResponse"
+        "title": "MetricNamesResponse",
+        "description": "Plain-JSON response listing distinct metric names for the account."
       },
       "MetricResource": {
         "properties": {
@@ -7491,6 +7678,7 @@
           "attributes"
         ],
         "title": "MetricResource",
+        "description": "JSON:API resource envelope for a metric data point.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "created_at": "2026-04-10T18:00:01Z",
@@ -7512,26 +7700,31 @@
         "properties": {
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Metric series name the rollup is computed from."
           },
           "value": {
             "type": "string",
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Value"
+            "title": "Value",
+            "description": "Sum of the underlying metric values over the bucket."
           },
           "unit": {
             "type": "string",
             "nullable": true,
-            "title": "Unit"
+            "title": "Unit",
+            "description": "Unit the value is expressed in."
           },
           "bucket": {
             "type": "string",
             "format": "date-time",
-            "title": "Bucket"
+            "title": "Bucket",
+            "description": "Start of the time bucket this rollup covers."
           },
           "rollup": {
             "type": "string",
-            "title": "Rollup"
+            "title": "Rollup",
+            "description": "Rollup interval. One of `1m`, `5m`, `15m`, `1h`, `6h`, `1d`."
           }
         },
         "type": "object",
@@ -7541,7 +7734,8 @@
           "bucket",
           "rollup"
         ],
-        "title": "MetricRollupAttributes"
+        "title": "MetricRollupAttributes",
+        "description": "An aggregated metric value over a fixed-size time bucket."
       },
       "MetricRollupListResponse": {
         "properties": {
@@ -7557,7 +7751,8 @@
         "required": [
           "data"
         ],
-        "title": "MetricRollupListResponse"
+        "title": "MetricRollupListResponse",
+        "description": "JSON:API collection response for metric rollups."
       },
       "MetricRollupResource": {
         "properties": {
@@ -7578,6 +7773,7 @@
           "attributes"
         ],
         "title": "MetricRollupResource",
+        "description": "JSON:API resource envelope for a metric rollup.",
         "example": {
           "attributes": {
             "bucket": "2026-04-10T15:00:00Z",
@@ -7593,15 +7789,18 @@
         "properties": {
           "products_needed": {
             "type": "integer",
-            "title": "Products Needed"
+            "title": "Products Needed",
+            "description": "Number of additional subscribed products needed to reach the next tier."
           },
           "discount_pct": {
             "type": "integer",
-            "title": "Discount Pct"
+            "title": "Discount Pct",
+            "description": "Discount percentage that would apply at the next tier."
           },
           "additional_savings_cents": {
             "type": "integer",
-            "title": "Additional Savings Cents"
+            "title": "Additional Savings Cents",
+            "description": "Additional monthly savings in cents at the next tier."
           }
         },
         "type": "object",
@@ -7610,7 +7809,8 @@
           "discount_pct",
           "additional_savings_cents"
         ],
-        "title": "NextTierMeta"
+        "title": "NextTierMeta",
+        "description": "Information about the next volume-discount tier."
       },
       "OidcProvider": {
         "type": "string",
@@ -7625,22 +7825,22 @@
           "size": {
             "type": "integer",
             "title": "Size",
-            "description": "Page size used for this response"
+            "description": "Page size used for this response."
           },
           "number": {
             "type": "integer",
             "title": "Number",
-            "description": "1-based page number returned"
+            "description": "1-based page number returned."
           },
           "total_items": {
             "type": "integer",
             "title": "Total Items",
-            "description": "Total number of matching items across all pages"
+            "description": "Total number of matching items across all pages."
           },
           "total_pages": {
             "type": "integer",
             "title": "Total Pages",
-            "description": "Total number of pages at the current page size"
+            "description": "Total number of pages at the current page size."
           }
         },
         "type": "object",
@@ -7650,7 +7850,8 @@
           "total_items",
           "total_pages"
         ],
-        "title": "PageMeta"
+        "title": "PageMeta",
+        "description": "Pagination metadata returned with a collection response."
       },
       "PaymentMethod": {
         "properties": {
@@ -7658,12 +7859,14 @@
             "type": "string",
             "nullable": true,
             "title": "Brand",
+            "description": "Card network brand, e.g. `visa`, `mastercard`, `amex`.",
             "readOnly": true
           },
           "last4": {
             "type": "string",
             "nullable": true,
             "title": "Last4",
+            "description": "Last four digits of the card number.",
             "readOnly": true
           },
           "exp_month": {
@@ -7671,31 +7874,36 @@
             "maximum": 12.0,
             "minimum": 1.0,
             "nullable": true,
-            "title": "Exp Month"
+            "title": "Exp Month",
+            "description": "Expiry month (1-12)."
           },
           "exp_year": {
             "type": "integer",
             "maximum": 2100.0,
             "minimum": 2000.0,
             "nullable": true,
-            "title": "Exp Year"
+            "title": "Exp Year",
+            "description": "Expiry year (four-digit)."
           },
           "default": {
             "type": "boolean",
             "nullable": true,
-            "title": "Default"
+            "title": "Default",
+            "description": "Whether this payment method is the account's default for subscription charges. Use the `set_default` action to change which payment method is default \u2014 this field is not writable via PUT."
           },
           "billing_details": {
             "additionalProperties": true,
             "type": "object",
             "nullable": true,
-            "title": "Billing Details"
+            "title": "Billing Details",
+            "description": "Billing details (name, email, phone, address) associated with the card."
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the payment method was registered.",
             "readOnly": true
           },
           "updated_at": {
@@ -7703,12 +7911,13 @@
             "format": "date-time",
             "nullable": true,
             "title": "Updated At",
+            "description": "When the payment method was last modified.",
             "readOnly": true
           }
         },
         "type": "object",
         "title": "PaymentMethod",
-        "description": "Attributes for a saved card payment method.\n\n``default`` is the API-facing name; the underlying column is ``is_default``\nper ADR-013 (reserved-word exception) and ADR-014 (unprefixed API fields).",
+        "description": "A saved card on file for the account, used to charge subscription\ninvoices.\n\nThe default payment method is changed via the `set_default` action\nrather than by updating this field through PUT.",
         "example": {
           "billing_details": {
             "address": {
@@ -7744,7 +7953,21 @@
         "required": [
           "data"
         ],
-        "title": "PaymentMethodListResponse"
+        "title": "PaymentMethodListResponse",
+        "description": "JSON:API collection response for payment methods."
+      },
+      "PaymentMethodRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaymentMethodResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "PaymentMethodRequest",
+        "description": "JSON:API request envelope for updating a payment method."
       },
       "PaymentMethodResource": {
         "properties": {
@@ -7770,6 +7993,7 @@
           "attributes"
         ],
         "title": "PaymentMethodResource",
+        "description": "JSON:API resource envelope for a payment method.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "billing_details": {
@@ -7798,21 +8022,25 @@
         "required": [
           "data"
         ],
-        "title": "PaymentMethodResponse"
+        "title": "PaymentMethodResponse",
+        "description": "JSON:API single-resource response envelope for a payment method."
       },
       "Plan": {
         "properties": {
           "display_name": {
             "type": "string",
-            "title": "Display Name"
+            "title": "Display Name",
+            "description": "Human-readable plan name."
           },
           "description": {
             "type": "string",
-            "title": "Description"
+            "title": "Description",
+            "description": "Long-form plan description."
           },
           "sort_order": {
             "type": "integer",
-            "title": "Sort Order"
+            "title": "Sort Order",
+            "description": "Order in which the plan should be shown in customer-facing lists. Lower values sort first."
           }
         },
         "type": "object",
@@ -7821,33 +8049,38 @@
           "description",
           "sort_order"
         ],
-        "title": "Plan"
+        "title": "Plan",
+        "description": "A plan tier offered across smplkit products."
       },
       "PlanChangeRequest": {
         "properties": {
           "plan": {
             "type": "string",
-            "title": "Plan"
+            "title": "Plan",
+            "description": "Plan key to change the subscription to."
           }
         },
         "type": "object",
         "required": [
           "plan"
         ],
-        "title": "PlanChangeRequest"
+        "title": "PlanChangeRequest",
+        "description": "Body for the subscription upgrade and downgrade actions."
       },
       "PlanDefinition": {
         "properties": {
           "price_monthly_cents": {
             "type": "integer",
-            "title": "Price Monthly Cents"
+            "title": "Price Monthly Cents",
+            "description": "Monthly list price in cents. `0` for free plans."
           },
           "limits": {
             "additionalProperties": {
               "type": "integer"
             },
             "type": "object",
-            "title": "Limits"
+            "title": "Limits",
+            "description": "Map of limit key to the cap that applies on this plan. `-1` indicates an unlimited cap."
           }
         },
         "type": "object",
@@ -7855,7 +8088,8 @@
           "price_monthly_cents",
           "limits"
         ],
-        "title": "PlanDefinition"
+        "title": "PlanDefinition",
+        "description": "Per-plan pricing and limits for a product."
       },
       "PlanListResponse": {
         "properties": {
@@ -7871,7 +8105,8 @@
         "required": [
           "data"
         ],
-        "title": "PlanListResponse"
+        "title": "PlanListResponse",
+        "description": "JSON:API collection response for plan tiers."
       },
       "PlanResource": {
         "properties": {
@@ -7897,6 +8132,7 @@
           "attributes"
         ],
         "title": "PlanResource",
+        "description": "JSON:API resource envelope for a plan tier.",
         "example": {
           "attributes": {
             "description": "Get started with essential features at no cost",
@@ -7911,16 +8147,19 @@
         "properties": {
           "display_name": {
             "type": "string",
-            "title": "Display Name"
+            "title": "Display Name",
+            "description": "Human-readable product name."
           },
           "description": {
             "type": "string",
-            "title": "Description"
+            "title": "Description",
+            "description": "Long-form product description."
           },
           "tagline": {
             "type": "string",
             "nullable": true,
-            "title": "Tagline"
+            "title": "Tagline",
+            "description": "Short marketing tagline shown on plan-selection surfaces."
           },
           "features": {
             "items": {
@@ -7928,11 +8167,12 @@
             },
             "type": "array",
             "title": "Features",
-            "default": []
+            "description": "Bullet-list feature highlights for the product."
           },
           "coming_soon": {
             "type": "boolean",
             "title": "Coming Soon",
+            "description": "When `true`, the product is listed but not yet available for subscription.",
             "default": false
           },
           "limits": {
@@ -7940,14 +8180,16 @@
               "$ref": "#/components/schemas/LimitDefinition"
             },
             "type": "object",
-            "title": "Limits"
+            "title": "Limits",
+            "description": "Map of limit key to limit definition for this product."
           },
           "plans": {
             "additionalProperties": {
               "$ref": "#/components/schemas/PlanDefinition"
             },
             "type": "object",
-            "title": "Plans"
+            "title": "Plans",
+            "description": "Map of plan key to plan definition for this product."
           }
         },
         "type": "object",
@@ -7957,7 +8199,8 @@
           "limits",
           "plans"
         ],
-        "title": "Product"
+        "title": "Product",
+        "description": "A smplkit product, with its plans, metered limits, and marketing copy."
       },
       "ProductListResponse": {
         "properties": {
@@ -7973,7 +8216,8 @@
         "required": [
           "data"
         ],
-        "title": "ProductListResponse"
+        "title": "ProductListResponse",
+        "description": "JSON:API collection response for products."
       },
       "ProductResource": {
         "properties": {
@@ -7999,6 +8243,7 @@
           "attributes"
         ],
         "title": "ProductResource",
+        "description": "JSON:API resource envelope for a product catalog entry.",
         "example": {
           "attributes": {
             "coming_soon": false,
@@ -8041,13 +8286,15 @@
           "email": {
             "type": "string",
             "format": "email",
-            "title": "Email"
+            "title": "Email",
+            "description": "Email address that becomes the new user's login identifier."
           },
           "password": {
             "type": "string",
             "maxLength": 128,
             "minLength": 8,
-            "title": "Password"
+            "title": "Password",
+            "description": "Password for the new account. Must be at least 8 characters."
           },
           "entry_point": {
             "type": "string",
@@ -8059,7 +8306,7 @@
             ],
             "nullable": true,
             "title": "Entry Point",
-            "description": "Registration entry point. Allowed: LOGIN, GET_STARTED, LIVE_DEMO, UNKNOWN. Defaults to UNKNOWN when omitted. Case-insensitive."
+            "description": "How the customer arrived at the registration page. Allowed values: `LOGIN`, `GET_STARTED`, `LIVE_DEMO`, `UNKNOWN`. Defaults to `UNKNOWN` when omitted. Case-insensitive on input."
           }
         },
         "type": "object",
@@ -8068,11 +8315,79 @@
           "password"
         ],
         "title": "RegisterRequest",
+        "description": "Body for the email + password registration endpoint.",
         "example": {
           "email": "jane@example.com",
           "entry_point": "GET_STARTED",
           "password": "correct-horse-battery-staple"
         }
+      },
+      "Service": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Name",
+            "description": "Human-readable name for the service."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Created At",
+            "description": "When the service was created.",
+            "readOnly": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Updated At",
+            "description": "When the service was last modified.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Service",
+        "description": "A service that contexts can be evaluated against \u2014 for example, a\nbackend application or microservice in the customer's stack.",
+        "example": {
+          "created_at": "2026-03-20T11:02:16.616Z",
+          "name": "User Service",
+          "updated_at": "2026-03-20T11:02:16.616Z"
+        }
+      },
+      "ServiceListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ServiceResource"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ServiceListResponse",
+        "description": "JSON:API collection response for services."
+      },
+      "ServiceRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ServiceResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ServiceRequest",
+        "description": "JSON:API request envelope for creating or updating a service."
       },
       "ServiceResource": {
         "properties": {
@@ -8098,6 +8413,7 @@
           "attributes"
         ],
         "title": "ServiceResource",
+        "description": "JSON:API resource envelope for a service.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "created_at": "2026-03-20T11:02:16.616Z",
@@ -8106,45 +8422,6 @@
           },
           "id": "user_service",
           "type": "service"
-        }
-      },
-      "UserResource": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "nullable": true,
-            "title": "Id"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "user"
-            ],
-            "title": "Type"
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/User"
-          }
-        },
-        "type": "object",
-        "required": [
-          "type",
-          "attributes"
-        ],
-        "title": "UserResource",
-        "example": {
-          "attributes": {
-            "account": "d290f1ee-6c54-4b01-90e6-d701748f0851",
-            "auth_provider": "GOOGLE",
-            "created_at": "2026-03-20T11:02:16.616Z",
-            "display_name": "Jane Smith",
-            "email": "jane@example.com",
-            "email_verified": true,
-            "profile_pic": "https://lh3.googleusercontent.com/a/example",
-            "role": "OWNER"
-          },
-          "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-          "type": "user"
         }
       },
       "ServiceResponse": {
@@ -8157,81 +8434,23 @@
         "required": [
           "data"
         ],
-        "title": "ServiceResponse"
-      },
-      "UserResponse": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/UserResource"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "UserResponse"
-      },
-      "Service": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 255,
-            "title": "Name"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "title": "Created At",
-            "readOnly": true
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "title": "Updated At",
-            "readOnly": true
-          }
-        },
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "Service",
-        "example": {
-          "created_at": "2026-03-20T11:02:16.616Z",
-          "name": "User Service",
-          "updated_at": "2026-03-20T11:02:16.616Z"
-        }
-      },
-      "ServiceListResponse": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/ServiceResource"
-            },
-            "type": "array",
-            "title": "Data"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "ServiceListResponse"
+        "title": "ServiceResponse",
+        "description": "JSON:API single-resource response envelope for a service."
       },
       "SetupIntentAttributes": {
         "properties": {
           "client_secret": {
             "type": "string",
-            "title": "Client Secret"
+            "title": "Client Secret",
+            "description": "Client secret to pass to Stripe Elements so the customer can complete payment-method setup in the browser."
           }
         },
         "type": "object",
         "required": [
           "client_secret"
         ],
-        "title": "SetupIntentAttributes"
+        "title": "SetupIntentAttributes",
+        "description": "Result of executing the setup-intent function."
       },
       "SetupIntentResource": {
         "properties": {
@@ -8269,40 +8488,48 @@
         "required": [
           "data"
         ],
-        "title": "SetupIntentResponse"
+        "title": "SetupIntentResponse",
+        "description": "JSON:API single-resource response envelope for a setup-intent result."
       },
       "SubscriptionAttributes": {
         "properties": {
           "product": {
             "type": "string",
-            "title": "Product"
+            "title": "Product",
+            "description": "Product key the subscription is for, e.g. `flags`."
           },
           "plan": {
             "type": "string",
-            "title": "Plan"
+            "title": "Plan",
+            "description": "Plan key the subscription is on, e.g. `pro`."
           },
           "status": {
             "type": "string",
             "nullable": true,
-            "title": "Status"
+            "title": "Status",
+            "description": "Lifecycle state of the subscription, e.g. `active`, `trialing`, `past_due`, `canceled`."
           },
           "comped": {
             "type": "boolean",
-            "title": "Comped"
+            "title": "Comped",
+            "description": "When `true`, the subscription is complimentary and is not billed through the billing provider."
           },
           "stripe_managed": {
             "type": "boolean",
-            "title": "Stripe Managed"
+            "title": "Stripe Managed",
+            "description": "When `true`, the subscription is billed through Stripe; otherwise it is a free or complimentary subscription that does not produce invoices."
           },
           "current_period_end": {
             "type": "string",
             "nullable": true,
-            "title": "Current Period End"
+            "title": "Current Period End",
+            "description": "End of the current billing period (ISO 8601 timestamp)."
           },
           "client_secret": {
             "type": "string",
             "nullable": true,
-            "title": "Client Secret"
+            "title": "Client Secret",
+            "description": "Stripe payment intent client secret returned when a subscription create requires additional authentication (3DS). Returned only on create."
           }
         },
         "type": "object",
@@ -8312,21 +8539,25 @@
           "comped",
           "stripe_managed"
         ],
-        "title": "SubscriptionAttributes"
+        "title": "SubscriptionAttributes",
+        "description": "A subscription that grants the account access to a product on a plan."
       },
       "SubscriptionListMeta": {
         "properties": {
           "subtotal_cents": {
             "type": "integer",
-            "title": "Subtotal Cents"
+            "title": "Subtotal Cents",
+            "description": "Sum of list prices across all subscriptions in cents."
           },
           "discount_pct": {
             "type": "integer",
-            "title": "Discount Pct"
+            "title": "Discount Pct",
+            "description": "Effective discount percentage applied."
           },
           "discount_amount_cents": {
             "type": "integer",
-            "title": "Discount Amount Cents"
+            "title": "Discount Amount Cents",
+            "description": "Discount amount in cents."
           },
           "discount_source": {
             "type": "string",
@@ -8334,15 +8565,18 @@
               "VOLUME",
               "OVERRIDE"
             ],
-            "title": "Discount Source"
+            "title": "Discount Source",
+            "description": "Source of the discount. `VOLUME` indicates the standard volume-discount schedule; `OVERRIDE` indicates a custom discount set on the account."
           },
           "total_cents": {
             "type": "integer",
-            "title": "Total Cents"
+            "title": "Total Cents",
+            "description": "Final monthly total in cents after the discount."
           },
           "next_tier": {
             "$ref": "#/components/schemas/NextTierMeta",
-            "nullable": true
+            "nullable": true,
+            "description": "Information about the next volume-discount tier, or `null` if the account is already at the top tier or on an override."
           }
         },
         "type": "object",
@@ -8354,7 +8588,7 @@
           "total_cents"
         ],
         "title": "SubscriptionListMeta",
-        "description": "Discount and totals summary attached to GET /api/v1/subscriptions."
+        "description": "Discount and totals summary attached to a subscription collection response."
       },
       "SubscriptionListResponse": {
         "properties": {
@@ -8374,7 +8608,8 @@
         "required": [
           "data"
         ],
-        "title": "SubscriptionListResponse"
+        "title": "SubscriptionListResponse",
+        "description": "JSON:API collection response for subscriptions."
       },
       "SubscriptionResource": {
         "properties": {
@@ -8400,6 +8635,7 @@
           "attributes"
         ],
         "title": "SubscriptionResource",
+        "description": "JSON:API resource envelope for a subscription.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
             "comped": false,
@@ -8423,44 +8659,50 @@
         "required": [
           "data"
         ],
-        "title": "SubscriptionResponse"
+        "title": "SubscriptionResponse",
+        "description": "JSON:API single-resource response envelope for a subscription."
       },
       "User": {
         "properties": {
           "email": {
             "type": "string",
             "format": "email",
+            "nullable": true,
             "title": "Email",
-            "description": "User's email address",
-            "x-immutable": true
+            "description": "Email address used to sign in to the user account.",
+            "readOnly": true
           },
           "display_name": {
             "type": "string",
             "maxLength": 255,
-            "title": "Display Name"
+            "title": "Display Name",
+            "description": "Human-readable display name shown in the console and on shared resources."
           },
           "profile_pic": {
             "type": "string",
             "maxLength": 2048,
             "nullable": true,
-            "title": "Profile Pic"
+            "title": "Profile Pic",
+            "description": "URL of an external profile picture (e.g. the value supplied by the user's identity provider)."
           },
           "avatar_url": {
             "type": "string",
             "nullable": true,
             "title": "Avatar Url",
-            "description": "Server-computed ``data:`` URL when an OIDC provider supplied a profile picture. Null otherwise \u2014 callers should fall back to Gravatar or initials.",
+            "description": "Server-generated `data:` URL containing the user's avatar image bytes when one has been captured. `null` when no avatar is available \u2014 callers should fall back to Gravatar or initials.",
             "readOnly": true
           },
           "auth_provider": {
             "type": "string",
             "nullable": true,
             "title": "Auth Provider",
+            "description": "Identity provider that authenticates the user, e.g. `google`, `microsoft`, or `email`.",
             "readOnly": true
           },
           "email_verified": {
             "type": "boolean",
             "title": "Email Verified",
+            "description": "Whether the user has completed email verification.",
             "default": false,
             "readOnly": true
           },
@@ -8468,13 +8710,13 @@
             "type": "string",
             "nullable": true,
             "title": "Role",
-            "description": "Role in current account context"
+            "description": "Role the user holds in the current account context. One of `OWNER`, `ADMIN`, `MEMBER`, or `VIEWER`."
           },
           "account": {
             "type": "string",
             "nullable": true,
             "title": "Account",
-            "description": "Account UUID",
+            "description": "UUID of the account the user is acting within.",
             "readOnly": true
           },
           "created_at": {
@@ -8482,15 +8724,16 @@
             "format": "date-time",
             "nullable": true,
             "title": "Created At",
+            "description": "When the user record was created.",
             "readOnly": true
           }
         },
         "type": "object",
         "required": [
-          "email",
           "display_name"
         ],
         "title": "User",
+        "description": "A person with access to one or more accounts in smplkit.",
         "example": {
           "account": "d290f1ee-6c54-4b01-90e6-d701748f0851",
           "auth_provider": "GOOGLE",
@@ -8532,13 +8775,81 @@
         "required": [
           "data"
         ],
-        "title": "UserListResponse"
+        "title": "UserListResponse",
+        "description": "JSON:API collection response for users."
+      },
+      "UserRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/UserResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "UserRequest",
+        "description": "JSON:API request envelope for creating or updating a user."
+      },
+      "UserResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "user"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "UserResource",
+        "description": "JSON:API resource envelope for a user.\n\n`id` must not be specified for create requests (the server assigns it).",
+        "example": {
+          "attributes": {
+            "account": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+            "auth_provider": "GOOGLE",
+            "created_at": "2026-03-20T11:02:16.616Z",
+            "display_name": "Jane Smith",
+            "email": "jane@example.com",
+            "email_verified": true,
+            "profile_pic": "https://lh3.googleusercontent.com/a/example",
+            "role": "OWNER"
+          },
+          "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "type": "user"
+        }
+      },
+      "UserResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/UserResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "UserResponse",
+        "description": "JSON:API single-resource response envelope for a user."
       },
       "VerifyEmailRequest": {
         "properties": {
           "token": {
             "type": "string",
-            "title": "Token"
+            "title": "Token",
+            "description": "Verification token previously delivered to the user's email."
           }
         },
         "type": "object",
@@ -8546,6 +8857,7 @@
           "token"
         ],
         "title": "VerifyEmailRequest",
+        "description": "Body for the email-verification endpoint.",
         "example": {
           "token": "eyJhbGciOiJIUzI1NiJ9..."
         }
@@ -8561,10 +8873,10 @@
   },
   "tags": [
     {
-      "name": "API Keys"
+      "name": "Account"
     },
     {
-      "name": "Account"
+      "name": "API Keys"
     },
     {
       "name": "Auth"
@@ -8604,6 +8916,9 @@
     },
     {
       "name": "Users"
+    },
+    {
+      "name": "Webhooks"
     }
   ]
 }
