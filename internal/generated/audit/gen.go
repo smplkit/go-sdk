@@ -558,42 +558,6 @@ type UsageResponse struct {
 	Data []UsageResource `json:"data"`
 }
 
-// WipeRequest Empty body — the action takes no parameters.
-type WipeRequest = map[string]interface{}
-
-// WipeResponse Summary of a completed wipe action.
-type WipeResponse struct {
-	// CompletedAt When the wipe completed.
-	CompletedAt time.Time `json:"completed_at"`
-
-	// Tables Counts of records deleted, broken down by record kind.
-	Tables WipeTablesSummary `json:"tables"`
-
-	// Wiped Always `true` for a successful wipe.
-	Wiped *bool `json:"wiped,omitempty"`
-}
-
-// WipeTablesSummary Counts of records deleted, broken down by record kind.
-type WipeTablesSummary struct {
-	// Action Number of distinct `action` entries deleted.
-	Action int `json:"action"`
-
-	// AuditEvent Number of audit events deleted.
-	AuditEvent int `json:"audit_event"`
-
-	// AuditEventQuota Number of monthly usage-quota counters deleted.
-	AuditEventQuota int `json:"audit_event_quota"`
-
-	// Forwarder Number of forwarders deleted.
-	Forwarder int `json:"forwarder"`
-
-	// ForwarderDelivery Number of forwarder delivery log entries deleted.
-	ForwarderDelivery int `json:"forwarder_delivery"`
-
-	// ResourceType Number of distinct `resource_type` entries deleted.
-	ResourceType int `json:"resource_type"`
-}
-
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
 type hTTPBearerContextKey string
 
@@ -664,9 +628,6 @@ type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderRequest
 
 // ExecuteTestForwarderJSONRequestBody defines body for ExecuteTestForwarder for application/json ContentType.
 type ExecuteTestForwarderJSONRequestBody = TestForwarderRequest
-
-// ExecuteWipeJSONRequestBody defines body for ExecuteWipe for application/json ContentType.
-type ExecuteWipeJSONRequestBody = WipeRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -787,11 +748,6 @@ type ClientInterface interface {
 	ExecuteTestForwarderWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ExecuteTestForwarder(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ExecuteWipeWithBody request with any body
-	ExecuteWipeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	ExecuteWipe(ctx context.Context, body ExecuteWipeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListResourceTypes request
 	ListResourceTypes(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -994,30 +950,6 @@ func (c *Client) ExecuteTestForwarderWithBody(ctx context.Context, contentType s
 
 func (c *Client) ExecuteTestForwarder(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewExecuteTestForwarderRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) ExecuteWipeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewExecuteWipeRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) ExecuteWipe(ctx context.Context, body ExecuteWipeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewExecuteWipeRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1838,46 +1770,6 @@ func NewExecuteTestForwarderRequestWithBody(server string, contentType string, b
 	return req, nil
 }
 
-// NewExecuteWipeRequest calls the generic ExecuteWipe builder with application/json body
-func NewExecuteWipeRequest(server string, body ExecuteWipeJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewExecuteWipeRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewExecuteWipeRequestWithBody generates requests for ExecuteWipe with any type of body
-func NewExecuteWipeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/functions/wipe/actions/execute")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewListResourceTypesRequest generates requests for ListResourceTypes
 func NewListResourceTypesRequest(server string, params *ListResourceTypesParams) (*http.Request, error) {
 	var err error
@@ -2083,11 +1975,6 @@ type ClientWithResponsesInterface interface {
 	ExecuteTestForwarderWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExecuteTestForwarderResponse, error)
 
 	ExecuteTestForwarderWithResponse(ctx context.Context, body ExecuteTestForwarderJSONRequestBody, reqEditors ...RequestEditorFn) (*ExecuteTestForwarderResponse, error)
-
-	// ExecuteWipeWithBodyWithResponse request with any body
-	ExecuteWipeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExecuteWipeResponse, error)
-
-	ExecuteWipeWithResponse(ctx context.Context, body ExecuteWipeJSONRequestBody, reqEditors ...RequestEditorFn) (*ExecuteWipeResponse, error)
 
 	// ListResourceTypesWithResponse request
 	ListResourceTypesWithResponse(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*ListResourceTypesResponse, error)
@@ -2486,36 +2373,6 @@ func (r ExecuteTestForwarderResponse) ContentType() string {
 	return ""
 }
 
-type ExecuteWipeResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *WipeResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r ExecuteWipeResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ExecuteWipeResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ExecuteWipeResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type ListResourceTypesResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -2723,23 +2580,6 @@ func (c *ClientWithResponses) ExecuteTestForwarderWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseExecuteTestForwarderResponse(rsp)
-}
-
-// ExecuteWipeWithBodyWithResponse request with arbitrary body returning *ExecuteWipeResponse
-func (c *ClientWithResponses) ExecuteWipeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExecuteWipeResponse, error) {
-	rsp, err := c.ExecuteWipeWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseExecuteWipeResponse(rsp)
-}
-
-func (c *ClientWithResponses) ExecuteWipeWithResponse(ctx context.Context, body ExecuteWipeJSONRequestBody, reqEditors ...RequestEditorFn) (*ExecuteWipeResponse, error) {
-	rsp, err := c.ExecuteWipe(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseExecuteWipeResponse(rsp)
 }
 
 // ListResourceTypesWithResponse request returning *ListResourceTypesResponse
@@ -3085,32 +2925,6 @@ func ParseExecuteTestForwarderResponse(rsp *http.Response) (*ExecuteTestForwarde
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest TestForwarderResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseExecuteWipeResponse parses an HTTP response from a ExecuteWipeWithResponse call
-func ParseExecuteWipeResponse(rsp *http.Response) (*ExecuteWipeResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ExecuteWipeResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest WipeResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
