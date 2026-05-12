@@ -954,43 +954,6 @@
           }
         }
       }
-    },
-    "/api/v1/functions/wipe/actions/execute": {
-      "post": {
-        "tags": [
-          "Functions"
-        ],
-        "summary": "Execute Wipe",
-        "description": "Delete every audit record this account has stored.\n\nAtomic: either every record is deleted, or none is. Returns the\nper-table counts and the completion timestamp. The request body\nmust be `{}`.",
-        "operationId": "execute_wipe",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WipeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WipeResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
     }
   },
   "components": {
@@ -2304,102 +2267,6 @@
           "data"
         ],
         "title": "UsageResponse"
-      },
-      "WipeRequest": {
-        "properties": {},
-        "additionalProperties": false,
-        "type": "object",
-        "title": "WipeRequest",
-        "description": "Empty body \u2014 the action takes no parameters."
-      },
-      "WipeResponse": {
-        "properties": {
-          "wiped": {
-            "type": "boolean",
-            "title": "Wiped",
-            "description": "Always `true` for a successful wipe.",
-            "default": true
-          },
-          "tables": {
-            "$ref": "#/components/schemas/WipeTablesSummary"
-          },
-          "completed_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Completed At",
-            "description": "When the wipe completed."
-          }
-        },
-        "type": "object",
-        "required": [
-          "tables",
-          "completed_at"
-        ],
-        "title": "WipeResponse",
-        "description": "Summary of a completed wipe action.",
-        "example": {
-          "completed_at": "2026-05-08T19:31:24Z",
-          "tables": {
-            "action": 11,
-            "audit_event": 1432,
-            "audit_event_quota": 5,
-            "forwarder": 2,
-            "forwarder_delivery": 312,
-            "resource_type": 4
-          },
-          "wiped": true
-        }
-      },
-      "WipeTablesSummary": {
-        "properties": {
-          "audit_event": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Audit Event",
-            "description": "Number of audit events deleted."
-          },
-          "audit_event_quota": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Audit Event Quota",
-            "description": "Number of monthly usage-quota counters deleted."
-          },
-          "forwarder": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Forwarder",
-            "description": "Number of forwarders deleted."
-          },
-          "forwarder_delivery": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Forwarder Delivery",
-            "description": "Number of forwarder delivery log entries deleted."
-          },
-          "resource_type": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Resource Type",
-            "description": "Number of distinct `resource_type` entries deleted."
-          },
-          "action": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Action",
-            "description": "Number of distinct `action` entries deleted."
-          }
-        },
-        "type": "object",
-        "required": [
-          "audit_event",
-          "audit_event_quota",
-          "forwarder",
-          "forwarder_delivery",
-          "resource_type",
-          "action"
-        ],
-        "title": "WipeTablesSummary",
-        "description": "Counts of records deleted, broken down by record kind."
       }
     },
     "securitySchemes": {
@@ -2418,9 +2285,6 @@
     },
     {
       "name": "Forwarders"
-    },
-    {
-      "name": "Functions"
     },
     {
       "name": "Resource Types"
