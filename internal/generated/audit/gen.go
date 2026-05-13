@@ -193,6 +193,9 @@ type Event struct {
 	// Data Free-form payload attached to the event. Use it for resource snapshots (by convention under `data.snapshot`), request identifiers, or any other context the event needs to carry.
 	Data *map[string]interface{} `json:"data,omitempty"`
 
+	// Description Free-text description of the event. Included alongside `resource_id` in the `filter[search]` substring target.
+	Description *string `json:"description,omitempty"`
+
 	// DoNotForward When `true`, the event is recorded but not delivered to any forwarder. A delivery log entry with status `SKIPPED_DO_NOT_FORWARD` is written for each enabled forwarder so the skip is visible in the delivery log.
 	DoNotForward *bool `json:"do_not_forward,omitempty"`
 
@@ -577,7 +580,7 @@ type ListEventsParams struct {
 	FilterResourceType *string             `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 	FilterResourceId   *string             `form:"filter[resource_id],omitempty" json:"filter[resource_id],omitempty"`
 
-	// FilterSearch Case-insensitive substring match against `resource_id`. Use `filter[resource_id]` for an exact match.
+	// FilterSearch Case-insensitive substring match against `resource_id` or `description`. Use `filter[resource_id]` for an exact match on `resource_id`.
 	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
 	PageSize     *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter    *string `form:"page[after],omitempty" json:"page[after],omitempty"`
