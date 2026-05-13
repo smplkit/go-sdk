@@ -55,7 +55,8 @@ func main() {
 
 	// list events
 	page, err := client.Audit().Events().List(ctx, smplkit.ListEventsInput{
-		ResourceID: someResourceID,
+		ResourceType: "invoice",
+		ResourceID:   someResourceID,
 	})
 	fatalIfErr("audit.Events.List", err)
 	ids := map[string]bool{}
