@@ -12,7 +12,7 @@
           "Loggers"
         ],
         "summary": "List Loggers",
-        "description": "List loggers for this account.\n\nSupports `filter[managed]` to narrow to managed (or unmanaged) loggers,\n`filter[service]` to keep only loggers observed in a specific service,\nand `filter[last_seen]` (interval notation `[<from>,*)`) to keep only\nloggers with a source observation at or after the given timestamp.",
+        "description": "List loggers for this account.\n\nDefault sort is `key` ascending. Supports `filter[managed]` to narrow\nto managed (or unmanaged) loggers, `filter[service]` to keep only\nloggers observed in a specific service, and `filter[last_seen]`\n(interval notation `[<from>,*)`) to keep only loggers with a source\nobservation at or after the given timestamp.",
         "operationId": "list_loggers",
         "security": [
           {
@@ -67,6 +67,28 @@
               ],
               "title": "Filter[Last Seen]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "key",
+                "-key",
+                "name",
+                "-name",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`."
           }
         ],
         "responses": {
@@ -434,71 +456,6 @@
       }
     },
     "/api/v1/log_groups": {
-      "get": {
-        "tags": [
-          "Log Groups"
-        ],
-        "summary": "List Log Groups",
-        "description": "List log groups for this account.",
-        "operationId": "list_log_groups",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LogGroupListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
       "post": {
         "tags": [
           "Log Groups"
@@ -506,15 +463,20 @@
         "summary": "Create Log Group",
         "description": "Create a log group.\n\nThe caller may supply a key in `data.id`; if omitted, the server\ngenerates one from `name`.",
         "operationId": "create_log_group",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/LogGroupRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -567,12 +529,96 @@
               }
             }
           }
-        },
+        }
+      },
+      "get": {
+        "tags": [
+          "Log Groups"
+        ],
+        "summary": "List Log Groups",
+        "description": "List log groups for this account.\n\nDefault sort is `key` ascending.",
+        "operationId": "list_log_groups",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "key",
+                "-key",
+                "name",
+                "-name",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogGroupListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/log_groups/{id}": {
@@ -814,7 +860,7 @@
           "Logger Sources"
         ],
         "summary": "List Logger Sources",
-        "description": "List the service / environment observations recorded for a logger.",
+        "description": "List the service / environment observations recorded for a logger.\n\nDefault sort is `-last_seen` (most recently observed first).",
         "operationId": "list_logger_sources",
         "security": [
           {
@@ -830,6 +876,28 @@
               "type": "string",
               "title": "Id"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "environment",
+                "-environment",
+                "last_seen",
+                "-last_seen",
+                "service",
+                "-service"
+              ],
+              "default": "-last_seen",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`."
           }
         ],
         "responses": {
@@ -892,7 +960,7 @@
           "Logger Sources"
         ],
         "summary": "List All Logger Sources",
-        "description": "List every logger source observation for this account.\n\nSupports `filter[environment]` and `filter[service]` to narrow to a\nspecific environment or service.",
+        "description": "List every logger source observation for this account.\n\nDefault sort is `-last_seen` (most recently observed first). Supports\n`filter[environment]` and `filter[service]` to narrow to a specific\nenvironment or service.",
         "operationId": "list_all_logger_sources",
         "security": [
           {
@@ -931,6 +999,28 @@
               ],
               "title": "Filter[Service]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "environment",
+                "-environment",
+                "last_seen",
+                "-last_seen",
+                "service",
+                "-service"
+              ],
+              "default": "-last_seen",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`."
           }
         ],
         "responses": {
@@ -993,8 +1083,31 @@
           "Services"
         ],
         "summary": "List Services",
-        "description": "List the services that have reported a logger for this account.",
+        "description": "List the services that have reported a logger for this account.\n\nDefault sort is `name` ascending.",
         "operationId": "list_services",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `name`, `-name`.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "default": "name",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `name`, `-name`."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1046,12 +1159,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/usage": {
