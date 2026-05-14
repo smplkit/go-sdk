@@ -412,6 +412,468 @@ func (e UserResourceType) Valid() bool {
 	}
 }
 
+// Defines values for ListApiKeysParamsSort.
+const (
+	ListApiKeysParamsSortCreatedAt       ListApiKeysParamsSort = "created_at"
+	ListApiKeysParamsSortExpiresAt       ListApiKeysParamsSort = "expires_at"
+	ListApiKeysParamsSortLastUsedAt      ListApiKeysParamsSort = "last_used_at"
+	ListApiKeysParamsSortMinusCreatedAt  ListApiKeysParamsSort = "-created_at"
+	ListApiKeysParamsSortMinusExpiresAt  ListApiKeysParamsSort = "-expires_at"
+	ListApiKeysParamsSortMinusLastUsedAt ListApiKeysParamsSort = "-last_used_at"
+	ListApiKeysParamsSortMinusName       ListApiKeysParamsSort = "-name"
+	ListApiKeysParamsSortMinusStatus     ListApiKeysParamsSort = "-status"
+	ListApiKeysParamsSortName            ListApiKeysParamsSort = "name"
+	ListApiKeysParamsSortStatus          ListApiKeysParamsSort = "status"
+)
+
+// Valid indicates whether the value is a known member of the ListApiKeysParamsSort enum.
+func (e ListApiKeysParamsSort) Valid() bool {
+	switch e {
+	case ListApiKeysParamsSortCreatedAt:
+		return true
+	case ListApiKeysParamsSortExpiresAt:
+		return true
+	case ListApiKeysParamsSortLastUsedAt:
+		return true
+	case ListApiKeysParamsSortMinusCreatedAt:
+		return true
+	case ListApiKeysParamsSortMinusExpiresAt:
+		return true
+	case ListApiKeysParamsSortMinusLastUsedAt:
+		return true
+	case ListApiKeysParamsSortMinusName:
+		return true
+	case ListApiKeysParamsSortMinusStatus:
+		return true
+	case ListApiKeysParamsSortName:
+		return true
+	case ListApiKeysParamsSortStatus:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListContextTypesParamsSort.
+const (
+	ListContextTypesParamsSortCreatedAt      ListContextTypesParamsSort = "created_at"
+	ListContextTypesParamsSortKey            ListContextTypesParamsSort = "key"
+	ListContextTypesParamsSortMinusCreatedAt ListContextTypesParamsSort = "-created_at"
+	ListContextTypesParamsSortMinusKey       ListContextTypesParamsSort = "-key"
+	ListContextTypesParamsSortMinusName      ListContextTypesParamsSort = "-name"
+	ListContextTypesParamsSortMinusUpdatedAt ListContextTypesParamsSort = "-updated_at"
+	ListContextTypesParamsSortName           ListContextTypesParamsSort = "name"
+	ListContextTypesParamsSortUpdatedAt      ListContextTypesParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListContextTypesParamsSort enum.
+func (e ListContextTypesParamsSort) Valid() bool {
+	switch e {
+	case ListContextTypesParamsSortCreatedAt:
+		return true
+	case ListContextTypesParamsSortKey:
+		return true
+	case ListContextTypesParamsSortMinusCreatedAt:
+		return true
+	case ListContextTypesParamsSortMinusKey:
+		return true
+	case ListContextTypesParamsSortMinusName:
+		return true
+	case ListContextTypesParamsSortMinusUpdatedAt:
+		return true
+	case ListContextTypesParamsSortName:
+		return true
+	case ListContextTypesParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListContextsParamsSort.
+const (
+	ListContextsParamsSortCreatedAt      ListContextsParamsSort = "created_at"
+	ListContextsParamsSortKey            ListContextsParamsSort = "key"
+	ListContextsParamsSortMinusCreatedAt ListContextsParamsSort = "-created_at"
+	ListContextsParamsSortMinusKey       ListContextsParamsSort = "-key"
+	ListContextsParamsSortMinusName      ListContextsParamsSort = "-name"
+	ListContextsParamsSortMinusUpdatedAt ListContextsParamsSort = "-updated_at"
+	ListContextsParamsSortName           ListContextsParamsSort = "name"
+	ListContextsParamsSortUpdatedAt      ListContextsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListContextsParamsSort enum.
+func (e ListContextsParamsSort) Valid() bool {
+	switch e {
+	case ListContextsParamsSortCreatedAt:
+		return true
+	case ListContextsParamsSortKey:
+		return true
+	case ListContextsParamsSortMinusCreatedAt:
+		return true
+	case ListContextsParamsSortMinusKey:
+		return true
+	case ListContextsParamsSortMinusName:
+		return true
+	case ListContextsParamsSortMinusUpdatedAt:
+		return true
+	case ListContextsParamsSortName:
+		return true
+	case ListContextsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListEnvironmentsParamsSort.
+const (
+	ListEnvironmentsParamsSortCreatedAt      ListEnvironmentsParamsSort = "created_at"
+	ListEnvironmentsParamsSortKey            ListEnvironmentsParamsSort = "key"
+	ListEnvironmentsParamsSortMinusCreatedAt ListEnvironmentsParamsSort = "-created_at"
+	ListEnvironmentsParamsSortMinusKey       ListEnvironmentsParamsSort = "-key"
+	ListEnvironmentsParamsSortMinusName      ListEnvironmentsParamsSort = "-name"
+	ListEnvironmentsParamsSortMinusUpdatedAt ListEnvironmentsParamsSort = "-updated_at"
+	ListEnvironmentsParamsSortName           ListEnvironmentsParamsSort = "name"
+	ListEnvironmentsParamsSortUpdatedAt      ListEnvironmentsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListEnvironmentsParamsSort enum.
+func (e ListEnvironmentsParamsSort) Valid() bool {
+	switch e {
+	case ListEnvironmentsParamsSortCreatedAt:
+		return true
+	case ListEnvironmentsParamsSortKey:
+		return true
+	case ListEnvironmentsParamsSortMinusCreatedAt:
+		return true
+	case ListEnvironmentsParamsSortMinusKey:
+		return true
+	case ListEnvironmentsParamsSortMinusName:
+		return true
+	case ListEnvironmentsParamsSortMinusUpdatedAt:
+		return true
+	case ListEnvironmentsParamsSortName:
+		return true
+	case ListEnvironmentsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListInvitationsParamsSort.
+const (
+	ListInvitationsParamsSortCreatedAt      ListInvitationsParamsSort = "created_at"
+	ListInvitationsParamsSortEmail          ListInvitationsParamsSort = "email"
+	ListInvitationsParamsSortMinusCreatedAt ListInvitationsParamsSort = "-created_at"
+	ListInvitationsParamsSortMinusEmail     ListInvitationsParamsSort = "-email"
+	ListInvitationsParamsSortMinusStatus    ListInvitationsParamsSort = "-status"
+	ListInvitationsParamsSortStatus         ListInvitationsParamsSort = "status"
+)
+
+// Valid indicates whether the value is a known member of the ListInvitationsParamsSort enum.
+func (e ListInvitationsParamsSort) Valid() bool {
+	switch e {
+	case ListInvitationsParamsSortCreatedAt:
+		return true
+	case ListInvitationsParamsSortEmail:
+		return true
+	case ListInvitationsParamsSortMinusCreatedAt:
+		return true
+	case ListInvitationsParamsSortMinusEmail:
+		return true
+	case ListInvitationsParamsSortMinusStatus:
+		return true
+	case ListInvitationsParamsSortStatus:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListInvoicesParamsSort.
+const (
+	ListInvoicesParamsSortCreatedAt      ListInvoicesParamsSort = "created_at"
+	ListInvoicesParamsSortMinusCreatedAt ListInvoicesParamsSort = "-created_at"
+	ListInvoicesParamsSortMinusStatus    ListInvoicesParamsSort = "-status"
+	ListInvoicesParamsSortMinusTotal     ListInvoicesParamsSort = "-total"
+	ListInvoicesParamsSortStatus         ListInvoicesParamsSort = "status"
+	ListInvoicesParamsSortTotal          ListInvoicesParamsSort = "total"
+)
+
+// Valid indicates whether the value is a known member of the ListInvoicesParamsSort enum.
+func (e ListInvoicesParamsSort) Valid() bool {
+	switch e {
+	case ListInvoicesParamsSortCreatedAt:
+		return true
+	case ListInvoicesParamsSortMinusCreatedAt:
+		return true
+	case ListInvoicesParamsSortMinusStatus:
+		return true
+	case ListInvoicesParamsSortMinusTotal:
+		return true
+	case ListInvoicesParamsSortStatus:
+		return true
+	case ListInvoicesParamsSortTotal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListMetricNamesParamsSort.
+const (
+	ListMetricNamesParamsSortMinusName ListMetricNamesParamsSort = "-name"
+	ListMetricNamesParamsSortName      ListMetricNamesParamsSort = "name"
+)
+
+// Valid indicates whether the value is a known member of the ListMetricNamesParamsSort enum.
+func (e ListMetricNamesParamsSort) Valid() bool {
+	switch e {
+	case ListMetricNamesParamsSortMinusName:
+		return true
+	case ListMetricNamesParamsSortName:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListMetricRollupsParamsSort.
+const (
+	Bucket      ListMetricRollupsParamsSort = "bucket"
+	MinusBucket ListMetricRollupsParamsSort = "-bucket"
+)
+
+// Valid indicates whether the value is a known member of the ListMetricRollupsParamsSort enum.
+func (e ListMetricRollupsParamsSort) Valid() bool {
+	switch e {
+	case Bucket:
+		return true
+	case MinusBucket:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListMetricsParamsSort.
+const (
+	MinusRecordedAt ListMetricsParamsSort = "-recorded_at"
+	MinusValue      ListMetricsParamsSort = "-value"
+	RecordedAt      ListMetricsParamsSort = "recorded_at"
+	Value           ListMetricsParamsSort = "value"
+)
+
+// Valid indicates whether the value is a known member of the ListMetricsParamsSort enum.
+func (e ListMetricsParamsSort) Valid() bool {
+	switch e {
+	case MinusRecordedAt:
+		return true
+	case MinusValue:
+		return true
+	case RecordedAt:
+		return true
+	case Value:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListPaymentMethodsParamsSort.
+const (
+	ListPaymentMethodsParamsSortCreatedAt      ListPaymentMethodsParamsSort = "created_at"
+	ListPaymentMethodsParamsSortExpYear        ListPaymentMethodsParamsSort = "exp_year"
+	ListPaymentMethodsParamsSortIsDefault      ListPaymentMethodsParamsSort = "is_default"
+	ListPaymentMethodsParamsSortMinusCreatedAt ListPaymentMethodsParamsSort = "-created_at"
+	ListPaymentMethodsParamsSortMinusExpYear   ListPaymentMethodsParamsSort = "-exp_year"
+	ListPaymentMethodsParamsSortMinusIsDefault ListPaymentMethodsParamsSort = "-is_default"
+	ListPaymentMethodsParamsSortMinusUpdatedAt ListPaymentMethodsParamsSort = "-updated_at"
+	ListPaymentMethodsParamsSortUpdatedAt      ListPaymentMethodsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListPaymentMethodsParamsSort enum.
+func (e ListPaymentMethodsParamsSort) Valid() bool {
+	switch e {
+	case ListPaymentMethodsParamsSortCreatedAt:
+		return true
+	case ListPaymentMethodsParamsSortExpYear:
+		return true
+	case ListPaymentMethodsParamsSortIsDefault:
+		return true
+	case ListPaymentMethodsParamsSortMinusCreatedAt:
+		return true
+	case ListPaymentMethodsParamsSortMinusExpYear:
+		return true
+	case ListPaymentMethodsParamsSortMinusIsDefault:
+		return true
+	case ListPaymentMethodsParamsSortMinusUpdatedAt:
+		return true
+	case ListPaymentMethodsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListPlansParamsSort.
+const (
+	ListPlansParamsSortDisplayName      ListPlansParamsSort = "display_name"
+	ListPlansParamsSortId               ListPlansParamsSort = "id"
+	ListPlansParamsSortMinusDisplayName ListPlansParamsSort = "-display_name"
+	ListPlansParamsSortMinusId          ListPlansParamsSort = "-id"
+	ListPlansParamsSortMinusSortOrder   ListPlansParamsSort = "-sort_order"
+	ListPlansParamsSortSortOrder        ListPlansParamsSort = "sort_order"
+)
+
+// Valid indicates whether the value is a known member of the ListPlansParamsSort enum.
+func (e ListPlansParamsSort) Valid() bool {
+	switch e {
+	case ListPlansParamsSortDisplayName:
+		return true
+	case ListPlansParamsSortId:
+		return true
+	case ListPlansParamsSortMinusDisplayName:
+		return true
+	case ListPlansParamsSortMinusId:
+		return true
+	case ListPlansParamsSortMinusSortOrder:
+		return true
+	case ListPlansParamsSortSortOrder:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListProductsParamsSort.
+const (
+	ListProductsParamsSortDisplayName      ListProductsParamsSort = "display_name"
+	ListProductsParamsSortId               ListProductsParamsSort = "id"
+	ListProductsParamsSortMinusDisplayName ListProductsParamsSort = "-display_name"
+	ListProductsParamsSortMinusId          ListProductsParamsSort = "-id"
+)
+
+// Valid indicates whether the value is a known member of the ListProductsParamsSort enum.
+func (e ListProductsParamsSort) Valid() bool {
+	switch e {
+	case ListProductsParamsSortDisplayName:
+		return true
+	case ListProductsParamsSortId:
+		return true
+	case ListProductsParamsSortMinusDisplayName:
+		return true
+	case ListProductsParamsSortMinusId:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListServicesParamsSort.
+const (
+	ListServicesParamsSortCreatedAt      ListServicesParamsSort = "created_at"
+	ListServicesParamsSortKey            ListServicesParamsSort = "key"
+	ListServicesParamsSortMinusCreatedAt ListServicesParamsSort = "-created_at"
+	ListServicesParamsSortMinusKey       ListServicesParamsSort = "-key"
+	ListServicesParamsSortMinusName      ListServicesParamsSort = "-name"
+	ListServicesParamsSortMinusUpdatedAt ListServicesParamsSort = "-updated_at"
+	ListServicesParamsSortName           ListServicesParamsSort = "name"
+	ListServicesParamsSortUpdatedAt      ListServicesParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListServicesParamsSort enum.
+func (e ListServicesParamsSort) Valid() bool {
+	switch e {
+	case ListServicesParamsSortCreatedAt:
+		return true
+	case ListServicesParamsSortKey:
+		return true
+	case ListServicesParamsSortMinusCreatedAt:
+		return true
+	case ListServicesParamsSortMinusKey:
+		return true
+	case ListServicesParamsSortMinusName:
+		return true
+	case ListServicesParamsSortMinusUpdatedAt:
+		return true
+	case ListServicesParamsSortName:
+		return true
+	case ListServicesParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListSubscriptionsParamsSort.
+const (
+	ListSubscriptionsParamsSortCreatedAt      ListSubscriptionsParamsSort = "created_at"
+	ListSubscriptionsParamsSortMinusCreatedAt ListSubscriptionsParamsSort = "-created_at"
+	ListSubscriptionsParamsSortMinusPlan      ListSubscriptionsParamsSort = "-plan"
+	ListSubscriptionsParamsSortMinusProduct   ListSubscriptionsParamsSort = "-product"
+	ListSubscriptionsParamsSortMinusStatus    ListSubscriptionsParamsSort = "-status"
+	ListSubscriptionsParamsSortPlan           ListSubscriptionsParamsSort = "plan"
+	ListSubscriptionsParamsSortProduct        ListSubscriptionsParamsSort = "product"
+	ListSubscriptionsParamsSortStatus         ListSubscriptionsParamsSort = "status"
+)
+
+// Valid indicates whether the value is a known member of the ListSubscriptionsParamsSort enum.
+func (e ListSubscriptionsParamsSort) Valid() bool {
+	switch e {
+	case ListSubscriptionsParamsSortCreatedAt:
+		return true
+	case ListSubscriptionsParamsSortMinusCreatedAt:
+		return true
+	case ListSubscriptionsParamsSortMinusPlan:
+		return true
+	case ListSubscriptionsParamsSortMinusProduct:
+		return true
+	case ListSubscriptionsParamsSortMinusStatus:
+		return true
+	case ListSubscriptionsParamsSortPlan:
+		return true
+	case ListSubscriptionsParamsSortProduct:
+		return true
+	case ListSubscriptionsParamsSortStatus:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListUsersParamsSort.
+const (
+	ListUsersParamsSortCreatedAt        ListUsersParamsSort = "created_at"
+	ListUsersParamsSortDisplayName      ListUsersParamsSort = "display_name"
+	ListUsersParamsSortEmail            ListUsersParamsSort = "email"
+	ListUsersParamsSortMinusCreatedAt   ListUsersParamsSort = "-created_at"
+	ListUsersParamsSortMinusDisplayName ListUsersParamsSort = "-display_name"
+	ListUsersParamsSortMinusEmail       ListUsersParamsSort = "-email"
+)
+
+// Valid indicates whether the value is a known member of the ListUsersParamsSort enum.
+func (e ListUsersParamsSort) Valid() bool {
+	switch e {
+	case ListUsersParamsSortCreatedAt:
+		return true
+	case ListUsersParamsSortDisplayName:
+		return true
+	case ListUsersParamsSortEmail:
+		return true
+	case ListUsersParamsSortMinusCreatedAt:
+		return true
+	case ListUsersParamsSortMinusDisplayName:
+		return true
+	case ListUsersParamsSortMinusEmail:
+		return true
+	default:
+		return false
+	}
+}
+
 // Account A tenant of smplkit — the unit of isolation that owns all of a
 // customer's resources (environments, contexts, API keys, and so on).
 type Account struct {
@@ -1638,7 +2100,13 @@ type hTTPBearerContextKey string
 // ListApiKeysParams defines parameters for ListApiKeys.
 type ListApiKeysParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `expires_at`, `-expires_at`, `last_used_at`, `-last_used_at`, `name`, `-name`, `status`, `-status`.
+	Sort *ListApiKeysParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListApiKeysParamsSort defines parameters for ListApiKeys.
+type ListApiKeysParamsSort string
 
 // HandleOidcCallbackParams defines parameters for HandleOidcCallback.
 type HandleOidcCallbackParams struct {
@@ -1655,16 +2123,40 @@ type BeginOidcLoginParams struct {
 	EntryPoint *string `form:"entry_point,omitempty" json:"entry_point,omitempty"`
 }
 
+// ListContextTypesParams defines parameters for ListContextTypes.
+type ListContextTypesParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
+	Sort *ListContextTypesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListContextTypesParamsSort defines parameters for ListContextTypes.
+type ListContextTypesParamsSort string
+
 // ListContextsParams defines parameters for ListContexts.
 type ListContextsParams struct {
 	FilterContextType *string `form:"filter[context_type],omitempty" json:"filter[context_type],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
+	Sort *ListContextsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListContextsParamsSort defines parameters for ListContexts.
+type ListContextsParamsSort string
 
 // CreateEmailRegistrationApplicationVndAPIPlusJSONBody defines parameters for CreateEmailRegistration.
 type CreateEmailRegistrationApplicationVndAPIPlusJSONBody map[string]interface{}
 
 // SendContactEmailApplicationVndAPIPlusJSONBody defines parameters for SendContactEmail.
 type SendContactEmailApplicationVndAPIPlusJSONBody map[string]interface{}
+
+// ListEnvironmentsParams defines parameters for ListEnvironments.
+type ListEnvironmentsParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
+	Sort *ListEnvironmentsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListEnvironmentsParamsSort defines parameters for ListEnvironments.
+type ListEnvironmentsParamsSort string
 
 // DeleteEnvironmentParams defines parameters for DeleteEnvironment.
 type DeleteEnvironmentParams struct {
@@ -1676,20 +2168,101 @@ type DeleteEnvironmentParams struct {
 type ListInvitationsParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
 	FilterToken  *string `form:"filter[token],omitempty" json:"filter[token],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `email`, `-email`, `status`, `-status`.
+	Sort *ListInvitationsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListInvitationsParamsSort defines parameters for ListInvitations.
+type ListInvitationsParamsSort string
+
+// ListInvoicesParams defines parameters for ListInvoices.
+type ListInvoicesParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `status`, `-status`, `total`, `-total`.
+	Sort *ListInvoicesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListInvoicesParamsSort defines parameters for ListInvoices.
+type ListInvoicesParamsSort string
+
+// ListMetricNamesParams defines parameters for ListMetricNames.
+type ListMetricNamesParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `name`, `-name`.
+	Sort *ListMetricNamesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListMetricNamesParamsSort defines parameters for ListMetricNames.
+type ListMetricNamesParamsSort string
 
 // ListMetricRollupsParams defines parameters for ListMetricRollups.
 type ListMetricRollupsParams struct {
 	FilterName       string  `form:"filter[name]" json:"filter[name]"`
 	FilterRollup     string  `form:"filter[rollup]" json:"filter[rollup]"`
 	FilterRecordedAt *string `form:"filter[recorded_at],omitempty" json:"filter[recorded_at],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `bucket`. Allowed values: `bucket`, `-bucket`.
+	Sort *ListMetricRollupsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListMetricRollupsParamsSort defines parameters for ListMetricRollups.
+type ListMetricRollupsParamsSort string
 
 // ListMetricsParams defines parameters for ListMetrics.
 type ListMetricsParams struct {
 	FilterName       string  `form:"filter[name]" json:"filter[name]"`
 	FilterRecordedAt *string `form:"filter[recorded_at],omitempty" json:"filter[recorded_at],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-recorded_at`. Allowed values: `recorded_at`, `-recorded_at`, `value`, `-value`.
+	Sort *ListMetricsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListMetricsParamsSort defines parameters for ListMetrics.
+type ListMetricsParamsSort string
+
+// ListPaymentMethodsParams defines parameters for ListPaymentMethods.
+type ListPaymentMethodsParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `exp_year`, `-exp_year`, `is_default`, `-is_default`, `updated_at`, `-updated_at`.
+	Sort *ListPaymentMethodsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListPaymentMethodsParamsSort defines parameters for ListPaymentMethods.
+type ListPaymentMethodsParamsSort string
+
+// ListPlansParams defines parameters for ListPlans.
+type ListPlansParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `sort_order`. Allowed values: `display_name`, `-display_name`, `id`, `-id`, `sort_order`, `-sort_order`.
+	Sort *ListPlansParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListPlansParamsSort defines parameters for ListPlans.
+type ListPlansParamsSort string
+
+// ListProductsParams defines parameters for ListProducts.
+type ListProductsParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `display_name`. Allowed values: `display_name`, `-display_name`, `id`, `-id`.
+	Sort *ListProductsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListProductsParamsSort defines parameters for ListProducts.
+type ListProductsParamsSort string
+
+// ListServicesParams defines parameters for ListServices.
+type ListServicesParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
+	Sort *ListServicesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListServicesParamsSort defines parameters for ListServices.
+type ListServicesParamsSort string
+
+// ListSubscriptionsParams defines parameters for ListSubscriptions.
+type ListSubscriptionsParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `product`. Allowed values: `created_at`, `-created_at`, `plan`, `-plan`, `product`, `-product`, `status`, `-status`.
+	Sort *ListSubscriptionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListSubscriptionsParamsSort defines parameters for ListSubscriptions.
+type ListSubscriptionsParamsSort string
 
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
@@ -1704,7 +2277,13 @@ type ListUsersParams struct {
 
 	// PageSize Items per page
 	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `email`. Allowed values: `created_at`, `-created_at`, `display_name`, `-display_name`, `email`, `-email`.
+	Sort *ListUsersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListUsersParamsSort defines parameters for ListUsers.
+type ListUsersParamsSort string
 
 // UpdateAccountApplicationVndAPIPlusJSONRequestBody defines body for UpdateAccount for application/vnd.api+json ContentType.
 type UpdateAccountApplicationVndAPIPlusJSONRequestBody = AccountRequest
@@ -1991,7 +2570,7 @@ type ClientInterface interface {
 	VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListContextTypes request
-	ListContextTypes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListContextTypes(ctx context.Context, params *ListContextTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateContextTypeWithBody request with any body
 	CreateContextTypeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2039,7 +2618,7 @@ type ClientInterface interface {
 	SendContactEmailWithApplicationVndAPIPlusJSONBody(ctx context.Context, body SendContactEmailApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListEnvironments request
-	ListEnvironments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListEnvironments(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateEnvironmentWithBody request with any body
 	CreateEnvironmentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2083,13 +2662,13 @@ type ClientInterface interface {
 	RevokeInvitation(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListInvoices request
-	ListInvoices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListInvoices(ctx context.Context, params *ListInvoicesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetInvoice request
 	GetInvoice(ctx context.Context, invoiceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListMetricNames request
-	ListMetricNames(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListMetricNames(ctx context.Context, params *ListMetricNamesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListMetricRollups request
 	ListMetricRollups(ctx context.Context, params *ListMetricRollupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2103,7 +2682,7 @@ type ClientInterface interface {
 	BulkIngestMetricsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPaymentMethods request
-	ListPaymentMethods(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListPaymentMethods(ctx context.Context, params *ListPaymentMethodsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreatePaymentMethodWithBody request with any body
 	CreatePaymentMethodWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2125,13 +2704,13 @@ type ClientInterface interface {
 	SetDefaultPaymentMethod(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPlans request
-	ListPlans(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListPlans(ctx context.Context, params *ListPlansParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListProducts request
-	ListProducts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListProducts(ctx context.Context, params *ListProductsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListServices request
-	ListServices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListServices(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateServiceWithBody request with any body
 	CreateServiceWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2150,7 +2729,7 @@ type ClientInterface interface {
 	UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSubscriptions request
-	ListSubscriptions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListSubscriptions(ctx context.Context, params *ListSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSubscriptionWithBody request with any body
 	CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2508,8 +3087,8 @@ func (c *Client) VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBod
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListContextTypes(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListContextTypesRequest(c.Server)
+func (c *Client) ListContextTypes(ctx context.Context, params *ListContextTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListContextTypesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2724,8 +3303,8 @@ func (c *Client) SendContactEmailWithApplicationVndAPIPlusJSONBody(ctx context.C
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListEnvironments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListEnvironmentsRequest(c.Server)
+func (c *Client) ListEnvironments(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEnvironmentsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2916,8 +3495,8 @@ func (c *Client) RevokeInvitation(ctx context.Context, id openapi_types.UUID, re
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListInvoices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListInvoicesRequest(c.Server)
+func (c *Client) ListInvoices(ctx context.Context, params *ListInvoicesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInvoicesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2940,8 +3519,8 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceId string, reqEditors ..
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListMetricNames(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListMetricNamesRequest(c.Server)
+func (c *Client) ListMetricNames(ctx context.Context, params *ListMetricNamesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMetricNamesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3000,8 +3579,8 @@ func (c *Client) BulkIngestMetricsWithApplicationVndAPIPlusJSONBody(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListPaymentMethods(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListPaymentMethodsRequest(c.Server)
+func (c *Client) ListPaymentMethods(ctx context.Context, params *ListPaymentMethodsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPaymentMethodsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3096,8 +3675,8 @@ func (c *Client) SetDefaultPaymentMethod(ctx context.Context, id openapi_types.U
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListPlans(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListPlansRequest(c.Server)
+func (c *Client) ListPlans(ctx context.Context, params *ListPlansParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPlansRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3108,8 +3687,8 @@ func (c *Client) ListPlans(ctx context.Context, reqEditors ...RequestEditorFn) (
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListProducts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListProductsRequest(c.Server)
+func (c *Client) ListProducts(ctx context.Context, params *ListProductsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListProductsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3120,8 +3699,8 @@ func (c *Client) ListProducts(ctx context.Context, reqEditors ...RequestEditorFn
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListServices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListServicesRequest(c.Server)
+func (c *Client) ListServices(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListServicesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3204,8 +3783,8 @@ func (c *Client) UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListSubscriptions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListSubscriptionsRequest(c.Server)
+func (c *Client) ListSubscriptions(ctx context.Context, params *ListSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSubscriptionsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3675,6 +4254,18 @@ func NewListApiKeysRequest(server string, params *ListApiKeysParams) (*http.Requ
 		if params.FilterStatus != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[status]", *params.FilterStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -4217,7 +4808,7 @@ func NewVerifyEmailRequestWithBody(server string, contentType string, body io.Re
 }
 
 // NewListContextTypesRequest generates requests for ListContextTypes
-func NewListContextTypesRequest(server string) (*http.Request, error) {
+func NewListContextTypesRequest(server string, params *ListContextTypesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4233,6 +4824,33 @@ func NewListContextTypesRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -4429,6 +5047,18 @@ func NewListContextsRequest(server string, params *ListContextsParams) (*http.Re
 		if params.FilterContextType != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[context_type]", *params.FilterContextType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -4688,7 +5318,7 @@ func NewSendContactEmailRequestWithBody(server string, contentType string, body 
 }
 
 // NewListEnvironmentsRequest generates requests for ListEnvironments
-func NewListEnvironmentsRequest(server string) (*http.Request, error) {
+func NewListEnvironmentsRequest(server string, params *ListEnvironmentsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4704,6 +5334,33 @@ func NewListEnvironmentsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5009,6 +5666,18 @@ func NewListInvitationsRequest(server string, params *ListInvitationsParams) (*h
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -5172,7 +5841,7 @@ func NewRevokeInvitationRequest(server string, id openapi_types.UUID) (*http.Req
 }
 
 // NewListInvoicesRequest generates requests for ListInvoices
-func NewListInvoicesRequest(server string) (*http.Request, error) {
+func NewListInvoicesRequest(server string, params *ListInvoicesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5188,6 +5857,33 @@ func NewListInvoicesRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5233,7 +5929,7 @@ func NewGetInvoiceRequest(server string, invoiceId string) (*http.Request, error
 }
 
 // NewListMetricNamesRequest generates requests for ListMetricNames
-func NewListMetricNamesRequest(server string) (*http.Request, error) {
+func NewListMetricNamesRequest(server string, params *ListMetricNamesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5249,6 +5945,33 @@ func NewListMetricNamesRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5306,6 +6029,18 @@ func NewListMetricRollupsRequest(server string, params *ListMetricRollupsParams)
 		if params.FilterRecordedAt != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[recorded_at]", *params.FilterRecordedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -5377,6 +6112,18 @@ func NewListMetricsRequest(server string, params *ListMetricsParams) (*http.Requ
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -5432,7 +6179,7 @@ func NewBulkIngestMetricsRequestWithBody(server string, contentType string, body
 }
 
 // NewListPaymentMethodsRequest generates requests for ListPaymentMethods
-func NewListPaymentMethodsRequest(server string) (*http.Request, error) {
+func NewListPaymentMethodsRequest(server string, params *ListPaymentMethodsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5448,6 +6195,33 @@ func NewListPaymentMethodsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5648,7 +6422,7 @@ func NewSetDefaultPaymentMethodRequest(server string, id openapi_types.UUID) (*h
 }
 
 // NewListPlansRequest generates requests for ListPlans
-func NewListPlansRequest(server string) (*http.Request, error) {
+func NewListPlansRequest(server string, params *ListPlansParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5666,6 +6440,33 @@ func NewListPlansRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -5675,7 +6476,7 @@ func NewListPlansRequest(server string) (*http.Request, error) {
 }
 
 // NewListProductsRequest generates requests for ListProducts
-func NewListProductsRequest(server string) (*http.Request, error) {
+func NewListProductsRequest(server string, params *ListProductsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5693,6 +6494,33 @@ func NewListProductsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -5702,7 +6530,7 @@ func NewListProductsRequest(server string) (*http.Request, error) {
 }
 
 // NewListServicesRequest generates requests for ListServices
-func NewListServicesRequest(server string) (*http.Request, error) {
+func NewListServicesRequest(server string, params *ListServicesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5718,6 +6546,33 @@ func NewListServicesRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5884,7 +6739,7 @@ func NewUpdateServiceRequestWithBody(server string, id string, contentType strin
 }
 
 // NewListSubscriptionsRequest generates requests for ListSubscriptions
-func NewListSubscriptionsRequest(server string) (*http.Request, error) {
+func NewListSubscriptionsRequest(server string, params *ListSubscriptionsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5900,6 +6755,33 @@ func NewListSubscriptionsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -6225,6 +7107,18 @@ func NewListUsersRequest(server string, params *ListUsersParams) (*http.Request,
 		if params.PageSize != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -6630,7 +7524,7 @@ type ClientWithResponsesInterface interface {
 	VerifyEmailWithResponse(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyEmailResponse, error)
 
 	// ListContextTypesWithResponse request
-	ListContextTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListContextTypesResponse, error)
+	ListContextTypesWithResponse(ctx context.Context, params *ListContextTypesParams, reqEditors ...RequestEditorFn) (*ListContextTypesResponse, error)
 
 	// CreateContextTypeWithBodyWithResponse request with any body
 	CreateContextTypeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateContextTypeResponse, error)
@@ -6678,7 +7572,7 @@ type ClientWithResponsesInterface interface {
 	SendContactEmailWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body SendContactEmailApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*SendContactEmailResponse, error)
 
 	// ListEnvironmentsWithResponse request
-	ListEnvironmentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error)
+	ListEnvironmentsWithResponse(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error)
 
 	// CreateEnvironmentWithBodyWithResponse request with any body
 	CreateEnvironmentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error)
@@ -6722,13 +7616,13 @@ type ClientWithResponsesInterface interface {
 	RevokeInvitationWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error)
 
 	// ListInvoicesWithResponse request
-	ListInvoicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListInvoicesResponse, error)
+	ListInvoicesWithResponse(ctx context.Context, params *ListInvoicesParams, reqEditors ...RequestEditorFn) (*ListInvoicesResponse, error)
 
 	// GetInvoiceWithResponse request
 	GetInvoiceWithResponse(ctx context.Context, invoiceId string, reqEditors ...RequestEditorFn) (*GetInvoiceResponse, error)
 
 	// ListMetricNamesWithResponse request
-	ListMetricNamesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error)
+	ListMetricNamesWithResponse(ctx context.Context, params *ListMetricNamesParams, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error)
 
 	// ListMetricRollupsWithResponse request
 	ListMetricRollupsWithResponse(ctx context.Context, params *ListMetricRollupsParams, reqEditors ...RequestEditorFn) (*ListMetricRollupsResponse, error)
@@ -6742,7 +7636,7 @@ type ClientWithResponsesInterface interface {
 	BulkIngestMetricsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkIngestMetricsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkIngestMetricsResponse, error)
 
 	// ListPaymentMethodsWithResponse request
-	ListPaymentMethodsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPaymentMethodsResponse, error)
+	ListPaymentMethodsWithResponse(ctx context.Context, params *ListPaymentMethodsParams, reqEditors ...RequestEditorFn) (*ListPaymentMethodsResponse, error)
 
 	// CreatePaymentMethodWithBodyWithResponse request with any body
 	CreatePaymentMethodWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePaymentMethodResponse, error)
@@ -6764,13 +7658,13 @@ type ClientWithResponsesInterface interface {
 	SetDefaultPaymentMethodWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*SetDefaultPaymentMethodResponse, error)
 
 	// ListPlansWithResponse request
-	ListPlansWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPlansResponse, error)
+	ListPlansWithResponse(ctx context.Context, params *ListPlansParams, reqEditors ...RequestEditorFn) (*ListPlansResponse, error)
 
 	// ListProductsWithResponse request
-	ListProductsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProductsResponse, error)
+	ListProductsWithResponse(ctx context.Context, params *ListProductsParams, reqEditors ...RequestEditorFn) (*ListProductsResponse, error)
 
 	// ListServicesWithResponse request
-	ListServicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServicesResponse, error)
+	ListServicesWithResponse(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*ListServicesResponse, error)
 
 	// CreateServiceWithBodyWithResponse request with any body
 	CreateServiceWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateServiceResponse, error)
@@ -6789,7 +7683,7 @@ type ClientWithResponsesInterface interface {
 	UpdateServiceWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
 
 	// ListSubscriptionsWithResponse request
-	ListSubscriptionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSubscriptionsResponse, error)
+	ListSubscriptionsWithResponse(ctx context.Context, params *ListSubscriptionsParams, reqEditors ...RequestEditorFn) (*ListSubscriptionsResponse, error)
 
 	// CreateSubscriptionWithBodyWithResponse request with any body
 	CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
@@ -9675,8 +10569,8 @@ func (c *ClientWithResponses) VerifyEmailWithResponse(ctx context.Context, body 
 }
 
 // ListContextTypesWithResponse request returning *ListContextTypesResponse
-func (c *ClientWithResponses) ListContextTypesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListContextTypesResponse, error) {
-	rsp, err := c.ListContextTypes(ctx, reqEditors...)
+func (c *ClientWithResponses) ListContextTypesWithResponse(ctx context.Context, params *ListContextTypesParams, reqEditors ...RequestEditorFn) (*ListContextTypesResponse, error) {
+	rsp, err := c.ListContextTypes(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9831,8 +10725,8 @@ func (c *ClientWithResponses) SendContactEmailWithApplicationVndAPIPlusJSONBodyW
 }
 
 // ListEnvironmentsWithResponse request returning *ListEnvironmentsResponse
-func (c *ClientWithResponses) ListEnvironmentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error) {
-	rsp, err := c.ListEnvironments(ctx, reqEditors...)
+func (c *ClientWithResponses) ListEnvironmentsWithResponse(ctx context.Context, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResponse, error) {
+	rsp, err := c.ListEnvironments(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9971,8 +10865,8 @@ func (c *ClientWithResponses) RevokeInvitationWithResponse(ctx context.Context, 
 }
 
 // ListInvoicesWithResponse request returning *ListInvoicesResponse
-func (c *ClientWithResponses) ListInvoicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListInvoicesResponse, error) {
-	rsp, err := c.ListInvoices(ctx, reqEditors...)
+func (c *ClientWithResponses) ListInvoicesWithResponse(ctx context.Context, params *ListInvoicesParams, reqEditors ...RequestEditorFn) (*ListInvoicesResponse, error) {
+	rsp, err := c.ListInvoices(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9989,8 +10883,8 @@ func (c *ClientWithResponses) GetInvoiceWithResponse(ctx context.Context, invoic
 }
 
 // ListMetricNamesWithResponse request returning *ListMetricNamesResponse
-func (c *ClientWithResponses) ListMetricNamesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error) {
-	rsp, err := c.ListMetricNames(ctx, reqEditors...)
+func (c *ClientWithResponses) ListMetricNamesWithResponse(ctx context.Context, params *ListMetricNamesParams, reqEditors ...RequestEditorFn) (*ListMetricNamesResponse, error) {
+	rsp, err := c.ListMetricNames(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10033,8 +10927,8 @@ func (c *ClientWithResponses) BulkIngestMetricsWithApplicationVndAPIPlusJSONBody
 }
 
 // ListPaymentMethodsWithResponse request returning *ListPaymentMethodsResponse
-func (c *ClientWithResponses) ListPaymentMethodsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPaymentMethodsResponse, error) {
-	rsp, err := c.ListPaymentMethods(ctx, reqEditors...)
+func (c *ClientWithResponses) ListPaymentMethodsWithResponse(ctx context.Context, params *ListPaymentMethodsParams, reqEditors ...RequestEditorFn) (*ListPaymentMethodsResponse, error) {
+	rsp, err := c.ListPaymentMethods(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10103,8 +10997,8 @@ func (c *ClientWithResponses) SetDefaultPaymentMethodWithResponse(ctx context.Co
 }
 
 // ListPlansWithResponse request returning *ListPlansResponse
-func (c *ClientWithResponses) ListPlansWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPlansResponse, error) {
-	rsp, err := c.ListPlans(ctx, reqEditors...)
+func (c *ClientWithResponses) ListPlansWithResponse(ctx context.Context, params *ListPlansParams, reqEditors ...RequestEditorFn) (*ListPlansResponse, error) {
+	rsp, err := c.ListPlans(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10112,8 +11006,8 @@ func (c *ClientWithResponses) ListPlansWithResponse(ctx context.Context, reqEdit
 }
 
 // ListProductsWithResponse request returning *ListProductsResponse
-func (c *ClientWithResponses) ListProductsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProductsResponse, error) {
-	rsp, err := c.ListProducts(ctx, reqEditors...)
+func (c *ClientWithResponses) ListProductsWithResponse(ctx context.Context, params *ListProductsParams, reqEditors ...RequestEditorFn) (*ListProductsResponse, error) {
+	rsp, err := c.ListProducts(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10121,8 +11015,8 @@ func (c *ClientWithResponses) ListProductsWithResponse(ctx context.Context, reqE
 }
 
 // ListServicesWithResponse request returning *ListServicesResponse
-func (c *ClientWithResponses) ListServicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServicesResponse, error) {
-	rsp, err := c.ListServices(ctx, reqEditors...)
+func (c *ClientWithResponses) ListServicesWithResponse(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*ListServicesResponse, error) {
+	rsp, err := c.ListServices(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10182,8 +11076,8 @@ func (c *ClientWithResponses) UpdateServiceWithApplicationVndAPIPlusJSONBodyWith
 }
 
 // ListSubscriptionsWithResponse request returning *ListSubscriptionsResponse
-func (c *ClientWithResponses) ListSubscriptionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSubscriptionsResponse, error) {
-	rsp, err := c.ListSubscriptions(ctx, reqEditors...)
+func (c *ClientWithResponses) ListSubscriptionsWithResponse(ctx context.Context, params *ListSubscriptionsParams, reqEditors ...RequestEditorFn) (*ListSubscriptionsResponse, error) {
+	rsp, err := c.ListSubscriptions(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
