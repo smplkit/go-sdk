@@ -1556,8 +1556,91 @@
           "Environments"
         ],
         "summary": "Delete Environment",
-        "description": "Delete an environment by id.",
+        "description": "Delete an environment by id. When `cascade=true` is set, also remove every per-environment reference held by flags, configs, and loggers in the corresponding services before deleting the environment row. The default `cascade=false` deletes only the environment row, leaving downstream references in place.",
         "operationId": "delete_environment",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, remove every flag rule, env-level flag default, config override, and logger override scoped to this environment before deleting the environment row.",
+              "default": false,
+              "title": "Cascade"
+            },
+            "description": "When `true`, remove every flag rule, env-level flag default, config override, and logger override scoped to this environment before deleting the environment row."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/usage": {
+      "get": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Report Environment Usage",
+        "description": "Report how many flag rules, env-level flag defaults, config overrides, and logger overrides reference this environment. Used by the console's delete dialog so the user can see what would survive a non-cascading delete.",
+        "operationId": "get_environment_usage",
         "security": [
           {
             "HTTPBearer": []
@@ -1575,8 +1658,15 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "Successful Response"
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentUsageResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error or malformed request",
@@ -6993,6 +7083,98 @@
         ],
         "title": "EnvironmentResponse",
         "description": "JSON:API single-resource response envelope for an environment."
+      },
+      "EnvironmentUsage": {
+        "properties": {
+          "flag_rules": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Flag Rules",
+            "description": "Number of feature-flag targeting rules scoped to this environment. Each flag may contribute multiple rules."
+          },
+          "flag_env_defaults": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Flag Env Defaults",
+            "description": "Number of feature flags that declare an environment-level default value for this environment."
+          },
+          "config_overrides": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Config Overrides",
+            "description": "Number of config-item overrides keyed to this environment, summed across all configs."
+          },
+          "logger_overrides": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Logger Overrides",
+            "description": "Number of loggers with an environment-level level override for this environment."
+          }
+        },
+        "type": "object",
+        "required": [
+          "flag_rules",
+          "flag_env_defaults",
+          "config_overrides",
+          "logger_overrides"
+        ],
+        "title": "EnvironmentUsage",
+        "description": "Counts of references to an environment held by other resources.\n\nReturned by `GET /environments/{id}/usage` so the console can warn\nthe user about per-environment configuration that would survive a\nbare environment-row deletion. Each count is the number of distinct\nreferencing resources, not the number of rule entries within them.",
+        "example": {
+          "config_overrides": 5,
+          "flag_env_defaults": 2,
+          "flag_rules": 3,
+          "logger_overrides": 1
+        }
+      },
+      "EnvironmentUsageResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "environment_usage"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/EnvironmentUsage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "EnvironmentUsageResource",
+        "description": "JSON:API resource envelope for an environment-usage report.",
+        "example": {
+          "attributes": {
+            "config_overrides": 5,
+            "flag_env_defaults": 2,
+            "flag_rules": 3,
+            "logger_overrides": 1
+          },
+          "id": "production",
+          "type": "environment_usage"
+        }
+      },
+      "EnvironmentUsageResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EnvironmentUsageResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "EnvironmentUsageResponse",
+        "description": "JSON:API single-resource response envelope for environment-usage counts."
       },
       "Error": {
         "properties": {
