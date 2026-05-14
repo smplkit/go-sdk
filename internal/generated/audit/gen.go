@@ -133,6 +133,108 @@ func (e TestForwarderRequestMethod) Valid() bool {
 	}
 }
 
+// Defines values for ListActionsParamsSort.
+const (
+	ListActionsParamsSortKey      ListActionsParamsSort = "key"
+	ListActionsParamsSortMinusKey ListActionsParamsSort = "-key"
+)
+
+// Valid indicates whether the value is a known member of the ListActionsParamsSort enum.
+func (e ListActionsParamsSort) Valid() bool {
+	switch e {
+	case ListActionsParamsSortKey:
+		return true
+	case ListActionsParamsSortMinusKey:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListEventsParamsSort.
+const (
+	ListEventsParamsSortCreatedAt       ListEventsParamsSort = "created_at"
+	ListEventsParamsSortMinusCreatedAt  ListEventsParamsSort = "-created_at"
+	ListEventsParamsSortMinusOccurredAt ListEventsParamsSort = "-occurred_at"
+	ListEventsParamsSortOccurredAt      ListEventsParamsSort = "occurred_at"
+)
+
+// Valid indicates whether the value is a known member of the ListEventsParamsSort enum.
+func (e ListEventsParamsSort) Valid() bool {
+	switch e {
+	case ListEventsParamsSortCreatedAt:
+		return true
+	case ListEventsParamsSortMinusCreatedAt:
+		return true
+	case ListEventsParamsSortMinusOccurredAt:
+		return true
+	case ListEventsParamsSortOccurredAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListForwardersParamsSort.
+const (
+	ListForwardersParamsSortCreatedAt      ListForwardersParamsSort = "created_at"
+	ListForwardersParamsSortMinusCreatedAt ListForwardersParamsSort = "-created_at"
+	ListForwardersParamsSortMinusUpdatedAt ListForwardersParamsSort = "-updated_at"
+	ListForwardersParamsSortUpdatedAt      ListForwardersParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListForwardersParamsSort enum.
+func (e ListForwardersParamsSort) Valid() bool {
+	switch e {
+	case ListForwardersParamsSortCreatedAt:
+		return true
+	case ListForwardersParamsSortMinusCreatedAt:
+		return true
+	case ListForwardersParamsSortMinusUpdatedAt:
+		return true
+	case ListForwardersParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListForwarderDeliveriesParamsSort.
+const (
+	CreatedAt      ListForwarderDeliveriesParamsSort = "created_at"
+	MinusCreatedAt ListForwarderDeliveriesParamsSort = "-created_at"
+)
+
+// Valid indicates whether the value is a known member of the ListForwarderDeliveriesParamsSort enum.
+func (e ListForwarderDeliveriesParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case MinusCreatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListResourceTypesParamsSort.
+const (
+	ListResourceTypesParamsSortKey      ListResourceTypesParamsSort = "key"
+	ListResourceTypesParamsSortMinusKey ListResourceTypesParamsSort = "-key"
+)
+
+// Valid indicates whether the value is a known member of the ListResourceTypesParamsSort enum.
+func (e ListResourceTypesParamsSort) Valid() bool {
+	switch e {
+	case ListResourceTypesParamsSortKey:
+		return true
+	case ListResourceTypesParamsSortMinusKey:
+		return true
+	default:
+		return false
+	}
+}
+
 // ActionAttributes defines model for ActionAttributes.
 type ActionAttributes struct {
 	// Action The action slug. Same as the JSON:API ``id``.
@@ -569,7 +671,13 @@ type ListActionsParams struct {
 	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 	PageSize           *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter          *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
+	Sort *ListActionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListActionsParamsSort defines parameters for ListActions.
+type ListActionsParamsSort string
 
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
@@ -584,7 +692,13 @@ type ListEventsParams struct {
 	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
 	PageSize     *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter    *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-occurred_at`. Allowed values: `created_at`, `-created_at`, `occurred_at`, `-occurred_at`.
+	Sort *ListEventsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListEventsParamsSort defines parameters for ListEvents.
+type ListEventsParamsSort string
 
 // RecordEventParams defines parameters for RecordEvent.
 type RecordEventParams struct {
@@ -597,7 +711,13 @@ type ListForwardersParams struct {
 	FilterEnabled       *bool   `form:"filter[enabled],omitempty" json:"filter[enabled],omitempty"`
 	PageSize            *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter           *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `updated_at`, `-updated_at`.
+	Sort *ListForwardersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListForwardersParamsSort defines parameters for ListForwarders.
+type ListForwardersParamsSort string
 
 // ListForwarderDeliveriesParams defines parameters for ListForwarderDeliveries.
 type ListForwarderDeliveriesParams struct {
@@ -606,13 +726,25 @@ type ListForwarderDeliveriesParams struct {
 	FilterEventId   *string `form:"filter[event_id],omitempty" json:"filter[event_id],omitempty"`
 	PageSize        *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter       *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`.
+	Sort *ListForwarderDeliveriesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListForwarderDeliveriesParamsSort defines parameters for ListForwarderDeliveries.
+type ListForwarderDeliveriesParamsSort string
 
 // ListResourceTypesParams defines parameters for ListResourceTypes.
 type ListResourceTypesParams struct {
 	PageSize  *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
+	Sort *ListResourceTypesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListResourceTypesParamsSort defines parameters for ListResourceTypes.
+type ListResourceTypesParamsSort string
 
 // ListUsageParams defines parameters for ListUsage.
 type ListUsageParams struct {
@@ -1051,6 +1183,18 @@ func NewListActionsRequest(server string, params *ListActionsParams) (*http.Requ
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1192,6 +1336,18 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 		if params.PageAfter != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1371,6 +1527,18 @@ func NewListForwardersRequest(server string, params *ListForwardersParams) (*htt
 		if params.PageAfter != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1678,6 +1846,18 @@ func NewListForwarderDeliveriesRequest(server string, forwarderId openapi_types.
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1816,6 +1996,18 @@ func NewListResourceTypesRequest(server string, params *ListResourceTypesParams)
 		if params.PageAfter != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

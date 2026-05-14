@@ -75,7 +75,7 @@
           "Events"
         ],
         "summary": "List Events",
-        "description": "List audit events for this account.\n\nDefault sort is newest first. Filters are exact-match except\n`filter[occurred_at]`, which uses interval notation\n(e.g. `[2026-01-01T00:00:00Z,2026-01-31T00:00:00Z)`), and\n`filter[search]`, which is a case-insensitive substring match against\n`resource_id` or `description`.\n\nTo bound the rows scanned per request, the endpoint requires either:\n\n- `filter[resource_id]` (which must be accompanied by\n  `filter[resource_type]`), or\n- `filter[occurred_at]` with a span no greater than 30 days.\n\n`page[size]` defaults to 50 and must not exceed 1000.",
+        "description": "List audit events for this account.\n\nDefault sort is `-occurred_at` (newest occurrence first). Sort by\n`occurred_at` or `created_at`, ascending or descending \u2014 keep the same\n`sort` value across paginated requests so the cursor stays consistent.\nFilters are exact-match except `filter[occurred_at]`, which uses\ninterval notation (e.g.\n`[2026-01-01T00:00:00Z,2026-01-31T00:00:00Z)`), and `filter[search]`,\nwhich is a case-insensitive substring match against `resource_id` or\n`description`.\n\nTo bound the rows scanned per request, the endpoint requires either:\n\n- `filter[resource_id]` (which must be accompanied by\n  `filter[resource_type]`), or\n- `filter[occurred_at]` with a span no greater than 30 days.\n\n`page[size]` defaults to 50 and must not exceed 1000.",
         "operationId": "list_events",
         "security": [
           {
@@ -230,6 +230,24 @@
               ],
               "title": "Page[After]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-occurred_at`. Allowed values: `created_at`, `-created_at`, `occurred_at`, `-occurred_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "occurred_at",
+                "-occurred_at"
+              ],
+              "default": "-occurred_at",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-occurred_at`. Allowed values: `created_at`, `-created_at`, `occurred_at`, `-occurred_at`."
           }
         ],
         "responses": {
@@ -366,7 +384,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarders",
-        "description": "List forwarders for this account.",
+        "description": "List forwarders for this account.\n\nDefault sort is `-created_at` (newest first). Pagination uses cursor\ntokens; keep the same `sort` value across paginated requests.",
         "operationId": "list_forwarders",
         "security": [
           {
@@ -438,6 +456,24 @@
               ],
               "title": "Page[After]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "-created_at",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `updated_at`, `-updated_at`."
           }
         ],
         "responses": {
@@ -576,7 +612,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarder Deliveries",
-        "description": "List delivery log entries for a forwarder.\n\nDefault sort is newest first. Filter by `status` (one of `SUCCEEDED`,\n`FAILED`, `FILTERED_OUT`, `SKIPPED_DO_NOT_FORWARD` \u2014 case-insensitive),\nby `event_id`, or by a `created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
+        "description": "List delivery log entries for a forwarder.\n\nDefault sort is `-created_at` (newest first). Filter by `status` (one of\n`SUCCEEDED`, `FAILED`, `FILTERED_OUT`, `SKIPPED_DO_NOT_FORWARD` \u2014\ncase-insensitive), by `event_id`, or by a `created_at` range using\ninterval notation (e.g. `[2026-01-01T00:00:00Z,*)`).",
         "operationId": "list_forwarder_deliveries",
         "security": [
           {
@@ -674,6 +710,22 @@
               ],
               "title": "Page[After]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`.",
+              "enum": [
+                "created_at",
+                "-created_at"
+              ],
+              "default": "-created_at",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`."
           }
         ],
         "responses": {
@@ -821,7 +873,7 @@
           "Resource Types"
         ],
         "summary": "List Resource Types",
-        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Useful for populating filter\ndropdowns in a UI.",
+        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Default sort is `key`\nascending; pass `sort=-key` for descending. Useful for populating\nfilter dropdowns in a UI.",
         "operationId": "list_resource_types",
         "security": [
           {
@@ -861,6 +913,22 @@
               ],
               "title": "Page[After]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.",
+              "enum": [
+                "key",
+                "-key"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`."
           }
         ],
         "responses": {
@@ -883,7 +951,7 @@
           "Actions"
         ],
         "summary": "List Actions",
-        "description": "List the distinct `action` slugs recorded for this account.\n\nWithout `filter[resource_type]`, returns one row per distinct\naction. With `filter[resource_type]`, returns the actions recorded\nfor that specific resource type.",
+        "description": "List the distinct `action` slugs recorded for this account.\n\nDefault sort is `key` ascending; pass `sort=-key` for descending.\nWithout `filter[resource_type]`, returns one row per distinct\naction. With `filter[resource_type]`, returns the actions recorded\nfor that specific resource type.",
         "operationId": "list_actions",
         "security": [
           {
@@ -939,6 +1007,22 @@
               ],
               "title": "Page[After]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.",
+              "enum": [
+                "key",
+                "-key"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`."
           }
         ],
         "responses": {
