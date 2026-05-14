@@ -75,6 +75,42 @@ func (e UsageResourceType) Valid() bool {
 	}
 }
 
+// Defines values for ListConfigsParamsSort.
+const (
+	CreatedAt      ListConfigsParamsSort = "created_at"
+	Key            ListConfigsParamsSort = "key"
+	MinusCreatedAt ListConfigsParamsSort = "-created_at"
+	MinusKey       ListConfigsParamsSort = "-key"
+	MinusName      ListConfigsParamsSort = "-name"
+	MinusUpdatedAt ListConfigsParamsSort = "-updated_at"
+	Name           ListConfigsParamsSort = "name"
+	UpdatedAt      ListConfigsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListConfigsParamsSort enum.
+func (e ListConfigsParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case Key:
+		return true
+	case MinusCreatedAt:
+		return true
+	case MinusKey:
+		return true
+	case MinusName:
+		return true
+	case MinusUpdatedAt:
+		return true
+	case Name:
+		return true
+	case UpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
 // Config A named bag of configuration items, optionally inheriting from another config.
 //
 // Items are typed key/value pairs (`STRING`, `NUMBER`, `BOOLEAN`,
@@ -212,7 +248,13 @@ type hTTPBearerContextKey string
 // ListConfigsParams defines parameters for ListConfigs.
 type ListConfigsParams struct {
 	FilterParent *string `form:"filter[parent],omitempty" json:"filter[parent],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
+	Sort *ListConfigsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListConfigsParamsSort defines parameters for ListConfigs.
+type ListConfigsParamsSort string
 
 // ListConfigUsageParams defines parameters for ListConfigUsage.
 type ListConfigUsageParams struct {
@@ -449,6 +491,18 @@ func NewListConfigsRequest(server string, params *ListConfigsParams) (*http.Requ
 		if params.FilterParent != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[parent]", *params.FilterParent, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

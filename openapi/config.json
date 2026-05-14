@@ -47,7 +47,7 @@
           "Configs"
         ],
         "summary": "List Configs",
-        "description": "List configs for this account.\n\nPass `filter[parent]=<parent_key>` to return only the direct children\nof a specific config.",
+        "description": "List configs for this account.\n\nDefault sort is `key` ascending. Pass `filter[parent]=<parent_key>`\nto return only the direct children of a specific config.",
         "operationId": "list_configs",
         "security": [
           {
@@ -70,6 +70,28 @@
               ],
               "title": "Filter[Parent]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "key",
+                "-key",
+                "name",
+                "-name",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`."
           }
         ],
         "responses": {
