@@ -166,7 +166,7 @@ func (m *EnvironmentsManagement) Get(ctx context.Context, id string) (*Environme
 
 // Delete removes an environment by ID.
 func (m *EnvironmentsManagement) Delete(ctx context.Context, id string) error {
-	resp, err := m.client.appClient.DeleteEnvironment(ctx, id)
+	resp, err := m.client.appClient.DeleteEnvironment(ctx, id, nil)
 	if err != nil {
 		return classifyError(err)
 	}

@@ -172,6 +172,21 @@ func (e EnvironmentResourceType) Valid() bool {
 	}
 }
 
+// Defines values for EnvironmentUsageResourceType.
+const (
+	EnvironmentUsageResourceTypeEnvironmentUsage EnvironmentUsageResourceType = "environment_usage"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentUsageResourceType enum.
+func (e EnvironmentUsageResourceType) Valid() bool {
+	switch e {
+	case EnvironmentUsageResourceTypeEnvironmentUsage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationResourceType.
 const (
 	InvitationResourceTypeInvitation InvitationResourceType = "invitation"
@@ -863,6 +878,48 @@ type EnvironmentResponse struct {
 	//
 	// `id` must not be specified for create requests (the server assigns it).
 	Data EnvironmentResource `json:"data"`
+}
+
+// EnvironmentUsage Counts of references to an environment held by other resources.
+//
+// Returned by `GET /environments/{id}/usage` so the console can warn
+// the user about per-environment configuration that would survive a
+// bare environment-row deletion. Each count is the number of distinct
+// referencing resources, not the number of rule entries within them.
+type EnvironmentUsage struct {
+	// ConfigOverrides Number of config-item overrides keyed to this environment, summed across all configs.
+	ConfigOverrides int `json:"config_overrides"`
+
+	// FlagEnvDefaults Number of feature flags that declare an environment-level default value for this environment.
+	FlagEnvDefaults int `json:"flag_env_defaults"`
+
+	// FlagRules Number of feature-flag targeting rules scoped to this environment. Each flag may contribute multiple rules.
+	FlagRules int `json:"flag_rules"`
+
+	// LoggerOverrides Number of loggers with an environment-level level override for this environment.
+	LoggerOverrides int `json:"logger_overrides"`
+}
+
+// EnvironmentUsageResource JSON:API resource envelope for an environment-usage report.
+type EnvironmentUsageResource struct {
+	// Attributes Counts of references to an environment held by other resources.
+	//
+	// Returned by `GET /environments/{id}/usage` so the console can warn
+	// the user about per-environment configuration that would survive a
+	// bare environment-row deletion. Each count is the number of distinct
+	// referencing resources, not the number of rule entries within them.
+	Attributes EnvironmentUsage             `json:"attributes"`
+	Id         *string                      `json:"id,omitempty"`
+	Type       EnvironmentUsageResourceType `json:"type"`
+}
+
+// EnvironmentUsageResourceType defines model for EnvironmentUsageResource.Type.
+type EnvironmentUsageResourceType string
+
+// EnvironmentUsageResponse JSON:API single-resource response envelope for environment-usage counts.
+type EnvironmentUsageResponse struct {
+	// Data JSON:API resource envelope for an environment-usage report.
+	Data EnvironmentUsageResource `json:"data"`
 }
 
 // Error Single JSON:API error object.
@@ -1609,6 +1666,12 @@ type CreateEmailRegistrationApplicationVndAPIPlusJSONBody map[string]interface{}
 // SendContactEmailApplicationVndAPIPlusJSONBody defines parameters for SendContactEmail.
 type SendContactEmailApplicationVndAPIPlusJSONBody map[string]interface{}
 
+// DeleteEnvironmentParams defines parameters for DeleteEnvironment.
+type DeleteEnvironmentParams struct {
+	// Cascade When `true`, remove every flag rule, env-level flag default, config override, and logger override scoped to this environment before deleting the environment row.
+	Cascade *bool `form:"cascade,omitempty" json:"cascade,omitempty"`
+}
+
 // ListInvitationsParams defines parameters for ListInvitations.
 type ListInvitationsParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
@@ -1984,7 +2047,7 @@ type ClientInterface interface {
 	CreateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteEnvironment request
-	DeleteEnvironment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteEnvironment(ctx context.Context, id string, params *DeleteEnvironmentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEnvironment request
 	GetEnvironment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1993,6 +2056,9 @@ type ClientInterface interface {
 	UpdateEnvironmentWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetEnvironmentUsage request
+	GetEnvironmentUsage(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ExecuteSetupIntent request
 	ExecuteSetupIntent(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2694,8 +2760,8 @@ func (c *Client) CreateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteEnvironment(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteEnvironmentRequest(c.Server, id)
+func (c *Client) DeleteEnvironment(ctx context.Context, id string, params *DeleteEnvironmentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteEnvironmentRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2732,6 +2798,18 @@ func (c *Client) UpdateEnvironmentWithBody(ctx context.Context, id string, conte
 
 func (c *Client) UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateEnvironmentRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetEnvironmentUsage(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetEnvironmentUsageRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -4677,7 +4755,7 @@ func NewCreateEnvironmentRequestWithBody(server string, contentType string, body
 }
 
 // NewDeleteEnvironmentRequest generates requests for DeleteEnvironment
-func NewDeleteEnvironmentRequest(server string, id string) (*http.Request, error) {
+func NewDeleteEnvironmentRequest(server string, id string, params *DeleteEnvironmentParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4700,6 +4778,33 @@ func NewDeleteEnvironmentRequest(server string, id string) (*http.Request, error
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cascade != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cascade", *params.Cascade, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -4787,6 +4892,40 @@ func NewUpdateEnvironmentRequestWithBody(server string, id string, contentType s
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetEnvironmentUsageRequest generates requests for GetEnvironmentUsage
+func NewGetEnvironmentUsageRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/environments/%s/usage", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -6547,7 +6686,7 @@ type ClientWithResponsesInterface interface {
 	CreateEnvironmentWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error)
 
 	// DeleteEnvironmentWithResponse request
-	DeleteEnvironmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteEnvironmentResponse, error)
+	DeleteEnvironmentWithResponse(ctx context.Context, id string, params *DeleteEnvironmentParams, reqEditors ...RequestEditorFn) (*DeleteEnvironmentResponse, error)
 
 	// GetEnvironmentWithResponse request
 	GetEnvironmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetEnvironmentResponse, error)
@@ -6556,6 +6695,9 @@ type ClientWithResponsesInterface interface {
 	UpdateEnvironmentWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error)
 
 	UpdateEnvironmentWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEnvironmentResponse, error)
+
+	// GetEnvironmentUsageWithResponse request
+	GetEnvironmentUsageWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetEnvironmentUsageResponse, error)
 
 	// ExecuteSetupIntentWithResponse request
 	ExecuteSetupIntentWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ExecuteSetupIntentResponse, error)
@@ -7882,6 +8024,40 @@ func (r UpdateEnvironmentResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateEnvironmentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetEnvironmentUsageResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *EnvironmentUsageResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetEnvironmentUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetEnvironmentUsageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetEnvironmentUsageResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -9681,8 +9857,8 @@ func (c *ClientWithResponses) CreateEnvironmentWithApplicationVndAPIPlusJSONBody
 }
 
 // DeleteEnvironmentWithResponse request returning *DeleteEnvironmentResponse
-func (c *ClientWithResponses) DeleteEnvironmentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteEnvironmentResponse, error) {
-	rsp, err := c.DeleteEnvironment(ctx, id, reqEditors...)
+func (c *ClientWithResponses) DeleteEnvironmentWithResponse(ctx context.Context, id string, params *DeleteEnvironmentParams, reqEditors ...RequestEditorFn) (*DeleteEnvironmentResponse, error) {
+	rsp, err := c.DeleteEnvironment(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9713,6 +9889,15 @@ func (c *ClientWithResponses) UpdateEnvironmentWithApplicationVndAPIPlusJSONBody
 		return nil, err
 	}
 	return ParseUpdateEnvironmentResponse(rsp)
+}
+
+// GetEnvironmentUsageWithResponse request returning *GetEnvironmentUsageResponse
+func (c *ClientWithResponses) GetEnvironmentUsageWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetEnvironmentUsageResponse, error) {
+	rsp, err := c.GetEnvironmentUsage(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetEnvironmentUsageResponse(rsp)
 }
 
 // ExecuteSetupIntentWithResponse request returning *ExecuteSetupIntentResponse
@@ -11983,6 +12168,60 @@ func ParseUpdateEnvironmentResponse(rsp *http.Response) (*UpdateEnvironmentRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest EnvironmentResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetEnvironmentUsageResponse parses an HTTP response from a GetEnvironmentUsageWithResponse call
+func ParseGetEnvironmentUsageResponse(rsp *http.Response) (*GetEnvironmentUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetEnvironmentUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EnvironmentUsageResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
