@@ -46,7 +46,7 @@
           "Flags"
         ],
         "summary": "List Flags",
-        "description": "List feature flags for this account.",
+        "description": "List feature flags for this account.\n\nDefault sort is `key` ascending.",
         "operationId": "list_flags",
         "security": [
           {
@@ -121,6 +121,30 @@
               "title": "Filter[References Context Type]"
             },
             "description": "Return flags whose rules reference any attribute of the given context type."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `type`, `-type`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "key",
+                "-key",
+                "name",
+                "-name",
+                "type",
+                "-type",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `type`, `-type`, `updated_at`, `-updated_at`."
           }
         ],
         "responses": {
@@ -293,7 +317,7 @@
           "Flag Sources"
         ],
         "summary": "List Flag Sources",
-        "description": "List the service/environment observations recorded for a single flag.",
+        "description": "List the service/environment observations recorded for a single flag.\n\nDefault sort is `-last_seen` (most recently seen first).",
         "operationId": "list_flag_sources",
         "security": [
           {
@@ -309,6 +333,28 @@
               "type": "string",
               "title": "Id"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "environment",
+                "-environment",
+                "last_seen",
+                "-last_seen",
+                "service",
+                "-service"
+              ],
+              "default": "-last_seen",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`."
           }
         ],
         "responses": {
@@ -331,7 +377,7 @@
           "Flag Sources"
         ],
         "summary": "List All Flag Sources",
-        "description": "List service/environment observations across all flags for this account.\n\nFilter by `environment` or `service` (or both) to narrow the result.",
+        "description": "List service/environment observations across all flags for this account.\n\nDefault sort is `-last_seen` (most recently seen first). Filter by\n`environment` or `service` (or both) to narrow the result.",
         "operationId": "list_all_flag_sources",
         "security": [
           {
@@ -370,6 +416,28 @@
               ],
               "title": "Filter[Service]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "environment",
+                "-environment",
+                "last_seen",
+                "-last_seen",
+                "service",
+                "-service"
+              ],
+              "default": "-last_seen",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`."
           }
         ],
         "responses": {
