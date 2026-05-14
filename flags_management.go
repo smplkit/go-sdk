@@ -283,7 +283,7 @@ func (m *FlagsManagement) UpdateContextType(ctx context.Context, ctID string, at
 
 // ListContextTypes lists all context types.
 func (m *FlagsManagement) ListContextTypes(ctx context.Context) ([]*ContextType, error) {
-	resp, err := m.appGen.ListContextTypes(ctx)
+	resp, err := m.appGen.ListContextTypes(ctx, nil)
 	if err != nil {
 		return nil, classifyError(err)
 	}
