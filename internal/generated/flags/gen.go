@@ -153,6 +153,120 @@ func (e UsageResourceType) Valid() bool {
 	}
 }
 
+// Defines values for ListAllFlagSourcesParamsSort.
+const (
+	ListAllFlagSourcesParamsSortCreatedAt        ListAllFlagSourcesParamsSort = "created_at"
+	ListAllFlagSourcesParamsSortEnvironment      ListAllFlagSourcesParamsSort = "environment"
+	ListAllFlagSourcesParamsSortLastSeen         ListAllFlagSourcesParamsSort = "last_seen"
+	ListAllFlagSourcesParamsSortMinusCreatedAt   ListAllFlagSourcesParamsSort = "-created_at"
+	ListAllFlagSourcesParamsSortMinusEnvironment ListAllFlagSourcesParamsSort = "-environment"
+	ListAllFlagSourcesParamsSortMinusLastSeen    ListAllFlagSourcesParamsSort = "-last_seen"
+	ListAllFlagSourcesParamsSortMinusService     ListAllFlagSourcesParamsSort = "-service"
+	ListAllFlagSourcesParamsSortService          ListAllFlagSourcesParamsSort = "service"
+)
+
+// Valid indicates whether the value is a known member of the ListAllFlagSourcesParamsSort enum.
+func (e ListAllFlagSourcesParamsSort) Valid() bool {
+	switch e {
+	case ListAllFlagSourcesParamsSortCreatedAt:
+		return true
+	case ListAllFlagSourcesParamsSortEnvironment:
+		return true
+	case ListAllFlagSourcesParamsSortLastSeen:
+		return true
+	case ListAllFlagSourcesParamsSortMinusCreatedAt:
+		return true
+	case ListAllFlagSourcesParamsSortMinusEnvironment:
+		return true
+	case ListAllFlagSourcesParamsSortMinusLastSeen:
+		return true
+	case ListAllFlagSourcesParamsSortMinusService:
+		return true
+	case ListAllFlagSourcesParamsSortService:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListFlagsParamsSort.
+const (
+	ListFlagsParamsSortCreatedAt      ListFlagsParamsSort = "created_at"
+	ListFlagsParamsSortKey            ListFlagsParamsSort = "key"
+	ListFlagsParamsSortMinusCreatedAt ListFlagsParamsSort = "-created_at"
+	ListFlagsParamsSortMinusKey       ListFlagsParamsSort = "-key"
+	ListFlagsParamsSortMinusName      ListFlagsParamsSort = "-name"
+	ListFlagsParamsSortMinusType      ListFlagsParamsSort = "-type"
+	ListFlagsParamsSortMinusUpdatedAt ListFlagsParamsSort = "-updated_at"
+	ListFlagsParamsSortName           ListFlagsParamsSort = "name"
+	ListFlagsParamsSortType           ListFlagsParamsSort = "type"
+	ListFlagsParamsSortUpdatedAt      ListFlagsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListFlagsParamsSort enum.
+func (e ListFlagsParamsSort) Valid() bool {
+	switch e {
+	case ListFlagsParamsSortCreatedAt:
+		return true
+	case ListFlagsParamsSortKey:
+		return true
+	case ListFlagsParamsSortMinusCreatedAt:
+		return true
+	case ListFlagsParamsSortMinusKey:
+		return true
+	case ListFlagsParamsSortMinusName:
+		return true
+	case ListFlagsParamsSortMinusType:
+		return true
+	case ListFlagsParamsSortMinusUpdatedAt:
+		return true
+	case ListFlagsParamsSortName:
+		return true
+	case ListFlagsParamsSortType:
+		return true
+	case ListFlagsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListFlagSourcesParamsSort.
+const (
+	CreatedAt        ListFlagSourcesParamsSort = "created_at"
+	Environment      ListFlagSourcesParamsSort = "environment"
+	LastSeen         ListFlagSourcesParamsSort = "last_seen"
+	MinusCreatedAt   ListFlagSourcesParamsSort = "-created_at"
+	MinusEnvironment ListFlagSourcesParamsSort = "-environment"
+	MinusLastSeen    ListFlagSourcesParamsSort = "-last_seen"
+	MinusService     ListFlagSourcesParamsSort = "-service"
+	Service          ListFlagSourcesParamsSort = "service"
+)
+
+// Valid indicates whether the value is a known member of the ListFlagSourcesParamsSort enum.
+func (e ListFlagSourcesParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case Environment:
+		return true
+	case LastSeen:
+		return true
+	case MinusCreatedAt:
+		return true
+	case MinusEnvironment:
+		return true
+	case MinusLastSeen:
+		return true
+	case MinusService:
+		return true
+	case Service:
+		return true
+	default:
+		return false
+	}
+}
+
 // Flag A feature flag whose value is resolved at runtime from environment
 // rules and a default.
 //
@@ -468,7 +582,13 @@ type hTTPBearerContextKey string
 type ListAllFlagSourcesParams struct {
 	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 	FilterService     *string `form:"filter[service],omitempty" json:"filter[service],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.
+	Sort *ListAllFlagSourcesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListAllFlagSourcesParamsSort defines parameters for ListAllFlagSources.
+type ListAllFlagSourcesParamsSort string
 
 // ListFlagsParams defines parameters for ListFlags.
 type ListFlagsParams struct {
@@ -480,7 +600,22 @@ type ListFlagsParams struct {
 
 	// FilterReferencesContextType Return flags whose rules reference any attribute of the given context type.
 	FilterReferencesContextType *string `form:"filter[references_context_type],omitempty" json:"filter[references_context_type],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `type`, `-type`, `updated_at`, `-updated_at`.
+	Sort *ListFlagsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListFlagsParamsSort defines parameters for ListFlags.
+type ListFlagsParamsSort string
+
+// ListFlagSourcesParams defines parameters for ListFlagSources.
+type ListFlagSourcesParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.
+	Sort *ListFlagSourcesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListFlagSourcesParamsSort defines parameters for ListFlagSources.
+type ListFlagSourcesParamsSort string
 
 // ListFlagsUsageParams defines parameters for ListFlagsUsage.
 type ListFlagsUsageParams struct {
@@ -600,7 +735,7 @@ type ClientInterface interface {
 	UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListFlagSources request
-	ListFlagSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListFlagSources(ctx context.Context, id string, params *ListFlagSourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RemoveReferencesWithBody request with any body
 	RemoveReferencesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -731,8 +866,8 @@ func (c *Client) UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx context.Context
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListFlagSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListFlagSourcesRequest(c.Server, id)
+func (c *Client) ListFlagSources(ctx context.Context, id string, params *ListFlagSourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListFlagSourcesRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -831,6 +966,18 @@ func NewListAllFlagSourcesRequest(server string, params *ListAllFlagSourcesParam
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -912,6 +1059,18 @@ func NewListFlagsRequest(server string, params *ListFlagsParams) (*http.Request,
 		if params.FilterReferencesContextType != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[references_context_type]", *params.FilterReferencesContextType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1131,7 +1290,7 @@ func NewUpdateFlagRequestWithBody(server string, id string, contentType string, 
 }
 
 // NewListFlagSourcesRequest generates requests for ListFlagSources
-func NewListFlagSourcesRequest(server string, id string) (*http.Request, error) {
+func NewListFlagSourcesRequest(server string, id string, params *ListFlagSourcesParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -1154,6 +1313,33 @@ func NewListFlagSourcesRequest(server string, id string) (*http.Request, error) 
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -1329,7 +1515,7 @@ type ClientWithResponsesInterface interface {
 	UpdateFlagWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateFlagApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateFlagResponse, error)
 
 	// ListFlagSourcesWithResponse request
-	ListFlagSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListFlagSourcesResponse, error)
+	ListFlagSourcesWithResponse(ctx context.Context, id string, params *ListFlagSourcesParams, reqEditors ...RequestEditorFn) (*ListFlagSourcesResponse, error)
 
 	// RemoveReferencesWithBodyWithResponse request with any body
 	RemoveReferencesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RemoveReferencesResponse, error)
@@ -1727,8 +1913,8 @@ func (c *ClientWithResponses) UpdateFlagWithApplicationVndAPIPlusJSONBodyWithRes
 }
 
 // ListFlagSourcesWithResponse request returning *ListFlagSourcesResponse
-func (c *ClientWithResponses) ListFlagSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListFlagSourcesResponse, error) {
-	rsp, err := c.ListFlagSources(ctx, id, reqEditors...)
+func (c *ClientWithResponses) ListFlagSourcesWithResponse(ctx context.Context, id string, params *ListFlagSourcesParams, reqEditors ...RequestEditorFn) (*ListFlagSourcesResponse, error) {
+	rsp, err := c.ListFlagSources(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
