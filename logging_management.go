@@ -247,7 +247,7 @@ func (m *LoggingManagement) GetGroup(ctx context.Context, id string) (*LogGroup,
 
 // ListGroups returns all log groups for the account.
 func (m *LoggingManagement) ListGroups(ctx context.Context) ([]*LogGroup, error) {
-	resp, err := m.gen.ListLogGroups(ctx)
+	resp, err := m.gen.ListLogGroups(ctx, nil)
 	if err != nil {
 		return nil, classifyError(err)
 	}

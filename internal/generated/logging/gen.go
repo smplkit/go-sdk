@@ -134,13 +134,13 @@ func (e LoggerSourceResourceType) Valid() bool {
 
 // Defines values for ServiceResourceType.
 const (
-	Service ServiceResourceType = "service"
+	ServiceResourceTypeService ServiceResourceType = "service"
 )
 
 // Valid indicates whether the value is a known member of the ServiceResourceType enum.
 func (e ServiceResourceType) Valid() bool {
 	switch e {
-	case Service:
+	case ServiceResourceTypeService:
 		return true
 	default:
 		return false
@@ -156,6 +156,168 @@ const (
 func (e UsageResourceType) Valid() bool {
 	switch e {
 	case Usage:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListLogGroupsParamsSort.
+const (
+	ListLogGroupsParamsSortCreatedAt      ListLogGroupsParamsSort = "created_at"
+	ListLogGroupsParamsSortKey            ListLogGroupsParamsSort = "key"
+	ListLogGroupsParamsSortMinusCreatedAt ListLogGroupsParamsSort = "-created_at"
+	ListLogGroupsParamsSortMinusKey       ListLogGroupsParamsSort = "-key"
+	ListLogGroupsParamsSortMinusName      ListLogGroupsParamsSort = "-name"
+	ListLogGroupsParamsSortMinusUpdatedAt ListLogGroupsParamsSort = "-updated_at"
+	ListLogGroupsParamsSortName           ListLogGroupsParamsSort = "name"
+	ListLogGroupsParamsSortUpdatedAt      ListLogGroupsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListLogGroupsParamsSort enum.
+func (e ListLogGroupsParamsSort) Valid() bool {
+	switch e {
+	case ListLogGroupsParamsSortCreatedAt:
+		return true
+	case ListLogGroupsParamsSortKey:
+		return true
+	case ListLogGroupsParamsSortMinusCreatedAt:
+		return true
+	case ListLogGroupsParamsSortMinusKey:
+		return true
+	case ListLogGroupsParamsSortMinusName:
+		return true
+	case ListLogGroupsParamsSortMinusUpdatedAt:
+		return true
+	case ListLogGroupsParamsSortName:
+		return true
+	case ListLogGroupsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAllLoggerSourcesParamsSort.
+const (
+	ListAllLoggerSourcesParamsSortCreatedAt        ListAllLoggerSourcesParamsSort = "created_at"
+	ListAllLoggerSourcesParamsSortEnvironment      ListAllLoggerSourcesParamsSort = "environment"
+	ListAllLoggerSourcesParamsSortLastSeen         ListAllLoggerSourcesParamsSort = "last_seen"
+	ListAllLoggerSourcesParamsSortMinusCreatedAt   ListAllLoggerSourcesParamsSort = "-created_at"
+	ListAllLoggerSourcesParamsSortMinusEnvironment ListAllLoggerSourcesParamsSort = "-environment"
+	ListAllLoggerSourcesParamsSortMinusLastSeen    ListAllLoggerSourcesParamsSort = "-last_seen"
+	ListAllLoggerSourcesParamsSortMinusService     ListAllLoggerSourcesParamsSort = "-service"
+	ListAllLoggerSourcesParamsSortService          ListAllLoggerSourcesParamsSort = "service"
+)
+
+// Valid indicates whether the value is a known member of the ListAllLoggerSourcesParamsSort enum.
+func (e ListAllLoggerSourcesParamsSort) Valid() bool {
+	switch e {
+	case ListAllLoggerSourcesParamsSortCreatedAt:
+		return true
+	case ListAllLoggerSourcesParamsSortEnvironment:
+		return true
+	case ListAllLoggerSourcesParamsSortLastSeen:
+		return true
+	case ListAllLoggerSourcesParamsSortMinusCreatedAt:
+		return true
+	case ListAllLoggerSourcesParamsSortMinusEnvironment:
+		return true
+	case ListAllLoggerSourcesParamsSortMinusLastSeen:
+		return true
+	case ListAllLoggerSourcesParamsSortMinusService:
+		return true
+	case ListAllLoggerSourcesParamsSortService:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListLoggersParamsSort.
+const (
+	ListLoggersParamsSortCreatedAt      ListLoggersParamsSort = "created_at"
+	ListLoggersParamsSortKey            ListLoggersParamsSort = "key"
+	ListLoggersParamsSortMinusCreatedAt ListLoggersParamsSort = "-created_at"
+	ListLoggersParamsSortMinusKey       ListLoggersParamsSort = "-key"
+	ListLoggersParamsSortMinusName      ListLoggersParamsSort = "-name"
+	ListLoggersParamsSortMinusUpdatedAt ListLoggersParamsSort = "-updated_at"
+	ListLoggersParamsSortName           ListLoggersParamsSort = "name"
+	ListLoggersParamsSortUpdatedAt      ListLoggersParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListLoggersParamsSort enum.
+func (e ListLoggersParamsSort) Valid() bool {
+	switch e {
+	case ListLoggersParamsSortCreatedAt:
+		return true
+	case ListLoggersParamsSortKey:
+		return true
+	case ListLoggersParamsSortMinusCreatedAt:
+		return true
+	case ListLoggersParamsSortMinusKey:
+		return true
+	case ListLoggersParamsSortMinusName:
+		return true
+	case ListLoggersParamsSortMinusUpdatedAt:
+		return true
+	case ListLoggersParamsSortName:
+		return true
+	case ListLoggersParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListLoggerSourcesParamsSort.
+const (
+	CreatedAt        ListLoggerSourcesParamsSort = "created_at"
+	Environment      ListLoggerSourcesParamsSort = "environment"
+	LastSeen         ListLoggerSourcesParamsSort = "last_seen"
+	MinusCreatedAt   ListLoggerSourcesParamsSort = "-created_at"
+	MinusEnvironment ListLoggerSourcesParamsSort = "-environment"
+	MinusLastSeen    ListLoggerSourcesParamsSort = "-last_seen"
+	MinusService     ListLoggerSourcesParamsSort = "-service"
+	Service          ListLoggerSourcesParamsSort = "service"
+)
+
+// Valid indicates whether the value is a known member of the ListLoggerSourcesParamsSort enum.
+func (e ListLoggerSourcesParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case Environment:
+		return true
+	case LastSeen:
+		return true
+	case MinusCreatedAt:
+		return true
+	case MinusEnvironment:
+		return true
+	case MinusLastSeen:
+		return true
+	case MinusService:
+		return true
+	case Service:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListServicesParamsSort.
+const (
+	MinusName ListServicesParamsSort = "-name"
+	Name      ListServicesParamsSort = "name"
+)
+
+// Valid indicates whether the value is a known member of the ListServicesParamsSort enum.
+func (e ListServicesParamsSort) Valid() bool {
+	switch e {
+	case MinusName:
+		return true
+	case Name:
 		return true
 	default:
 		return false
@@ -468,18 +630,57 @@ type UsageResourceType string
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
 type hTTPBearerContextKey string
 
+// ListLogGroupsParams defines parameters for ListLogGroups.
+type ListLogGroupsParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
+	Sort *ListLogGroupsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListLogGroupsParamsSort defines parameters for ListLogGroups.
+type ListLogGroupsParamsSort string
+
 // ListAllLoggerSourcesParams defines parameters for ListAllLoggerSources.
 type ListAllLoggerSourcesParams struct {
 	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 	FilterService     *string `form:"filter[service],omitempty" json:"filter[service],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.
+	Sort *ListAllLoggerSourcesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListAllLoggerSourcesParamsSort defines parameters for ListAllLoggerSources.
+type ListAllLoggerSourcesParamsSort string
 
 // ListLoggersParams defines parameters for ListLoggers.
 type ListLoggersParams struct {
 	FilterManaged  *bool   `form:"filter[managed],omitempty" json:"filter[managed],omitempty"`
 	FilterService  *string `form:"filter[service],omitempty" json:"filter[service],omitempty"`
 	FilterLastSeen *string `form:"filter[last_seen],omitempty" json:"filter[last_seen],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
+	Sort *ListLoggersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListLoggersParamsSort defines parameters for ListLoggers.
+type ListLoggersParamsSort string
+
+// ListLoggerSourcesParams defines parameters for ListLoggerSources.
+type ListLoggerSourcesParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.
+	Sort *ListLoggerSourcesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListLoggerSourcesParamsSort defines parameters for ListLoggerSources.
+type ListLoggerSourcesParamsSort string
+
+// ListServicesParams defines parameters for ListServices.
+type ListServicesParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `name`, `-name`.
+	Sort *ListServicesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListServicesParamsSort defines parameters for ListServices.
+type ListServicesParamsSort string
 
 // ListLoggingUsageParams defines parameters for ListLoggingUsage.
 type ListLoggingUsageParams struct {
@@ -572,7 +773,7 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 	// ListLogGroups request
-	ListLogGroups(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListLogGroups(ctx context.Context, params *ListLogGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateLogGroupWithBody request with any body
 	CreateLogGroupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -613,17 +814,17 @@ type ClientInterface interface {
 	UpdateLoggerWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListLoggerSources request
-	ListLoggerSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListLoggerSources(ctx context.Context, id string, params *ListLoggerSourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListServices request
-	ListServices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListServices(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListLoggingUsage request
 	ListLoggingUsage(ctx context.Context, params *ListLoggingUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) ListLogGroups(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListLogGroupsRequest(c.Server)
+func (c *Client) ListLogGroups(ctx context.Context, params *ListLogGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLogGroupsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -802,8 +1003,8 @@ func (c *Client) UpdateLoggerWithApplicationVndAPIPlusJSONBody(ctx context.Conte
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListLoggerSources(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListLoggerSourcesRequest(c.Server, id)
+func (c *Client) ListLoggerSources(ctx context.Context, id string, params *ListLoggerSourcesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLoggerSourcesRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -814,8 +1015,8 @@ func (c *Client) ListLoggerSources(ctx context.Context, id string, reqEditors ..
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListServices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListServicesRequest(c.Server)
+func (c *Client) ListServices(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListServicesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -839,7 +1040,7 @@ func (c *Client) ListLoggingUsage(ctx context.Context, params *ListLoggingUsageP
 }
 
 // NewListLogGroupsRequest generates requests for ListLogGroups
-func NewListLogGroupsRequest(server string) (*http.Request, error) {
+func NewListLogGroupsRequest(server string, params *ListLogGroupsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -855,6 +1056,33 @@ func NewListLogGroupsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -1072,6 +1300,18 @@ func NewListAllLoggerSourcesRequest(server string, params *ListAllLoggerSourcesP
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1141,6 +1381,18 @@ func NewListLoggersRequest(server string, params *ListLoggersParams) (*http.Requ
 		if params.FilterLastSeen != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[last_seen]", *params.FilterLastSeen, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1320,7 +1572,7 @@ func NewUpdateLoggerRequestWithBody(server string, id string, contentType string
 }
 
 // NewListLoggerSourcesRequest generates requests for ListLoggerSources
-func NewListLoggerSourcesRequest(server string, id string) (*http.Request, error) {
+func NewListLoggerSourcesRequest(server string, id string, params *ListLoggerSourcesParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -1345,6 +1597,33 @@ func NewListLoggerSourcesRequest(server string, id string) (*http.Request, error
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -1354,7 +1633,7 @@ func NewListLoggerSourcesRequest(server string, id string) (*http.Request, error
 }
 
 // NewListServicesRequest generates requests for ListServices
-func NewListServicesRequest(server string) (*http.Request, error) {
+func NewListServicesRequest(server string, params *ListServicesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1370,6 +1649,33 @@ func NewListServicesRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -1478,7 +1784,7 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 	// ListLogGroupsWithResponse request
-	ListLogGroupsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListLogGroupsResponse, error)
+	ListLogGroupsWithResponse(ctx context.Context, params *ListLogGroupsParams, reqEditors ...RequestEditorFn) (*ListLogGroupsResponse, error)
 
 	// CreateLogGroupWithBodyWithResponse request with any body
 	CreateLogGroupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLogGroupResponse, error)
@@ -1519,10 +1825,10 @@ type ClientWithResponsesInterface interface {
 	UpdateLoggerWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateLoggerApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLoggerResponse, error)
 
 	// ListLoggerSourcesWithResponse request
-	ListLoggerSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListLoggerSourcesResponse, error)
+	ListLoggerSourcesWithResponse(ctx context.Context, id string, params *ListLoggerSourcesParams, reqEditors ...RequestEditorFn) (*ListLoggerSourcesResponse, error)
 
 	// ListServicesWithResponse request
-	ListServicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServicesResponse, error)
+	ListServicesWithResponse(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*ListServicesResponse, error)
 
 	// ListLoggingUsageWithResponse request
 	ListLoggingUsageWithResponse(ctx context.Context, params *ListLoggingUsageParams, reqEditors ...RequestEditorFn) (*ListLoggingUsageResponse, error)
@@ -2003,8 +2309,8 @@ func (r ListLoggingUsageResponse) ContentType() string {
 }
 
 // ListLogGroupsWithResponse request returning *ListLogGroupsResponse
-func (c *ClientWithResponses) ListLogGroupsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListLogGroupsResponse, error) {
-	rsp, err := c.ListLogGroups(ctx, reqEditors...)
+func (c *ClientWithResponses) ListLogGroupsWithResponse(ctx context.Context, params *ListLogGroupsParams, reqEditors ...RequestEditorFn) (*ListLogGroupsResponse, error) {
+	rsp, err := c.ListLogGroups(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -2134,8 +2440,8 @@ func (c *ClientWithResponses) UpdateLoggerWithApplicationVndAPIPlusJSONBodyWithR
 }
 
 // ListLoggerSourcesWithResponse request returning *ListLoggerSourcesResponse
-func (c *ClientWithResponses) ListLoggerSourcesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*ListLoggerSourcesResponse, error) {
-	rsp, err := c.ListLoggerSources(ctx, id, reqEditors...)
+func (c *ClientWithResponses) ListLoggerSourcesWithResponse(ctx context.Context, id string, params *ListLoggerSourcesParams, reqEditors ...RequestEditorFn) (*ListLoggerSourcesResponse, error) {
+	rsp, err := c.ListLoggerSources(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -2143,8 +2449,8 @@ func (c *ClientWithResponses) ListLoggerSourcesWithResponse(ctx context.Context,
 }
 
 // ListServicesWithResponse request returning *ListServicesResponse
-func (c *ClientWithResponses) ListServicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServicesResponse, error) {
-	rsp, err := c.ListServices(ctx, reqEditors...)
+func (c *ClientWithResponses) ListServicesWithResponse(ctx context.Context, params *ListServicesParams, reqEditors ...RequestEditorFn) (*ListServicesResponse, error) {
+	rsp, err := c.ListServices(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
