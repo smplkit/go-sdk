@@ -115,7 +115,7 @@ func (m *EnvironmentsManagement) New(id string, name string, opts ...Environment
 
 // List returns all environments for the account.
 func (m *EnvironmentsManagement) List(ctx context.Context) ([]*Environment, error) {
-	resp, err := m.client.appClient.ListEnvironments(ctx)
+	resp, err := m.client.appClient.ListEnvironments(ctx, nil)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -291,7 +291,7 @@ func (m *ContextTypesManagement) New(id string, opts ...ContextTypeOption) *Cont
 
 // List returns all context types for the account.
 func (m *ContextTypesManagement) List(ctx context.Context) ([]*ContextType, error) {
-	resp, err := m.client.appClient.ListContextTypes(ctx)
+	resp, err := m.client.appClient.ListContextTypes(ctx, nil)
 	if err != nil {
 		return nil, classifyError(err)
 	}

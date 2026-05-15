@@ -1247,71 +1247,6 @@
       }
     },
     "/api/v1/environments": {
-      "get": {
-        "tags": [
-          "Environments"
-        ],
-        "summary": "List Environments",
-        "description": "List all environments for the authenticated account.",
-        "operationId": "list_environments",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnvironmentListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
       "post": {
         "tags": [
           "Environments"
@@ -1319,15 +1254,20 @@
         "summary": "Create Environment",
         "description": "Create a new environment. The caller provides the id (key) in the request body.",
         "operationId": "create_environment",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/EnvironmentRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -1380,12 +1320,96 @@
               }
             }
           }
-        },
+        }
+      },
+      "get": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "List Environments",
+        "description": "List all environments for the authenticated account.",
+        "operationId": "list_environments",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "key",
+                "-key",
+                "name",
+                "-name",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "name",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/environments/{id}": {
@@ -1809,6 +1833,30 @@
               "nullable": true,
               "title": "Filter[Status]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `expires_at`, `-expires_at`, `last_used_at`, `-last_used_at`, `name`, `-name`, `status`, `-status`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "expires_at",
+                "-expires_at",
+                "last_used_at",
+                "-last_used_at",
+                "name",
+                "-name",
+                "status",
+                "-status"
+              ],
+              "default": "name",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `expires_at`, `-expires_at`, `last_used_at`, `-last_used_at`, `name`, `-name`, `status`, `-status`."
           }
         ],
         "responses": {
@@ -2181,71 +2229,6 @@
       }
     },
     "/api/v1/context_types": {
-      "get": {
-        "tags": [
-          "Context Types"
-        ],
-        "summary": "List Context Types",
-        "description": "List all context types for the authenticated account.",
-        "operationId": "list_context_types",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContextTypeListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
       "post": {
         "tags": [
           "Context Types"
@@ -2253,15 +2236,20 @@
         "summary": "Create Context Type",
         "description": "Create a new context type. The caller provides the id (key) in the request body.",
         "operationId": "create_context_type",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/ContextTypeRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -2314,12 +2302,96 @@
               }
             }
           }
-        },
+        }
+      },
+      "get": {
+        "tags": [
+          "Context Types"
+        ],
+        "summary": "List Context Types",
+        "description": "List all context types for the authenticated account.",
+        "operationId": "list_context_types",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "key",
+                "-key",
+                "name",
+                "-name",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextTypeListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/context_types/{id}": {
@@ -2655,6 +2727,28 @@
               "nullable": true,
               "title": "Filter[Context Type]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "key",
+                "-key",
+                "name",
+                "-name",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`."
           }
         ],
         "responses": {
@@ -2945,71 +3039,6 @@
       }
     },
     "/api/v1/services": {
-      "get": {
-        "tags": [
-          "Services"
-        ],
-        "summary": "List Services",
-        "description": "List all services for the authenticated account.",
-        "operationId": "list_services",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServiceListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
       "post": {
         "tags": [
           "Services"
@@ -3017,15 +3046,20 @@
         "summary": "Create Service",
         "description": "Create a new service. The caller provides the id (key) in the request body.",
         "operationId": "create_service",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/ServiceRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -3078,12 +3112,96 @@
               }
             }
           }
-        },
+        }
+      },
+      "get": {
+        "tags": [
+          "Services"
+        ],
+        "summary": "List Services",
+        "description": "List all services for the authenticated account.",
+        "operationId": "list_services",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "key",
+                "-key",
+                "name",
+                "-name",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "name",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/services/{id}": {
@@ -3427,6 +3545,26 @@
               "nullable": true,
               "title": "Filter[Token]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `email`, `-email`, `status`, `-status`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "email",
+                "-email",
+                "status",
+                "-status"
+              ],
+              "default": "-created_at",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `email`, `-email`, `status`, `-status`."
           }
         ],
         "responses": {
@@ -3927,8 +4065,31 @@
           "Metrics"
         ],
         "summary": "List Metric Names",
-        "description": "Return distinct metric names recorded for the account, each with a\nrepresentative unit. Plain-JSON response (not JSON:API) \u2014 this is\nmetadata for discovery, not a metric resource.",
+        "description": "Return distinct metric names recorded for the account, each with a\nrepresentative unit. Plain-JSON response (not JSON:API) \u2014 this is\nmetadata for discovery, not a metric resource.\n\nDefault sort is `name` ascending.",
         "operationId": "list_metric_names",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `name`, `-name`.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "default": "name",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `name`, `-name`."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3980,12 +4141,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/metrics/bulk": {
@@ -4091,6 +4247,24 @@
               "nullable": true,
               "title": "Filter[Recorded At]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-recorded_at`. Allowed values: `recorded_at`, `-recorded_at`, `value`, `-value`.",
+              "enum": [
+                "recorded_at",
+                "-recorded_at",
+                "value",
+                "-value"
+              ],
+              "default": "-recorded_at",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-recorded_at`. Allowed values: `recorded_at`, `-recorded_at`, `value`, `-value`."
           }
         ],
         "responses": {
@@ -4188,6 +4362,22 @@
               "nullable": true,
               "title": "Filter[Recorded At]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `bucket`. Allowed values: `bucket`, `-bucket`.",
+              "enum": [
+                "bucket",
+                "-bucket"
+              ],
+              "default": "bucket",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `bucket`. Allowed values: `bucket`, `-bucket`."
           }
         ],
         "responses": {
@@ -4316,6 +4506,26 @@
               "title": "Page[Size]"
             },
             "description": "Items per page"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `email`. Allowed values: `created_at`, `-created_at`, `display_name`, `-display_name`, `email`, `-email`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "display_name",
+                "-display_name",
+                "email",
+                "-email"
+              ],
+              "default": "email",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `email`. Allowed values: `created_at`, `-created_at`, `display_name`, `-display_name`, `email`, `-email`."
           }
         ],
         "responses": {
@@ -4614,8 +4824,30 @@
           "Plans"
         ],
         "summary": "List Plans",
-        "description": "Return all plan tier definitions as JSON:API resources.",
+        "description": "Return all plan tier definitions as JSON:API resources.\n\nDefault sort is `sort_order` ascending \u2014 the natural ladder defined in\n`plans.yaml`. Pass `sort=display_name` for an alphabetical view.",
         "operationId": "list_plans",
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `sort_order`. Allowed values: `display_name`, `-display_name`, `id`, `-id`, `sort_order`, `-sort_order`.",
+              "enum": [
+                "display_name",
+                "-display_name",
+                "id",
+                "-id",
+                "sort_order",
+                "-sort_order"
+              ],
+              "default": "sort_order",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `sort_order`. Allowed values: `display_name`, `-display_name`, `id`, `-id`, `sort_order`, `-sort_order`."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -4676,8 +4908,28 @@
           "Products"
         ],
         "summary": "List Products",
-        "description": "Return all flag-enabled products with their plans, limits, and marketing content.",
+        "description": "Return all flag-enabled products with their plans, limits, and\nmarketing content.\n\nDefault sort is `display_name` ascending.",
         "operationId": "list_products",
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `display_name`. Allowed values: `display_name`, `-display_name`, `id`, `-id`.",
+              "enum": [
+                "display_name",
+                "-display_name",
+                "id",
+                "-id"
+              ],
+              "default": "display_name",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `display_name`. Allowed values: `display_name`, `-display_name`, `id`, `-id`."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -4738,8 +4990,37 @@
           "Billing"
         ],
         "summary": "List Subscriptions",
-        "description": "Return subscription rows for the authenticated account.",
+        "description": "Return subscription rows for the authenticated account.\n\nDefault sort is `product` ascending.",
         "operationId": "list_subscriptions",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `product`. Allowed values: `created_at`, `-created_at`, `plan`, `-plan`, `product`, `-product`, `status`, `-status`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "plan",
+                "-plan",
+                "product",
+                "-product",
+                "status",
+                "-status"
+              ],
+              "default": "product",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `product`. Allowed values: `created_at`, `-created_at`, `plan`, `-plan`, `product`, `-product`, `status`, `-status`."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -4791,12 +5072,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -4805,15 +5081,20 @@
         "summary": "Create Subscription",
         "description": "Create a new paid subscription for a product.",
         "operationId": "create_subscription",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateSubscriptionBody"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -4866,12 +5147,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/subscriptions/{id}/actions/upgrade": {
@@ -5297,6 +5573,35 @@
         "summary": "List Payment Methods",
         "description": "List all payment methods for the account. Default is returned first, then newest first.",
         "operationId": "list_payment_methods",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `exp_year`, `-exp_year`, `is_default`, `-is_default`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "exp_year",
+                "-exp_year",
+                "is_default",
+                "-is_default",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "-created_at",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `exp_year`, `-exp_year`, `is_default`, `-is_default`, `updated_at`, `-updated_at`."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5348,12 +5653,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -5362,15 +5662,20 @@
         "summary": "Add Payment Method",
         "description": "Register a Stripe payment method (`pm_...`) on the account. The client first creates the Stripe payment method using a SetupIntent and Stripe Elements, then submits its identifier here to persist it.",
         "operationId": "create_payment_method",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/AddPaymentMethodBody"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -5423,12 +5728,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/payment_methods/{id}": {
@@ -5752,8 +6052,35 @@
           "Billing"
         ],
         "summary": "List Invoices",
-        "description": "Return invoice history for the account from Stripe.",
+        "description": "Return invoice history for the account from Stripe.\n\nDefault sort is `-created_at` (newest first).",
         "operationId": "list_invoices",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `status`, `-status`, `total`, `-total`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "status",
+                "-status",
+                "total",
+                "-total"
+              ],
+              "default": "-created_at",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `status`, `-status`, `total`, `-total`."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5805,12 +6132,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/invoices/{invoice_id}": {
