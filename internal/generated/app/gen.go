@@ -1199,7 +1199,7 @@ type Context struct {
 	// CreatedAt When the context instance was first registered.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
-	// Key Entity identifier within the context type (e.g. `alice-123`). Together with `context_type` it forms the composite `id` `context_type:key`. Set by the bulk-register API; not editable.
+	// Key Entity identifier within the context type (e.g. `alice-123`). Together with `context_type` it forms the composite `id` `context_type:key`. Always populated in responses; declared optional only so SDK consumers can construct a draft Context without a key. Set by the bulk-register API; not editable.
 	Key *string `json:"key,omitempty"`
 
 	// Name Human-readable display name for the context instance.

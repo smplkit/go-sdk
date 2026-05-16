@@ -7222,8 +7222,9 @@
         "properties": {
           "key": {
             "type": "string",
+            "nullable": true,
             "title": "Key",
-            "description": "Entity identifier within the context type (e.g. `alice-123`). Together with `context_type` it forms the composite `id` `context_type:key`. Set by the bulk-register API; not editable.",
+            "description": "Entity identifier within the context type (e.g. `alice-123`). Together with `context_type` it forms the composite `id` `context_type:key`. Always populated in responses; declared optional only so SDK consumers can construct a draft Context without a key. Set by the bulk-register API; not editable.",
             "readOnly": true
           },
           "name": {
@@ -7262,7 +7263,6 @@
         },
         "type": "object",
         "required": [
-          "key",
           "context_type"
         ],
         "title": "Context",
