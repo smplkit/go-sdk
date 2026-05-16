@@ -210,36 +210,55 @@ func TestAuditForwarders_Create_NonSuccessReturnsError(t *testing.T) {
 	}
 }
 
-func TestAuditForwarders_List_PaginatesAndExtractsCursor(t *testing.T) {
+func TestAuditForwarders_List_PaginatesWithOffset(t *testing.T) {
 	calls := 0
-	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
+	var capturedQueries []string
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedQueries = append(capturedQueries, r.URL.RawQuery)
 		calls++
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if calls == 1 {
-			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"A","slug":"a","forwarder_type":"HTTP","enabled":true,"http":{"url":"https://x"}}}],"links":{"next":"/api/v1/forwarders?page[size]=1&page[after]=tok-2"},"meta":{"page_size":1}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"A","slug":"a","forwarder_type":"HTTP","enabled":true,"http":{"url":"https://x"}}}],"meta":{"pagination":{"page":1,"size":1,"total":2,"total_pages":2}}}`))
 		} else {
-			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"B","slug":"b","forwarder_type":"HTTP","enabled":true,"http":{"url":"https://y"}}}],"meta":{"page_size":1}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"B","slug":"b","forwarder_type":"HTTP","enabled":true,"http":{"url":"https://y"}}}],"meta":{"pagination":{"page":2,"size":1}}}`))
 		}
 	})
 	defer cleanup()
 
 	enabled := true
 	first, err := fwds.List(context.Background(), ListForwardersInput{
-		ForwarderType: ForwarderTypeDatadog, Enabled: &enabled, PageSize: 1,
+		ForwarderType: ForwarderTypeDatadog, Enabled: &enabled,
+		PageNumber: 1, PageSize: 1, MetaTotal: true,
 	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if first.NextCursor != "tok-2" {
-		t.Errorf("expected next cursor tok-2, got %q", first.NextCursor)
+	if first.Pagination.Page != 1 || first.Pagination.Size != 1 {
+		t.Errorf("expected page=1 size=1, got %+v", first.Pagination)
 	}
-	second, err := fwds.List(context.Background(), ListForwardersInput{PageAfter: first.NextCursor})
+	if first.Pagination.Total == nil || *first.Pagination.Total != 2 {
+		t.Errorf("expected total=2, got %+v", first.Pagination.Total)
+	}
+	if first.Pagination.TotalPages == nil || *first.Pagination.TotalPages != 2 {
+		t.Errorf("expected total_pages=2, got %+v", first.Pagination.TotalPages)
+	}
+	if !strings.Contains(capturedQueries[0], "page%5Bnumber%5D=1") ||
+		!strings.Contains(capturedQueries[0], "page%5Bsize%5D=1") ||
+		!strings.Contains(capturedQueries[0], "meta%5Btotal%5D=true") {
+		t.Errorf("expected page[number]/page[size]/meta[total] in first query, got %q", capturedQueries[0])
+	}
+
+	second, err := fwds.List(context.Background(), ListForwardersInput{PageNumber: 2, PageSize: 1})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if second.NextCursor != "" {
-		t.Errorf("expected no next cursor on last page, got %q", second.NextCursor)
+	if second.Pagination.Page != 2 || second.Pagination.Size != 1 {
+		t.Errorf("expected page=2 size=1, got %+v", second.Pagination)
+	}
+	if second.Pagination.Total != nil || second.Pagination.TotalPages != nil {
+		t.Errorf("expected nil total/total_pages without MetaTotal, got %+v / %+v",
+			second.Pagination.Total, second.Pagination.TotalPages)
 	}
 }
 
@@ -450,39 +469,8 @@ func TestForwarderFromResource_PopulatesOptionalFields(t *testing.T) {
 	}
 }
 
-func TestNextCursorExtraction_BranchCoverage(t *testing.T) {
-	calls := 0
-	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
-		calls++
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		switch calls {
-		case 1:
-			// page[after]= followed by &<other> — exercise the `if amp >= 0` branch.
-			_, _ = w.Write([]byte(`{"data":[],"links":{"next":"/api/v1/forwarders?page[after]=tok-mid&page[size]=1"},"meta":{"page_size":1}}`))
-		case 2:
-			// Next is set but contains no page[after]= — must return "".
-			_, _ = w.Write([]byte(`{"data":[],"links":{"next":"/api/v1/forwarders?page[size]=1"},"meta":{"page_size":1}}`))
-		}
-	})
-	defer cleanup()
-
-	first, err := fwds.List(context.Background(), ListForwardersInput{})
-	if err != nil {
-		t.Fatalf("List call 1: %v", err)
-	}
-	if first.NextCursor != "tok-mid" {
-		t.Errorf("expected cursor=tok-mid (trimmed at &), got %q", first.NextCursor)
-	}
-
-	second, err := fwds.List(context.Background(), ListForwardersInput{})
-	if err != nil {
-		t.Fatalf("List call 2: %v", err)
-	}
-	if second.NextCursor != "" {
-		t.Errorf("expected empty cursor when page[after] missing, got %q", second.NextCursor)
-	}
-}
+// extractNextCursor branch coverage (& trim, no page[after]) is exercised
+// via the events tests in audit_client_test.go — events stays cursor-paged.
 
 // ---------------------------------------------------------------------------
 // do_not_forward (exercises AuditEvents on the runtime client)
@@ -570,7 +558,7 @@ func TestAuditResourceTypes_List_ReturnsSlug(t *testing.T) {
 	rt, cleanup := newTestAuditResourceTypes(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"invoice","type":"resource_type","attributes":{"resource_type":"invoice","created_at":"2026-05-01T00:00:00Z"}},{"id":"user","type":"resource_type","attributes":{"resource_type":"user","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"page_size":50}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"invoice","type":"resource_type","attributes":{"resource_type":"invoice","created_at":"2026-05-01T00:00:00Z"}},{"id":"user","type":"resource_type","attributes":{"resource_type":"user","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":1,"size":1000}}}`))
 	})
 	defer cleanup()
 
@@ -588,22 +576,31 @@ func TestAuditResourceTypes_List_ReturnsSlug(t *testing.T) {
 	if !ids["invoice"] {
 		t.Error("expected invoice in resource types")
 	}
+	if page.Pagination.Page != 1 || page.Pagination.Size != 1000 {
+		t.Errorf("expected pagination page=1 size=1000, got %+v", page.Pagination)
+	}
 }
 
-func TestAuditResourceTypes_List_ParsesNextCursor(t *testing.T) {
+func TestAuditResourceTypes_List_ParsesPaginationWithTotals(t *testing.T) {
 	rt, cleanup := newTestAuditResourceTypes(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"invoice","type":"resource_type","attributes":{"resource_type":"invoice","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"page_size":1},"links":{"next":"/api/v1/resource_types?page[after]=tok-rt"}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"invoice","type":"resource_type","attributes":{"resource_type":"invoice","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":2,"size":1,"total":3,"total_pages":3}}}`))
 	})
 	defer cleanup()
 
-	page, err := rt.List(context.Background(), ListResourceTypesInput{PageSize: 1})
+	page, err := rt.List(context.Background(), ListResourceTypesInput{PageNumber: 2, PageSize: 1, MetaTotal: true})
 	if err != nil {
 		t.Fatalf("ResourceTypes.List: %v", err)
 	}
-	if page.NextCursor != "tok-rt" {
-		t.Errorf("expected cursor=tok-rt, got %q", page.NextCursor)
+	if page.Pagination.Page != 2 || page.Pagination.Size != 1 {
+		t.Errorf("expected page=2 size=1, got %+v", page.Pagination)
+	}
+	if page.Pagination.Total == nil || *page.Pagination.Total != 3 {
+		t.Errorf("expected total=3, got %+v", page.Pagination.Total)
+	}
+	if page.Pagination.TotalPages == nil || *page.Pagination.TotalPages != 3 {
+		t.Errorf("expected total_pages=3, got %+v", page.Pagination.TotalPages)
 	}
 }
 
@@ -632,7 +629,7 @@ func TestAuditActions_List_ReturnsSlugs(t *testing.T) {
 	ac, cleanup := newTestAuditActions(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}},{"id":"user.updated","type":"action","attributes":{"action":"user.updated","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"page_size":50}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}},{"id":"user.updated","type":"action","attributes":{"action":"user.updated","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":1,"size":1000}}}`))
 	})
 	defer cleanup()
 
@@ -650,6 +647,9 @@ func TestAuditActions_List_ReturnsSlugs(t *testing.T) {
 	if !ids["invoice.created"] {
 		t.Error("expected invoice.created in actions")
 	}
+	if page.Pagination.Page != 1 || page.Pagination.Size != 1000 {
+		t.Errorf("expected pagination page=1 size=1000, got %+v", page.Pagination)
+	}
 }
 
 func TestAuditActions_List_FilterResourceType(t *testing.T) {
@@ -658,7 +658,7 @@ func TestAuditActions_List_FilterResourceType(t *testing.T) {
 		capturedQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"page_size":50}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":1,"size":1000}}}`))
 	})
 	defer cleanup()
 
@@ -670,20 +670,26 @@ func TestAuditActions_List_FilterResourceType(t *testing.T) {
 	}
 }
 
-func TestAuditActions_List_ParsesNextCursor(t *testing.T) {
+func TestAuditActions_List_ParsesPaginationWithTotals(t *testing.T) {
 	ac, cleanup := newTestAuditActions(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"page_size":1},"links":{"next":"/api/v1/actions?page[after]=tok-ac"}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":2,"size":1,"total":3,"total_pages":3}}}`))
 	})
 	defer cleanup()
 
-	page, err := ac.List(context.Background(), ListActionsInput{PageSize: 1})
+	page, err := ac.List(context.Background(), ListActionsInput{PageNumber: 2, PageSize: 1, MetaTotal: true})
 	if err != nil {
 		t.Fatalf("Actions.List: %v", err)
 	}
-	if page.NextCursor != "tok-ac" {
-		t.Errorf("expected cursor=tok-ac, got %q", page.NextCursor)
+	if page.Pagination.Page != 2 || page.Pagination.Size != 1 {
+		t.Errorf("expected page=2 size=1, got %+v", page.Pagination)
+	}
+	if page.Pagination.Total == nil || *page.Pagination.Total != 3 {
+		t.Errorf("expected total=3, got %+v", page.Pagination.Total)
+	}
+	if page.Pagination.TotalPages == nil || *page.Pagination.TotalPages != 3 {
+		t.Errorf("expected total_pages=3, got %+v", page.Pagination.TotalPages)
 	}
 }
 
@@ -735,50 +741,68 @@ func TestPaymentRequiredError_ErrorAndUnwrap(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ResourceTypes.List and Actions.List — PageAfter branch coverage
+// ResourceTypes.List and Actions.List — PageNumber/PageSize query coverage
 // ---------------------------------------------------------------------------
 
-func TestAuditResourceTypes_List_WithPageAfter(t *testing.T) {
+func TestAuditResourceTypes_List_WithPageNumber(t *testing.T) {
 	var capturedQuery string
 	rt, cleanup := newTestAuditResourceTypes(t, func(w http.ResponseWriter, r *http.Request) {
 		capturedQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":1}}`))
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":3,"size":1}}}`))
 	})
 	defer cleanup()
 
-	if _, err := rt.List(context.Background(), ListResourceTypesInput{PageAfter: "tok-rt"}); err != nil {
+	if _, err := rt.List(context.Background(), ListResourceTypesInput{PageNumber: 3, PageSize: 1}); err != nil {
 		t.Fatalf("ResourceTypes.List: %v", err)
 	}
-	if !strings.Contains(capturedQuery, "tok-rt") {
-		t.Errorf("expected page[after] in query, got %q", capturedQuery)
+	if !strings.Contains(capturedQuery, "page%5Bnumber%5D=3") ||
+		!strings.Contains(capturedQuery, "page%5Bsize%5D=1") {
+		t.Errorf("expected page[number]=3 and page[size]=1 in query, got %q", capturedQuery)
 	}
 }
 
-func TestAuditActions_List_WithPageAfter(t *testing.T) {
+func TestAuditActions_List_WithPageNumber(t *testing.T) {
 	var capturedQuery string
 	ac, cleanup := newTestAuditActions(t, func(w http.ResponseWriter, r *http.Request) {
 		capturedQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":1}}`))
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":3,"size":1}}}`))
 	})
 	defer cleanup()
 
-	if _, err := ac.List(context.Background(), ListActionsInput{PageAfter: "tok-ac"}); err != nil {
+	if _, err := ac.List(context.Background(), ListActionsInput{PageNumber: 3, PageSize: 1}); err != nil {
 		t.Fatalf("Actions.List: %v", err)
 	}
-	if !strings.Contains(capturedQuery, "tok-ac") {
-		t.Errorf("expected page[after] in query, got %q", capturedQuery)
+	if !strings.Contains(capturedQuery, "page%5Bnumber%5D=3") ||
+		!strings.Contains(capturedQuery, "page%5Bsize%5D=1") {
+		t.Errorf("expected page[number]=3 and page[size]=1 in query, got %q", capturedQuery)
 	}
 }
 
-func TestExtractNextCursor_NilReturnsEmpty(t *testing.T) {
-	if got := extractNextCursor(nil); got != "" {
-		t.Fatalf("expected empty string for nil, got %q", got)
+func TestExtractNextCursor(t *testing.T) {
+	cases := []struct {
+		name string
+		next *string
+		want string
+	}{
+		{"nil", nil, ""},
+		{"tokenAtEnd", ptr("/api/v1/events?page[size]=1&page[after]=tok"), "tok"},
+		{"tokenMidWithAmp", ptr("/api/v1/events?page[after]=tok-mid&page[size]=1"), "tok-mid"},
+		{"noPageAfter", ptr("/api/v1/events?page[size]=1"), ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractNextCursor(tc.next); got != tc.want {
+				t.Fatalf("extractNextCursor: want %q, got %q", tc.want, got)
+			}
+		})
 	}
 }
+
+func ptr[T any](v T) *T { return &v }
 
 // ---------------------------------------------------------------------------
 // buildAuditGenClient header editor — exercised via NewManagementClient + httptest
@@ -793,7 +817,7 @@ func TestBuildAuditGenClient_HeaderEditorFires(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":1,"size":1000}}}`))
 	}))
 	defer srv.Close()
 

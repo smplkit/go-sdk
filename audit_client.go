@@ -196,14 +196,18 @@ func (e *AuditEvents) close() {
 //
 // Backed by a maintain-by-write side table (ADR-047 §2.5), so the
 // response time is independent of event volume. Sorted alphabetically;
-// cursor pagination via PageAfter.
+// offset pagination via PageNumber / PageSize (ADR-014).
 func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesInput) (*ResourceTypeListPage, error) {
 	params := &genaudit.ListResourceTypesParams{}
+	if input.PageNumber > 0 {
+		params.PageNumber = &input.PageNumber
+	}
 	if input.PageSize > 0 {
 		params.PageSize = &input.PageSize
 	}
-	if input.PageAfter != "" {
-		params.PageAfter = &input.PageAfter
+	if input.MetaTotal {
+		mt := true
+		params.MetaTotal = &mt
 	}
 	resp, err := rt.gen.ListResourceTypesWithResponse(ctx, params)
 	if err != nil {
@@ -215,15 +219,13 @@ func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesI
 	body := resp.ApplicationvndApiJSON200
 	page := &ResourceTypeListPage{
 		ResourceTypes: make([]AuditResourceType, 0, len(body.Data)),
+		Pagination:    paginationFromMeta(body.Meta.Pagination),
 	}
 	for _, r := range body.Data {
 		page.ResourceTypes = append(page.ResourceTypes, AuditResourceType{
 			ID:           r.Id,
 			ResourceType: r.Attributes.ResourceType,
 		})
-	}
-	if body.Links != nil && body.Links.Next != nil {
-		page.NextCursor = extractNextCursor(body.Links.Next)
 	}
 	return page, nil
 }
@@ -232,17 +234,21 @@ func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesI
 //
 // Without FilterResourceType, returns one row per distinct action. With
 // the filter, returns only the actions seen with that specific resource
-// type. Sorted alphabetically; cursor pagination via PageAfter.
+// type. Sorted alphabetically; offset pagination via PageNumber / PageSize.
 func (ac *AuditActions) List(ctx context.Context, input ListActionsInput) (*ActionListPage, error) {
 	params := &genaudit.ListActionsParams{}
 	if input.FilterResourceType != "" {
 		params.FilterResourceType = &input.FilterResourceType
 	}
+	if input.PageNumber > 0 {
+		params.PageNumber = &input.PageNumber
+	}
 	if input.PageSize > 0 {
 		params.PageSize = &input.PageSize
 	}
-	if input.PageAfter != "" {
-		params.PageAfter = &input.PageAfter
+	if input.MetaTotal {
+		mt := true
+		params.MetaTotal = &mt
 	}
 	resp, err := ac.gen.ListActionsWithResponse(ctx, params)
 	if err != nil {
@@ -253,7 +259,8 @@ func (ac *AuditActions) List(ctx context.Context, input ListActionsInput) (*Acti
 	}
 	body := resp.ApplicationvndApiJSON200
 	page := &ActionListPage{
-		Actions: make([]AuditAction, 0, len(body.Data)),
+		Actions:    make([]AuditAction, 0, len(body.Data)),
+		Pagination: paginationFromMeta(body.Meta.Pagination),
 	}
 	for _, r := range body.Data {
 		page.Actions = append(page.Actions, AuditAction{
@@ -261,10 +268,19 @@ func (ac *AuditActions) List(ctx context.Context, input ListActionsInput) (*Acti
 			Action: r.Attributes.Action,
 		})
 	}
-	if body.Links != nil && body.Links.Next != nil {
-		page.NextCursor = extractNextCursor(body.Links.Next)
-	}
 	return page, nil
+}
+
+// paginationFromMeta converts the generated PaginationMeta into the
+// wrapper-public Pagination shape, sharing the optional Total /
+// TotalPages pointers as-is.
+func paginationFromMeta(p genaudit.PaginationMeta) Pagination {
+	return Pagination{
+		Page:       p.Page,
+		Size:       p.Size,
+		Total:      p.Total,
+		TotalPages: p.TotalPages,
+	}
 }
 
 // eventFromResource converts the JSON:API resource shape into the

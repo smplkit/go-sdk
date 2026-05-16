@@ -38,7 +38,8 @@ func (f *AuditForwarders) Create(ctx context.Context, input CreateForwarderInput
 	return &out, nil
 }
 
-// List returns one page of forwarders.
+// List returns one page of forwarders. Offset pagination via PageNumber /
+// PageSize (ADR-014).
 func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (*ListForwardersPage, error) {
 	params := &genaudit.ListForwardersParams{}
 	if input.ForwarderType != "" {
@@ -48,11 +49,15 @@ func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (
 	if input.Enabled != nil {
 		params.FilterEnabled = input.Enabled
 	}
+	if input.PageNumber > 0 {
+		params.PageNumber = &input.PageNumber
+	}
 	if input.PageSize > 0 {
 		params.PageSize = &input.PageSize
 	}
-	if input.PageAfter != "" {
-		params.PageAfter = &input.PageAfter
+	if input.MetaTotal {
+		mt := true
+		params.MetaTotal = &mt
 	}
 	resp, err := f.gen.ListForwardersWithResponse(ctx, params)
 	if err != nil {
@@ -64,12 +69,10 @@ func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (
 	body := resp.ApplicationvndApiJSON200
 	page := &ListForwardersPage{
 		Forwarders: make([]Forwarder, 0, len(body.Data)),
+		Pagination: paginationFromMeta(body.Meta.Pagination),
 	}
 	for _, r := range body.Data {
 		page.Forwarders = append(page.Forwarders, forwarderFromResource(r))
-	}
-	if body.Links != nil && body.Links.Next != nil {
-		page.NextCursor = extractNextCursor(body.Links.Next)
 	}
 	return page, nil
 }

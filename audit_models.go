@@ -113,6 +113,17 @@ type ListEventsPage struct {
 // Resource types and actions (read-only index surfaces)
 // ---------------------------------------------------------------------------
 
+// Pagination is the offset-pagination meta block returned on every standard
+// list response (ADR-014). Page and Size always reflect the parameters that
+// served the response. Total and TotalPages are populated only when the
+// request set MetaTotal=true.
+type Pagination struct {
+	Page       int
+	Size       int
+	Total      *int
+	TotalPages *int
+}
+
 // AuditResourceType is one row from the resource-type index.
 type AuditResourceType struct {
 	ID           string // the resource_type slug, e.g. "invoice"
@@ -121,14 +132,15 @@ type AuditResourceType struct {
 
 // ListResourceTypesInput is the pagination input for AuditResourceTypes.List.
 type ListResourceTypesInput struct {
-	PageSize  int
-	PageAfter string
+	PageNumber int
+	PageSize   int
+	MetaTotal  bool
 }
 
 // ResourceTypeListPage is one page of resource-type slugs.
 type ResourceTypeListPage struct {
 	ResourceTypes []AuditResourceType
-	NextCursor    string
+	Pagination    Pagination
 }
 
 // AuditAction is one row from the actions index.
@@ -140,14 +152,15 @@ type AuditAction struct {
 // ListActionsInput is the filter + pagination input for AuditActions.List.
 type ListActionsInput struct {
 	FilterResourceType string // when set, returns only actions for that resource type
+	PageNumber         int
 	PageSize           int
-	PageAfter          string
+	MetaTotal          bool
 }
 
 // ActionListPage is one page of action slugs.
 type ActionListPage struct {
 	Actions    []AuditAction
-	NextCursor string
+	Pagination Pagination
 }
 
 // ---------------------------------------------------------------------------
@@ -211,12 +224,13 @@ type UpdateForwarderInput = CreateForwarderInput
 type ListForwardersInput struct {
 	ForwarderType ForwarderType
 	Enabled       *bool
+	PageNumber    int
 	PageSize      int
-	PageAfter     string
+	MetaTotal     bool
 }
 
 // ListForwardersPage is one page of forwarders.
 type ListForwardersPage struct {
 	Forwarders []Forwarder
-	NextCursor string
+	Pagination Pagination
 }
