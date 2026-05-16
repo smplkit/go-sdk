@@ -196,38 +196,19 @@ func (c *LoggingClient) RegisterLogger(name string, level LogLevel) {
 // Refresh re-fetches managed logger and log-group definitions from the
 // server, re-applies resolved levels to every adapter-known logger, and
 // fires change/deletion listeners (with Source = "manual") for any
-// logger whose definition changed since the previous fetch.
+// logger whose effective level changed since the previous fetch.
 //
 // Use this when the customer wants to bypass the WebSocket and force a
 // fresh sync — e.g. after a known burst of server-side edits, or when
 // running short-lived scripts that don't keep the WS open. Mirrors
 // Python's client.logging.refresh().
 func (c *LoggingClient) Refresh(ctx context.Context) error {
-	oldLoggers := c.loggersCache
-
+	before := c.snapshotResolvedLevels()
 	if err := c.fetchAndCache(ctx); err != nil {
 		return err
 	}
 	c.applyLevels()
-
-	allKeys := make(map[string]struct{}, len(oldLoggers)+len(c.loggersCache))
-	for k := range oldLoggers {
-		allKeys[k] = struct{}{}
-	}
-	for k := range c.loggersCache {
-		allKeys[k] = struct{}{}
-	}
-
-	for k := range allKeys {
-		_, hadOld := oldLoggers[k]
-		_, hasNew := c.loggersCache[k]
-		switch {
-		case hadOld && !hasNew:
-			c.fireDeletedListeners(k, "manual")
-		case !reflect.DeepEqual(oldLoggers[k], c.loggersCache[k]):
-			c.fireChangeListeners(k, "manual")
-		}
-	}
+	c.fireResolvedLevelDeltas(before, "manual")
 	return nil
 }
 
@@ -643,31 +624,31 @@ func (c *LoggingClient) handleLoggerChanged(data map[string]interface{}) {
 
 	ctx := context.Background()
 
-	// Snapshot pre-state.
+	// Scoped single fetch; skip the apply/fire pass entirely when the
+	// raw entry didn't change (cheap fast path for noisy events).
 	prePre := c.loggersCache[loggerKey]
-
-	// Scoped single fetch.
 	updated, err := c.fetchSingleLogger(ctx, loggerKey)
 	if err != nil {
 		return
 	}
-
 	if reflect.DeepEqual(prePre, updated) {
 		return
 	}
 
+	before := c.snapshotResolvedLevels()
 	c.loggersCache[loggerKey] = updated
 	c.applyLevels()
-	c.fireChangeListeners(loggerKey, "websocket")
+	c.fireResolvedLevelDeltas(before, "websocket")
 }
 
 func (c *LoggingClient) handleLoggerDeleted(data map[string]interface{}) {
 	loggerKey, _ := data["id"].(string)
 	debug.Debug("websocket", "logger_deleted event received, key=%q", loggerKey)
 
+	before := c.snapshotResolvedLevels()
 	delete(c.loggersCache, loggerKey)
 	c.applyLevels()
-	c.fireDeletedListeners(loggerKey, "websocket")
+	c.fireResolvedLevelDeltas(before, "websocket")
 }
 
 func (c *LoggingClient) handleGroupChanged(data map[string]interface{}) {
@@ -676,29 +657,32 @@ func (c *LoggingClient) handleGroupChanged(data map[string]interface{}) {
 
 	ctx := context.Background()
 
-	// Snapshot pre-state.
 	pre := c.groupsCache[groupKey]
-
-	// Scoped single fetch.
 	updated, err := c.fetchSingleGroup(ctx, groupKey)
 	if err != nil {
 		return
 	}
-
 	if reflect.DeepEqual(pre, updated) {
 		return
 	}
 
+	before := c.snapshotResolvedLevels()
 	c.groupsCache[groupKey] = updated
 	c.applyLevels()
+	c.fireResolvedLevelDeltas(before, "websocket")
 }
 
 func (c *LoggingClient) handleGroupDeleted(data map[string]interface{}) {
 	groupKey, _ := data["id"].(string)
 	debug.Debug("websocket", "group_deleted event received, key=%q", groupKey)
 
+	if _, existed := c.groupsCache[groupKey]; !existed {
+		return
+	}
+	before := c.snapshotResolvedLevels()
 	delete(c.groupsCache, groupKey)
 	c.applyLevels()
+	c.fireResolvedLevelDeltas(before, "websocket")
 }
 
 func (c *LoggingClient) handleLoggersChanged(_ map[string]interface{}) {
@@ -706,27 +690,41 @@ func (c *LoggingClient) handleLoggersChanged(_ map[string]interface{}) {
 
 	ctx := context.Background()
 
-	oldLoggersCache := c.loggersCache
-	oldGroupsCache := c.groupsCache
-
+	before := c.snapshotResolvedLevels()
 	if err := c.fetchAndCache(ctx); err != nil {
 		return
 	}
 	c.applyLevels()
+	c.fireResolvedLevelDeltas(before, "websocket")
+}
 
-	// Fire listeners for changed loggers.
-	allKeys := make(map[string]struct{})
-	for k := range oldLoggersCache {
-		allKeys[k] = struct{}{}
+// snapshotResolvedLevels resolves every cached logger against the
+// current loggers + groups + environment and returns the resulting map.
+// Used to capture a "before" picture for diffing after a cache mutation.
+func (c *LoggingClient) snapshotResolvedLevels() map[string]LogLevel {
+	snap := make(map[string]LogLevel, len(c.loggersCache))
+	for id := range c.loggersCache {
+		snap[id] = resolveLoggerLevel(id, c.client.environment, c.loggersCache, c.groupsCache)
 	}
-	for k := range c.loggersCache {
-		allKeys[k] = struct{}{}
-	}
-	_ = oldGroupsCache // groups don't have key-scoped listeners
+	return snap
+}
 
-	for k := range allKeys {
-		if !reflect.DeepEqual(oldLoggersCache[k], c.loggersCache[k]) {
-			c.fireChangeListeners(k, "websocket")
+// fireResolvedLevelDeltas re-resolves every cached logger and fires
+// change / deleted listeners for any logger whose effective level
+// differs from the supplied snapshot. A logger that is no longer in
+// loggersCache (i.e. was deleted) fires a deleted listener; everything
+// else with a different (or newly-resolved) level fires a change
+// listener.
+func (c *LoggingClient) fireResolvedLevelDeltas(before map[string]LogLevel, source string) {
+	after := c.snapshotResolvedLevels()
+	for id, newLvl := range after {
+		if oldLvl, ok := before[id]; !ok || oldLvl != newLvl {
+			c.fireChangeListeners(id, source)
+		}
+	}
+	for id := range before {
+		if _, stillCached := c.loggersCache[id]; !stillCached {
+			c.fireDeletedListeners(id, source)
 		}
 	}
 }

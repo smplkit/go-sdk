@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1830,6 +1831,123 @@ func TestApplyLevelsDelegatesToAdapters(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "expected ApplyLevel(com.acme.app, WARN) to be called, got %v", adapter.appliedLevels)
+}
+
+// Install must apply a logger's inherited level — group chain, then
+// dot-ancestry — not just the logger's raw level field. A managed
+// logger with level=null and group="grp" should land on the adapter at
+// the group's level, not INFO.
+func TestStart_AppliesInheritedLevelViaGroup(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{
+			"id":"com.acme.db",
+			"type":"logger",
+			"attributes":{
+				"id":"com.acme.db",
+				"name":"com.acme.db",
+				"managed":true,
+				"group":"sql",
+				"environments":{}
+			}
+		}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{
+			"id":"sql",
+			"type":"log_group",
+			"attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}
+		}]}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	client := newLoggingTestClient(t, mux)
+	adapter := &testAdapter{
+		name: "test",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "com.acme.db", Level: "DEBUG"},
+		},
+	}
+	client.Logging().RegisterAdapter(adapter)
+	require.NoError(t, client.Logging().Start(context.Background()))
+
+	// Without group resolution the adapter would have ended up at INFO
+	// (the system fallback for a logger with level=null). The group
+	// chain must produce ERROR.
+	require.NotEmpty(t, adapter.appliedLevels)
+	var got string
+	for _, al := range adapter.appliedLevels {
+		if al.loggerName == "com.acme.db" {
+			got = al.level
+		}
+	}
+	assert.Equal(t, "ERROR", got, "group's level must propagate to the dependent logger's adapter")
+}
+
+// After install, a group_changed WS event for the parent group must
+// reapply the new level to the dependent logger's adapter.
+func TestGroupChanged_ReapliesLevelToDependentAdapter(t *testing.T) {
+	var groupLevel atomic.Value
+	groupLevel.Store("ERROR")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{
+			"id":"com.acme.db",
+			"type":"logger",
+			"attributes":{"id":"com.acme.db","name":"com.acme.db","managed":true,"group":"sql","environments":{}}
+		}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		level := groupLevel.Load().(string)
+		_, _ = w.Write([]byte(`{"data":[{
+			"id":"sql","type":"log_group",
+			"attributes":{"id":"sql","name":"SQL","level":"` + level + `","environments":{}}
+		}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups/sql", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		level := groupLevel.Load().(string)
+		_, _ = w.Write([]byte(`{"data":{
+			"id":"sql","type":"log_group",
+			"attributes":{"id":"sql","name":"SQL","level":"` + level + `","environments":{}}
+		}}`))
+	})
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	client := newLoggingTestClient(t, mux)
+	adapter := &testAdapter{
+		name: "test",
+		discovered: []smplkit.TestDiscoveredLogger{
+			{Name: "com.acme.db", Level: "DEBUG"},
+		},
+	}
+	client.Logging().RegisterAdapter(adapter)
+	require.NoError(t, client.Logging().Start(context.Background()))
+
+	// Now the group flips to WARN; force a refresh (equivalent to the WS
+	// group_changed handler from the customer's perspective: it
+	// re-resolves and re-applies).
+	groupLevel.Store("WARN")
+	require.NoError(t, client.Logging().Refresh(context.Background()))
+
+	// Last apply for com.acme.db should be WARN.
+	var last string
+	for _, al := range adapter.appliedLevels {
+		if al.loggerName == "com.acme.db" {
+			last = al.level
+		}
+	}
+	assert.Equal(t, "WARN", last, "Refresh after group level change should reapply WARN to the dependent adapter")
 }
 
 func TestCloseCallsUninstallHook(t *testing.T) {
