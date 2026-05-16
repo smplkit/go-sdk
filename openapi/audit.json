@@ -327,6 +327,42 @@
               "title": "Filter[Period]"
             },
             "description": "Period to report. `current` is the only supported value."
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error.",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
+              "default": 1000,
+              "title": "Page[Size]"
+            },
+            "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
+          },
+          {
+            "name": "meta[total]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.",
+              "default": false,
+              "title": "Meta[Total]"
+            },
+            "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`."
           }
         ],
         "responses": {
@@ -384,7 +420,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarders",
-        "description": "List forwarders for this account.\n\nDefault sort is `-created_at` (newest first). Pagination uses cursor\ntokens; keep the same `sort` value across paginated requests.",
+        "description": "List forwarders for this account.\n\nDefault sort is `-created_at` (newest first).",
         "operationId": "list_forwarders",
         "security": [
           {
@@ -425,39 +461,6 @@
             }
           },
           {
-            "name": "page[size]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page[Size]"
-            }
-          },
-          {
-            "name": "page[after]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page[After]"
-            }
-          },
-          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -474,6 +477,42 @@
               "title": "Sort"
             },
             "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `updated_at`, `-updated_at`."
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error.",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
+              "default": 1000,
+              "title": "Page[Size]"
+            },
+            "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
+          },
+          {
+            "name": "meta[total]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.",
+              "default": false,
+              "title": "Meta[Total]"
+            },
+            "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`."
           }
         ],
         "responses": {
@@ -882,39 +921,6 @@
         ],
         "parameters": [
           {
-            "name": "page[size]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page[Size]"
-            }
-          },
-          {
-            "name": "page[after]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page[After]"
-            }
-          },
-          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -929,6 +935,42 @@
               "title": "Sort"
             },
             "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`."
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error.",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
+              "default": 1000,
+              "title": "Page[Size]"
+            },
+            "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
+          },
+          {
+            "name": "meta[total]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.",
+              "default": false,
+              "title": "Meta[Total]"
+            },
+            "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`."
           }
         ],
         "responses": {
@@ -976,39 +1018,6 @@
             }
           },
           {
-            "name": "page[size]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page[Size]"
-            }
-          },
-          {
-            "name": "page[after]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page[After]"
-            }
-          },
-          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -1023,6 +1032,42 @@
               "title": "Sort"
             },
             "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`."
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error.",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
+              "default": 1000,
+              "title": "Page[Size]"
+            },
+            "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
+          },
+          {
+            "name": "meta[total]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.",
+              "default": false,
+              "title": "Meta[Total]"
+            },
+            "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`."
           }
         ],
         "responses": {
@@ -1063,36 +1108,6 @@
         ],
         "title": "ActionAttributes"
       },
-      "ActionListLinks": {
-        "properties": {
-          "next": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next"
-          }
-        },
-        "type": "object",
-        "title": "ActionListLinks"
-      },
-      "ActionListMeta": {
-        "properties": {
-          "page_size": {
-            "type": "integer",
-            "title": "Page Size"
-          }
-        },
-        "type": "object",
-        "required": [
-          "page_size"
-        ],
-        "title": "ActionListMeta"
-      },
       "ActionListResponse": {
         "properties": {
           "data": {
@@ -1103,17 +1118,7 @@
             "title": "Data"
           },
           "meta": {
-            "$ref": "#/components/schemas/ActionListMeta"
-          },
-          "links": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ActionListLinks"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/ListMeta"
           }
         },
         "type": "object",
@@ -1316,7 +1321,8 @@
         "required": [
           "page_size"
         ],
-        "title": "EventListMeta"
+        "title": "EventListMeta",
+        "description": "Cursor-pagination meta for the audit-event list endpoint.\n\nAudit events are append-only at high cardinality (millions of rows\nper account at production tenants), so this endpoint stays on\ncursor pagination \u2014 the documented exception in ADR-014. Every\nother read-many endpoint in the platform follows the standard\noffset convention (`page[number]` / `page[size]`)."
       },
       "EventListResponse": {
         "properties": {
@@ -1347,7 +1353,7 @@
           "meta"
         ],
         "title": "EventListResponse",
-        "description": "JSON:API collection response for audit events."
+        "description": "JSON:API collection response for audit events (cursor paged)."
       },
       "EventRequest": {
         "properties": {
@@ -1669,6 +1675,37 @@
         "title": "ForwarderDelivery",
         "description": "A log entry for one attempt to deliver an event to a forwarder."
       },
+      "ForwarderDeliveryListLinks": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next"
+          }
+        },
+        "type": "object",
+        "title": "ForwarderDeliveryListLinks"
+      },
+      "ForwarderDeliveryListMeta": {
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_size"
+        ],
+        "title": "ForwarderDeliveryListMeta",
+        "description": "Cursor-pagination meta for the forwarder-delivery log endpoint.\n\nForwarder deliveries are append-only at high cardinality (one row per\ndelivery attempt per event) and scroll with the same workload as\naudit events, so this endpoint stays on cursor pagination \u2014 the\ndocumented exception in ADR-014. The parent `/forwarders` collection\nfollows the standard offset convention."
+      },
       "ForwarderDeliveryListResponse": {
         "properties": {
           "data": {
@@ -1679,12 +1716,12 @@
             "title": "Data"
           },
           "meta": {
-            "$ref": "#/components/schemas/ForwarderListMeta"
+            "$ref": "#/components/schemas/ForwarderDeliveryListMeta"
           },
           "links": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ForwarderListLinks"
+                "$ref": "#/components/schemas/ForwarderDeliveryListLinks"
               },
               {
                 "type": "null"
@@ -1698,7 +1735,7 @@
           "meta"
         ],
         "title": "ForwarderDeliveryListResponse",
-        "description": "JSON:API collection response for forwarder deliveries."
+        "description": "JSON:API collection response for forwarder deliveries (cursor paged)."
       },
       "ForwarderDeliveryResource": {
         "properties": {
@@ -1820,36 +1857,6 @@
         "title": "ForwarderHttp",
         "description": "HTTP request configuration used to deliver an event to the destination."
       },
-      "ForwarderListLinks": {
-        "properties": {
-          "next": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next"
-          }
-        },
-        "type": "object",
-        "title": "ForwarderListLinks"
-      },
-      "ForwarderListMeta": {
-        "properties": {
-          "page_size": {
-            "type": "integer",
-            "title": "Page Size"
-          }
-        },
-        "type": "object",
-        "required": [
-          "page_size"
-        ],
-        "title": "ForwarderListMeta"
-      },
       "ForwarderListResponse": {
         "properties": {
           "data": {
@@ -1860,17 +1867,7 @@
             "title": "Data"
           },
           "meta": {
-            "$ref": "#/components/schemas/ForwarderListMeta"
-          },
-          "links": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ForwarderListLinks"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/ListMeta"
           }
         },
         "type": "object",
@@ -2006,6 +2003,64 @@
         "title": "HttpHeader",
         "description": "A single HTTP header attached to a forwarder delivery request."
       },
+      "ListMeta": {
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pagination"
+        ],
+        "title": "ListMeta",
+        "description": "Top-level ``meta`` block included on every JSON:API list response."
+      },
+      "PaginationMeta": {
+        "properties": {
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "description": "1-based page number returned."
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "description": "Number of items per page."
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total",
+            "description": "Total number of matching items across all pages. Present only when the request included `meta[total]=true`."
+          },
+          "total_pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Pages",
+            "description": "Total number of pages at the requested page size. Present only when the request included `meta[total]=true`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "page",
+          "size"
+        ],
+        "title": "PaginationMeta",
+        "description": "Pagination block returned inside ``meta`` on every list response.\n\n``page`` and ``size`` are always present and echo the parameters that\nserved the response (their defaults when the client omitted them).\n``total`` and ``total_pages`` are present only when the request included\n``meta[total]=true``."
+      },
       "ResourceTypeAttributes": {
         "properties": {
           "resource_type": {
@@ -2027,36 +2082,6 @@
         ],
         "title": "ResourceTypeAttributes"
       },
-      "ResourceTypeListLinks": {
-        "properties": {
-          "next": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next"
-          }
-        },
-        "type": "object",
-        "title": "ResourceTypeListLinks"
-      },
-      "ResourceTypeListMeta": {
-        "properties": {
-          "page_size": {
-            "type": "integer",
-            "title": "Page Size"
-          }
-        },
-        "type": "object",
-        "required": [
-          "page_size"
-        ],
-        "title": "ResourceTypeListMeta"
-      },
       "ResourceTypeListResponse": {
         "properties": {
           "data": {
@@ -2067,17 +2092,7 @@
             "title": "Data"
           },
           "meta": {
-            "$ref": "#/components/schemas/ResourceTypeListMeta"
-          },
-          "links": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ResourceTypeListLinks"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/ListMeta"
           }
         },
         "type": "object",
@@ -2357,11 +2372,15 @@
             },
             "type": "array",
             "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListMeta"
           }
         },
         "type": "object",
         "required": [
-          "data"
+          "data",
+          "meta"
         ],
         "title": "UsageResponse"
       }

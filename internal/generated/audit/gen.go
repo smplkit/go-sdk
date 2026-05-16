@@ -244,21 +244,12 @@ type ActionAttributes struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ActionListLinks defines model for ActionListLinks.
-type ActionListLinks struct {
-	Next *string `json:"next,omitempty"`
-}
-
-// ActionListMeta defines model for ActionListMeta.
-type ActionListMeta struct {
-	PageSize int `json:"page_size"`
-}
-
 // ActionListResponse defines model for ActionListResponse.
 type ActionListResponse struct {
-	Data  []ActionResource `json:"data"`
-	Links *ActionListLinks `json:"links,omitempty"`
-	Meta  ActionListMeta   `json:"meta"`
+	Data []ActionResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ActionResource defines model for ActionResource.
@@ -319,16 +310,30 @@ type EventListLinks struct {
 	Next *string `json:"next,omitempty"`
 }
 
-// EventListMeta defines model for EventListMeta.
+// EventListMeta Cursor-pagination meta for the audit-event list endpoint.
+//
+// Audit events are append-only at high cardinality (millions of rows
+// per account at production tenants), so this endpoint stays on
+// cursor pagination — the documented exception in ADR-014. Every
+// other read-many endpoint in the platform follows the standard
+// offset convention (`page[number]` / `page[size]`).
 type EventListMeta struct {
 	PageSize int `json:"page_size"`
 }
 
-// EventListResponse JSON:API collection response for audit events.
+// EventListResponse JSON:API collection response for audit events (cursor paged).
 type EventListResponse struct {
 	Data  []EventResource `json:"data"`
 	Links *EventListLinks `json:"links,omitempty"`
-	Meta  EventListMeta   `json:"meta"`
+
+	// Meta Cursor-pagination meta for the audit-event list endpoint.
+	//
+	// Audit events are append-only at high cardinality (millions of rows
+	// per account at production tenants), so this endpoint stays on
+	// cursor pagination — the documented exception in ADR-014. Every
+	// other read-many endpoint in the platform follows the standard
+	// offset convention (`page[number]` / `page[size]`).
+	Meta EventListMeta `json:"meta"`
 }
 
 // EventRequest JSON:API request envelope for recording an audit event.
@@ -440,11 +445,35 @@ type ForwarderDelivery struct {
 // ForwarderDeliveryStatus Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event; `SKIPPED_DO_NOT_FORWARD` is recorded when the event was emitted with `do_not_forward=true`.
 type ForwarderDeliveryStatus string
 
-// ForwarderDeliveryListResponse JSON:API collection response for forwarder deliveries.
+// ForwarderDeliveryListLinks defines model for ForwarderDeliveryListLinks.
+type ForwarderDeliveryListLinks struct {
+	Next *string `json:"next,omitempty"`
+}
+
+// ForwarderDeliveryListMeta Cursor-pagination meta for the forwarder-delivery log endpoint.
+//
+// Forwarder deliveries are append-only at high cardinality (one row per
+// delivery attempt per event) and scroll with the same workload as
+// audit events, so this endpoint stays on cursor pagination — the
+// documented exception in ADR-014. The parent `/forwarders` collection
+// follows the standard offset convention.
+type ForwarderDeliveryListMeta struct {
+	PageSize int `json:"page_size"`
+}
+
+// ForwarderDeliveryListResponse JSON:API collection response for forwarder deliveries (cursor paged).
 type ForwarderDeliveryListResponse struct {
 	Data  []ForwarderDeliveryResource `json:"data"`
-	Links *ForwarderListLinks         `json:"links,omitempty"`
-	Meta  ForwarderListMeta           `json:"meta"`
+	Links *ForwarderDeliveryListLinks `json:"links,omitempty"`
+
+	// Meta Cursor-pagination meta for the forwarder-delivery log endpoint.
+	//
+	// Forwarder deliveries are append-only at high cardinality (one row per
+	// delivery attempt per event) and scroll with the same workload as
+	// audit events, so this endpoint stays on cursor pagination — the
+	// documented exception in ADR-014. The parent `/forwarders` collection
+	// follows the standard offset convention.
+	Meta ForwarderDeliveryListMeta `json:"meta"`
 }
 
 // ForwarderDeliveryResource JSON:API resource envelope for a forwarder delivery log entry.
@@ -482,21 +511,12 @@ type ForwarderHttp struct {
 // ForwarderHttpMethod HTTP method used when delivering an event.
 type ForwarderHttpMethod string
 
-// ForwarderListLinks defines model for ForwarderListLinks.
-type ForwarderListLinks struct {
-	Next *string `json:"next,omitempty"`
-}
-
-// ForwarderListMeta defines model for ForwarderListMeta.
-type ForwarderListMeta struct {
-	PageSize int `json:"page_size"`
-}
-
 // ForwarderListResponse JSON:API collection response for forwarders.
 type ForwarderListResponse struct {
-	Data  []ForwarderResource `json:"data"`
-	Links *ForwarderListLinks `json:"links,omitempty"`
-	Meta  ForwarderListMeta   `json:"meta"`
+	Data []ForwarderResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ForwarderRequest JSON:API request envelope for creating or updating a forwarder.
@@ -543,6 +563,37 @@ type HttpHeader struct {
 	Value string `json:"value"`
 }
 
+// ListMeta Top-level “meta“ block included on every JSON:API list response.
+type ListMeta struct {
+	// Pagination Pagination block returned inside ``meta`` on every list response.
+	//
+	// ``page`` and ``size`` are always present and echo the parameters that
+	// served the response (their defaults when the client omitted them).
+	// ``total`` and ``total_pages`` are present only when the request included
+	// ``meta[total]=true``.
+	Pagination PaginationMeta `json:"pagination"`
+}
+
+// PaginationMeta Pagination block returned inside “meta“ on every list response.
+//
+// “page“ and “size“ are always present and echo the parameters that
+// served the response (their defaults when the client omitted them).
+// “total“ and “total_pages“ are present only when the request included
+// “meta[total]=true“.
+type PaginationMeta struct {
+	// Page 1-based page number returned.
+	Page int `json:"page"`
+
+	// Size Number of items per page.
+	Size int `json:"size"`
+
+	// Total Total number of matching items across all pages. Present only when the request included `meta[total]=true`.
+	Total *int `json:"total,omitempty"`
+
+	// TotalPages Total number of pages at the requested page size. Present only when the request included `meta[total]=true`.
+	TotalPages *int `json:"total_pages,omitempty"`
+}
+
 // ResourceTypeAttributes defines model for ResourceTypeAttributes.
 type ResourceTypeAttributes struct {
 	// CreatedAt First sighting of this resource_type for the account.
@@ -552,21 +603,12 @@ type ResourceTypeAttributes struct {
 	ResourceType string `json:"resource_type"`
 }
 
-// ResourceTypeListLinks defines model for ResourceTypeListLinks.
-type ResourceTypeListLinks struct {
-	Next *string `json:"next,omitempty"`
-}
-
-// ResourceTypeListMeta defines model for ResourceTypeListMeta.
-type ResourceTypeListMeta struct {
-	PageSize int `json:"page_size"`
-}
-
 // ResourceTypeListResponse defines model for ResourceTypeListResponse.
 type ResourceTypeListResponse struct {
-	Data  []ResourceTypeResource `json:"data"`
-	Links *ResourceTypeListLinks `json:"links,omitempty"`
-	Meta  ResourceTypeListMeta   `json:"meta"`
+	Data []ResourceTypeResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ResourceTypeResource defines model for ResourceTypeResource.
@@ -661,6 +703,9 @@ type UsageResource struct {
 // UsageResponse defines model for UsageResponse.
 type UsageResponse struct {
 	Data []UsageResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
@@ -669,11 +714,18 @@ type hTTPBearerContextKey string
 // ListActionsParams defines parameters for ListActions.
 type ListActionsParams struct {
 	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
-	PageSize           *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
-	PageAfter          *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
 	Sort *ListActionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListActionsParamsSort defines parameters for ListActions.
@@ -709,11 +761,18 @@ type RecordEventParams struct {
 type ListForwardersParams struct {
 	FilterForwarderType *string `form:"filter[forwarder_type],omitempty" json:"filter[forwarder_type],omitempty"`
 	FilterEnabled       *bool   `form:"filter[enabled],omitempty" json:"filter[enabled],omitempty"`
-	PageSize            *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
-	PageAfter           *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `updated_at`, `-updated_at`.
 	Sort *ListForwardersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListForwardersParamsSort defines parameters for ListForwarders.
@@ -736,11 +795,17 @@ type ListForwarderDeliveriesParamsSort string
 
 // ListResourceTypesParams defines parameters for ListResourceTypes.
 type ListResourceTypesParams struct {
-	PageSize  *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
-	PageAfter *string `form:"page[after],omitempty" json:"page[after],omitempty"`
-
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
 	Sort *ListResourceTypesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListResourceTypesParamsSort defines parameters for ListResourceTypes.
@@ -750,6 +815,15 @@ type ListResourceTypesParamsSort string
 type ListUsageParams struct {
 	// FilterPeriod Period to report. `current` is the only supported value.
 	FilterPeriod string `form:"filter[period]" json:"filter[period]"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // RecordEventApplicationVndAPIPlusJSONRequestBody defines body for RecordEvent for application/vnd.api+json ContentType.
@@ -1159,6 +1233,30 @@ func NewListActionsRequest(server string, params *ListActionsParams) (*http.Requ
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.PageSize != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -1171,21 +1269,9 @@ func NewListActionsRequest(server string, params *ListActionsParams) (*http.Requ
 
 		}
 
-		if params.PageAfter != nil {
+		if params.MetaTotal != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Sort != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1512,6 +1598,30 @@ func NewListForwardersRequest(server string, params *ListForwardersParams) (*htt
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.PageSize != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -1524,21 +1634,9 @@ func NewListForwardersRequest(server string, params *ListForwardersParams) (*htt
 
 		}
 
-		if params.PageAfter != nil {
+		if params.MetaTotal != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Sort != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1981,6 +2079,30 @@ func NewListResourceTypesRequest(server string, params *ListResourceTypesParams)
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.PageSize != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -1993,21 +2115,9 @@ func NewListResourceTypesRequest(server string, params *ListResourceTypesParams)
 
 		}
 
-		if params.PageAfter != nil {
+		if params.MetaTotal != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Sort != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2065,6 +2175,42 @@ func NewListUsageRequest(server string, params *ListUsageParams) (*http.Request,
 			for _, qp := range strings.Split(queryFrag, "&") {
 				rawQueryFragments = append(rawQueryFragments, qp)
 			}
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
 		}
 
 		if encoded := queryValues.Encode(); encoded != "" {
