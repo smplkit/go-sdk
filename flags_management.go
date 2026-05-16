@@ -181,9 +181,19 @@ func (m *FlagsManagement) Get(ctx context.Context, id string) (*Flag, error) {
 	return resourceToFlag(result.Data, m), nil
 }
 
-// List returns all flags for the account.
-func (m *FlagsManagement) List(ctx context.Context) ([]*Flag, error) {
-	resp, err := m.gen.ListFlags(ctx, nil)
+// List returns one page of flags for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional
+// pages. The wrapper does not loop — callers that want every flag
+// should iterate until a short page is returned.
+func (m *FlagsManagement) List(ctx context.Context, opts ...ListOption) ([]*Flag, error) {
+	o := resolveListOptions(opts)
+	params := &genflags.ListFlagsParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := m.gen.ListFlags(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -281,9 +291,17 @@ func (m *FlagsManagement) UpdateContextType(ctx context.Context, ctID string, at
 	return parseContextType(body)
 }
 
-// ListContextTypes lists all context types.
-func (m *FlagsManagement) ListContextTypes(ctx context.Context) ([]*ContextType, error) {
-	resp, err := m.appGen.ListContextTypes(ctx, nil)
+// ListContextTypes returns one page of context types.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (m *FlagsManagement) ListContextTypes(ctx context.Context, opts ...ListOption) ([]*ContextType, error) {
+	o := resolveListOptions(opts)
+	params := &genapp.ListContextTypesParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := m.appGen.ListContextTypes(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -344,10 +362,17 @@ func (m *FlagsManagement) DeleteContextType(ctx context.Context, ctID string) er
 	return checkStatus(resp.StatusCode, body)
 }
 
-// ListContexts lists context instances filtered by context type key.
-func (m *FlagsManagement) ListContexts(ctx context.Context, contextTypeKey string) ([]map[string]interface{}, error) {
+// ListContexts returns one page of context instances filtered by
+// context type key.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (m *FlagsManagement) ListContexts(ctx context.Context, contextTypeKey string, opts ...ListOption) ([]map[string]interface{}, error) {
+	o := resolveListOptions(opts)
 	params := &genapp.ListContextsParams{
 		FilterContextType: &contextTypeKey,
+		PageNumber:        o.pageNumber,
+		PageSize:          o.pageSize,
 	}
 	resp, err := m.appGen.ListContexts(ctx, params)
 	if err != nil {

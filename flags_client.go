@@ -302,9 +302,30 @@ func (c *FlagsClient) fetchAllFlags(ctx context.Context) (map[string]map[string]
 	return store, nil
 }
 
-// fetchFlagsList fetches all flags as plain dicts.
+// fetchFlagsList fetches every flag as plain dicts, walking pagination
+// until the server returns a short page.
 func (c *FlagsClient) fetchFlagsList(ctx context.Context) ([]map[string]interface{}, error) {
-	resp, err := c.generated.ListFlags(ctx, nil)
+	var all []map[string]interface{}
+	for page := 1; ; page++ {
+		batch, err := c.fetchFlagsPage(ctx, page, fetchAllPageSize)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, batch...)
+		if len(batch) < fetchAllPageSize {
+			return all, nil
+		}
+	}
+}
+
+// fetchFlagsPage fetches a single page of flags and converts each row to
+// the runtime's plain-dict shape.
+func (c *FlagsClient) fetchFlagsPage(ctx context.Context, pageNumber, pageSize int) ([]map[string]interface{}, error) {
+	params := &genflags.ListFlagsParams{
+		PageNumber: &pageNumber,
+		PageSize:   &pageSize,
+	}
+	resp, err := c.generated.ListFlags(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}

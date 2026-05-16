@@ -131,9 +131,19 @@ func (m *ConfigManagement) Get(ctx context.Context, id string) (*ConfigEntry, er
 	return resourceToConfig(result.Data, m), nil
 }
 
-// List returns all configs for the account.
-func (m *ConfigManagement) List(ctx context.Context) ([]*ConfigEntry, error) {
-	resp, err := m.gen.ListConfigs(ctx, nil)
+// List returns one page of configs for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional
+// pages. The wrapper does not loop — callers that want every config
+// should iterate until a short page is returned.
+func (m *ConfigManagement) List(ctx context.Context, opts ...ListOption) ([]*ConfigEntry, error) {
+	o := resolveListOptions(opts)
+	params := &genconfig.ListConfigsParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := m.gen.ListConfigs(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}

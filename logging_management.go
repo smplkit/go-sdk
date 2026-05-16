@@ -92,9 +92,19 @@ func (m *LoggingManagement) Get(ctx context.Context, id string) (*Logger, error)
 	return resourceToLogger(result.Data, m), nil
 }
 
-// List returns all loggers for the account.
-func (m *LoggingManagement) List(ctx context.Context) ([]*Logger, error) {
-	resp, err := m.gen.ListLoggers(ctx, nil)
+// List returns one page of loggers for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional
+// pages. The wrapper does not loop — callers that want every logger
+// should iterate until a short page is returned.
+func (m *LoggingManagement) List(ctx context.Context, opts ...ListOption) ([]*Logger, error) {
+	o := resolveListOptions(opts)
+	params := &genlogging.ListLoggersParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := m.gen.ListLoggers(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -245,9 +255,19 @@ func (m *LoggingManagement) GetGroup(ctx context.Context, id string) (*LogGroup,
 	}
 }
 
-// ListGroups returns all log groups for the account.
-func (m *LoggingManagement) ListGroups(ctx context.Context) ([]*LogGroup, error) {
-	resp, err := m.gen.ListLogGroups(ctx, nil)
+// ListGroups returns one page of log groups for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional
+// pages. The wrapper does not loop — callers that want every log
+// group should iterate until a short page is returned.
+func (m *LoggingManagement) ListGroups(ctx context.Context, opts ...ListOption) ([]*LogGroup, error) {
+	o := resolveListOptions(opts)
+	params := &genlogging.ListLogGroupsParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := m.gen.ListLogGroups(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}

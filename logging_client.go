@@ -490,12 +490,47 @@ func (c *LoggingClient) fetchSingleGroup(ctx context.Context, key string) (map[s
 	return entry, nil
 }
 
+// fetchAllLoggers walks every page of /loggers and accumulates the full
+// list. Stops when the server returns a short page (fewer than
+// fetchAllPageSize items).
+func (c *LoggingClient) fetchAllLoggers(ctx context.Context) ([]*Logger, error) {
+	mgmt := c.Management()
+	var all []*Logger
+	for page := 1; ; page++ {
+		batch, err := mgmt.List(ctx, WithPageNumber(page), WithPageSize(fetchAllPageSize))
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, batch...)
+		if len(batch) < fetchAllPageSize {
+			return all, nil
+		}
+	}
+}
+
+// fetchAllLogGroups walks every page of /log_groups and accumulates the
+// full list. Same termination semantics as fetchAllLoggers.
+func (c *LoggingClient) fetchAllLogGroups(ctx context.Context) ([]*LogGroup, error) {
+	mgmt := c.Management()
+	var all []*LogGroup
+	for page := 1; ; page++ {
+		batch, err := mgmt.ListGroups(ctx, WithPageNumber(page), WithPageSize(fetchAllPageSize))
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, batch...)
+		if len(batch) < fetchAllPageSize {
+			return all, nil
+		}
+	}
+}
+
 func (c *LoggingClient) fetchAndCache(ctx context.Context) error {
-	loggers, err := c.Management().List(ctx)
+	loggers, err := c.fetchAllLoggers(ctx)
 	if err != nil {
 		return err
 	}
-	groups, err := c.Management().ListGroups(ctx)
+	groups, err := c.fetchAllLogGroups(ctx)
 	if err != nil {
 		return err
 	}

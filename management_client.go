@@ -113,9 +113,17 @@ func (m *EnvironmentsManagement) New(id string, name string, opts ...Environment
 	return e
 }
 
-// List returns all environments for the account.
-func (m *EnvironmentsManagement) List(ctx context.Context) ([]*Environment, error) {
-	resp, err := m.client.appClient.ListEnvironments(ctx, nil)
+// List returns one page of environments for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (m *EnvironmentsManagement) List(ctx context.Context, opts ...ListOption) ([]*Environment, error) {
+	o := resolveListOptions(opts)
+	params := &genapp.ListEnvironmentsParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := m.client.appClient.ListEnvironments(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -289,9 +297,17 @@ func (m *ContextTypesManagement) New(id string, opts ...ContextTypeOption) *Cont
 	return ct
 }
 
-// List returns all context types for the account.
-func (m *ContextTypesManagement) List(ctx context.Context) ([]*ContextType, error) {
-	resp, err := m.client.appClient.ListContextTypes(ctx, nil)
+// List returns one page of context types for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (m *ContextTypesManagement) List(ctx context.Context, opts ...ListOption) ([]*ContextType, error) {
+	o := resolveListOptions(opts)
+	params := &genapp.ListContextTypesParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := m.client.appClient.ListContextTypes(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -516,9 +532,17 @@ func (m *ContextsManagement) flushBatch(ctx context.Context, batch []map[string]
 	return checkStatus(resp.StatusCode, body)
 }
 
-// List returns all context instances of the given context type.
-func (m *ContextsManagement) List(ctx context.Context, contextType string) ([]*ContextEntity, error) {
-	params := &genapp.ListContextsParams{FilterContextType: &contextType}
+// List returns one page of context instances of the given context type.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (m *ContextsManagement) List(ctx context.Context, contextType string, opts ...ListOption) ([]*ContextEntity, error) {
+	o := resolveListOptions(opts)
+	params := &genapp.ListContextsParams{
+		FilterContextType: &contextType,
+		PageNumber:        o.pageNumber,
+		PageSize:          o.pageSize,
+	}
 	resp, err := m.client.appClient.ListContexts(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)

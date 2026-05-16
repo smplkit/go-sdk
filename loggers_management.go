@@ -33,9 +33,12 @@ func (m *LoggersManagement) Get(ctx context.Context, id string) (*Logger, error)
 	return m.logging.Get(ctx, id)
 }
 
-// List returns all loggers for the account.
-func (m *LoggersManagement) List(ctx context.Context) ([]*Logger, error) {
-	return m.logging.List(ctx)
+// List returns one page of loggers for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (m *LoggersManagement) List(ctx context.Context, opts ...ListOption) ([]*Logger, error) {
+	return m.logging.List(ctx, opts...)
 }
 
 // Delete removes a logger by ID.
@@ -81,9 +84,12 @@ func (m *LogGroupsManagement) Get(ctx context.Context, id string) (*LogGroup, er
 	return m.logging.GetGroup(ctx, id)
 }
 
-// List returns all log groups for the account.
-func (m *LogGroupsManagement) List(ctx context.Context) ([]*LogGroup, error) {
-	return m.logging.ListGroups(ctx)
+// List returns one page of log groups for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (m *LogGroupsManagement) List(ctx context.Context, opts ...ListOption) ([]*LogGroup, error) {
+	return m.logging.ListGroups(ctx, opts...)
 }
 
 // Delete removes a log group by ID.

@@ -160,7 +160,7 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 	c.initOnce.Do(func() {
 		environment := c.client.environment
 		debug.Debug("api", "fetching config definitions")
-		configs, err := c.Management().List(ctx)
+		configs, err := c.fetchAllConfigs(ctx)
 		if err != nil {
 			c.initErr = err
 			return
@@ -262,7 +262,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 		return &Error{Message: "No environment set."}
 	}
 
-	configs, err := c.Management().List(ctx)
+	configs, err := c.fetchAllConfigs(ctx)
 	if err != nil {
 		return err
 	}
@@ -458,6 +458,24 @@ func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]inte
 					}()
 				}
 			}
+		}
+	}
+}
+
+// fetchAllConfigs walks every page of /configs and accumulates the full
+// list. The server caps page size at fetchAllPageSize; we stop when a
+// short page (fewer than fetchAllPageSize items) comes back.
+func (c *ConfigClient) fetchAllConfigs(ctx context.Context) ([]*ConfigEntry, error) {
+	mgmt := c.Management()
+	var all []*ConfigEntry
+	for page := 1; ; page++ {
+		batch, err := mgmt.List(ctx, WithPageNumber(page), WithPageSize(fetchAllPageSize))
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, batch...)
+		if len(batch) < fetchAllPageSize {
+			return all, nil
 		}
 	}
 }
