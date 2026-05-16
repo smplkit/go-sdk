@@ -139,6 +139,21 @@ func (e ContextTypeResourceType) Valid() bool {
 	}
 }
 
+// Defines values for ContextValueResourceType.
+const (
+	ContextValueResourceTypeContextValue ContextValueResourceType = "context_value"
+)
+
+// Valid indicates whether the value is a known member of the ContextValueResourceType enum.
+func (e ContextValueResourceType) Valid() bool {
+	switch e {
+	case ContextValueResourceTypeContextValue:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailResourceType.
 const (
 	EmailResourceTypeEmail EmailResourceType = "email"
@@ -1118,6 +1133,9 @@ type ApiKey struct {
 // ApiKeyListResponse JSON:API collection response for API keys.
 type ApiKeyListResponse struct {
 	Data []ApiKeyResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ApiKeyRequest JSON:API request envelope for creating or updating an API key.
@@ -1181,6 +1199,9 @@ type Context struct {
 	// CreatedAt When the context instance was first registered.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
+	// Key Entity identifier within the context type (e.g. `alice-123`). Together with `context_type` it forms the composite `id` `context_type:key`. Set by the bulk-register API; not editable.
+	Key *string `json:"key,omitempty"`
+
 	// Name Human-readable display name for the context instance.
 	Name *string `json:"name,omitempty"`
 
@@ -1215,21 +1236,22 @@ type ContextBulkRegister struct {
 // ContextListResponse JSON:API collection response for context instances.
 type ContextListResponse struct {
 	Data []ContextResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ContextRequest JSON:API request envelope for creating or updating a context instance.
 type ContextRequest struct {
 	// Data JSON:API resource envelope for a context instance.
 	//
-	// `id` is the composite identifier `context_type:key`. It must not be
-	// specified for create requests (the server assigns it).
+	// `id` is the composite identifier `context_type:key` (e.g. `user:alice-123`).
 	Data ContextResource `json:"data"`
 }
 
 // ContextResource JSON:API resource envelope for a context instance.
 //
-// `id` is the composite identifier `context_type:key`. It must not be
-// specified for create requests (the server assigns it).
+// `id` is the composite identifier `context_type:key` (e.g. `user:alice-123`).
 type ContextResource struct {
 	// Attributes A specific instance of a context type — for example, a particular
 	// user, account, or device — together with the attributes observed on it.
@@ -1248,8 +1270,7 @@ type ContextResourceType string
 type ContextResponse struct {
 	// Data JSON:API resource envelope for a context instance.
 	//
-	// `id` is the composite identifier `context_type:key`. It must not be
-	// specified for create requests (the server assigns it).
+	// `id` is the composite identifier `context_type:key` (e.g. `user:alice-123`).
 	Data ContextResource `json:"data"`
 }
 
@@ -1275,6 +1296,9 @@ type ContextType struct {
 // ContextTypeListResponse JSON:API collection response for context types.
 type ContextTypeListResponse struct {
 	Data []ContextTypeResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ContextTypeRequest JSON:API request envelope for creating or updating a context type.
@@ -1309,6 +1333,43 @@ type ContextTypeResponse struct {
 	// `id` must not be specified for create requests (the server assigns it).
 	Data ContextTypeResource `json:"data"`
 }
+
+// ContextValue A single distinct attribute value observed across context instances.
+//
+// Returned by `GET /api/v1/context_values` to power typeahead pickers in
+// rule-building UIs. The set of values reflects what has been registered
+// via the bulk-context endpoint — it is observational, not a customer-
+// declared enumeration.
+type ContextValue struct {
+	// Value The distinct attribute value as it appears on at least one context instance of the requested type.
+	Value string `json:"value"`
+}
+
+// ContextValueListResponse JSON:API collection response envelope for distinct context values.
+type ContextValueListResponse struct {
+	Data []ContextValueResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
+}
+
+// ContextValueResource JSON:API resource envelope for a distinct context-attribute value.
+//
+// `id` is the value itself.
+type ContextValueResource struct {
+	// Attributes A single distinct attribute value observed across context instances.
+	//
+	// Returned by `GET /api/v1/context_values` to power typeahead pickers in
+	// rule-building UIs. The set of values reflects what has been registered
+	// via the bulk-context endpoint — it is observational, not a customer-
+	// declared enumeration.
+	Attributes ContextValue             `json:"attributes"`
+	Id         *string                  `json:"id,omitempty"`
+	Type       ContextValueResourceType `json:"type"`
+}
+
+// ContextValueResourceType defines model for ContextValueResource.Type.
+type ContextValueResourceType string
 
 // Email A contact-us submission. Sending the resource delivers a support
 // ticket and an auto-response email; nothing is persisted. The `id`
@@ -1373,6 +1434,9 @@ type EnvironmentClassification string
 // EnvironmentListResponse JSON:API collection response for environments.
 type EnvironmentListResponse struct {
 	Data []EnvironmentResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // EnvironmentRequest JSON:API request envelope for creating or updating an environment.
@@ -1521,6 +1585,9 @@ type InvitationCreateItem struct {
 // InvitationListResponse JSON:API collection response for invitations.
 type InvitationListResponse struct {
 	Data []InvitationResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // InvitationResource JSON:API resource envelope for an invitation.
@@ -1589,6 +1656,9 @@ type Invoice struct {
 // InvoiceListResponse JSON:API collection response for invoices.
 type InvoiceListResponse struct {
 	Data []InvoiceResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // InvoiceResource JSON:API resource envelope for an invoice.
@@ -1621,6 +1691,17 @@ type LimitDefinition struct {
 
 	// Unit Unit the limit is measured in, e.g. `flags`, `events`.
 	Unit string `json:"unit"`
+}
+
+// ListMeta Top-level “meta“ block included on every JSON:API list response.
+type ListMeta struct {
+	// Pagination Pagination block returned inside ``meta`` on every list response.
+	//
+	// ``page`` and ``size`` are always present and echo the parameters that
+	// served the response (their defaults when the client omitted them).
+	// ``total`` and ``total_pages`` are present only when the request included
+	// ``meta[total]=true``.
+	Pagination PaginationMeta `json:"pagination"`
 }
 
 // LoginRequest Body for the email + password login endpoint.
@@ -1676,6 +1757,9 @@ type MetricBulkRequest struct {
 // MetricListResponse JSON:API collection response for metric data points.
 type MetricListResponse struct {
 	Data []MetricResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // MetricNameItem One distinct metric name with a representative unit.
@@ -1690,6 +1774,9 @@ type MetricNameItem struct {
 // MetricNamesResponse Plain-JSON response listing distinct metric names for the account.
 type MetricNamesResponse struct {
 	Data []MetricNameItem `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // MetricResource JSON:API resource envelope for a metric data point.
@@ -1726,6 +1813,9 @@ type MetricRollupAttributes struct {
 // MetricRollupListResponse JSON:API collection response for metric rollups.
 type MetricRollupListResponse struct {
 	Data []MetricRollupResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // MetricRollupResource JSON:API resource envelope for a metric rollup.
@@ -1753,19 +1843,24 @@ type NextTierResponse struct {
 // OidcProvider defines model for OidcProvider.
 type OidcProvider string
 
-// PageMeta Pagination metadata returned with a collection response.
-type PageMeta struct {
-	// Number 1-based page number returned.
-	Number int `json:"number"`
+// PaginationMeta Pagination block returned inside “meta“ on every list response.
+//
+// “page“ and “size“ are always present and echo the parameters that
+// served the response (their defaults when the client omitted them).
+// “total“ and “total_pages“ are present only when the request included
+// “meta[total]=true“.
+type PaginationMeta struct {
+	// Page 1-based page number returned.
+	Page int `json:"page"`
 
-	// Size Page size used for this response.
+	// Size Number of items per page.
 	Size int `json:"size"`
 
-	// TotalItems Total number of matching items across all pages.
-	TotalItems int `json:"total_items"`
+	// Total Total number of matching items across all pages. Present only when the request included `meta[total]=true`.
+	Total *int `json:"total,omitempty"`
 
-	// TotalPages Total number of pages at the current page size.
-	TotalPages int `json:"total_pages"`
+	// TotalPages Total number of pages at the requested page size. Present only when the request included `meta[total]=true`.
+	TotalPages *int `json:"total_pages,omitempty"`
 }
 
 // PaymentMethod A saved card on file for the account, used to charge subscription
@@ -1802,6 +1897,9 @@ type PaymentMethod struct {
 // PaymentMethodListResponse JSON:API collection response for payment methods.
 type PaymentMethodListResponse struct {
 	Data []PaymentMethodResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // PaymentMethodRequest JSON:API request envelope for updating a payment method.
@@ -1861,6 +1959,9 @@ type PlanDefinition struct {
 // PlanListResponse JSON:API collection response for plan tiers.
 type PlanListResponse struct {
 	Data []PlanResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // PlanResource JSON:API resource envelope for a plan tier.
@@ -1901,6 +2002,9 @@ type Product struct {
 // ProductListResponse JSON:API collection response for products.
 type ProductListResponse struct {
 	Data []ProductResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ProductResource JSON:API resource envelope for a product catalog entry.
@@ -1945,6 +2049,9 @@ type Service struct {
 // ServiceListResponse JSON:API collection response for services.
 type ServiceListResponse struct {
 	Data []ServiceResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ServiceRequest JSON:API request envelope for creating or updating a service.
@@ -2236,16 +2343,12 @@ type User struct {
 	Role *string `json:"role,omitempty"`
 }
 
-// UserListMeta defines model for UserListMeta.
-type UserListMeta struct {
-	// Page Pagination metadata returned with a collection response.
-	Page PageMeta `json:"page"`
-}
-
 // UserListResponse JSON:API collection response for users.
 type UserListResponse struct {
 	Data []UserResource `json:"data"`
-	Meta *UserListMeta  `json:"meta,omitempty"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // UserRequest JSON:API request envelope for creating or updating a user.
@@ -2292,6 +2395,15 @@ type ListApiKeysParams struct {
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `expires_at`, `-expires_at`, `last_used_at`, `-last_used_at`, `name`, `-name`, `status`, `-status`.
 	Sort *ListApiKeysParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListApiKeysParamsSort defines parameters for ListApiKeys.
@@ -2316,17 +2428,60 @@ type BeginOidcLoginParams struct {
 type ListContextTypesParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListContextTypesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListContextTypesParamsSort defines parameters for ListContextTypes.
 type ListContextTypesParamsSort string
 
+// ListContextValuesParams defines parameters for ListContextValues.
+type ListContextValuesParams struct {
+	// FilterContextType Context type key whose instances should be searched (e.g. `user`).
+	FilterContextType *string `form:"filter[context_type],omitempty" json:"filter[context_type],omitempty"`
+
+	// FilterAttribute Attribute name whose distinct values should be returned (e.g. `first_name`). Accepts `key` and `name` as well as any attribute key stored on the context instance.
+	FilterAttribute *string `form:"filter[attribute],omitempty" json:"filter[attribute],omitempty"`
+
+	// FilterSearch Optional case-insensitive starts-with match against the projected attribute value. When omitted, all distinct values are returned in the page.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
+}
+
 // ListContextsParams defines parameters for ListContexts.
 type ListContextsParams struct {
+	// FilterContextType Limit results to context instances of this context type (e.g. `user`).
 	FilterContextType *string `form:"filter[context_type],omitempty" json:"filter[context_type],omitempty"`
+
+	// FilterSearch Case-insensitive substring match against the `key`, `name`, and any attribute value. A context is returned if at least one of those fields contains the search term.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListContextsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListContextsParamsSort defines parameters for ListContexts.
@@ -2342,6 +2497,15 @@ type SendContactEmailApplicationVndAPIPlusJSONBody map[string]interface{}
 type ListEnvironmentsParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListEnvironmentsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListEnvironmentsParamsSort defines parameters for ListEnvironments.
@@ -2360,6 +2524,15 @@ type ListInvitationsParams struct {
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `email`, `-email`, `status`, `-status`.
 	Sort *ListInvitationsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListInvitationsParamsSort defines parameters for ListInvitations.
@@ -2369,6 +2542,15 @@ type ListInvitationsParamsSort string
 type ListInvoicesParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `status`, `-status`, `total`, `-total`.
 	Sort *ListInvoicesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListInvoicesParamsSort defines parameters for ListInvoices.
@@ -2378,6 +2560,15 @@ type ListInvoicesParamsSort string
 type ListMetricNamesParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `name`, `-name`.
 	Sort *ListMetricNamesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListMetricNamesParamsSort defines parameters for ListMetricNames.
@@ -2391,6 +2582,15 @@ type ListMetricRollupsParams struct {
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `bucket`. Allowed values: `bucket`, `-bucket`.
 	Sort *ListMetricRollupsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListMetricRollupsParamsSort defines parameters for ListMetricRollups.
@@ -2403,6 +2603,15 @@ type ListMetricsParams struct {
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-recorded_at`. Allowed values: `recorded_at`, `-recorded_at`, `value`, `-value`.
 	Sort *ListMetricsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListMetricsParamsSort defines parameters for ListMetrics.
@@ -2412,6 +2621,15 @@ type ListMetricsParamsSort string
 type ListPaymentMethodsParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `exp_year`, `-exp_year`, `is_default`, `-is_default`, `updated_at`, `-updated_at`.
 	Sort *ListPaymentMethodsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListPaymentMethodsParamsSort defines parameters for ListPaymentMethods.
@@ -2421,6 +2639,15 @@ type ListPaymentMethodsParamsSort string
 type ListPlansParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `sort_order`. Allowed values: `display_name`, `-display_name`, `id`, `-id`, `sort_order`, `-sort_order`.
 	Sort *ListPlansParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListPlansParamsSort defines parameters for ListPlans.
@@ -2430,6 +2657,15 @@ type ListPlansParamsSort string
 type ListProductsParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `display_name`. Allowed values: `display_name`, `-display_name`, `id`, `-id`.
 	Sort *ListProductsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListProductsParamsSort defines parameters for ListProducts.
@@ -2439,6 +2675,15 @@ type ListProductsParamsSort string
 type ListServicesParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListServicesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListServicesParamsSort defines parameters for ListServices.
@@ -2452,14 +2697,17 @@ type ListUsersParams struct {
 	// FilterSearch Case-insensitive substring match against display_name and email. If the value is a valid UUID, also matches user id exactly.
 	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
 
-	// PageNumber 1-based page number
-	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
-
-	// PageSize Items per page
-	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
-
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `email`. Allowed values: `created_at`, `-created_at`, `display_name`, `-display_name`, `email`, `-email`.
 	Sort *ListUsersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListUsersParamsSort defines parameters for ListUsers.
@@ -2785,6 +3033,9 @@ type ClientInterface interface {
 	UpdateContextTypeWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListContextValues request
+	ListContextValues(ctx context.Context, params *ListContextValuesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListContexts request
 	ListContexts(ctx context.Context, params *ListContextsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3416,6 +3667,18 @@ func (c *Client) UpdateContextTypeWithBody(ctx context.Context, id string, conte
 
 func (c *Client) UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateContextTypeRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListContextValues(ctx context.Context, params *ListContextValuesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListContextValuesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4564,6 +4827,42 @@ func NewListApiKeysRequest(server string, params *ListApiKeysParams) (*http.Requ
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -5136,6 +5435,42 @@ func NewListContextTypesRequest(server string, params *ListContextTypesParams) (
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -5305,6 +5640,120 @@ func NewUpdateContextTypeRequestWithBody(server string, id string, contentType s
 	return req, nil
 }
 
+// NewListContextValuesRequest generates requests for ListContextValues
+func NewListContextValuesRequest(server string, params *ListContextValuesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/context_values")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.FilterContextType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[context_type]", *params.FilterContextType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterAttribute != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[attribute]", *params.FilterAttribute, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListContextsRequest generates requests for ListContexts
 func NewListContextsRequest(server string, params *ListContextsParams) (*http.Request, error) {
 	var err error
@@ -5345,9 +5794,57 @@ func NewListContextsRequest(server string, params *ListContextsParams) (*http.Re
 
 		}
 
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -5637,6 +6134,42 @@ func NewListEnvironmentsRequest(server string, params *ListEnvironmentsParams) (
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -5967,6 +6500,42 @@ func NewListInvitationsRequest(server string, params *ListInvitationsParams) (*h
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -6169,6 +6738,42 @@ func NewListInvoicesRequest(server string, params *ListInvoicesParams) (*http.Re
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -6248,6 +6853,42 @@ func NewListMetricNamesRequest(server string, params *ListMetricNamesParams) (*h
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -6339,6 +6980,42 @@ func NewListMetricRollupsRequest(server string, params *ListMetricRollupsParams)
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -6404,6 +7081,42 @@ func NewListMetricsRequest(server string, params *ListMetricsParams) (*http.Requ
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -6498,6 +7211,42 @@ func NewListPaymentMethodsRequest(server string, params *ListPaymentMethodsParam
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -6750,6 +7499,42 @@ func NewListPlansRequest(server string, params *ListPlansParams) (*http.Request,
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -6804,6 +7589,42 @@ func NewListProductsRequest(server string, params *ListProductsParams) (*http.Re
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -6849,6 +7670,42 @@ func NewListServicesRequest(server string, params *ListServicesParams) (*http.Re
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7091,6 +7948,18 @@ func NewListUsersRequest(server string, params *ListUsersParams) (*http.Request,
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.PageNumber != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -7115,9 +7984,9 @@ func NewListUsersRequest(server string, params *ListUsersParams) (*http.Request,
 
 		}
 
-		if params.Sort != nil {
+		if params.MetaTotal != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7558,6 +8427,9 @@ type ClientWithResponsesInterface interface {
 	UpdateContextTypeWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
 
 	UpdateContextTypeWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextTypeApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextTypeResponse, error)
+
+	// ListContextValuesWithResponse request
+	ListContextValuesWithResponse(ctx context.Context, params *ListContextValuesParams, reqEditors ...RequestEditorFn) (*ListContextValuesResponse, error)
 
 	// ListContextsWithResponse request
 	ListContextsWithResponse(ctx context.Context, params *ListContextsParams, reqEditors ...RequestEditorFn) (*ListContextsResponse, error)
@@ -8636,6 +9508,40 @@ func (r UpdateContextTypeResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateContextTypeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListContextValuesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ContextValueListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListContextValuesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListContextValuesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListContextValuesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -10577,6 +11483,15 @@ func (c *ClientWithResponses) UpdateContextTypeWithApplicationVndAPIPlusJSONBody
 	return ParseUpdateContextTypeResponse(rsp)
 }
 
+// ListContextValuesWithResponse request returning *ListContextValuesResponse
+func (c *ClientWithResponses) ListContextValuesWithResponse(ctx context.Context, params *ListContextValuesParams, reqEditors ...RequestEditorFn) (*ListContextValuesResponse, error) {
+	rsp, err := c.ListContextValues(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListContextValuesResponse(rsp)
+}
+
 // ListContextsWithResponse request returning *ListContextsResponse
 func (c *ClientWithResponses) ListContextsWithResponse(ctx context.Context, params *ListContextsParams, reqEditors ...RequestEditorFn) (*ListContextsResponse, error) {
 	rsp, err := c.ListContexts(ctx, params, reqEditors...)
@@ -12491,6 +13406,60 @@ func ParseUpdateContextTypeResponse(rsp *http.Response) (*UpdateContextTypeRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ContextTypeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListContextValuesResponse parses an HTTP response from a ListContextValuesWithResponse call
+func ParseListContextValuesResponse(rsp *http.Response) (*ListContextValuesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListContextValuesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ContextValueListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
