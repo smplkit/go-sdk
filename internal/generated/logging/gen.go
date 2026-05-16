@@ -337,6 +337,17 @@ type ErrorResponse struct {
 	Errors []Error `json:"errors"`
 }
 
+// ListMeta Top-level “meta“ block included on every JSON:API list response.
+type ListMeta struct {
+	// Pagination Pagination block returned inside ``meta`` on every list response.
+	//
+	// ``page`` and ``size`` are always present and echo the parameters that
+	// served the response (their defaults when the client omitted them).
+	// ``total`` and ``total_pages`` are present only when the request included
+	// ``meta[total]=true``.
+	Pagination PaginationMeta `json:"pagination"`
+}
+
 // LogGroup A named collection of loggers that share a level configuration.
 //
 // Assigning a logger to a group ties the logger's effective level to
@@ -368,6 +379,9 @@ type LogGroupLevel string
 // LogGroupListResponse JSON:API collection response for log groups.
 type LogGroupListResponse struct {
 	Data []LogGroupResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // LogGroupRequest JSON:API request envelope for creating or updating a log group.
@@ -481,6 +495,9 @@ type LoggerBulkResponse struct {
 // LoggerListResponse JSON:API collection response for loggers.
 type LoggerListResponse struct {
 	Data []LoggerResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // LoggerRequest JSON:API request envelope for creating or updating a logger.
@@ -558,6 +575,9 @@ type LoggerSource struct {
 // LoggerSourceListResponse JSON:API collection response for logger sources.
 type LoggerSourceListResponse struct {
 	Data []LoggerSourceResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // LoggerSourceResource JSON:API resource envelope for a logger source observation.
@@ -575,12 +595,35 @@ type LoggerSourceResource struct {
 // LoggerSourceResourceType defines model for LoggerSourceResource.Type.
 type LoggerSourceResourceType string
 
+// PaginationMeta Pagination block returned inside “meta“ on every list response.
+//
+// “page“ and “size“ are always present and echo the parameters that
+// served the response (their defaults when the client omitted them).
+// “total“ and “total_pages“ are present only when the request included
+// “meta[total]=true“.
+type PaginationMeta struct {
+	// Page 1-based page number returned.
+	Page int `json:"page"`
+
+	// Size Number of items per page.
+	Size int `json:"size"`
+
+	// Total Total number of matching items across all pages. Present only when the request included `meta[total]=true`.
+	Total *int `json:"total,omitempty"`
+
+	// TotalPages Total number of pages at the requested page size. Present only when the request included `meta[total]=true`.
+	TotalPages *int `json:"total_pages,omitempty"`
+}
+
 // ServiceAttributes A discovered service has no attributes beyond its name (the `id`).
 type ServiceAttributes = map[string]interface{}
 
 // ServiceListResponse JSON:API collection response for discovered services.
 type ServiceListResponse struct {
 	Data []ServiceResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ServiceResource JSON:API resource envelope for a discovered service.
@@ -614,6 +657,9 @@ type UsageAttributes struct {
 // UsageListResponse JSON:API collection response for usage counters.
 type UsageListResponse struct {
 	Data []UsageResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // UsageResource JSON:API resource envelope for a single usage counter.
@@ -634,6 +680,15 @@ type hTTPBearerContextKey string
 type ListLogGroupsParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListLogGroupsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListLogGroupsParamsSort defines parameters for ListLogGroups.
@@ -646,6 +701,15 @@ type ListAllLoggerSourcesParams struct {
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.
 	Sort *ListAllLoggerSourcesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListAllLoggerSourcesParamsSort defines parameters for ListAllLoggerSources.
@@ -659,6 +723,15 @@ type ListLoggersParams struct {
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListLoggersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListLoggersParamsSort defines parameters for ListLoggers.
@@ -668,6 +741,15 @@ type ListLoggersParamsSort string
 type ListLoggerSourcesParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-last_seen`. Allowed values: `created_at`, `-created_at`, `environment`, `-environment`, `last_seen`, `-last_seen`, `service`, `-service`.
 	Sort *ListLoggerSourcesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListLoggerSourcesParamsSort defines parameters for ListLoggerSources.
@@ -677,6 +759,15 @@ type ListLoggerSourcesParamsSort string
 type ListServicesParams struct {
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `name`, `-name`.
 	Sort *ListServicesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListServicesParamsSort defines parameters for ListServices.
@@ -685,6 +776,15 @@ type ListServicesParamsSort string
 // ListLoggingUsageParams defines parameters for ListLoggingUsage.
 type ListLoggingUsageParams struct {
 	FilterPeriod *string `form:"filter[period],omitempty" json:"filter[period],omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // CreateLogGroupApplicationVndAPIPlusJSONRequestBody defines body for CreateLogGroup for application/vnd.api+json ContentType.
@@ -1079,6 +1179,42 @@ func NewListLogGroupsRequest(server string, params *ListLogGroupsParams) (*http.
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1312,6 +1448,42 @@ func NewListAllLoggerSourcesRequest(server string, params *ListAllLoggerSourcesP
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1393,6 +1565,42 @@ func NewListLoggersRequest(server string, params *ListLoggersParams) (*http.Requ
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1618,6 +1826,42 @@ func NewListLoggerSourcesRequest(server string, id string, params *ListLoggerSou
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1672,6 +1916,42 @@ func NewListServicesRequest(server string, params *ListServicesParams) (*http.Re
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1717,6 +1997,42 @@ func NewListLoggingUsageRequest(server string, params *ListLoggingUsageParams) (
 		if params.FilterPeriod != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[period]", *params.FilterPeriod, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
