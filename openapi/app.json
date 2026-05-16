@@ -4984,50 +4984,21 @@
         }
       }
     },
-    "/api/v1/subscriptions": {
+    "/api/v1/accounts/current/subscription": {
       "get": {
         "tags": [
-          "Billing"
+          "Subscription"
         ],
-        "summary": "List Subscriptions",
-        "description": "Return subscription rows for the authenticated account.\n\nDefault sort is `product` ascending.",
-        "operationId": "list_subscriptions",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Field to sort by. Prefix with `-` for descending order. Default: `product`. Allowed values: `created_at`, `-created_at`, `plan`, `-plan`, `product`, `-product`, `status`, `-status`.",
-              "enum": [
-                "created_at",
-                "-created_at",
-                "plan",
-                "-plan",
-                "product",
-                "-product",
-                "status",
-                "-status"
-              ],
-              "default": "product",
-              "title": "Sort"
-            },
-            "description": "Field to sort by. Prefix with `-` for descending order. Default: `product`. Allowed values: `created_at`, `-created_at`, `plan`, `-plan`, `product`, `-product`, `status`, `-status`."
-          }
-        ],
+        "summary": "Get Current Subscription",
+        "description": "Return the authenticated account's subscription, or 404 if none exists.",
+        "operationId": "get_current_subscription",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/vnd.api+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubscriptionListResponse"
+                  "$ref": "#/components/schemas/SubscriptionResponse"
                 }
               }
             }
@@ -5072,118 +5043,29 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       },
-      "post": {
+      "put": {
         "tags": [
-          "Billing"
+          "Subscription"
         ],
-        "summary": "Create Subscription",
-        "description": "Create a new paid subscription for a product.",
-        "operationId": "create_subscription",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
+        "summary": "Replace Current Subscription",
+        "description": "Replace the authenticated account's subscription with the desired state.",
+        "operationId": "put_current_subscription",
         "requestBody": {
-          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateSubscriptionBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubscriptionResponse"
-                }
+                "$ref": "#/components/schemas/SubscriptionRequest"
               }
             }
           },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/subscriptions/{id}/actions/upgrade": {
-      "post": {
-        "tags": [
-          "Billing"
-        ],
-        "summary": "Upgrade Subscription",
-        "description": "Upgrade an existing paid subscription to a higher plan.",
-        "operationId": "upgrade_subscription",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/vnd.api+json": {
-              "schema": {
-                "$ref": "#/components/schemas/PlanChangeRequest"
-              }
-            }
-          }
+          "required": true
         },
         "responses": {
           "200": {
@@ -5236,17 +5118,99 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
-    "/api/v1/subscriptions/{id}/actions/downgrade": {
+    "/api/v1/accounts/current/subscription/actions/preview": {
       "post": {
         "tags": [
-          "Billing"
+          "Subscription"
         ],
-        "summary": "Downgrade Subscription",
-        "description": "Downgrade an existing paid subscription to a lower plan.",
-        "operationId": "downgrade_subscription",
+        "summary": "Preview Subscription Change",
+        "description": "Project the result of replacing the subscription with the desired state.\n\nNo database or billing-provider changes are made; safe to call as the\ncustomer iterates on a plan picker.",
+        "operationId": "preview_current_subscription",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounts/{account_id}/subscription": {
+      "put": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "Replace Account Subscription (admin)",
+        "description": "Admin replacement of a specific account's subscription.\n\nAccepts the same body shape as the customer endpoint plus\n``discount_override_pct``. Setting the override to 100 skips the billing\nprovider entirely; lowering it below 100 requires a payment method on\nfile for the target account.",
+        "operationId": "admin_put_account_subscription",
         "security": [
           {
             "HTTPBearer": []
@@ -5254,13 +5218,13 @@
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "account_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Id"
+              "title": "Account Id"
             }
           }
         ],
@@ -5269,248 +5233,11 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/PlanChangeRequest"
+                "$ref": "#/components/schemas/AdminSubscriptionRequest"
               }
             }
           }
         },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubscriptionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/subscriptions/{id}/actions/cancel": {
-      "post": {
-        "tags": [
-          "Billing"
-        ],
-        "summary": "Cancel Subscription",
-        "description": "Cancel a subscription at end of the current billing period.",
-        "operationId": "cancel_subscription",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubscriptionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/subscriptions/{id}/actions/uncancel": {
-      "post": {
-        "tags": [
-          "Billing"
-        ],
-        "summary": "Undo Cancellation",
-        "description": "Reverse a pending cancellation; subscription will renew as normal.",
-        "operationId": "uncancel_subscription",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubscriptionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or malformed request",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid authentication",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/vnd.api+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/subscriptions/{id}/actions/undowngrade": {
-      "post": {
-        "tags": [
-          "Billing"
-        ],
-        "summary": "Undo Pending Downgrade",
-        "description": "Reverse a pending downgrade scheduled for end of the current billing period.",
-        "operationId": "undowngrade_subscription",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Id"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -6570,6 +6297,89 @@
         "title": "AddPaymentMethodData",
         "description": "Resource object for the add-payment-method request."
       },
+      "AdminSubscriptionRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AdminSubscriptionRequestResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "AdminSubscriptionRequest",
+        "description": "Admin-scope request envelope for replacing a subscription."
+      },
+      "AdminSubscriptionRequestAttributes": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionItemRequest"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Desired enrollments. Products listed are scheduled to be on the specified plan immediately (for upgrades and new enrollments) or at the end of the current billing period (for downgrades). Products not listed are scheduled to be dropped at the end of the current billing period."
+          },
+          "payment_method": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Payment Method",
+            "description": "Optional identifier of the payment method to bill against. If omitted, the account's default payment method is used."
+          },
+          "discount_override_pct": {
+            "type": "integer",
+            "nullable": true,
+            "title": "Discount Override Pct",
+            "description": "Administrator-set discount percentage (0\u2013100). When set, the multi-product discount schedule is bypassed and this value is used directly. Setting `100` skips the billing provider entirely \u2014 the customer pays nothing. Pass `null` to clear any existing override and revert to the multi-product discount schedule."
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "AdminSubscriptionRequestAttributes",
+        "description": "Same as the customer request body plus the admin-only override field."
+      },
+      "AdminSubscriptionRequestResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "subscription"
+            ],
+            "title": "Type",
+            "description": "JSON:API resource type."
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/AdminSubscriptionRequestAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "AdminSubscriptionRequestResource",
+        "description": "Admin-scope resource object for a subscription update request.",
+        "example": {
+          "attributes": {
+            "discount_override_pct": 100,
+            "items": [
+              {
+                "plan": "PRO",
+                "product": "audit"
+              }
+            ]
+          },
+          "type": "subscription"
+        }
+      },
       "ApiKey": {
         "properties": {
           "name": {
@@ -7105,88 +6915,6 @@
         ],
         "title": "ContextTypeResponse",
         "description": "JSON:API single-resource response envelope for a context type."
-      },
-      "CreateSubscriptionAttributes": {
-        "properties": {
-          "product": {
-            "type": "string",
-            "title": "Product",
-            "description": "Product key to subscribe to, e.g. `flags`."
-          },
-          "plan": {
-            "type": "string",
-            "title": "Plan",
-            "description": "Plan key to subscribe on, e.g. `pro`."
-          },
-          "payment_method": {
-            "type": "string",
-            "nullable": true,
-            "title": "Payment Method",
-            "description": "UUID of a payment method on file to bill against. If omitted, the account's default payment method is used."
-          }
-        },
-        "type": "object",
-        "required": [
-          "product",
-          "plan"
-        ],
-        "title": "CreateSubscriptionAttributes",
-        "description": "Attributes accepted when creating a new subscription.",
-        "example": {
-          "payment_method": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-          "plan": "pro",
-          "product": "flags"
-        }
-      },
-      "CreateSubscriptionBody": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/CreateSubscriptionData"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "CreateSubscriptionBody",
-        "description": "JSON:API request envelope for creating a subscription.",
-        "example": {
-          "data": {
-            "attributes": {
-              "payment_method": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-              "plan": "pro",
-              "product": "flags"
-            },
-            "type": "subscription"
-          }
-        }
-      },
-      "CreateSubscriptionData": {
-        "properties": {
-          "type": {
-            "type": "string",
-            "title": "Type",
-            "description": "Resource type; must be `subscription`."
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/CreateSubscriptionAttributes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "type",
-          "attributes"
-        ],
-        "title": "CreateSubscriptionData",
-        "description": "Resource object for the create-subscription request.",
-        "example": {
-          "attributes": {
-            "payment_method": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-            "plan": "pro",
-            "product": "flags"
-          },
-          "type": "subscription"
-        }
       },
       "Email": {
         "properties": {
@@ -8289,12 +8017,12 @@
           "type": "metric_rollup"
         }
       },
-      "NextTierMeta": {
+      "NextTierResponse": {
         "properties": {
           "products_needed": {
             "type": "integer",
             "title": "Products Needed",
-            "description": "Number of additional subscribed products needed to reach the next tier."
+            "description": "Number of additional paid products required to reach the next discount tier."
           },
           "discount_pct": {
             "type": "integer",
@@ -8304,7 +8032,7 @@
           "additional_savings_cents": {
             "type": "integer",
             "title": "Additional Savings Cents",
-            "description": "Additional monthly savings in cents at the next tier."
+            "description": "Estimated additional monthly savings (in cents) at the next tier, compared to paying full list price for the added product."
           }
         },
         "type": "object",
@@ -8313,8 +8041,8 @@
           "discount_pct",
           "additional_savings_cents"
         ],
-        "title": "NextTierMeta",
-        "description": "Information about the next volume-discount tier."
+        "title": "NextTierResponse",
+        "description": "Hint describing how the customer could unlock a better discount."
       },
       "OidcProvider": {
         "type": "string",
@@ -8555,21 +8283,6 @@
         ],
         "title": "Plan",
         "description": "A plan tier offered across smplkit products."
-      },
-      "PlanChangeRequest": {
-        "properties": {
-          "plan": {
-            "type": "string",
-            "title": "Plan",
-            "description": "Plan key to change the subscription to."
-          }
-        },
-        "type": "object",
-        "required": [
-          "plan"
-        ],
-        "title": "PlanChangeRequest",
-        "description": "Body for the subscription upgrade and downgrade actions."
       },
       "PlanDefinition": {
         "properties": {
@@ -8995,142 +8708,366 @@
         "title": "SetupIntentResponse",
         "description": "JSON:API single-resource response envelope for a setup-intent result."
       },
-      "SubscriptionAttributes": {
+      "SubscriptionChangeProjection": {
         "properties": {
           "product": {
             "type": "string",
             "title": "Product",
-            "description": "Product key the subscription is for, e.g. `flags`."
+            "description": "Product key affected by this change."
           },
-          "plan": {
+          "from_plan": {
             "type": "string",
-            "title": "Plan",
-            "description": "Plan key the subscription is on, e.g. `pro`."
+            "title": "From Plan",
+            "description": "Current plan for this product, or `FREE` if it is being added."
           },
-          "status": {
+          "to_plan": {
+            "type": "string",
+            "title": "To Plan",
+            "description": "Plan the product will be on after the change. `FREE` indicates the enrollment will be dropped."
+          },
+          "monthly_cents": {
+            "type": "integer",
+            "title": "Monthly Cents",
+            "description": "Monthly cost in cents of this enrollment after the change. `0` when the enrollment will be dropped."
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "IMMEDIATE",
+              "NEXT_PERIOD"
+            ],
+            "title": "Effect",
+            "description": "`IMMEDIATE` when the change takes effect at confirmation time (and a prorated charge may apply today). `NEXT_PERIOD` when the change takes effect at the end of the current billing period."
+          },
+          "prorated_charge_today_cents": {
+            "type": "integer",
+            "title": "Prorated Charge Today Cents",
+            "description": "When `effect` is `IMMEDIATE`, the estimated prorated charge for the remainder of the current billing period in cents. Always `0` when `effect` is `NEXT_PERIOD`.",
+            "default": 0
+          },
+          "starts_at": {
             "type": "string",
             "nullable": true,
-            "title": "Status",
-            "description": "Lifecycle state of the subscription, e.g. `active`, `trialing`, `past_due`, `canceled`."
-          },
-          "comped": {
-            "type": "boolean",
-            "title": "Comped",
-            "description": "When `true`, the subscription is complimentary and is not billed through the billing provider."
-          },
-          "stripe_managed": {
-            "type": "boolean",
-            "title": "Stripe Managed",
-            "description": "When `true`, the subscription is billed through Stripe; otherwise it is a free or complimentary subscription that does not produce invoices."
-          },
-          "current_period_end": {
-            "type": "string",
-            "nullable": true,
-            "title": "Current Period End",
-            "description": "End of the current billing period (ISO 8601 timestamp)."
-          },
-          "client_secret": {
-            "type": "string",
-            "nullable": true,
-            "title": "Client Secret",
-            "description": "Stripe payment intent client secret returned when a subscription create requires additional authentication (3DS). Returned only on create."
+            "title": "Starts At",
+            "description": "When `effect` is `NEXT_PERIOD`, the ISO-8601 timestamp at which the change takes effect. `null` when `effect` is `IMMEDIATE` (the change applies on confirmation)."
           }
         },
         "type": "object",
         "required": [
           "product",
-          "plan",
-          "comped",
-          "stripe_managed"
+          "from_plan",
+          "to_plan",
+          "monthly_cents",
+          "effect"
         ],
-        "title": "SubscriptionAttributes",
-        "description": "A subscription that grants the account access to a product on a plan."
+        "title": "SubscriptionChangeProjection",
+        "description": "Per-item projected effect of a subscription change."
       },
-      "SubscriptionListMeta": {
+      "SubscriptionItemRequest": {
         "properties": {
-          "subtotal_cents": {
-            "type": "integer",
-            "title": "Subtotal Cents",
-            "description": "Sum of list prices across all subscriptions in cents."
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "description": "Product key (e.g. `audit`, `config`, `flags`, `logging`)."
           },
-          "discount_pct": {
-            "type": "integer",
-            "title": "Discount Pct",
-            "description": "Effective discount percentage applied."
+          "plan": {
+            "type": "string",
+            "title": "Plan",
+            "description": "Target plan for this product. Must be a paid plan such as `STANDARD` or `PRO`; the free plan is implicit when a product is not listed."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product",
+          "plan"
+        ],
+        "title": "SubscriptionItemRequest",
+        "description": "One product enrollment as supplied by the caller.\n\nThe caller supplies the *desired* (product, plan) pair for each product\nthey want enrolled. Products absent from the request are interpreted as\nscheduled-for-drop at the end of the current billing period."
+      },
+      "SubscriptionItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Unique identifier for this enrollment."
           },
-          "discount_amount_cents": {
-            "type": "integer",
-            "title": "Discount Amount Cents",
-            "description": "Discount amount in cents."
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "description": "Product key (e.g. `audit`, `config`, `flags`, `logging`)."
           },
-          "discount_source": {
+          "plan": {
+            "type": "string",
+            "title": "Plan",
+            "description": "Current plan for this product (e.g. `STANDARD`, `PRO`)."
+          },
+          "price_monthly_cents": {
+            "type": "integer",
+            "title": "Price Monthly Cents",
+            "description": "Monthly list price for this enrollment, in cents. This value is locked at the time the enrollment was created or last had its plan changed; subsequent changes to the public price list do not affect this enrollment until the customer themselves changes their plan."
+          },
+          "pending_plan_change": {
+            "type": "string",
+            "nullable": true,
+            "title": "Pending Plan Change",
+            "description": "When a plan change is scheduled for the end of the current billing period, this is the plan that will take effect. Otherwise `null`. The value `FREE` indicates the enrollment will be dropped."
+          },
+          "scheduled_change_effective_at": {
+            "type": "string",
+            "nullable": true,
+            "title": "Scheduled Change Effective At",
+            "description": "ISO-8601 timestamp at which the pending plan change takes effect. Matches the subscription's `current_period_end`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product",
+          "plan",
+          "price_monthly_cents"
+        ],
+        "title": "SubscriptionItemResponse",
+        "description": "One product enrollment as exposed in subscription responses."
+      },
+      "SubscriptionPreviewAttributes": {
+        "properties": {
+          "projected_subtotal_cents": {
+            "type": "integer",
+            "title": "Projected Subtotal Cents",
+            "description": "Projected sum of item monthly list prices after the change."
+          },
+          "projected_discount_pct": {
+            "type": "integer",
+            "title": "Projected Discount Pct",
+            "description": "Projected discount percentage that will apply after the change."
+          },
+          "projected_discount_source": {
             "type": "string",
             "enum": [
               "VOLUME",
               "OVERRIDE"
             ],
-            "title": "Discount Source",
-            "description": "Source of the discount. `VOLUME` indicates the standard volume-discount schedule; `OVERRIDE` indicates a custom discount set on the account."
+            "title": "Projected Discount Source",
+            "description": "`VOLUME` when the projected discount comes from the multi-product schedule; `OVERRIDE` when an administrator's discount applies."
           },
-          "total_cents": {
+          "projected_discount_amount_cents": {
             "type": "integer",
-            "title": "Total Cents",
-            "description": "Final monthly total in cents after the discount."
+            "title": "Projected Discount Amount Cents",
+            "description": "Projected discount amount in cents after the change."
           },
-          "next_tier": {
-            "$ref": "#/components/schemas/NextTierMeta",
+          "projected_total_cents": {
+            "type": "integer",
+            "title": "Projected Total Cents",
+            "description": "Projected final monthly total in cents after the change."
+          },
+          "projected_next_tier": {
+            "$ref": "#/components/schemas/NextTierResponse",
             "nullable": true,
-            "description": "Information about the next volume-discount tier, or `null` if the account is already at the top tier or on an override."
+            "description": "Hint describing additional savings available by subscribing to another product after the change is applied. `null` when no better tier is reachable."
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionChangeProjection"
+            },
+            "type": "array",
+            "title": "Changes",
+            "description": "Per-product breakdown of changes the desired state would produce. Products that would remain unchanged are omitted."
+          },
+          "total_charge_today_cents": {
+            "type": "integer",
+            "title": "Total Charge Today Cents",
+            "description": "Total amount that would be charged at confirmation time, in cents. The sum of `prorated_charge_today_cents` across `IMMEDIATE` changes."
+          },
+          "next_invoice_total_cents": {
+            "type": "integer",
+            "title": "Next Invoice Total Cents",
+            "description": "Projected total of the next monthly invoice in cents, after all scheduled changes have taken effect."
           }
         },
         "type": "object",
         "required": [
-          "subtotal_cents",
-          "discount_pct",
-          "discount_amount_cents",
-          "discount_source",
-          "total_cents"
+          "projected_subtotal_cents",
+          "projected_discount_pct",
+          "projected_discount_source",
+          "projected_discount_amount_cents",
+          "projected_total_cents",
+          "changes",
+          "total_charge_today_cents",
+          "next_invoice_total_cents"
         ],
-        "title": "SubscriptionListMeta",
-        "description": "Discount and totals summary attached to a subscription collection response."
+        "title": "SubscriptionPreviewAttributes",
+        "description": "Projected totals and per-change breakdown for a hypothetical change."
       },
-      "SubscriptionListResponse": {
+      "SubscriptionPreviewResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "preview"
+            ],
+            "nullable": true,
+            "title": "Id",
+            "description": "Always `preview`.",
+            "default": "preview"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "subscription_preview"
+            ],
+            "title": "Type",
+            "description": "JSON:API resource type."
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/SubscriptionPreviewAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "SubscriptionPreviewResource",
+        "description": "JSON:API resource object for a subscription preview.",
+        "example": {
+          "attributes": {
+            "changes": [
+              {
+                "effect": "IMMEDIATE",
+                "from_plan": "FREE",
+                "monthly_cents": 9900,
+                "product": "audit",
+                "prorated_charge_today_cents": 4521,
+                "to_plan": "PRO"
+              }
+            ],
+            "next_invoice_total_cents": 12580,
+            "projected_discount_amount_cents": 2220,
+            "projected_discount_pct": 15,
+            "projected_discount_source": "VOLUME",
+            "projected_subtotal_cents": 14800,
+            "projected_total_cents": 12580,
+            "total_charge_today_cents": 4521
+          },
+          "id": "preview",
+          "type": "subscription_preview"
+        }
+      },
+      "SubscriptionPreviewResponse": {
         "properties": {
           "data": {
-            "items": {
-              "$ref": "#/components/schemas/SubscriptionResource"
-            },
-            "type": "array",
-            "title": "Data"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/SubscriptionListMeta",
-            "nullable": true
+            "$ref": "#/components/schemas/SubscriptionPreviewResource"
           }
         },
         "type": "object",
         "required": [
           "data"
         ],
-        "title": "SubscriptionListResponse",
-        "description": "JSON:API collection response for subscriptions."
+        "title": "SubscriptionPreviewResponse",
+        "description": "Response envelope for the preview action."
       },
-      "SubscriptionResource": {
+      "SubscriptionRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SubscriptionRequestResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SubscriptionRequest",
+        "description": "Single-resource request envelope for replacing the subscription."
+      },
+      "SubscriptionRequestAttributes": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionItemRequest"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Desired enrollments. Products listed are scheduled to be on the specified plan immediately (for upgrades and new enrollments) or at the end of the current billing period (for downgrades). Products not listed are scheduled to be dropped at the end of the current billing period."
+          },
+          "payment_method": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Payment Method",
+            "description": "Optional identifier of the payment method to bill against. If omitted, the account's default payment method is used."
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SubscriptionRequestAttributes",
+        "description": "Customer's desired subscription state."
+      },
+      "SubscriptionRequestResource": {
         "properties": {
           "id": {
             "type": "string",
             "nullable": true,
-            "title": "Id"
+            "title": "Id",
+            "description": "Subscription identifier; the server ignores this and uses the auth context."
           },
           "type": {
             "type": "string",
             "enum": [
               "subscription"
             ],
-            "title": "Type"
+            "title": "Type",
+            "description": "JSON:API resource type."
           },
           "attributes": {
-            "$ref": "#/components/schemas/SubscriptionAttributes"
+            "$ref": "#/components/schemas/SubscriptionRequestAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "SubscriptionRequestResource",
+        "description": "JSON:API resource object for a subscription update request.",
+        "example": {
+          "attributes": {
+            "items": [
+              {
+                "plan": "PRO",
+                "product": "audit"
+              },
+              {
+                "plan": "PRO",
+                "product": "config"
+              }
+            ],
+            "payment_method": "p1q2r3s4-5678-90ab-cdef-1234567890ab"
+          },
+          "type": "subscription"
+        }
+      },
+      "SubscriptionResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id",
+            "description": "Subscription identifier. Always `current` on response; absent on create-style requests."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "subscription"
+            ],
+            "title": "Type",
+            "description": "JSON:API resource type."
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/SubscriptionResponseAttributes"
           }
         },
         "type": "object",
@@ -9139,15 +9076,31 @@
           "attributes"
         ],
         "title": "SubscriptionResource",
-        "description": "JSON:API resource envelope for a subscription.\n\n`id` must not be specified for create requests (the server assigns it).",
+        "description": "JSON:API resource object for a subscription.",
         "example": {
           "attributes": {
-            "comped": false,
-            "current_period_end": "2026-05-01T00:00:00Z",
-            "plan": "pro",
-            "product": "flags",
-            "status": "active",
-            "stripe_managed": true
+            "current_period_end": "2026-06-01T00:00:00Z",
+            "current_period_start": "2026-05-01T00:00:00Z",
+            "discount_amount_cents": 2220,
+            "discount_pct": 15,
+            "discount_source": "VOLUME",
+            "items": [
+              {
+                "id": "i1j2k3l4-5678-90ab-cdef-1234567890ab",
+                "plan": "PRO",
+                "price_monthly_cents": 9900,
+                "product": "audit"
+              }
+            ],
+            "next_tier": {
+              "additional_savings_cents": 4281,
+              "discount_pct": 33,
+              "products_needed": 1
+            },
+            "payment_method": "p1q2r3s4-5678-90ab-cdef-1234567890ab",
+            "status": "ACTIVE",
+            "subtotal_cents": 14800,
+            "total_cents": 12580
           },
           "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
           "type": "subscription"
@@ -9164,7 +9117,89 @@
           "data"
         ],
         "title": "SubscriptionResponse",
-        "description": "JSON:API single-resource response envelope for a subscription."
+        "description": "Single-resource response envelope for a subscription."
+      },
+      "SubscriptionResponseAttributes": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "title": "Status",
+            "description": "Lifecycle state of the subscription. `ACTIVE` while billing is current; `PAST_DUE` after a failed charge; `CANCELED` once the subscription has ended; `null` when the subscription has no billing object (fully comped at 100% discount)."
+          },
+          "current_period_start": {
+            "type": "string",
+            "nullable": true,
+            "title": "Current Period Start",
+            "description": "ISO-8601 timestamp of the current billing period's start."
+          },
+          "current_period_end": {
+            "type": "string",
+            "nullable": true,
+            "title": "Current Period End",
+            "description": "ISO-8601 timestamp of the current billing period's end. Scheduled plan changes take effect at this moment."
+          },
+          "discount_pct": {
+            "type": "integer",
+            "title": "Discount Pct",
+            "description": "Effective discount percentage applied to the subscription's monthly invoice. This is the value locked at the time of the customer's last subscription change; subsequent changes to the public discount schedule do not affect this customer until they themselves change their subscription."
+          },
+          "discount_source": {
+            "type": "string",
+            "enum": [
+              "VOLUME",
+              "OVERRIDE"
+            ],
+            "title": "Discount Source",
+            "description": "`VOLUME` when the discount comes from the multi-product discount schedule; `OVERRIDE` when an administrator has applied a custom discount."
+          },
+          "subtotal_cents": {
+            "type": "integer",
+            "title": "Subtotal Cents",
+            "description": "Sum of all item list prices in cents, before discount."
+          },
+          "discount_amount_cents": {
+            "type": "integer",
+            "title": "Discount Amount Cents",
+            "description": "Amount discounted from the subtotal in cents."
+          },
+          "total_cents": {
+            "type": "integer",
+            "title": "Total Cents",
+            "description": "Final monthly total in cents after the discount is applied."
+          },
+          "next_tier": {
+            "$ref": "#/components/schemas/NextTierResponse",
+            "nullable": true,
+            "description": "When `discount_source` is `VOLUME` and the customer is below the top tier, describes the additional savings available by subscribing to another product. `null` otherwise."
+          },
+          "payment_method": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "title": "Payment Method",
+            "description": "Identifier of the default payment method used to bill this subscription. `null` when the subscription has no associated payment method (e.g. fully comped)."
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionItemResponse"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "One entry per product currently enrolled on the subscription."
+          }
+        },
+        "type": "object",
+        "required": [
+          "discount_pct",
+          "discount_source",
+          "subtotal_cents",
+          "discount_amount_cents",
+          "total_cents",
+          "items"
+        ],
+        "title": "SubscriptionResponseAttributes",
+        "description": "Customer's subscription as returned by the API."
       },
       "User": {
         "properties": {

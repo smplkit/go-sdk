@@ -52,6 +52,21 @@ func (e AddPaymentMethodDataType) Valid() bool {
 	}
 }
 
+// Defines values for AdminSubscriptionRequestResourceType.
+const (
+	AdminSubscriptionRequestResourceTypeSubscription AdminSubscriptionRequestResourceType = "subscription"
+)
+
+// Valid indicates whether the value is a known member of the AdminSubscriptionRequestResourceType enum.
+func (e AdminSubscriptionRequestResourceType) Valid() bool {
+	switch e {
+	case AdminSubscriptionRequestResourceTypeSubscription:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApiKeyResourceType.
 const (
 	ApiKeyResourceTypeApiKey ApiKeyResourceType = "api_key"
@@ -364,18 +379,81 @@ func (e SetupIntentResourceType) Valid() bool {
 	}
 }
 
-// Defines values for SubscriptionListMetaDiscountSource.
+// Defines values for SubscriptionChangeProjectionEffect.
 const (
-	OVERRIDE SubscriptionListMetaDiscountSource = "OVERRIDE"
-	VOLUME   SubscriptionListMetaDiscountSource = "VOLUME"
+	IMMEDIATE  SubscriptionChangeProjectionEffect = "IMMEDIATE"
+	NEXTPERIOD SubscriptionChangeProjectionEffect = "NEXT_PERIOD"
 )
 
-// Valid indicates whether the value is a known member of the SubscriptionListMetaDiscountSource enum.
-func (e SubscriptionListMetaDiscountSource) Valid() bool {
+// Valid indicates whether the value is a known member of the SubscriptionChangeProjectionEffect enum.
+func (e SubscriptionChangeProjectionEffect) Valid() bool {
 	switch e {
-	case OVERRIDE:
+	case IMMEDIATE:
 		return true
-	case VOLUME:
+	case NEXTPERIOD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubscriptionPreviewAttributesProjectedDiscountSource.
+const (
+	SubscriptionPreviewAttributesProjectedDiscountSourceOVERRIDE SubscriptionPreviewAttributesProjectedDiscountSource = "OVERRIDE"
+	SubscriptionPreviewAttributesProjectedDiscountSourceVOLUME   SubscriptionPreviewAttributesProjectedDiscountSource = "VOLUME"
+)
+
+// Valid indicates whether the value is a known member of the SubscriptionPreviewAttributesProjectedDiscountSource enum.
+func (e SubscriptionPreviewAttributesProjectedDiscountSource) Valid() bool {
+	switch e {
+	case SubscriptionPreviewAttributesProjectedDiscountSourceOVERRIDE:
+		return true
+	case SubscriptionPreviewAttributesProjectedDiscountSourceVOLUME:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubscriptionPreviewResourceId.
+const (
+	Preview SubscriptionPreviewResourceId = "preview"
+)
+
+// Valid indicates whether the value is a known member of the SubscriptionPreviewResourceId enum.
+func (e SubscriptionPreviewResourceId) Valid() bool {
+	switch e {
+	case Preview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubscriptionPreviewResourceType.
+const (
+	SubscriptionPreview SubscriptionPreviewResourceType = "subscription_preview"
+)
+
+// Valid indicates whether the value is a known member of the SubscriptionPreviewResourceType enum.
+func (e SubscriptionPreviewResourceType) Valid() bool {
+	switch e {
+	case SubscriptionPreview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubscriptionRequestResourceType.
+const (
+	SubscriptionRequestResourceTypeSubscription SubscriptionRequestResourceType = "subscription"
+)
+
+// Valid indicates whether the value is a known member of the SubscriptionRequestResourceType enum.
+func (e SubscriptionRequestResourceType) Valid() bool {
+	switch e {
+	case SubscriptionRequestResourceTypeSubscription:
 		return true
 	default:
 		return false
@@ -391,6 +469,24 @@ const (
 func (e SubscriptionResourceType) Valid() bool {
 	switch e {
 	case Subscription:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubscriptionResponseAttributesDiscountSource.
+const (
+	SubscriptionResponseAttributesDiscountSourceOVERRIDE SubscriptionResponseAttributesDiscountSource = "OVERRIDE"
+	SubscriptionResponseAttributesDiscountSourceVOLUME   SubscriptionResponseAttributesDiscountSource = "VOLUME"
+)
+
+// Valid indicates whether the value is a known member of the SubscriptionResponseAttributesDiscountSource enum.
+func (e SubscriptionResponseAttributesDiscountSource) Valid() bool {
+	switch e {
+	case SubscriptionResponseAttributesDiscountSourceOVERRIDE:
+		return true
+	case SubscriptionResponseAttributesDiscountSourceVOLUME:
 		return true
 	default:
 		return false
@@ -808,42 +904,6 @@ func (e ListServicesParamsSort) Valid() bool {
 	}
 }
 
-// Defines values for ListSubscriptionsParamsSort.
-const (
-	ListSubscriptionsParamsSortCreatedAt      ListSubscriptionsParamsSort = "created_at"
-	ListSubscriptionsParamsSortMinusCreatedAt ListSubscriptionsParamsSort = "-created_at"
-	ListSubscriptionsParamsSortMinusPlan      ListSubscriptionsParamsSort = "-plan"
-	ListSubscriptionsParamsSortMinusProduct   ListSubscriptionsParamsSort = "-product"
-	ListSubscriptionsParamsSortMinusStatus    ListSubscriptionsParamsSort = "-status"
-	ListSubscriptionsParamsSortPlan           ListSubscriptionsParamsSort = "plan"
-	ListSubscriptionsParamsSortProduct        ListSubscriptionsParamsSort = "product"
-	ListSubscriptionsParamsSortStatus         ListSubscriptionsParamsSort = "status"
-)
-
-// Valid indicates whether the value is a known member of the ListSubscriptionsParamsSort enum.
-func (e ListSubscriptionsParamsSort) Valid() bool {
-	switch e {
-	case ListSubscriptionsParamsSortCreatedAt:
-		return true
-	case ListSubscriptionsParamsSortMinusCreatedAt:
-		return true
-	case ListSubscriptionsParamsSortMinusPlan:
-		return true
-	case ListSubscriptionsParamsSortMinusProduct:
-		return true
-	case ListSubscriptionsParamsSortMinusStatus:
-		return true
-	case ListSubscriptionsParamsSortPlan:
-		return true
-	case ListSubscriptionsParamsSortProduct:
-		return true
-	case ListSubscriptionsParamsSortStatus:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ListUsersParamsSort.
 const (
 	ListUsersParamsSortCreatedAt        ListUsersParamsSort = "created_at"
@@ -988,6 +1048,37 @@ type AddPaymentMethodData struct {
 
 // AddPaymentMethodDataType defines model for AddPaymentMethodData.Type.
 type AddPaymentMethodDataType string
+
+// AdminSubscriptionRequest Admin-scope request envelope for replacing a subscription.
+type AdminSubscriptionRequest struct {
+	// Data Admin-scope resource object for a subscription update request.
+	Data AdminSubscriptionRequestResource `json:"data"`
+}
+
+// AdminSubscriptionRequestAttributes Same as the customer request body plus the admin-only override field.
+type AdminSubscriptionRequestAttributes struct {
+	// DiscountOverridePct Administrator-set discount percentage (0–100). When set, the multi-product discount schedule is bypassed and this value is used directly. Setting `100` skips the billing provider entirely — the customer pays nothing. Pass `null` to clear any existing override and revert to the multi-product discount schedule.
+	DiscountOverridePct *int `json:"discount_override_pct,omitempty"`
+
+	// Items Desired enrollments. Products listed are scheduled to be on the specified plan immediately (for upgrades and new enrollments) or at the end of the current billing period (for downgrades). Products not listed are scheduled to be dropped at the end of the current billing period.
+	Items []SubscriptionItemRequest `json:"items"`
+
+	// PaymentMethod Optional identifier of the payment method to bill against. If omitted, the account's default payment method is used.
+	PaymentMethod *openapi_types.UUID `json:"payment_method,omitempty"`
+}
+
+// AdminSubscriptionRequestResource Admin-scope resource object for a subscription update request.
+type AdminSubscriptionRequestResource struct {
+	// Attributes Same as the customer request body plus the admin-only override field.
+	Attributes AdminSubscriptionRequestAttributes `json:"attributes"`
+	Id         *string                            `json:"id,omitempty"`
+
+	// Type JSON:API resource type.
+	Type AdminSubscriptionRequestResourceType `json:"type"`
+}
+
+// AdminSubscriptionRequestResourceType JSON:API resource type.
+type AdminSubscriptionRequestResourceType string
 
 // ApiKey An API key used by SDKs, scripts, and other programmatic clients to
 // authenticate with the smplkit API on behalf of the account.
@@ -1217,33 +1308,6 @@ type ContextTypeResponse struct {
 	//
 	// `id` must not be specified for create requests (the server assigns it).
 	Data ContextTypeResource `json:"data"`
-}
-
-// CreateSubscriptionAttributes Attributes accepted when creating a new subscription.
-type CreateSubscriptionAttributes struct {
-	// PaymentMethod UUID of a payment method on file to bill against. If omitted, the account's default payment method is used.
-	PaymentMethod *string `json:"payment_method,omitempty"`
-
-	// Plan Plan key to subscribe on, e.g. `pro`.
-	Plan string `json:"plan"`
-
-	// Product Product key to subscribe to, e.g. `flags`.
-	Product string `json:"product"`
-}
-
-// CreateSubscriptionBody JSON:API request envelope for creating a subscription.
-type CreateSubscriptionBody struct {
-	// Data Resource object for the create-subscription request.
-	Data CreateSubscriptionData `json:"data"`
-}
-
-// CreateSubscriptionData Resource object for the create-subscription request.
-type CreateSubscriptionData struct {
-	// Attributes Attributes accepted when creating a new subscription.
-	Attributes CreateSubscriptionAttributes `json:"attributes"`
-
-	// Type Resource type; must be `subscription`.
-	Type string `json:"type"`
 }
 
 // Email A contact-us submission. Sending the resource delivers a support
@@ -1674,15 +1738,15 @@ type MetricRollupResource struct {
 // MetricRollupResourceType defines model for MetricRollupResource.Type.
 type MetricRollupResourceType string
 
-// NextTierMeta Information about the next volume-discount tier.
-type NextTierMeta struct {
-	// AdditionalSavingsCents Additional monthly savings in cents at the next tier.
+// NextTierResponse Hint describing how the customer could unlock a better discount.
+type NextTierResponse struct {
+	// AdditionalSavingsCents Estimated additional monthly savings (in cents) at the next tier, compared to paying full list price for the added product.
 	AdditionalSavingsCents int `json:"additional_savings_cents"`
 
 	// DiscountPct Discount percentage that would apply at the next tier.
 	DiscountPct int `json:"discount_pct"`
 
-	// ProductsNeeded Number of additional subscribed products needed to reach the next tier.
+	// ProductsNeeded Number of additional paid products required to reach the next discount tier.
 	ProductsNeeded int `json:"products_needed"`
 }
 
@@ -1783,12 +1847,6 @@ type Plan struct {
 
 	// SortOrder Order in which the plan should be shown in customer-facing lists. Lower values sort first.
 	SortOrder int `json:"sort_order"`
-}
-
-// PlanChangeRequest Body for the subscription upgrade and downgrade actions.
-type PlanChangeRequest struct {
-	// Plan Plan key to change the subscription to.
-	Plan string `json:"plan"`
 }
 
 // PlanDefinition Per-plan pricing and limits for a product.
@@ -1940,82 +1998,213 @@ type SetupIntentResponse struct {
 	Data SetupIntentResource `json:"data"`
 }
 
-// SubscriptionAttributes A subscription that grants the account access to a product on a plan.
-type SubscriptionAttributes struct {
-	// ClientSecret Stripe payment intent client secret returned when a subscription create requires additional authentication (3DS). Returned only on create.
-	ClientSecret *string `json:"client_secret,omitempty"`
+// SubscriptionChangeProjection Per-item projected effect of a subscription change.
+type SubscriptionChangeProjection struct {
+	// Effect `IMMEDIATE` when the change takes effect at confirmation time (and a prorated charge may apply today). `NEXT_PERIOD` when the change takes effect at the end of the current billing period.
+	Effect SubscriptionChangeProjectionEffect `json:"effect"`
 
-	// Comped When `true`, the subscription is complimentary and is not billed through the billing provider.
-	Comped bool `json:"comped"`
+	// FromPlan Current plan for this product, or `FREE` if it is being added.
+	FromPlan string `json:"from_plan"`
 
-	// CurrentPeriodEnd End of the current billing period (ISO 8601 timestamp).
-	CurrentPeriodEnd *string `json:"current_period_end,omitempty"`
+	// MonthlyCents Monthly cost in cents of this enrollment after the change. `0` when the enrollment will be dropped.
+	MonthlyCents int `json:"monthly_cents"`
 
-	// Plan Plan key the subscription is on, e.g. `pro`.
-	Plan string `json:"plan"`
-
-	// Product Product key the subscription is for, e.g. `flags`.
+	// Product Product key affected by this change.
 	Product string `json:"product"`
 
-	// Status Lifecycle state of the subscription, e.g. `active`, `trialing`, `past_due`, `canceled`.
-	Status *string `json:"status,omitempty"`
+	// ProratedChargeTodayCents When `effect` is `IMMEDIATE`, the estimated prorated charge for the remainder of the current billing period in cents. Always `0` when `effect` is `NEXT_PERIOD`.
+	ProratedChargeTodayCents *int `json:"prorated_charge_today_cents,omitempty"`
 
-	// StripeManaged When `true`, the subscription is billed through Stripe; otherwise it is a free or complimentary subscription that does not produce invoices.
-	StripeManaged bool `json:"stripe_managed"`
+	// StartsAt When `effect` is `NEXT_PERIOD`, the ISO-8601 timestamp at which the change takes effect. `null` when `effect` is `IMMEDIATE` (the change applies on confirmation).
+	StartsAt *string `json:"starts_at,omitempty"`
+
+	// ToPlan Plan the product will be on after the change. `FREE` indicates the enrollment will be dropped.
+	ToPlan string `json:"to_plan"`
 }
 
-// SubscriptionListMeta Discount and totals summary attached to a subscription collection response.
-type SubscriptionListMeta struct {
-	// DiscountAmountCents Discount amount in cents.
+// SubscriptionChangeProjectionEffect `IMMEDIATE` when the change takes effect at confirmation time (and a prorated charge may apply today). `NEXT_PERIOD` when the change takes effect at the end of the current billing period.
+type SubscriptionChangeProjectionEffect string
+
+// SubscriptionItemRequest One product enrollment as supplied by the caller.
+//
+// The caller supplies the *desired* (product, plan) pair for each product
+// they want enrolled. Products absent from the request are interpreted as
+// scheduled-for-drop at the end of the current billing period.
+type SubscriptionItemRequest struct {
+	// Plan Target plan for this product. Must be a paid plan such as `STANDARD` or `PRO`; the free plan is implicit when a product is not listed.
+	Plan string `json:"plan"`
+
+	// Product Product key (e.g. `audit`, `config`, `flags`, `logging`).
+	Product string `json:"product"`
+}
+
+// SubscriptionItemResponse One product enrollment as exposed in subscription responses.
+type SubscriptionItemResponse struct {
+	// Id Unique identifier for this enrollment.
+	Id openapi_types.UUID `json:"id"`
+
+	// PendingPlanChange When a plan change is scheduled for the end of the current billing period, this is the plan that will take effect. Otherwise `null`. The value `FREE` indicates the enrollment will be dropped.
+	PendingPlanChange *string `json:"pending_plan_change,omitempty"`
+
+	// Plan Current plan for this product (e.g. `STANDARD`, `PRO`).
+	Plan string `json:"plan"`
+
+	// PriceMonthlyCents Monthly list price for this enrollment, in cents. This value is locked at the time the enrollment was created or last had its plan changed; subsequent changes to the public price list do not affect this enrollment until the customer themselves changes their plan.
+	PriceMonthlyCents int `json:"price_monthly_cents"`
+
+	// Product Product key (e.g. `audit`, `config`, `flags`, `logging`).
+	Product string `json:"product"`
+
+	// ScheduledChangeEffectiveAt ISO-8601 timestamp at which the pending plan change takes effect. Matches the subscription's `current_period_end`.
+	ScheduledChangeEffectiveAt *string `json:"scheduled_change_effective_at,omitempty"`
+}
+
+// SubscriptionPreviewAttributes Projected totals and per-change breakdown for a hypothetical change.
+type SubscriptionPreviewAttributes struct {
+	// Changes Per-product breakdown of changes the desired state would produce. Products that would remain unchanged are omitted.
+	Changes []SubscriptionChangeProjection `json:"changes"`
+
+	// NextInvoiceTotalCents Projected total of the next monthly invoice in cents, after all scheduled changes have taken effect.
+	NextInvoiceTotalCents int `json:"next_invoice_total_cents"`
+
+	// ProjectedDiscountAmountCents Projected discount amount in cents after the change.
+	ProjectedDiscountAmountCents int `json:"projected_discount_amount_cents"`
+
+	// ProjectedDiscountPct Projected discount percentage that will apply after the change.
+	ProjectedDiscountPct int `json:"projected_discount_pct"`
+
+	// ProjectedDiscountSource `VOLUME` when the projected discount comes from the multi-product schedule; `OVERRIDE` when an administrator's discount applies.
+	ProjectedDiscountSource SubscriptionPreviewAttributesProjectedDiscountSource `json:"projected_discount_source"`
+
+	// ProjectedNextTier Hint describing how the customer could unlock a better discount.
+	ProjectedNextTier *NextTierResponse `json:"projected_next_tier,omitempty"`
+
+	// ProjectedSubtotalCents Projected sum of item monthly list prices after the change.
+	ProjectedSubtotalCents int `json:"projected_subtotal_cents"`
+
+	// ProjectedTotalCents Projected final monthly total in cents after the change.
+	ProjectedTotalCents int `json:"projected_total_cents"`
+
+	// TotalChargeTodayCents Total amount that would be charged at confirmation time, in cents. The sum of `prorated_charge_today_cents` across `IMMEDIATE` changes.
+	TotalChargeTodayCents int `json:"total_charge_today_cents"`
+}
+
+// SubscriptionPreviewAttributesProjectedDiscountSource `VOLUME` when the projected discount comes from the multi-product schedule; `OVERRIDE` when an administrator's discount applies.
+type SubscriptionPreviewAttributesProjectedDiscountSource string
+
+// SubscriptionPreviewResource JSON:API resource object for a subscription preview.
+type SubscriptionPreviewResource struct {
+	// Attributes Projected totals and per-change breakdown for a hypothetical change.
+	Attributes SubscriptionPreviewAttributes `json:"attributes"`
+
+	// Id Always `preview`.
+	Id *SubscriptionPreviewResourceId `json:"id,omitempty"`
+
+	// Type JSON:API resource type.
+	Type SubscriptionPreviewResourceType `json:"type"`
+}
+
+// SubscriptionPreviewResourceId Always `preview`.
+type SubscriptionPreviewResourceId string
+
+// SubscriptionPreviewResourceType JSON:API resource type.
+type SubscriptionPreviewResourceType string
+
+// SubscriptionPreviewResponse Response envelope for the preview action.
+type SubscriptionPreviewResponse struct {
+	// Data JSON:API resource object for a subscription preview.
+	Data SubscriptionPreviewResource `json:"data"`
+}
+
+// SubscriptionRequest Single-resource request envelope for replacing the subscription.
+type SubscriptionRequest struct {
+	// Data JSON:API resource object for a subscription update request.
+	Data SubscriptionRequestResource `json:"data"`
+}
+
+// SubscriptionRequestAttributes Customer's desired subscription state.
+type SubscriptionRequestAttributes struct {
+	// Items Desired enrollments. Products listed are scheduled to be on the specified plan immediately (for upgrades and new enrollments) or at the end of the current billing period (for downgrades). Products not listed are scheduled to be dropped at the end of the current billing period.
+	Items []SubscriptionItemRequest `json:"items"`
+
+	// PaymentMethod Optional identifier of the payment method to bill against. If omitted, the account's default payment method is used.
+	PaymentMethod *openapi_types.UUID `json:"payment_method,omitempty"`
+}
+
+// SubscriptionRequestResource JSON:API resource object for a subscription update request.
+type SubscriptionRequestResource struct {
+	// Attributes Customer's desired subscription state.
+	Attributes SubscriptionRequestAttributes `json:"attributes"`
+
+	// Id Subscription identifier; the server ignores this and uses the auth context.
+	Id *string `json:"id,omitempty"`
+
+	// Type JSON:API resource type.
+	Type SubscriptionRequestResourceType `json:"type"`
+}
+
+// SubscriptionRequestResourceType JSON:API resource type.
+type SubscriptionRequestResourceType string
+
+// SubscriptionResource JSON:API resource object for a subscription.
+type SubscriptionResource struct {
+	// Attributes Customer's subscription as returned by the API.
+	Attributes SubscriptionResponseAttributes `json:"attributes"`
+
+	// Id Subscription identifier. Always `current` on response; absent on create-style requests.
+	Id *string `json:"id,omitempty"`
+
+	// Type JSON:API resource type.
+	Type SubscriptionResourceType `json:"type"`
+}
+
+// SubscriptionResourceType JSON:API resource type.
+type SubscriptionResourceType string
+
+// SubscriptionResponse Single-resource response envelope for a subscription.
+type SubscriptionResponse struct {
+	// Data JSON:API resource object for a subscription.
+	Data SubscriptionResource `json:"data"`
+}
+
+// SubscriptionResponseAttributes Customer's subscription as returned by the API.
+type SubscriptionResponseAttributes struct {
+	// CurrentPeriodEnd ISO-8601 timestamp of the current billing period's end. Scheduled plan changes take effect at this moment.
+	CurrentPeriodEnd *string `json:"current_period_end,omitempty"`
+
+	// CurrentPeriodStart ISO-8601 timestamp of the current billing period's start.
+	CurrentPeriodStart *string `json:"current_period_start,omitempty"`
+
+	// DiscountAmountCents Amount discounted from the subtotal in cents.
 	DiscountAmountCents int `json:"discount_amount_cents"`
 
-	// DiscountPct Effective discount percentage applied.
+	// DiscountPct Effective discount percentage applied to the subscription's monthly invoice. This is the value locked at the time of the customer's last subscription change; subsequent changes to the public discount schedule do not affect this customer until they themselves change their subscription.
 	DiscountPct int `json:"discount_pct"`
 
-	// DiscountSource Source of the discount. `VOLUME` indicates the standard volume-discount schedule; `OVERRIDE` indicates a custom discount set on the account.
-	DiscountSource SubscriptionListMetaDiscountSource `json:"discount_source"`
+	// DiscountSource `VOLUME` when the discount comes from the multi-product discount schedule; `OVERRIDE` when an administrator has applied a custom discount.
+	DiscountSource SubscriptionResponseAttributesDiscountSource `json:"discount_source"`
 
-	// NextTier Information about the next volume-discount tier.
-	NextTier *NextTierMeta `json:"next_tier,omitempty"`
+	// Items One entry per product currently enrolled on the subscription.
+	Items []SubscriptionItemResponse `json:"items"`
 
-	// SubtotalCents Sum of list prices across all subscriptions in cents.
+	// NextTier Hint describing how the customer could unlock a better discount.
+	NextTier *NextTierResponse `json:"next_tier,omitempty"`
+
+	// PaymentMethod Identifier of the default payment method used to bill this subscription. `null` when the subscription has no associated payment method (e.g. fully comped).
+	PaymentMethod *openapi_types.UUID `json:"payment_method,omitempty"`
+
+	// Status Lifecycle state of the subscription. `ACTIVE` while billing is current; `PAST_DUE` after a failed charge; `CANCELED` once the subscription has ended; `null` when the subscription has no billing object (fully comped at 100% discount).
+	Status *string `json:"status,omitempty"`
+
+	// SubtotalCents Sum of all item list prices in cents, before discount.
 	SubtotalCents int `json:"subtotal_cents"`
 
-	// TotalCents Final monthly total in cents after the discount.
+	// TotalCents Final monthly total in cents after the discount is applied.
 	TotalCents int `json:"total_cents"`
 }
 
-// SubscriptionListMetaDiscountSource Source of the discount. `VOLUME` indicates the standard volume-discount schedule; `OVERRIDE` indicates a custom discount set on the account.
-type SubscriptionListMetaDiscountSource string
-
-// SubscriptionListResponse JSON:API collection response for subscriptions.
-type SubscriptionListResponse struct {
-	Data []SubscriptionResource `json:"data"`
-
-	// Meta Discount and totals summary attached to a subscription collection response.
-	Meta *SubscriptionListMeta `json:"meta,omitempty"`
-}
-
-// SubscriptionResource JSON:API resource envelope for a subscription.
-//
-// `id` must not be specified for create requests (the server assigns it).
-type SubscriptionResource struct {
-	// Attributes A subscription that grants the account access to a product on a plan.
-	Attributes SubscriptionAttributes   `json:"attributes"`
-	Id         *string                  `json:"id,omitempty"`
-	Type       SubscriptionResourceType `json:"type"`
-}
-
-// SubscriptionResourceType defines model for SubscriptionResource.Type.
-type SubscriptionResourceType string
-
-// SubscriptionResponse JSON:API single-resource response envelope for a subscription.
-type SubscriptionResponse struct {
-	// Data JSON:API resource envelope for a subscription.
-	//
-	// `id` must not be specified for create requests (the server assigns it).
-	Data SubscriptionResource `json:"data"`
-}
+// SubscriptionResponseAttributesDiscountSource `VOLUME` when the discount comes from the multi-product discount schedule; `OVERRIDE` when an administrator has applied a custom discount.
+type SubscriptionResponseAttributesDiscountSource string
 
 // User A person with access to one or more accounts in smplkit.
 type User struct {
@@ -2255,15 +2444,6 @@ type ListServicesParams struct {
 // ListServicesParamsSort defines parameters for ListServices.
 type ListServicesParamsSort string
 
-// ListSubscriptionsParams defines parameters for ListSubscriptions.
-type ListSubscriptionsParams struct {
-	// Sort Field to sort by. Prefix with `-` for descending order. Default: `product`. Allowed values: `created_at`, `-created_at`, `plan`, `-plan`, `product`, `-product`, `status`, `-status`.
-	Sort *ListSubscriptionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
-}
-
-// ListSubscriptionsParamsSort defines parameters for ListSubscriptions.
-type ListSubscriptionsParamsSort string
-
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	FilterAccount *string `form:"filter[account],omitempty" json:"filter[account],omitempty"`
@@ -2290,6 +2470,15 @@ type UpdateAccountApplicationVndAPIPlusJSONRequestBody = AccountRequest
 
 // WipeAccountDataApplicationVndAPIPlusJSONRequestBody defines body for WipeAccountData for application/vnd.api+json ContentType.
 type WipeAccountDataApplicationVndAPIPlusJSONRequestBody = AccountWipeRequest
+
+// PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for PutCurrentSubscription for application/vnd.api+json ContentType.
+type PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody = SubscriptionRequest
+
+// PreviewCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for PreviewCurrentSubscription for application/vnd.api+json ContentType.
+type PreviewCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody = SubscriptionRequest
+
+// AdminPutAccountSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for AdminPutAccountSubscription for application/vnd.api+json ContentType.
+type AdminPutAccountSubscriptionApplicationVndAPIPlusJSONRequestBody = AdminSubscriptionRequest
 
 // CreateApiKeyApplicationVndAPIPlusJSONRequestBody defines body for CreateApiKey for application/vnd.api+json ContentType.
 type CreateApiKeyApplicationVndAPIPlusJSONRequestBody = ApiKeyRequest
@@ -2350,15 +2539,6 @@ type CreateServiceApplicationVndAPIPlusJSONRequestBody = ServiceRequest
 
 // UpdateServiceApplicationVndAPIPlusJSONRequestBody defines body for UpdateService for application/vnd.api+json ContentType.
 type UpdateServiceApplicationVndAPIPlusJSONRequestBody = ServiceRequest
-
-// CreateSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for CreateSubscription for application/vnd.api+json ContentType.
-type CreateSubscriptionApplicationVndAPIPlusJSONRequestBody = CreateSubscriptionBody
-
-// DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for DowngradeSubscription for application/vnd.api+json ContentType.
-type DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody = PlanChangeRequest
-
-// UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for UpgradeSubscription for application/vnd.api+json ContentType.
-type UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody = PlanChangeRequest
 
 // UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody defines body for UpdateCurrentUser for application/vnd.api+json ContentType.
 type UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody = UserRequest
@@ -2522,6 +2702,24 @@ type ClientInterface interface {
 
 	// PutAccountSettings request
 	PutAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetCurrentSubscription request
+	GetCurrentSubscription(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutCurrentSubscriptionWithBody request with any body
+	PutCurrentSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutCurrentSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PreviewCurrentSubscriptionWithBody request with any body
+	PreviewCurrentSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PreviewCurrentSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PreviewCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminPutAccountSubscriptionWithBody request with any body
+	AdminPutAccountSubscriptionWithBody(ctx context.Context, accountId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AdminPutAccountSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, accountId openapi_types.UUID, body AdminPutAccountSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListApiKeys request
 	ListApiKeys(ctx context.Context, params *ListApiKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2728,33 +2926,6 @@ type ClientInterface interface {
 
 	UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListSubscriptions request
-	ListSubscriptions(ctx context.Context, params *ListSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateSubscriptionWithBody request with any body
-	CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	CreateSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CancelSubscription request
-	CancelSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DowngradeSubscriptionWithBody request with any body
-	DowngradeSubscriptionWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	DowngradeSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UncancelSubscription request
-	UncancelSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UndowngradeSubscription request
-	UndowngradeSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UpgradeSubscriptionWithBody request with any body
-	UpgradeSubscriptionWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	UpgradeSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListUsers request
 	ListUsers(ctx context.Context, params *ListUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2873,6 +3044,90 @@ func (c *Client) GetAccountSettings(ctx context.Context, reqEditors ...RequestEd
 
 func (c *Client) PutAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutAccountSettingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetCurrentSubscription(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCurrentSubscriptionRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutCurrentSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutCurrentSubscriptionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutCurrentSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutCurrentSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PreviewCurrentSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPreviewCurrentSubscriptionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PreviewCurrentSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PreviewCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPreviewCurrentSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AdminPutAccountSubscriptionWithBody(ctx context.Context, accountId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminPutAccountSubscriptionRequestWithBody(c.Server, accountId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AdminPutAccountSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, accountId openapi_types.UUID, body AdminPutAccountSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminPutAccountSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, accountId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3783,126 +4038,6 @@ func (c *Client) UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx context.Cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListSubscriptions(ctx context.Context, params *ListSubscriptionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListSubscriptionsRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateSubscriptionRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CreateSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CancelSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCancelSubscriptionRequest(c.Server, id)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) DowngradeSubscriptionWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDowngradeSubscriptionRequestWithBody(c.Server, id, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) DowngradeSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDowngradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UncancelSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUncancelSubscriptionRequest(c.Server, id)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UndowngradeSubscription(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUndowngradeSubscriptionRequest(c.Server, id)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpgradeSubscriptionWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpgradeSubscriptionRequestWithBody(c.Server, id, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpgradeSubscriptionWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpgradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 func (c *Client) ListUsers(ctx context.Context, params *ListUsersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListUsersRequest(c.Server, params)
 	if err != nil {
@@ -4219,6 +4354,160 @@ func NewPutAccountSettingsRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewGetCurrentSubscriptionRequest generates requests for GetCurrentSubscription
+func NewGetCurrentSubscriptionRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/subscription")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutCurrentSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic PutCurrentSubscription builder with application/vnd.api+json body
+func NewPutCurrentSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, body PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutCurrentSubscriptionRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewPutCurrentSubscriptionRequestWithBody generates requests for PutCurrentSubscription with any type of body
+func NewPutCurrentSubscriptionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/subscription")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPreviewCurrentSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic PreviewCurrentSubscription builder with application/vnd.api+json body
+func NewPreviewCurrentSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, body PreviewCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPreviewCurrentSubscriptionRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewPreviewCurrentSubscriptionRequestWithBody generates requests for PreviewCurrentSubscription with any type of body
+func NewPreviewCurrentSubscriptionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/subscription/actions/preview")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminPutAccountSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic AdminPutAccountSubscription builder with application/vnd.api+json body
+func NewAdminPutAccountSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, accountId openapi_types.UUID, body AdminPutAccountSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminPutAccountSubscriptionRequestWithBody(server, accountId, "application/vnd.api+json", bodyReader)
+}
+
+// NewAdminPutAccountSubscriptionRequestWithBody generates requests for AdminPutAccountSubscription with any type of body
+func NewAdminPutAccountSubscriptionRequestWithBody(server string, accountId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "account_id", accountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/%s/subscription", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6738,296 +7027,6 @@ func NewUpdateServiceRequestWithBody(server string, id string, contentType strin
 	return req, nil
 }
 
-// NewListSubscriptionsRequest generates requests for ListSubscriptions
-func NewListSubscriptionsRequest(server string, params *ListSubscriptionsParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/subscriptions")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Sort != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCreateSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateSubscription builder with application/vnd.api+json body
-func NewCreateSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateSubscriptionRequestWithBody(server, "application/vnd.api+json", bodyReader)
-}
-
-// NewCreateSubscriptionRequestWithBody generates requests for CreateSubscription with any type of body
-func NewCreateSubscriptionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/subscriptions")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewCancelSubscriptionRequest generates requests for CancelSubscription
-func NewCancelSubscriptionRequest(server string, id openapi_types.UUID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/subscriptions/%s/actions/cancel", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewDowngradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic DowngradeSubscription builder with application/vnd.api+json body
-func NewDowngradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, body DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewDowngradeSubscriptionRequestWithBody(server, id, "application/vnd.api+json", bodyReader)
-}
-
-// NewDowngradeSubscriptionRequestWithBody generates requests for DowngradeSubscription with any type of body
-func NewDowngradeSubscriptionRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/subscriptions/%s/actions/downgrade", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewUncancelSubscriptionRequest generates requests for UncancelSubscription
-func NewUncancelSubscriptionRequest(server string, id openapi_types.UUID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/subscriptions/%s/actions/uncancel", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewUndowngradeSubscriptionRequest generates requests for UndowngradeSubscription
-func NewUndowngradeSubscriptionRequest(server string, id openapi_types.UUID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/subscriptions/%s/actions/undowngrade", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewUpgradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody calls the generic UpgradeSubscription builder with application/vnd.api+json body
-func NewUpgradeSubscriptionRequestWithApplicationVndAPIPlusJSONBody(server string, id openapi_types.UUID, body UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewUpgradeSubscriptionRequestWithBody(server, id, "application/vnd.api+json", bodyReader)
-}
-
-// NewUpgradeSubscriptionRequestWithBody generates requests for UpgradeSubscription with any type of body
-func NewUpgradeSubscriptionRequestWithBody(server string, id openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/subscriptions/%s/actions/upgrade", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewListUsersRequest generates requests for ListUsers
 func NewListUsersRequest(server string, params *ListUsersParams) (*http.Request, error) {
 	var err error
@@ -7477,6 +7476,24 @@ type ClientWithResponsesInterface interface {
 	// PutAccountSettingsWithResponse request
 	PutAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
 
+	// GetCurrentSubscriptionWithResponse request
+	GetCurrentSubscriptionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentSubscriptionResponse, error)
+
+	// PutCurrentSubscriptionWithBodyWithResponse request with any body
+	PutCurrentSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutCurrentSubscriptionResponse, error)
+
+	PutCurrentSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutCurrentSubscriptionResponse, error)
+
+	// PreviewCurrentSubscriptionWithBodyWithResponse request with any body
+	PreviewCurrentSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PreviewCurrentSubscriptionResponse, error)
+
+	PreviewCurrentSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PreviewCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PreviewCurrentSubscriptionResponse, error)
+
+	// AdminPutAccountSubscriptionWithBodyWithResponse request with any body
+	AdminPutAccountSubscriptionWithBodyWithResponse(ctx context.Context, accountId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminPutAccountSubscriptionResponse, error)
+
+	AdminPutAccountSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, accountId openapi_types.UUID, body AdminPutAccountSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutAccountSubscriptionResponse, error)
+
 	// ListApiKeysWithResponse request
 	ListApiKeysWithResponse(ctx context.Context, params *ListApiKeysParams, reqEditors ...RequestEditorFn) (*ListApiKeysResponse, error)
 
@@ -7681,33 +7698,6 @@ type ClientWithResponsesInterface interface {
 	UpdateServiceWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
 
 	UpdateServiceWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateServiceApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateServiceResponse, error)
-
-	// ListSubscriptionsWithResponse request
-	ListSubscriptionsWithResponse(ctx context.Context, params *ListSubscriptionsParams, reqEditors ...RequestEditorFn) (*ListSubscriptionsResponse, error)
-
-	// CreateSubscriptionWithBodyWithResponse request with any body
-	CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
-
-	CreateSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error)
-
-	// CancelSubscriptionWithResponse request
-	CancelSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSubscriptionResponse, error)
-
-	// DowngradeSubscriptionWithBodyWithResponse request with any body
-	DowngradeSubscriptionWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DowngradeSubscriptionResponse, error)
-
-	DowngradeSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*DowngradeSubscriptionResponse, error)
-
-	// UncancelSubscriptionWithResponse request
-	UncancelSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*UncancelSubscriptionResponse, error)
-
-	// UndowngradeSubscriptionWithResponse request
-	UndowngradeSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*UndowngradeSubscriptionResponse, error)
-
-	// UpgradeSubscriptionWithBodyWithResponse request with any body
-	UpgradeSubscriptionWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpgradeSubscriptionResponse, error)
-
-	UpgradeSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpgradeSubscriptionResponse, error)
 
 	// ListUsersWithResponse request
 	ListUsersWithResponse(ctx context.Context, params *ListUsersParams, reqEditors ...RequestEditorFn) (*ListUsersResponse, error)
@@ -7937,6 +7927,142 @@ func (r PutAccountSettingsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PutAccountSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetCurrentSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SubscriptionResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCurrentSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCurrentSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetCurrentSubscriptionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutCurrentSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SubscriptionResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r PutCurrentSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutCurrentSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutCurrentSubscriptionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PreviewCurrentSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SubscriptionPreviewResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r PreviewCurrentSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PreviewCurrentSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PreviewCurrentSubscriptionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminPutAccountSubscriptionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SubscriptionResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminPutAccountSubscriptionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminPutAccountSubscriptionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminPutAccountSubscriptionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -9807,244 +9933,6 @@ func (r UpdateServiceResponse) ContentType() string {
 	return ""
 }
 
-type ListSubscriptionsResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *SubscriptionListResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r ListSubscriptionsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListSubscriptionsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListSubscriptionsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type CreateSubscriptionResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON201 *SubscriptionResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateSubscriptionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateSubscriptionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreateSubscriptionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type CancelSubscriptionResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *SubscriptionResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r CancelSubscriptionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CancelSubscriptionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CancelSubscriptionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DowngradeSubscriptionResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *SubscriptionResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r DowngradeSubscriptionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DowngradeSubscriptionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DowngradeSubscriptionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type UncancelSubscriptionResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *SubscriptionResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r UncancelSubscriptionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UncancelSubscriptionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r UncancelSubscriptionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type UndowngradeSubscriptionResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *SubscriptionResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r UndowngradeSubscriptionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UndowngradeSubscriptionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r UndowngradeSubscriptionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type UpgradeSubscriptionResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *SubscriptionResponse
-	ApplicationvndApiJSON400 *ErrorResponse
-	ApplicationvndApiJSON401 *ErrorResponse
-	ApplicationvndApiJSON404 *ErrorResponse
-	ApplicationvndApiJSON429 *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r UpgradeSubscriptionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UpgradeSubscriptionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r UpgradeSubscriptionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type ListUsersResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -10418,6 +10306,66 @@ func (c *ClientWithResponses) PutAccountSettingsWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParsePutAccountSettingsResponse(rsp)
+}
+
+// GetCurrentSubscriptionWithResponse request returning *GetCurrentSubscriptionResponse
+func (c *ClientWithResponses) GetCurrentSubscriptionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentSubscriptionResponse, error) {
+	rsp, err := c.GetCurrentSubscription(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCurrentSubscriptionResponse(rsp)
+}
+
+// PutCurrentSubscriptionWithBodyWithResponse request with arbitrary body returning *PutCurrentSubscriptionResponse
+func (c *ClientWithResponses) PutCurrentSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutCurrentSubscriptionResponse, error) {
+	rsp, err := c.PutCurrentSubscriptionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutCurrentSubscriptionResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutCurrentSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutCurrentSubscriptionResponse, error) {
+	rsp, err := c.PutCurrentSubscriptionWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutCurrentSubscriptionResponse(rsp)
+}
+
+// PreviewCurrentSubscriptionWithBodyWithResponse request with arbitrary body returning *PreviewCurrentSubscriptionResponse
+func (c *ClientWithResponses) PreviewCurrentSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PreviewCurrentSubscriptionResponse, error) {
+	rsp, err := c.PreviewCurrentSubscriptionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePreviewCurrentSubscriptionResponse(rsp)
+}
+
+func (c *ClientWithResponses) PreviewCurrentSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PreviewCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PreviewCurrentSubscriptionResponse, error) {
+	rsp, err := c.PreviewCurrentSubscriptionWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePreviewCurrentSubscriptionResponse(rsp)
+}
+
+// AdminPutAccountSubscriptionWithBodyWithResponse request with arbitrary body returning *AdminPutAccountSubscriptionResponse
+func (c *ClientWithResponses) AdminPutAccountSubscriptionWithBodyWithResponse(ctx context.Context, accountId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminPutAccountSubscriptionResponse, error) {
+	rsp, err := c.AdminPutAccountSubscriptionWithBody(ctx, accountId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminPutAccountSubscriptionResponse(rsp)
+}
+
+func (c *ClientWithResponses) AdminPutAccountSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, accountId openapi_types.UUID, body AdminPutAccountSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutAccountSubscriptionResponse, error) {
+	rsp, err := c.AdminPutAccountSubscriptionWithApplicationVndAPIPlusJSONBody(ctx, accountId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminPutAccountSubscriptionResponse(rsp)
 }
 
 // ListApiKeysWithResponse request returning *ListApiKeysResponse
@@ -11075,93 +11023,6 @@ func (c *ClientWithResponses) UpdateServiceWithApplicationVndAPIPlusJSONBodyWith
 	return ParseUpdateServiceResponse(rsp)
 }
 
-// ListSubscriptionsWithResponse request returning *ListSubscriptionsResponse
-func (c *ClientWithResponses) ListSubscriptionsWithResponse(ctx context.Context, params *ListSubscriptionsParams, reqEditors ...RequestEditorFn) (*ListSubscriptionsResponse, error) {
-	rsp, err := c.ListSubscriptions(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListSubscriptionsResponse(rsp)
-}
-
-// CreateSubscriptionWithBodyWithResponse request with arbitrary body returning *CreateSubscriptionResponse
-func (c *ClientWithResponses) CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
-	rsp, err := c.CreateSubscriptionWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateSubscriptionResponse(rsp)
-}
-
-func (c *ClientWithResponses) CreateSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSubscriptionResponse, error) {
-	rsp, err := c.CreateSubscriptionWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateSubscriptionResponse(rsp)
-}
-
-// CancelSubscriptionWithResponse request returning *CancelSubscriptionResponse
-func (c *ClientWithResponses) CancelSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSubscriptionResponse, error) {
-	rsp, err := c.CancelSubscription(ctx, id, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCancelSubscriptionResponse(rsp)
-}
-
-// DowngradeSubscriptionWithBodyWithResponse request with arbitrary body returning *DowngradeSubscriptionResponse
-func (c *ClientWithResponses) DowngradeSubscriptionWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DowngradeSubscriptionResponse, error) {
-	rsp, err := c.DowngradeSubscriptionWithBody(ctx, id, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDowngradeSubscriptionResponse(rsp)
-}
-
-func (c *ClientWithResponses) DowngradeSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body DowngradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*DowngradeSubscriptionResponse, error) {
-	rsp, err := c.DowngradeSubscriptionWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDowngradeSubscriptionResponse(rsp)
-}
-
-// UncancelSubscriptionWithResponse request returning *UncancelSubscriptionResponse
-func (c *ClientWithResponses) UncancelSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*UncancelSubscriptionResponse, error) {
-	rsp, err := c.UncancelSubscription(ctx, id, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUncancelSubscriptionResponse(rsp)
-}
-
-// UndowngradeSubscriptionWithResponse request returning *UndowngradeSubscriptionResponse
-func (c *ClientWithResponses) UndowngradeSubscriptionWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*UndowngradeSubscriptionResponse, error) {
-	rsp, err := c.UndowngradeSubscription(ctx, id, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUndowngradeSubscriptionResponse(rsp)
-}
-
-// UpgradeSubscriptionWithBodyWithResponse request with arbitrary body returning *UpgradeSubscriptionResponse
-func (c *ClientWithResponses) UpgradeSubscriptionWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpgradeSubscriptionResponse, error) {
-	rsp, err := c.UpgradeSubscriptionWithBody(ctx, id, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpgradeSubscriptionResponse(rsp)
-}
-
-func (c *ClientWithResponses) UpgradeSubscriptionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id openapi_types.UUID, body UpgradeSubscriptionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpgradeSubscriptionResponse, error) {
-	rsp, err := c.UpgradeSubscriptionWithApplicationVndAPIPlusJSONBody(ctx, id, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpgradeSubscriptionResponse(rsp)
-}
-
 // ListUsersWithResponse request returning *ListUsersResponse
 func (c *ClientWithResponses) ListUsersWithResponse(ctx context.Context, params *ListUsersParams, reqEditors ...RequestEditorFn) (*ListUsersResponse, error) {
 	rsp, err := c.ListUsers(ctx, params, reqEditors...)
@@ -11531,6 +11392,222 @@ func ParsePutAccountSettingsResponse(rsp *http.Response) (*PutAccountSettingsRes
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetCurrentSubscriptionResponse parses an HTTP response from a GetCurrentSubscriptionWithResponse call
+func ParseGetCurrentSubscriptionResponse(rsp *http.Response) (*GetCurrentSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCurrentSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SubscriptionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutCurrentSubscriptionResponse parses an HTTP response from a PutCurrentSubscriptionWithResponse call
+func ParsePutCurrentSubscriptionResponse(rsp *http.Response) (*PutCurrentSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutCurrentSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SubscriptionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePreviewCurrentSubscriptionResponse parses an HTTP response from a PreviewCurrentSubscriptionWithResponse call
+func ParsePreviewCurrentSubscriptionResponse(rsp *http.Response) (*PreviewCurrentSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PreviewCurrentSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SubscriptionPreviewResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminPutAccountSubscriptionResponse parses an HTTP response from a AdminPutAccountSubscriptionWithResponse call
+func ParseAdminPutAccountSubscriptionResponse(rsp *http.Response) (*AdminPutAccountSubscriptionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminPutAccountSubscriptionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SubscriptionResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -14459,384 +14536,6 @@ func ParseUpdateServiceResponse(rsp *http.Response) (*UpdateServiceResponse, err
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ServiceResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListSubscriptionsResponse parses an HTTP response from a ListSubscriptionsWithResponse call
-func ParseListSubscriptionsResponse(rsp *http.Response) (*ListSubscriptionsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListSubscriptionsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SubscriptionListResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreateSubscriptionResponse parses an HTTP response from a CreateSubscriptionWithResponse call
-func ParseCreateSubscriptionResponse(rsp *http.Response) (*CreateSubscriptionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateSubscriptionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest SubscriptionResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCancelSubscriptionResponse parses an HTTP response from a CancelSubscriptionWithResponse call
-func ParseCancelSubscriptionResponse(rsp *http.Response) (*CancelSubscriptionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CancelSubscriptionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SubscriptionResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDowngradeSubscriptionResponse parses an HTTP response from a DowngradeSubscriptionWithResponse call
-func ParseDowngradeSubscriptionResponse(rsp *http.Response) (*DowngradeSubscriptionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DowngradeSubscriptionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SubscriptionResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUncancelSubscriptionResponse parses an HTTP response from a UncancelSubscriptionWithResponse call
-func ParseUncancelSubscriptionResponse(rsp *http.Response) (*UncancelSubscriptionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UncancelSubscriptionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SubscriptionResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUndowngradeSubscriptionResponse parses an HTTP response from a UndowngradeSubscriptionWithResponse call
-func ParseUndowngradeSubscriptionResponse(rsp *http.Response) (*UndowngradeSubscriptionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UndowngradeSubscriptionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SubscriptionResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationvndApiJSON429 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUpgradeSubscriptionResponse parses an HTTP response from a UpgradeSubscriptionWithResponse call
-func ParseUpgradeSubscriptionResponse(rsp *http.Response) (*UpgradeSubscriptionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UpgradeSubscriptionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SubscriptionResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
