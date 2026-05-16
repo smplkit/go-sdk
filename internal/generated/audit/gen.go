@@ -22,6 +22,21 @@ const (
 	HTTPBearerScopes hTTPBearerContextKey = "HTTPBearer.Scopes"
 )
 
+// Defines values for ForwarderTransformType.
+const (
+	JSONATA ForwarderTransformType = "JSONATA"
+)
+
+// Valid indicates whether the value is a known member of the ForwarderTransformType enum.
+func (e ForwarderTransformType) Valid() bool {
+	switch e {
+	case JSONATA:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ForwarderDeliveryStatus.
 const (
 	FAILED              ForwarderDeliveryStatus = "FAILED"
@@ -40,33 +55,6 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 	case SKIPPEDDONOTFORWARD:
 		return true
 	case SUCCEEDED:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ForwarderHttpMethod.
-const (
-	ForwarderHttpMethodDELETE ForwarderHttpMethod = "DELETE"
-	ForwarderHttpMethodGET    ForwarderHttpMethod = "GET"
-	ForwarderHttpMethodPATCH  ForwarderHttpMethod = "PATCH"
-	ForwarderHttpMethodPOST   ForwarderHttpMethod = "POST"
-	ForwarderHttpMethodPUT    ForwarderHttpMethod = "PUT"
-)
-
-// Valid indicates whether the value is a known member of the ForwarderHttpMethod enum.
-func (e ForwarderHttpMethod) Valid() bool {
-	switch e {
-	case ForwarderHttpMethodDELETE:
-		return true
-	case ForwarderHttpMethodGET:
-		return true
-	case ForwarderHttpMethodPATCH:
-		return true
-	case ForwarderHttpMethodPOST:
-		return true
-	case ForwarderHttpMethodPUT:
 		return true
 	default:
 		return false
@@ -100,6 +88,33 @@ func (e ForwarderType) Valid() bool {
 	case SPLUNKHEC:
 		return true
 	case SUMOLOGIC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HttpConfigurationMethod.
+const (
+	HttpConfigurationMethodDELETE HttpConfigurationMethod = "DELETE"
+	HttpConfigurationMethodGET    HttpConfigurationMethod = "GET"
+	HttpConfigurationMethodPATCH  HttpConfigurationMethod = "PATCH"
+	HttpConfigurationMethodPOST   HttpConfigurationMethod = "POST"
+	HttpConfigurationMethodPUT    HttpConfigurationMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the HttpConfigurationMethod enum.
+func (e HttpConfigurationMethod) Valid() bool {
+	switch e {
+	case HttpConfigurationMethodDELETE:
+		return true
+	case HttpConfigurationMethodGET:
+		return true
+	case HttpConfigurationMethodPATCH:
+		return true
+	case HttpConfigurationMethodPOST:
+		return true
+	case HttpConfigurationMethodPUT:
 		return true
 	default:
 		return false
@@ -371,15 +386,27 @@ type EventResponse struct {
 //
 // Each event recorded for the account is evaluated against every enabled
 // forwarder. If the filter expression evaluates truthy — or is absent —
-// the event is delivered to the destination using the configured HTTP
-// request. The slug, derived from `name` at create time, is the stable
-// identifier used by the console and other tooling.
+// the event is shaped by the configured transform and delivered to the
+// destination defined by “configuration“.
 type Forwarder struct {
+	// Configuration HTTP request configuration used to deliver an event to the destination.
+	//
+	// Used when the parent forwarder's ``forwarder_type`` is one of the
+	// HTTP-family destinations (``HTTP``, ``DATADOG``, ``SPLUNK_HEC``,
+	// ``SUMO_LOGIC``, ``NEW_RELIC``, ``HONEYCOMB``, ``ELASTIC``). When other
+	// transports land (``FTP``, ``SQS``, …) their own configuration schemas
+	// will join this one as members of a discriminated union under the
+	// ``configuration`` field of ``Forwarder``.
+	Configuration HttpConfiguration `json:"configuration"`
+
 	// CreatedAt When the forwarder was created.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
 	// DeletedAt When the forwarder was deleted. `null` for active forwarders.
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+
+	// Description Free-text description for the forwarder.
+	Description *string `json:"description,omitempty"`
 
 	// Enabled Whether the forwarder is currently delivering events. Set to `false` to pause deliveries without deleting the forwarder.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -390,17 +417,14 @@ type Forwarder struct {
 	// ForwarderType Supported forwarder destination types.
 	ForwarderType ForwarderType `json:"forwarder_type"`
 
-	// Http HTTP request configuration used to deliver an event to the destination.
-	Http ForwarderHttp `json:"http"`
-
 	// Name Human-readable name for the forwarder.
 	Name string `json:"name"`
 
-	// Slug URL-safe identifier derived from `name` at create time. Stable for the lifetime of the forwarder.
-	Slug *string `json:"slug,omitempty"`
+	// Transform Template applied to each event before delivery. The shape depends on ``transform_type``: for `JSONATA`, a string containing a JSONata expression. Omit to deliver the event JSON unchanged.
+	Transform interface{} `json:"transform,omitempty"`
 
-	// Transform JSONata template applied to each event before delivery. Omit to deliver the event unchanged.
-	Transform *string `json:"transform,omitempty"`
+	// TransformType Engine used to evaluate ``transform``. Must be set whenever ``transform`` is set. Today only `JSONATA` is supported.
+	TransformType *ForwarderTransformType `json:"transform_type,omitempty"`
 
 	// UpdatedAt When the forwarder was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
@@ -408,6 +432,9 @@ type Forwarder struct {
 	// Version Monotonic counter incremented on every update, starting at 1.
 	Version *int `json:"version,omitempty"`
 }
+
+// ForwarderTransformType Engine used to evaluate “transform“. Must be set whenever “transform“ is set. Today only `JSONATA` is supported.
+type ForwarderTransformType string
 
 // ForwarderDelivery A log entry for one attempt to deliver an event to a forwarder.
 type ForwarderDelivery struct {
@@ -490,27 +517,6 @@ type ForwarderDeliveryResponse struct {
 	Data ForwarderDeliveryResource `json:"data"`
 }
 
-// ForwarderHttp HTTP request configuration used to deliver an event to the destination.
-type ForwarderHttp struct {
-	// Body Request body sent to the destination. If omitted, the event JSON is sent as the body.
-	Body *string `json:"body,omitempty"`
-
-	// Headers HTTP headers attached to each delivery request.
-	Headers *[]HttpHeader `json:"headers,omitempty"`
-
-	// Method HTTP method used when delivering an event.
-	Method *ForwarderHttpMethod `json:"method,omitempty"`
-
-	// SuccessStatus HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
-	SuccessStatus *string `json:"success_status,omitempty"`
-
-	// Url Destination URL.
-	Url string `json:"url"`
-}
-
-// ForwarderHttpMethod HTTP method used when delivering an event.
-type ForwarderHttpMethod string
-
 // ForwarderListResponse JSON:API collection response for forwarders.
 type ForwarderListResponse struct {
 	Data []ForwarderResource `json:"data"`
@@ -535,9 +541,8 @@ type ForwarderResource struct {
 	//
 	// Each event recorded for the account is evaluated against every enabled
 	// forwarder. If the filter expression evaluates truthy — or is absent —
-	// the event is delivered to the destination using the configured HTTP
-	// request. The slug, derived from `name` at create time, is the stable
-	// identifier used by the console and other tooling.
+	// the event is shaped by the configured transform and delivered to the
+	// destination defined by ``configuration``.
 	Attributes Forwarder `json:"attributes"`
 	Id         *string   `json:"id,omitempty"`
 	Type       *string   `json:"type,omitempty"`
@@ -554,7 +559,36 @@ type ForwarderResponse struct {
 // ForwarderType Supported forwarder destination types.
 type ForwarderType string
 
+// HttpConfiguration HTTP request configuration used to deliver an event to the destination.
+//
+// Used when the parent forwarder's “forwarder_type“ is one of the
+// HTTP-family destinations (“HTTP“, “DATADOG“, “SPLUNK_HEC“,
+// “SUMO_LOGIC“, “NEW_RELIC“, “HONEYCOMB“, “ELASTIC“). When other
+// transports land (“FTP“, “SQS“, …) their own configuration schemas
+// will join this one as members of a discriminated union under the
+// “configuration“ field of “Forwarder“.
+type HttpConfiguration struct {
+	// Headers HTTP headers attached to each delivery request.
+	Headers *[]HttpHeader `json:"headers,omitempty"`
+
+	// Method HTTP method used when delivering an event.
+	Method *HttpConfigurationMethod `json:"method,omitempty"`
+
+	// SuccessStatus HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
+	SuccessStatus *string `json:"success_status,omitempty"`
+
+	// Url Destination URL.
+	Url string `json:"url"`
+}
+
+// HttpConfigurationMethod HTTP method used when delivering an event.
+type HttpConfigurationMethod string
+
 // HttpHeader A single HTTP header attached to a forwarder delivery request.
+//
+// Header values carrying secrets (API keys, bearer tokens, HEC tokens)
+// are encrypted at the application layer before persistence; the wire
+// representation here is always plaintext.
 type HttpHeader struct {
 	// Name Header name.
 	Name string `json:"name"`
@@ -637,9 +671,6 @@ type RetryFailedDeliveriesSummary struct {
 // Mirrors a forwarder's HTTP destination configuration with one
 // addition: `timeout_ms`, applied per-request and capped server-side.
 type TestForwarderRequest struct {
-	// Body Request body. If omitted, an empty body is sent.
-	Body *string `json:"body,omitempty"`
-
 	// Headers HTTP headers attached to the test request.
 	Headers *[]HttpHeader `json:"headers,omitempty"`
 
