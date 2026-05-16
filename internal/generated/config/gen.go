@@ -168,6 +168,9 @@ type ConfigItemOverride struct {
 // ConfigListResponse JSON:API collection response for configs.
 type ConfigListResponse struct {
 	Data []ConfigResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // ConfigRequest JSON:API request envelope for creating or updating a config.
@@ -214,6 +217,37 @@ type EnvironmentOverride struct {
 	Values *map[string]ConfigItemOverride `json:"values,omitempty"`
 }
 
+// ListMeta Top-level “meta“ block included on every JSON:API list response.
+type ListMeta struct {
+	// Pagination Pagination block returned inside ``meta`` on every list response.
+	//
+	// ``page`` and ``size`` are always present and echo the parameters that
+	// served the response (their defaults when the client omitted them).
+	// ``total`` and ``total_pages`` are present only when the request included
+	// ``meta[total]=true``.
+	Pagination PaginationMeta `json:"pagination"`
+}
+
+// PaginationMeta Pagination block returned inside “meta“ on every list response.
+//
+// “page“ and “size“ are always present and echo the parameters that
+// served the response (their defaults when the client omitted them).
+// “total“ and “total_pages“ are present only when the request included
+// “meta[total]=true“.
+type PaginationMeta struct {
+	// Page 1-based page number returned.
+	Page int `json:"page"`
+
+	// Size Number of items per page.
+	Size int `json:"size"`
+
+	// Total Total number of matching items across all pages. Present only when the request included `meta[total]=true`.
+	Total *int `json:"total,omitempty"`
+
+	// TotalPages Total number of pages at the requested page size. Present only when the request included `meta[total]=true`.
+	TotalPages *int `json:"total_pages,omitempty"`
+}
+
 // UsageAttributes Usage counter for a single metered limit.
 type UsageAttributes struct {
 	// LimitKey Identifier of the metered limit, e.g. `config.items` or `config.inheritance_depth`.
@@ -229,6 +263,9 @@ type UsageAttributes struct {
 // UsageListResponse JSON:API collection response for usage counters.
 type UsageListResponse struct {
 	Data []UsageResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
 }
 
 // UsageResource JSON:API resource envelope for a usage counter.
@@ -251,6 +288,15 @@ type ListConfigsParams struct {
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListConfigsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // ListConfigsParamsSort defines parameters for ListConfigs.
@@ -260,6 +306,15 @@ type ListConfigsParamsSort string
 type ListConfigUsageParams struct {
 	// FilterPeriod Period to report. `current` is the only supported value.
 	FilterPeriod *string `form:"filter[period],omitempty" json:"filter[period],omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
 // CreateConfigApplicationVndAPIPlusJSONRequestBody defines body for CreateConfig for application/vnd.api+json ContentType.
@@ -512,6 +567,42 @@ func NewListConfigsRequest(server string, params *ListConfigsParams) (*http.Requ
 
 		}
 
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -712,6 +803,42 @@ func NewListConfigUsageRequest(server string, params *ListConfigUsageParams) (*h
 		if params.FilterPeriod != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[period]", *params.FilterPeriod, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
