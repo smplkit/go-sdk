@@ -257,9 +257,10 @@ func TestHandleLoggerChanged_FiresDotDescendantListeners(t *testing.T) {
 }
 
 // Deleting a parent logger flips dot-descendants' resolved level.
-// Listeners on those descendants must fire change events; the deleted
-// logger itself fires a deleted event.
-func TestHandleLoggerDeleted_FiresDotDescendantListeners(t *testing.T) {
+// Per the change-listener semantics rule, the deleted logger itself
+// fires NO event (deletion is not a level change). Descendants whose
+// effective level moved fire normal change events with the new level.
+func TestHandleLoggerDeleted_FiresDotDescendantListenersOnly(t *testing.T) {
 	lc := newTestLoggingClient(t, nil)
 
 	lc.loggersCache["com.acme"] = map[string]interface{}{
@@ -283,12 +284,12 @@ func TestHandleLoggerDeleted_FiresDotDescendantListeners(t *testing.T) {
 
 	cap.mu.Lock()
 	defer cap.mu.Unlock()
-	require.Len(t, cap.keys["com.acme"], 1)
-	assert.True(t, cap.keys["com.acme"][0].Deleted, "the deleted logger fires with Deleted=true")
+	assert.Empty(t, cap.keys["com.acme"], "deleted key fires nothing — deletion is not a level change")
 	require.Len(t, cap.keys["com.acme.payments"], 1)
-	assert.False(t, cap.keys["com.acme.payments"][0].Deleted, "the descendant fires a change event, not a delete")
 	require.NotNil(t, cap.keys["com.acme.payments"][0].Level)
 	assert.Equal(t, LogLevelInfo, *cap.keys["com.acme.payments"][0].Level, "no ancestor level left → INFO fallback")
+	require.Len(t, cap.global, 1, "global fires once — only the descendant changed")
+	assert.Equal(t, "com.acme.payments", cap.global[0].ID)
 }
 
 // ── loggers_changed ─────────────────────────────────────────────────────────
@@ -373,4 +374,159 @@ func TestRefresh_FiresOnGroupOnlyChange(t *testing.T) {
 	assert.Equal(t, "manual", cap.keys["app.db"][0].Source)
 	require.NotNil(t, cap.keys["app.db"][0].Level)
 	assert.Equal(t, LogLevelDebug, *cap.keys["app.db"][0].Level)
+}
+
+// ── Change-listener fanout diagnostics ──────────────────────────────────────
+//
+// These four tests codify the change-listener fanout rules verbatim from
+// the prompt that drove this fix. Every entry in this section is a
+// direct port of one numbered diagnostic — keep the structure aligned so
+// future SDK-wide audits can grep for the same shapes.
+
+// Diagnostic 1: a logger_changed event for a dot-ancestor cascades to
+// every descendant whose effective level moved. Global listener fires
+// once per affected logger (N+1 in total), each invocation carrying the
+// per-logger id and new level.
+func TestDiagnostic1_DotAncestorCascadeViaLoggerChanged(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/com.acme", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"com.acme","type":"logger","attributes":{"id":"com.acme","name":"com.acme","level":"ERROR","managed":true,"environments":{}}}}`))
+	})
+	lc := newTestLoggingClient(t, mux)
+
+	// Ancestor at WARN; 5 descendants with no own level / no group →
+	// all inherit WARN via dot-ancestry.
+	lc.loggersCache["com.acme"] = map[string]interface{}{
+		"id": "com.acme", "name": "com.acme", "managed": true, "level": "WARN",
+	}
+	descendants := []string{
+		"com.acme.api", "com.acme.db", "com.acme.queue",
+		"com.acme.cache", "com.acme.workers",
+	}
+	for _, id := range descendants {
+		lc.loggersCache[id] = map[string]interface{}{"id": id, "name": id, "managed": true}
+	}
+
+	cap := newCaptured()
+	cap.wireGlobal(lc)
+
+	lc.handleLoggerChanged(map[string]interface{}{"id": "com.acme"})
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	// Global must fire N+1 = 6 times — once per affected logger.
+	require.Len(t, cap.global, 6, "global fires once per affected logger, never a single summary event")
+	gotIDs := make(map[string]LogLevel, len(cap.global))
+	for _, e := range cap.global {
+		require.NotNil(t, e.Level, "every event carries the new effective level")
+		assert.Equal(t, "websocket", e.Source)
+		gotIDs[e.ID] = *e.Level
+	}
+	assert.Equal(t, LogLevelError, gotIDs["com.acme"])
+	for _, id := range descendants {
+		assert.Equal(t, LogLevelError, gotIDs[id], "descendant %s should have fired with new level ERROR", id)
+	}
+}
+
+// Diagnostic 2: a group_changed event cascades to every dependent
+// logger. Global listener fires once per dependent.
+func TestDiagnostic2_GroupCascadeViaGroupChanged(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/log_groups/app", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"app","type":"log_group","attributes":{"id":"app","name":"app","level":"ERROR","environments":{}}}}`))
+	})
+	lc := newTestLoggingClient(t, mux)
+
+	lc.groupsCache["app"] = map[string]interface{}{"id": "app", "name": "app", "level": "WARN"}
+	deps := []string{"app.db", "app.queue", "app.api"}
+	for _, id := range deps {
+		lc.loggersCache[id] = map[string]interface{}{
+			"id": id, "name": id, "managed": true, "group": "app",
+		}
+	}
+
+	cap := newCaptured()
+	cap.wireGlobal(lc)
+
+	lc.handleGroupChanged(map[string]interface{}{"id": "app"})
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	require.Len(t, cap.global, 3, "global fires once per dependent logger")
+	gotIDs := make(map[string]LogLevel, len(cap.global))
+	for _, e := range cap.global {
+		require.NotNil(t, e.Level)
+		gotIDs[e.ID] = *e.Level
+	}
+	for _, id := range deps {
+		assert.Equal(t, LogLevelError, gotIDs[id], "dependent %s should fire with new level ERROR", id)
+	}
+	// Crucially: NO event with id == "app" (the group key).
+	assert.NotContains(t, gotIDs, "app", "group id must not appear in any event")
+}
+
+// Diagnostic 3: group_deleted fires N events for dependents whose
+// effective level moved to the fallback. NO event for the deleted group
+// id; no deletion-flavored events anywhere.
+func TestDiagnostic3_GroupDeletedFiresForDependentsNotDeletedKey(t *testing.T) {
+	lc := newTestLoggingClient(t, nil)
+
+	lc.groupsCache["app"] = map[string]interface{}{"id": "app", "name": "app", "level": "WARN"}
+	deps := []string{"app.db", "app.queue", "app.api"}
+	for _, id := range deps {
+		lc.loggersCache[id] = map[string]interface{}{
+			"id": id, "name": id, "managed": true, "group": "app",
+		}
+	}
+
+	cap := newCaptured()
+	cap.wireGlobal(lc)
+
+	lc.handleGroupDeleted(map[string]interface{}{"id": "app"})
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	require.Len(t, cap.global, 3, "global fires once per dependent whose effective level moved")
+	gotIDs := make(map[string]LogLevel, len(cap.global))
+	for _, e := range cap.global {
+		require.NotNil(t, e.Level, "every event carries the new effective level")
+		gotIDs[e.ID] = *e.Level
+	}
+	for _, id := range deps {
+		// No own level + group is gone + no dot-ancestor → fallback INFO.
+		assert.Equal(t, LogLevelInfo, gotIDs[id], "dependent %s should fall to system fallback", id)
+	}
+	assert.NotContains(t, gotIDs, "app", "the deleted group id must not appear in any event")
+}
+
+// Diagnostic 4: a logger_changed (or group_changed) whose effective
+// level is unchanged — e.g. only a name moved — fires no listener.
+func TestDiagnostic4_NoOpEditFiresNothing(t *testing.T) {
+	mux := http.NewServeMux()
+	// Server returns the same level but a different name field.
+	mux.HandleFunc("/api/v1/loggers/com.acme.api", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"com.acme.api","type":"logger","attributes":{"id":"com.acme.api","name":"API Renamed","level":"WARN","managed":true,"environments":{}}}}`))
+	})
+	lc := newTestLoggingClient(t, mux)
+
+	lc.loggersCache["com.acme.api"] = map[string]interface{}{
+		"id": "com.acme.api", "name": "API", "managed": true, "level": "WARN",
+	}
+
+	cap := newCaptured()
+	cap.wireGlobal(lc)
+	cap.wireKey(lc, "com.acme.api")
+
+	lc.handleLoggerChanged(map[string]interface{}{"id": "com.acme.api"})
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	assert.Empty(t, cap.global, "global must not fire for metadata-only edits")
+	assert.Empty(t, cap.keys["com.acme.api"], "key listener must not fire for metadata-only edits")
 }

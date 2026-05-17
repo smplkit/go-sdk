@@ -709,60 +709,18 @@ func (c *LoggingClient) snapshotResolvedLevels() map[string]LogLevel {
 	return snap
 }
 
-// fireResolvedLevelDeltas re-resolves every cached logger and fires
-// change / deleted listeners for any logger whose effective level
-// differs from the supplied snapshot. A logger that is no longer in
-// loggersCache (i.e. was deleted) fires a deleted listener; everything
-// else with a different (or newly-resolved) level fires a change
-// listener.
+// fireResolvedLevelDeltas re-resolves every cached logger and fires a
+// change listener for every logger whose effective level differs from
+// the supplied snapshot. A logger that is no longer in loggersCache
+// (i.e. removed server-side) fires no event for its own key — its
+// dependents fire normal change events via the standard delta path
+// instead.
 func (c *LoggingClient) fireResolvedLevelDeltas(before map[string]LogLevel, source string) {
 	after := c.snapshotResolvedLevels()
 	for id, newLvl := range after {
 		if oldLvl, ok := before[id]; !ok || oldLvl != newLvl {
 			c.fireChangeListeners(id, source)
 		}
-	}
-	for id := range before {
-		if _, stillCached := c.loggersCache[id]; !stillCached {
-			c.fireDeletedListeners(id, source)
-		}
-	}
-}
-
-func (c *LoggingClient) fireDeletedListeners(loggerID string, source string) {
-	if loggerID == "" {
-		return
-	}
-
-	event := &LoggerChangeEvent{ID: loggerID, Deleted: true, Source: source}
-
-	c.listenersMu.Lock()
-	globals := make([]func(*LoggerChangeEvent), len(c.globalListeners))
-	copy(globals, c.globalListeners)
-	keyListeners := make([]func(*LoggerChangeEvent), len(c.keyListeners[loggerID]))
-	copy(keyListeners, c.keyListeners[loggerID])
-	c.listenersMu.Unlock()
-
-	for _, cb := range globals {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("smplkit: exception in global logging on_change listener: %v", r)
-				}
-			}()
-			cb(event)
-		}()
-	}
-
-	for _, cb := range keyListeners {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("smplkit: exception in key-scoped logging on_change listener: %v", r)
-				}
-			}()
-			cb(event)
-		}()
 	}
 }
 

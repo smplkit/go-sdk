@@ -283,14 +283,17 @@ func NewLoggerSource(id string, opts ...LoggerSourceOption) LoggerSource {
 	return s
 }
 
-// LoggerChangeEvent describes a logger definition change.
+// LoggerChangeEvent describes a logger whose effective level was just
+// re-applied. The SDK fires one event per logger per trigger — never a
+// batch / summary event and never a deletion-flavored event. If a
+// trigger removes a logger from server-side tracking, the deleted key
+// itself fires nothing; dependents whose effective level moves fire
+// normal change events through this same payload.
 type LoggerChangeEvent struct {
-	// ID is the logger ID that changed.
+	// ID is the normalized logger id whose effective level just moved.
 	ID string
-	// Level is the new resolved level (nil if deleted).
+	// Level is the newly-applied effective level.
 	Level *LogLevel
-	// Source is "websocket" or "refresh".
+	// Source identifies the trigger ("websocket", "manual").
 	Source string
-	// Deleted is true when the logger was deleted server-side.
-	Deleted bool
 }

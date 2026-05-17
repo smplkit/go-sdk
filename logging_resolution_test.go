@@ -1945,7 +1945,6 @@ func TestHandleLoggerChanged_ScopedFetch_ContentChanged(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call GetLogger once")
 	require.NotNil(t, received, "listener should fire when content changed")
 	assert.Equal(t, "com.acme.app", received.ID)
-	assert.False(t, received.Deleted)
 }
 
 // TestHandleLoggerChanged_ScopedFetch_ContentUnchanged verifies that logger_changed
@@ -1975,19 +1974,20 @@ func TestHandleLoggerChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
 	assert.False(t, called, "listener should NOT fire when content is unchanged")
 }
 
-// TestHandleLoggerDeleted_StoreRemoval_ListenerFired verifies that logger_deleted
-// removes the logger from cache and fires the listener with Deleted=true,
-// without making any HTTP fetch.
-func TestHandleLoggerDeleted_StoreRemoval_ListenerFired(t *testing.T) {
+// TestHandleLoggerDeleted_StoreRemoval_NoEventForDeletedKey verifies that
+// logger_deleted evicts the logger from the cache without making an HTTP
+// fetch, and fires NO listener for the deleted key (deletion is not a
+// level change — see the change-listener semantics rule).
+func TestHandleLoggerDeleted_StoreRemoval_NoEventForDeletedKey(t *testing.T) {
 	var fetchCount int32
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&fetchCount, 1)
-		w.WriteHeader(http.StatusOK)
 	}))
 
 	lc.loggersCache["gone.logger"] = map[string]interface{}{
-		"id":   "gone.logger",
-		"name": "gone.logger",
+		"id":    "gone.logger",
+		"name":  "gone.logger",
+		"level": "WARN",
 	}
 
 	var evt *LoggerChangeEvent
@@ -1998,9 +1998,7 @@ func TestHandleLoggerDeleted_StoreRemoval_ListenerFired(t *testing.T) {
 	assert.Equal(t, int32(0), atomic.LoadInt32(&fetchCount), "logger_deleted must NOT make HTTP fetch")
 	_, stillInCache := lc.loggersCache["gone.logger"]
 	assert.False(t, stillInCache, "logger should be removed from cache")
-	require.NotNil(t, evt)
-	assert.True(t, evt.Deleted, "event should have Deleted=true")
-	assert.Equal(t, "gone.logger", evt.ID)
+	assert.Nil(t, evt, "deleted key fires nothing — deletion is not a level change")
 }
 
 // TestHandleGroupChanged_ScopedFetch verifies that group_changed calls
@@ -2256,33 +2254,6 @@ func TestHandleLoggersChanged_FetchError(t *testing.T) {
 	assert.False(t, called)
 }
 
-// TestFireDeletedListeners_EmptyKey covers the empty key early return.
-func TestFireDeletedListeners_EmptyKey(t *testing.T) {
-	lc := newTestLoggingClient(t, nil)
-	var called bool
-	lc.OnChange(func(evt *LoggerChangeEvent) { called = true })
-	lc.fireDeletedListeners("", "test")
-	assert.False(t, called)
-}
-
-// TestFireDeletedListeners_GlobalPanic covers the global listener panic recovery.
-func TestFireDeletedListeners_GlobalPanic(t *testing.T) {
-	lc := newTestLoggingClient(t, nil)
-	lc.OnChange(func(evt *LoggerChangeEvent) { panic("global panic") })
-	assert.NotPanics(t, func() {
-		lc.fireDeletedListeners("my-logger", "test")
-	})
-}
-
-// TestFireDeletedListeners_KeyListenerPanic covers the key-scoped listener panic recovery.
-func TestFireDeletedListeners_KeyListenerPanic(t *testing.T) {
-	lc := newTestLoggingClient(t, nil)
-	lc.OnChangeKey("my-logger", func(evt *LoggerChangeEvent) { panic("key panic") })
-	assert.NotPanics(t, func() {
-		lc.fireDeletedListeners("my-logger", "test")
-	})
-}
-
 // failingTransportLogging returns a network error for all requests.
 type failingTransportLogging struct{}
 
@@ -2339,10 +2310,13 @@ func TestRefresh_FiresChangeListenerWithManualSource(t *testing.T) {
 	assert.Equal(t, "manual", events[0].Source)
 	require.NotNil(t, events[0].Level)
 	assert.Equal(t, LogLevelDebug, *events[0].Level)
-	assert.False(t, events[0].Deleted)
 }
 
-func TestRefresh_FiresDeletedListenerForRemovedLogger(t *testing.T) {
+// Removing a logger from the cache fires NOTHING for its own key —
+// deletion is not a level change. (If a dependent logger's effective
+// level moved, that dependent fires through the normal change path;
+// see TestRefresh_DeletedLogger_DependentsFireChange below.)
+func TestRefresh_DeletedLogger_NoEventForDeletedKey(t *testing.T) {
 	var loggers, groups atomic.Value
 	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
 	groups.Store(`{"data":[]}`)
@@ -2356,10 +2330,7 @@ func TestRefresh_FiresDeletedListenerForRemovedLogger(t *testing.T) {
 	loggers.Store(`{"data":[]}`)
 	require.NoError(t, lc.Refresh(context.Background()))
 
-	require.Len(t, events, 1)
-	assert.Equal(t, "app", events[0].ID)
-	assert.True(t, events[0].Deleted)
-	assert.Equal(t, "manual", events[0].Source)
+	assert.Empty(t, events, "deleted key fires nothing — deletion is not a level change")
 }
 
 func TestRefresh_NoListenerFireWhenUnchanged(t *testing.T) {
