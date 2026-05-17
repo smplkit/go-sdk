@@ -122,8 +122,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "format": "uuid"
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -1165,13 +1164,13 @@
             "type": "string",
             "minLength": 1,
             "title": "Action",
-            "description": "Slug for what happened, e.g. `user.created`. Lowercase, dot-separated."
+            "description": "What happened, e.g. `user.created`. Any non-empty string."
           },
           "resource_type": {
             "type": "string",
             "minLength": 1,
             "title": "Resource Type",
-            "description": "Slug for the kind of resource the event is about, e.g. `user`. Lowercase, dot-separated."
+            "description": "Kind of resource the event is about, e.g. `user`. Any non-empty string."
           },
           "resource_id": {
             "type": "string",
@@ -1204,6 +1203,42 @@
             "title": "Occurred At",
             "description": "When the event actually happened. Defaults to the server receipt time (`created_at`)."
           },
+          "actor_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Type",
+            "description": "Kind of actor that caused the event, e.g. `USER`, `API_KEY`, `SYSTEM`, or any other label you choose. Free-form string; the API does not constrain or interpret it."
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id",
+            "description": "Identifier of the actor that caused the event. Free-form string \u2014 any identifier scheme is accepted."
+          },
+          "actor_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Label",
+            "description": "Human-readable label for the actor (e.g. an email address or API key name) at the time the event was recorded."
+          },
           "data": {
             "additionalProperties": true,
             "type": "object",
@@ -1228,46 +1263,6 @@
             ],
             "title": "Created At",
             "description": "When the event was received and recorded.",
-            "readOnly": true
-          },
-          "actor_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actor Type",
-            "description": "Kind of credential that emitted the event, e.g. `USER` or `API_KEY`. Resolved server-side from the request credential.",
-            "readOnly": true
-          },
-          "actor_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actor Id",
-            "description": "Identifier of the actor that emitted the event.",
-            "readOnly": true
-          },
-          "actor_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actor Label",
-            "description": "Human-readable label for the actor (e.g. the user's email address or the API key name) at the time the event was recorded.",
             "readOnly": true
           },
           "idempotency_key": {
