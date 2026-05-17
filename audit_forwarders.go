@@ -135,15 +135,23 @@ func forwarderResourceFromInput(id string, input CreateForwarderInput) genaudit.
 		Name:          input.Name,
 		ForwarderType: input.ForwarderType,
 		Enabled:       &enabled,
-		Http:          forwarderHttpToWire(input.HTTP),
+		Configuration: httpConfigurationToWire(input.HTTP),
+	}
+	if input.Description != "" {
+		d := input.Description
+		attrs.Description = &d
 	}
 	if input.Filter != nil {
 		f := input.Filter
 		attrs.Filter = &f
 	}
 	if input.Transform != "" {
-		t := input.Transform
-		attrs.Transform = &t
+		// The spec accepts arbitrary transform shapes via a discriminated
+		// union; today JSONATA is the only engine, so we set both the
+		// transform body (as a string) and the engine label.
+		attrs.Transform = input.Transform
+		tt := genaudit.JSONATA
+		attrs.TransformType = &tt
 	}
 	var idPtr *string
 	if id != "" {
@@ -156,20 +164,17 @@ func forwarderResourceFromInput(id string, input CreateForwarderInput) genaudit.
 	}
 }
 
-func forwarderHttpToWire(h ForwarderHttp) genaudit.ForwarderHttp {
-	out := genaudit.ForwarderHttp{
+func httpConfigurationToWire(h ForwarderHttp) genaudit.HttpConfiguration {
+	out := genaudit.HttpConfiguration{
 		Url: h.URL,
 	}
 	if h.Method != "" {
-		m := genaudit.ForwarderHttpMethod(h.Method)
+		m := genaudit.HttpConfigurationMethod(h.Method)
 		out.Method = &m
 	}
 	if h.SuccessStatus != "" {
 		s := h.SuccessStatus
 		out.SuccessStatus = &s
-	}
-	if h.Body != nil {
-		out.Body = h.Body
 	}
 	if len(h.Headers) > 0 {
 		hh := make([]genaudit.HttpHeader, 0, len(h.Headers))
@@ -190,15 +195,13 @@ func forwarderFromResource(r genaudit.ForwarderResource) Forwarder {
 	out := Forwarder{
 		ID:            id,
 		Name:          a.Name,
+		Description:   a.Description,
 		ForwarderType: a.ForwarderType,
-		HTTP:          forwarderHttpFromWire(a.Http),
+		HTTP:          httpConfigurationFromWire(a.Configuration),
 		CreatedAt:     a.CreatedAt,
 		UpdatedAt:     a.UpdatedAt,
 		DeletedAt:     a.DeletedAt,
 		Version:       a.Version,
-	}
-	if a.Slug != nil {
-		out.Slug = *a.Slug
 	}
 	if a.Enabled != nil {
 		out.Enabled = *a.Enabled
@@ -206,13 +209,16 @@ func forwarderFromResource(r genaudit.ForwarderResource) Forwarder {
 	if a.Filter != nil {
 		out.Filter = *a.Filter
 	}
-	if a.Transform != nil {
-		out.Transform = a.Transform
+	// Transform is a discriminated union; for the only supported engine
+	// (JSONATA) the body is a string. Surface other shapes as nil rather
+	// than panicking on the type assertion.
+	if s, ok := a.Transform.(string); ok && s != "" {
+		out.Transform = &s
 	}
 	return out
 }
 
-func forwarderHttpFromWire(h genaudit.ForwarderHttp) ForwarderHttp {
+func httpConfigurationFromWire(h genaudit.HttpConfiguration) ForwarderHttp {
 	out := ForwarderHttp{
 		URL: h.Url,
 	}
@@ -221,9 +227,6 @@ func forwarderHttpFromWire(h genaudit.ForwarderHttp) ForwarderHttp {
 	}
 	if h.SuccessStatus != nil {
 		out.SuccessStatus = *h.SuccessStatus
-	}
-	if h.Body != nil {
-		out.Body = h.Body
 	}
 	if h.Headers != nil {
 		out.Headers = make([]HttpHeader, 0, len(*h.Headers))

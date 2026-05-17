@@ -181,7 +181,6 @@ type ForwarderHttp struct {
 	Method        string
 	URL           string
 	Headers       []HttpHeader
-	Body          *string
 	SuccessStatus string
 }
 
@@ -191,7 +190,7 @@ type ForwarderHttp struct {
 type Forwarder struct {
 	ID            uuid.UUID
 	Name          string
-	Slug          string
+	Description   *string
 	ForwarderType ForwarderType
 	Enabled       bool
 	Filter        map[string]interface{}
@@ -206,6 +205,7 @@ type Forwarder struct {
 // CreateForwarderInput is the input for AuditForwarders.Create.
 type CreateForwarderInput struct {
 	Name          string
+	Description   string
 	ForwarderType ForwarderType
 	HTTP          ForwarderHttp
 	Enabled       bool

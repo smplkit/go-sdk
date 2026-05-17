@@ -54,7 +54,10 @@ func newClosedAuditForwarders(t *testing.T) *AuditForwarders {
 	return &AuditForwarders{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
 }
 
-func writeForwarderResource(w http.ResponseWriter, status int, name, slug string) {
+// writeForwarderResource serves a single-forwarder JSON:API response.
+// The second positional argument used to be the (now-removed) slug —
+// kept to minimize call-site churn but unused beyond the name field.
+func writeForwarderResource(w http.ResponseWriter, status int, name, _ string) {
 	w.Header().Set("Content-Type", "application/vnd.api+json")
 	w.WriteHeader(status)
 	body := map[string]any{
@@ -63,10 +66,9 @@ func writeForwarderResource(w http.ResponseWriter, status int, name, slug string
 			"type": "forwarder",
 			"attributes": map[string]any{
 				"name":           name,
-				"slug":           slug,
 				"forwarder_type": "DATADOG",
 				"enabled":        true,
-				"http": map[string]any{
+				"configuration": map[string]any{
 					"method": "POST",
 					"url":    "https://siem.example.com/in",
 					"headers": []map[string]string{
@@ -149,7 +151,6 @@ func TestAuditForwarders_Create_RoundTrip(t *testing.T) {
 	})
 	defer cleanup()
 
-	body := `{"action":"user.created"}`
 	fwd, err := fwds.Create(context.Background(), CreateForwarderInput{
 		Name:          "Datadog production",
 		ForwarderType: ForwarderTypeDatadog,
@@ -160,7 +161,6 @@ func TestAuditForwarders_Create_RoundTrip(t *testing.T) {
 				{Name: "DD-API-KEY", Value: "real-secret"},
 			},
 			SuccessStatus: "2xx",
-			Body:          &body,
 		},
 		Filter:    map[string]interface{}{"==": []any{"x", "x"}},
 		Transform: "$",
@@ -169,8 +169,8 @@ func TestAuditForwarders_Create_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if fwd.Slug != "datadog_production" {
-		t.Errorf("expected slug=datadog_production, got %q", fwd.Slug)
+	if fwd.Name != "Datadog production" {
+		t.Errorf("expected Name round-tripped, got %q", fwd.Name)
 	}
 	if captured.method != http.MethodPost {
 		t.Errorf("expected POST, got %s", captured.method)
@@ -219,9 +219,9 @@ func TestAuditForwarders_List_PaginatesWithOffset(t *testing.T) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		if calls == 1 {
-			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"A","slug":"a","forwarder_type":"HTTP","enabled":true,"http":{"url":"https://x"}}}],"meta":{"pagination":{"page":1,"size":1,"total":2,"total_pages":2}}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"A","forwarder_type":"HTTP","enabled":true,"configuration":{"url":"https://x"}}}],"meta":{"pagination":{"page":1,"size":1,"total":2,"total_pages":2}}}`))
 		} else {
-			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"B","slug":"b","forwarder_type":"HTTP","enabled":true,"http":{"url":"https://y"}}}],"meta":{"pagination":{"page":2,"size":1}}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{"name":"B","forwarder_type":"HTTP","enabled":true,"configuration":{"url":"https://y"}}}],"meta":{"pagination":{"page":2,"size":1}}}`))
 		}
 	})
 	defer cleanup()
@@ -442,15 +442,39 @@ func TestAuditForwarders_Get_NonSuccessNon404(t *testing.T) {
 	}
 }
 
+// Create forwards the optional Description through to the wire body.
+func TestAuditForwarders_Create_ForwardsDescription(t *testing.T) {
+	var captured string
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		captured = string(b)
+		writeForwarderResource(w, http.StatusCreated, "Datadog production", "")
+	})
+	defer cleanup()
+
+	_, err := fwds.Create(context.Background(), CreateForwarderInput{
+		Name:          "Datadog production",
+		Description:   "ships every event to datadog",
+		ForwarderType: ForwarderTypeDatadog,
+		HTTP:          ForwarderHttp{URL: "https://x", SuccessStatus: "2xx"},
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if !strings.Contains(captured, `"description":"ships every event to datadog"`) {
+		t.Errorf("expected description in request body, got %s", captured)
+	}
+}
+
 func TestForwarderFromResource_PopulatesOptionalFields(t *testing.T) {
 	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data":{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{` +
-			`"name":"X","slug":"x","forwarder_type":"HTTP","enabled":true,` +
-			`"http":{"url":"https://x","method":"POST","success_status":"2xx",` +
-			`"body":"{\"hello\":\"world\"}","headers":[{"name":"H","value":"v"}]},` +
-			`"filter":{"==":["a","a"]},"transform":"$"` +
+			`"name":"X","description":"a forwarder","forwarder_type":"HTTP","enabled":true,` +
+			`"configuration":{"url":"https://x","method":"POST","success_status":"2xx",` +
+			`"headers":[{"name":"H","value":"v"}]},` +
+			`"filter":{"==":["a","a"]},"transform":"$","transform_type":"JSONATA"` +
 			`}}}`))
 	})
 	defer cleanup()
@@ -464,8 +488,11 @@ func TestForwarderFromResource_PopulatesOptionalFields(t *testing.T) {
 	if fwd.Transform == nil || *fwd.Transform != "$" {
 		t.Errorf("expected Transform=\"$\", got %v", fwd.Transform)
 	}
-	if fwd.HTTP.Body == nil {
-		t.Errorf("expected HTTP.Body populated, got nil")
+	if fwd.Description == nil || *fwd.Description != "a forwarder" {
+		t.Errorf("expected Description=\"a forwarder\", got %v", fwd.Description)
+	}
+	if len(fwd.HTTP.Headers) != 1 || fwd.HTTP.Headers[0].Name != "H" {
+		t.Errorf("expected HTTP.Headers round-tripped, got %v", fwd.HTTP.Headers)
 	}
 }
 

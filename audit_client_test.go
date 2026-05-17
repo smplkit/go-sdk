@@ -429,12 +429,12 @@ func TestAuditEventBuffer_OverflowEvictsOldest(t *testing.T) {
 	defer srv.Close()
 	gen, _ := genaudit.NewClient(srv.URL)
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	buf := newAuditEventBuffer(wrapped)
-	defer buf.close(2 * time.Second)
-
+	buf := newAuditEventBufferStopped(wrapped)
 	buf.maxSize = 3
 	buf.watermark = 999 // suppress auto-drain
 	buf.flushEvery = 60 * time.Second
+	go buf.run()
+	defer buf.close(2 * time.Second)
 	for i := 0; i < 10; i++ {
 		body := genaudit.EventRequest{
 			Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
@@ -455,12 +455,12 @@ func TestAuditEventBuffer_FlushTimesOut(t *testing.T) {
 	defer srv.Close()
 	gen, _ := genaudit.NewClient(srv.URL)
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	buf := newAuditEventBuffer(wrapped)
-	defer buf.close(2 * time.Second)
-
+	buf := newAuditEventBufferStopped(wrapped)
 	// Watermark > 1 keeps the worker idle while we add a single item.
 	buf.watermark = 999
 	buf.flushEvery = 60 * time.Second
+	go buf.run()
+	defer buf.close(2 * time.Second)
 
 	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
@@ -482,12 +482,12 @@ func TestAuditEventBuffer_GivesUpAfterMaxAttempts(t *testing.T) {
 	defer srv.Close()
 	gen, _ := genaudit.NewClient(srv.URL)
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	buf := newAuditEventBuffer(wrapped)
-	defer buf.close(2 * time.Second)
-
+	buf := newAuditEventBufferStopped(wrapped)
 	buf.maxAttempts = 3
 	buf.initialBack = 50 * time.Millisecond
 	buf.flushEvery = 25 * time.Millisecond
+	go buf.run()
+	defer buf.close(2 * time.Second)
 
 	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
@@ -524,11 +524,12 @@ func TestAuditEventBuffer_WatermarkTriggersDrain(t *testing.T) {
 	defer srv.Close()
 	gen, _ := genaudit.NewClient(srv.URL)
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	buf := newAuditEventBuffer(wrapped)
-	defer buf.close(2 * time.Second)
+	buf := newAuditEventBufferStopped(wrapped)
 	// Set watermark very low so each enqueue triggers signalWake.
 	buf.watermark = 1
 	buf.flushEvery = 60 * time.Second
+	go buf.run()
+	defer buf.close(2 * time.Second)
 	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 	}
@@ -587,9 +588,10 @@ func TestAuditEventBuffer_DropsPermanent4xx(t *testing.T) {
 	defer srv.Close()
 	gen, _ := genaudit.NewClient(srv.URL)
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	buf := newAuditEventBuffer(wrapped)
-	defer buf.close(2 * time.Second)
+	buf := newAuditEventBufferStopped(wrapped)
 	buf.watermark = 1
+	go buf.run()
+	defer buf.close(2 * time.Second)
 
 	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
@@ -615,14 +617,15 @@ func TestAuditEventBuffer_BackoffCappedAtMax(t *testing.T) {
 	defer srv.Close()
 	gen, _ := genaudit.NewClient(srv.URL)
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	buf := newAuditEventBuffer(wrapped)
-	defer buf.close(2 * time.Second)
+	buf := newAuditEventBufferStopped(wrapped)
 	// Push initial backoff well past maxBack so the cap branch fires.
 	buf.initialBack = 1 * time.Second
 	buf.maxBack = 100 * time.Millisecond
 	buf.maxAttempts = 3
 	buf.watermark = 1
 	buf.flushEvery = 50 * time.Millisecond
+	go buf.run()
+	defer buf.close(2 * time.Second)
 	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
 	}

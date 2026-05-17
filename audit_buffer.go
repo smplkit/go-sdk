@@ -59,7 +59,18 @@ const (
 )
 
 func newAuditEventBuffer(gen *genaudit.ClientWithResponses) *auditEventBuffer {
-	b := &auditEventBuffer{
+	b := newAuditEventBufferStopped(gen)
+	go b.run()
+	return b
+}
+
+// newAuditEventBufferStopped builds the buffer without spawning its
+// background worker. Tests that need to tweak internals (watermark,
+// flushEvery, etc.) call this, mutate, then start the worker manually
+// via `go buf.run()` — that ordering avoids the data race between the
+// running worker and post-construction field writes.
+func newAuditEventBufferStopped(gen *genaudit.ClientWithResponses) *auditEventBuffer {
+	return &auditEventBuffer{
 		gen:         gen,
 		maxSize:     auditMaxBufferSize,
 		watermark:   auditWatermark,
@@ -70,8 +81,6 @@ func newAuditEventBuffer(gen *genaudit.ClientWithResponses) *auditEventBuffer {
 		wake:        make(chan struct{}, 1),
 		done:        make(chan struct{}),
 	}
-	go b.run()
-	return b
 }
 
 func (b *auditEventBuffer) enqueue(body genaudit.EventRequest, idempKey string) {

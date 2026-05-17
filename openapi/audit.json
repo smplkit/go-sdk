@@ -1442,6 +1442,19 @@
             "title": "Name",
             "description": "Human-readable name for the forwarder."
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Free-text description for the forwarder."
+          },
           "forwarder_type": {
             "$ref": "#/components/schemas/ForwarderType",
             "description": "Destination type."
@@ -1465,35 +1478,32 @@
             "title": "Filter",
             "description": "JSON Logic expression evaluated against each event. The event is delivered only if the expression returns truthy. Omit to deliver every event."
           },
-          "transform": {
+          "transform_type": {
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 16384
+                "const": "JSONATA"
               },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transform Type",
+            "description": "Engine used to evaluate ``transform``. Must be set whenever ``transform`` is set. Today only `JSONATA` is supported."
+          },
+          "transform": {
+            "anyOf": [
+              {},
               {
                 "type": "null"
               }
             ],
             "title": "Transform",
-            "description": "JSONata template applied to each event before delivery. Omit to deliver the event unchanged."
+            "description": "Template applied to each event before delivery. The shape depends on ``transform_type``: for `JSONATA`, a string containing a JSONata expression. Omit to deliver the event JSON unchanged."
           },
-          "http": {
-            "$ref": "#/components/schemas/ForwarderHttp",
-            "description": "HTTP request used to deliver each event to the destination."
-          },
-          "slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Slug",
-            "description": "URL-safe identifier derived from `name` at create time. Stable for the lifetime of the forwarder.",
-            "readOnly": true
+          "configuration": {
+            "$ref": "#/components/schemas/HttpConfiguration",
+            "description": "Transport-specific delivery configuration. Shape is discriminated by ``forwarder_type``; today all destination types use ``HttpConfiguration``."
           },
           "created_at": {
             "anyOf": [
@@ -1555,10 +1565,10 @@
         "required": [
           "name",
           "forwarder_type",
-          "http"
+          "configuration"
         ],
         "title": "Forwarder",
-        "description": "A destination that receives audit events recorded for the account.\n\nEach event recorded for the account is evaluated against every enabled\nforwarder. If the filter expression evaluates truthy \u2014 or is absent \u2014\nthe event is delivered to the destination using the configured HTTP\nrequest. The slug, derived from `name` at create time, is the stable\nidentifier used by the console and other tooling."
+        "description": "A destination that receives audit events recorded for the account.\n\nEach event recorded for the account is evaluated against every enabled\nforwarder. If the filter expression evaluates truthy \u2014 or is absent \u2014\nthe event is shaped by the configured transform and delivered to the\ndestination defined by ``configuration``."
       },
       "ForwarderDelivery": {
         "properties": {
@@ -1798,65 +1808,6 @@
         "title": "ForwarderDeliveryResponse",
         "description": "JSON:API single-resource response for a forwarder delivery."
       },
-      "ForwarderHttp": {
-        "properties": {
-          "method": {
-            "type": "string",
-            "enum": [
-              "GET",
-              "POST",
-              "PUT",
-              "PATCH",
-              "DELETE"
-            ],
-            "title": "Method",
-            "description": "HTTP method used when delivering an event.",
-            "default": "POST"
-          },
-          "url": {
-            "type": "string",
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Url",
-            "description": "Destination URL."
-          },
-          "headers": {
-            "items": {
-              "$ref": "#/components/schemas/HttpHeader"
-            },
-            "type": "array",
-            "title": "Headers",
-            "description": "HTTP headers attached to each delivery request."
-          },
-          "body": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 65536
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body",
-            "description": "Request body sent to the destination. If omitted, the event JSON is sent as the body."
-          },
-          "success_status": {
-            "type": "string",
-            "maxLength": 3,
-            "title": "Success Status",
-            "description": "HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
-            "default": "2xx"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "url"
-        ],
-        "title": "ForwarderHttp",
-        "description": "HTTP request configuration used to deliver an event to the destination."
-      },
       "ForwarderListResponse": {
         "properties": {
           "data": {
@@ -1921,18 +1872,7 @@
         "description": "JSON:API resource envelope for a forwarder.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
-            "created_at": "2026-05-07T12:00:00Z",
-            "enabled": true,
-            "filter": {
-              "==": [
-                {
-                  "var": "action"
-                },
-                "user.created"
-              ]
-            },
-            "forwarder_type": "DATADOG",
-            "http": {
+            "configuration": {
               "headers": [
                 {
                   "name": "DD-API-KEY",
@@ -1943,8 +1883,21 @@
               "success_status": "2xx",
               "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"
             },
+            "created_at": "2026-05-07T12:00:00Z",
+            "description": "Forwards user.* events to the prod Datadog tenant.",
+            "enabled": true,
+            "filter": {
+              "==": [
+                {
+                  "var": "action"
+                },
+                "user.created"
+              ]
+            },
+            "forwarder_type": "DATADOG",
             "name": "Datadog production",
-            "slug": "datadog_production",
+            "transform": "{ \"message\": action & ' on ' & resource_type }",
+            "transform_type": "JSONATA",
             "updated_at": "2026-05-07T12:00:00Z",
             "version": 1
           },
@@ -1979,6 +1932,52 @@
         "title": "ForwarderType",
         "description": "Supported forwarder destination types."
       },
+      "HttpConfiguration": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "title": "Method",
+            "description": "HTTP method used when delivering an event.",
+            "default": "POST"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "description": "Destination URL."
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/HttpHeader"
+            },
+            "type": "array",
+            "title": "Headers",
+            "description": "HTTP headers attached to each delivery request."
+          },
+          "success_status": {
+            "type": "string",
+            "maxLength": 3,
+            "title": "Success Status",
+            "description": "HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
+            "default": "2xx"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "HttpConfiguration",
+        "description": "HTTP request configuration used to deliver an event to the destination.\n\nUsed when the parent forwarder's ``forwarder_type`` is one of the\nHTTP-family destinations (``HTTP``, ``DATADOG``, ``SPLUNK_HEC``,\n``SUMO_LOGIC``, ``NEW_RELIC``, ``HONEYCOMB``, ``ELASTIC``). When other\ntransports land (``FTP``, ``SQS``, \u2026) their own configuration schemas\nwill join this one as members of a discriminated union under the\n``configuration`` field of ``Forwarder``."
+      },
       "HttpHeader": {
         "properties": {
           "name": {
@@ -2001,7 +2000,7 @@
           "value"
         ],
         "title": "HttpHeader",
-        "description": "A single HTTP header attached to a forwarder delivery request."
+        "description": "A single HTTP header attached to a forwarder delivery request.\n\nHeader values carrying secrets (API keys, bearer tokens, HEC tokens)\nare encrypted at the application layer before persistence; the wire\nrepresentation here is always plaintext."
       },
       "ListMeta": {
         "properties": {
@@ -2189,19 +2188,6 @@
             "type": "array",
             "title": "Headers",
             "description": "HTTP headers attached to the test request."
-          },
-          "body": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 65536
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body",
-            "description": "Request body. If omitted, an empty body is sent."
           },
           "success_status": {
             "type": "string",

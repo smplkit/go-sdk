@@ -80,13 +80,13 @@ func main() {
 	if forwarder.Name != forwarderName || !forwarder.Enabled || forwarder.Filter == nil || forwarder.Transform == nil {
 		fatalIfErr("assertion", fmt.Errorf("forwarder fields mismatch: %+v", forwarder))
 	}
-	fmt.Printf("Created forwarder: %s\n", forwarder.Slug)
+	fmt.Printf("Created forwarder: %s\n", forwarder.Name)
 
 	defer func() {
 		if delErr := manage.Audit().Forwarders().Delete(ctx, forwarder.ID); delErr != nil {
-			fmt.Printf("warning: failed to delete forwarder %s: %v\n", forwarder.Slug, delErr)
+			fmt.Printf("warning: failed to delete forwarder %s: %v\n", forwarder.Name, delErr)
 		} else {
-			fmt.Printf("Deleted forwarder: %s\n", forwarder.Slug)
+			fmt.Printf("Deleted forwarder: %s\n", forwarder.Name)
 		}
 	}()
 
