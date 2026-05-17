@@ -302,6 +302,43 @@
         }
       }
     },
+    "/api/v1/search/events": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search Events",
+        "description": "Search audit events with column filters and an optional JSON Logic expression.\n\nWithout a JSON Logic `filter`: behaves like `GET /api/v1/events`\nwith the same column filters.\n\nWith a JSON Logic `filter`: the search is silently capped to the\nlast 30 days by `occurred_at` (intersected with any explicit\n`filter[occurred_at]` the caller supplied), the column filters\nnarrow the candidate set in SQL, and the JSON Logic expression\nruns in memory against each candidate row using the same\n`json-logic-qubit` evaluator the forwarder pipeline uses. Up to\n50,000 rows are scanned per request; the response's `meta.scan`\nblock reports the scan stats so a selective filter doesn't look\nlike \"0 matches\" when the truth is \"ceiling reached.\"",
+        "operationId": "search_events",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchEventsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchEventsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/usage": {
       "get": {
         "tags": [
@@ -2154,6 +2191,231 @@
         "title": "RetryFailedDeliveriesSummary",
         "description": "Counts returned by the retry-failed-deliveries action."
       },
+      "SearchEventsListLinks": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "Opaque cursor token for the next page. POST the same body with `page[after]` set to this value to fetch the next page. Unlike the URL-form `links.next` returned by `GET /api/v1/events`, this is a bare cursor token \u2014 the client must re-issue a POST with its body, which the URL form cannot capture."
+          }
+        },
+        "type": "object",
+        "title": "SearchEventsListLinks"
+      },
+      "SearchEventsListMeta": {
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "scan": {
+            "$ref": "#/components/schemas/SearchScanMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_size",
+          "scan"
+        ],
+        "title": "SearchEventsListMeta",
+        "description": "Cursor-pagination + scan meta for the search response.\n\nMirrors `EventListMeta` (cursor pagination \u2014 `page_size` is the\nonly pagination field) and adds the `scan` block above."
+      },
+      "SearchEventsRequest": {
+        "properties": {
+          "filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter",
+            "description": "Optional JSON Logic expression evaluated against each row after column filters narrow the candidate set. Null, absent, or an empty object disables JSON Logic filtering. When present, the search is silently capped to the last 30 days by `occurred_at` (intersected with any explicit `filter[occurred_at]` the caller supplied)."
+          },
+          "filter[action]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Action]",
+            "description": "Exact match on the event's `action` field."
+          },
+          "filter[resource_type]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Resource Type]",
+            "description": "Exact match on the event's `resource_type` field."
+          },
+          "filter[resource_id]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Resource Id]",
+            "description": "Exact match on the event's `resource_id` field. Must be accompanied by `filter[resource_type]`."
+          },
+          "filter[actor_type]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Actor Type]",
+            "description": "Exact match on the event's `actor_type` field."
+          },
+          "filter[actor_id]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Actor Id]",
+            "description": "Exact match on the event's `actor_id` field."
+          },
+          "filter[occurred_at]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Occurred At]",
+            "description": "Date range using interval notation, e.g. `[2026-04-01T00:00:00Z,2026-04-15T00:00:00Z)`. Required by `filter[search]` when the resource pair isn't provided. When a JSON Logic `filter` is present, the effective range is intersected with the last 30 days."
+          },
+          "filter[search]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Search]",
+            "description": "Case-insensitive substring match on `resource_id` or `description`. Must be accompanied by either `filter[occurred_at]` or `filter[resource_type]` + `filter[resource_id]`."
+          },
+          "page[size]": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Page[Size]",
+            "description": "Maximum events to return. Range 1..1000, default 10. The default is intentionally smaller than the list endpoint's default of 1000 because the search UI typically renders results one card at a time.",
+            "default": 10
+          },
+          "page[after]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page[After]",
+            "description": "Opaque cursor \u2014 pass the previous response's `links.next` cursor verbatim to fetch the next page. Keep the same `sort` value across paginated requests."
+          },
+          "sort": {
+            "type": "string",
+            "title": "Sort",
+            "description": "Sort field: `occurred_at` or `created_at`, optionally prefixed with `-` for descending order. Default `-occurred_at` (newest first).",
+            "default": "-occurred_at"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SearchEventsRequest",
+        "description": "Request body for ``POST /api/v1/search/events``.\n\nMirrors every column filter accepted by ``GET /api/v1/events`` with\nidentical semantics, and adds a top-level ``filter`` field carrying\na JSON Logic expression. When ``filter`` is present the search is\nsilently capped to the last 30 days by ``occurred_at``; the\nexpression is then evaluated in memory against each row that passes\nthe column filters using the same ``json-logic-qubit`` evaluator\nthat runs in the forwarder pipeline (so search results match what\nwould be forwarded).\n\nFilter-combination rules match ``GET /api/v1/events`` exactly:\n\n- ``filter[resource_id]`` must be accompanied by\n  ``filter[resource_type]`` \u2014 the index is keyed on the pair.\n- ``filter[search]`` must be accompanied by either\n  ``filter[occurred_at]`` or ``filter[resource_type]`` +\n  ``filter[resource_id]`` \u2014 substring matching has no index, so an\n  unbounded substring scan is rejected."
+      },
+      "SearchEventsResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EventResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/SearchEventsListMeta"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchEventsListLinks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SearchEventsResponse",
+        "description": "JSON:API list envelope returned by the search endpoint.\n\nStructurally identical to ``EventListResponse`` from the list\nendpoint \u2014 the only difference is the extra `scan` block inside\n`meta` (`SearchEventsListMeta` vs `EventListMeta`)."
+      },
+      "SearchScanMeta": {
+        "properties": {
+          "scanned": {
+            "type": "integer",
+            "title": "Scanned",
+            "description": "Rows scanned after column filters narrowed the candidate set, before the JSON Logic expression was applied."
+          },
+          "matched": {
+            "type": "integer",
+            "title": "Matched",
+            "description": "Rows the JSON Logic expression matched. Equal to `len(data)` for the page being returned plus any matches found beyond the page size."
+          },
+          "exhausted": {
+            "type": "boolean",
+            "title": "Exhausted",
+            "description": "`true` if the server hit the per-request scan ceiling before finding `page[size]` matches. When true, paginate again with the returned `links.next` cursor to continue scanning past the ceiling."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scanned",
+          "matched",
+          "exhausted"
+        ],
+        "title": "SearchScanMeta",
+        "description": "Scan statistics for a search response.\n\nExposed so a selective JSON Logic filter doesn't silently look like\n\"0 matches\" when the truth is \"the scan ceiling was reached before\nthe filter had a chance to find page[size] matches.\""
+      },
       "TestForwarderRequest": {
         "properties": {
           "method": {
@@ -2385,6 +2647,9 @@
     },
     {
       "name": "Resource Types"
+    },
+    {
+      "name": "Search"
     },
     {
       "name": "Usage"
