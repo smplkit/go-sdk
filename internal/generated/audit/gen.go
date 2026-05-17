@@ -577,7 +577,7 @@ type HttpConfiguration struct {
 	// SuccessStatus HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
 	SuccessStatus *string `json:"success_status,omitempty"`
 
-	// Url Destination URL.
+	// Url Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`).
 	Url string `json:"url"`
 }
 
@@ -683,7 +683,7 @@ type TestForwarderRequest struct {
 	// TimeoutMs Per-request timeout in milliseconds. Capped at 30 seconds.
 	TimeoutMs *int `json:"timeout_ms,omitempty"`
 
-	// Url Destination URL.
+	// Url Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`).
 	Url string `json:"url"`
 }
 
