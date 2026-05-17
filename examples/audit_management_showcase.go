@@ -60,7 +60,7 @@ func main() {
 			Headers: []smplkit.HttpHeader{{Name: "X-Showcase", Value: "ok"}},
 		},
 		smplkit.WithForwarderFilter(invoiceFilter),
-		smplkit.WithForwarderTransform(siemTransform),
+		smplkit.WithForwarderTransform(smplkit.ForwarderTransformTypeJSONata, siemTransform),
 	)
 	fatalIfErr("audit.Forwarders.Save", forwarder.Save(ctx))
 	fmt.Printf("Created forwarder: %s (id=%s)\n", forwarder.Name, forwarder.ID)
