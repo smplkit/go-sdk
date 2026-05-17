@@ -967,3 +967,80 @@ func TestForwarderResourceFromForwarder_AllBranches(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Transform validation invariants
+// ---------------------------------------------------------------------------
+
+// Save rejects a forwarder whose Transform is set without a
+// TransformType — both must be specified together.
+func TestForwarder_Save_TransformWithoutType(t *testing.T) {
+	fwds := &AuditForwarders{}
+	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd.Transform = "$"
+	fwd.TransformType = nil
+
+	err := fwd.Save(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "TransformType is not") {
+		t.Fatalf("expected transform-without-type error, got %v", err)
+	}
+}
+
+// Save rejects a forwarder whose TransformType is set without a
+// Transform — both must be specified together.
+func TestForwarder_Save_TypeWithoutTransform(t *testing.T) {
+	fwds := &AuditForwarders{}
+	tt := ForwarderTransformTypeJSONata
+	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd.Transform = nil
+	fwd.TransformType = &tt
+
+	err := fwd.Save(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "Transform is not") {
+		t.Fatalf("expected type-without-transform error, got %v", err)
+	}
+}
+
+// Save rejects a JSONATA forwarder whose Transform is not a string.
+func TestForwarder_Save_JSONataTransformMustBeString(t *testing.T) {
+	fwds := &AuditForwarders{}
+	tt := ForwarderTransformTypeJSONata
+	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd.Transform = map[string]interface{}{"event": "action"}
+	fwd.TransformType = &tt
+
+	err := fwd.Save(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "must be a string when TransformType is JSONATA") {
+		t.Fatalf("expected JSONATA-must-be-string error, got %v", err)
+	}
+}
+
+// Save accepts a JSONATA forwarder whose Transform is an empty string
+// (still a string — server-side validation owns content rules).
+func TestForwarder_Save_JSONataEmptyStringAllowed(t *testing.T) {
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeForwarderResource(w, http.StatusCreated, "x", "")
+	})
+	defer cleanup()
+	tt := ForwarderTransformTypeJSONata
+	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd.Transform = ""
+	fwd.TransformType = &tt
+
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("expected empty-string transform to validate, got %v", err)
+	}
+}
+
+// Save accepts a forwarder with neither Transform nor TransformType
+// (the common "no transform — pass event through unchanged" case).
+func TestForwarder_Save_NoTransformBothNil(t *testing.T) {
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeForwarderResource(w, http.StatusCreated, "x", "")
+	})
+	defer cleanup()
+	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("expected save to succeed with no transform, got %v", err)
+	}
+}

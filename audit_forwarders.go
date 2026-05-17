@@ -86,6 +86,9 @@ func (fwd *Forwarder) Save(ctx context.Context) error {
 	if fwd.client == nil {
 		return &Error{Message: "forwarder was constructed without a client; cannot save"}
 	}
+	if err := fwd.validateTransform(); err != nil {
+		return err
+	}
 	if fwd.CreatedAt == nil {
 		updated, err := fwd.client.create(ctx, fwd)
 		if err != nil {
@@ -99,6 +102,32 @@ func (fwd *Forwarder) Save(ctx context.Context) error {
 		return err
 	}
 	fwd.apply(updated)
+	return nil
+}
+
+// validateTransform enforces the two transform-related invariants
+// before sending to the server:
+//
+//  1. Transform and TransformType must be set together (both or
+//     neither). Setting one without the other is a configuration
+//     error.
+//  2. When TransformType is ForwarderTransformTypeJSONata, Transform
+//     must be a string — JSONata expressions are strings. Future
+//     engines may carry richer shapes; their own rules apply.
+func (fwd *Forwarder) validateTransform() error {
+	hasTransform := fwd.Transform != nil
+	hasType := fwd.TransformType != nil
+	switch {
+	case hasTransform && !hasType:
+		return &Error{Message: "forwarder Transform is set but TransformType is not; both must be specified together"}
+	case hasType && !hasTransform:
+		return &Error{Message: "forwarder TransformType is set but Transform is not; both must be specified together"}
+	}
+	if hasType && *fwd.TransformType == ForwarderTransformTypeJSONata {
+		if _, ok := fwd.Transform.(string); !ok {
+			return &Error{Message: "forwarder Transform must be a string when TransformType is JSONATA"}
+		}
+	}
 	return nil
 }
 
