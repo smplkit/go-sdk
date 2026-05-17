@@ -11,9 +11,13 @@ package smplkit
 // developer sandboxes) that should not appear in the standard ordering.
 type EnvironmentClassification string
 
+// Supported EnvironmentClassification values, alphabetical by wire
+// constant.
 const (
-	// EnvironmentClassificationStandard marks an environment as a canonical deploy target.
-	EnvironmentClassificationStandard EnvironmentClassification = "STANDARD"
-	// EnvironmentClassificationAdHoc marks an environment as a transient, non-ordered target.
+	// EnvironmentClassificationAdHoc marks an environment as a transient,
+	// non-ordered target (preview branches, developer sandboxes).
 	EnvironmentClassificationAdHoc EnvironmentClassification = "AD_HOC"
+	// EnvironmentClassificationStandard marks an environment as a canonical
+	// deploy target — appears in AccountSettings.EnvironmentOrder.
+	EnvironmentClassificationStandard EnvironmentClassification = "STANDARD"
 )

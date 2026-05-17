@@ -2,15 +2,11 @@
 
 // Demonstrates the smplkit management SDK for Smpl Audit.
 //
-// Covers: forwarder create / get / list / update / delete.
-//
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk/v3
 //   - A valid smplkit API key, provided via one of:
 //   - SMPLKIT_API_KEY environment variable
 //   - ~/.smplkit configuration file (see SDK docs)
-//   - The Pro tier is required. The showcase gracefully skips on a 402
-//     (free / standard tier) so it stays runnable in any environment.
 //
 // Usage:
 //
@@ -21,7 +17,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 
 	smplkit "github.com/smplkit/go-sdk/v3"
@@ -35,7 +30,8 @@ var invoiceFilter = map[string]interface{}{
 }
 
 // JSONata template — reshape the event payload before POSTing to the
-// destination. See https://jsonata.org for the full language reference.
+// destination. This example flattens the event into a compact SIEM-style
+// record. See https://jsonata.org for the full language reference.
 const siemTransform = `
 {
     "event": action,
@@ -54,49 +50,20 @@ func main() {
 
 	forwarderName := "showcase-" + randomHexMgmt(3)
 
-	// create a forwarder
-	forwarder, err := manage.Audit().Forwarders().Create(ctx, smplkit.CreateForwarderInput{
-		Name:          forwarderName,
-		ForwarderType: smplkit.ForwarderTypeHTTP,
-		Enabled:       true,
-		HTTP: smplkit.ForwarderHttp{
-			Method:        "POST",
-			URL:           "https://httpbin.org/post",
-			Headers:       []smplkit.HttpHeader{{Name: "X-Showcase", Value: "ok"}},
-			SuccessStatus: "2xx",
+	// create a new forwarder
+	forwarder := manage.Audit().Forwarders().New(
+		forwarderName,
+		smplkit.ForwarderTypeHTTP,
+		smplkit.HttpConfiguration{
+			Method:  smplkit.HttpMethodPost,
+			URL:     "https://httpbin.org/post",
+			Headers: []smplkit.HttpHeader{{Name: "X-Showcase", Value: "ok"}},
 		},
-		Filter:    invoiceFilter,
-		Transform: siemTransform,
-	})
-	if err != nil {
-		var pre *smplkit.PaymentRequiredError
-		if errors.As(err, &pre) {
-			fmt.Println("Skipping forwarder showcase — account is not Pro tier")
-			fmt.Println("Done!")
-			return
-		}
-		fatalIfErr("audit.Forwarders.Create", err)
-	}
-	if forwarder.Name != forwarderName || !forwarder.Enabled || forwarder.Filter == nil || forwarder.Transform == nil {
-		fatalIfErr("assertion", fmt.Errorf("forwarder fields mismatch: %+v", forwarder))
-	}
-	fmt.Printf("Created forwarder: %s\n", forwarder.Name)
-
-	defer func() {
-		if delErr := manage.Audit().Forwarders().Delete(ctx, forwarder.ID); delErr != nil {
-			fmt.Printf("warning: failed to delete forwarder %s: %v\n", forwarder.Name, delErr)
-		} else {
-			fmt.Printf("Deleted forwarder: %s\n", forwarder.Name)
-		}
-	}()
-
-	// fetch a forwarder
-	fetched, err := manage.Audit().Forwarders().Get(ctx, forwarder.ID)
-	fatalIfErr("audit.Forwarders.Get", err)
-	if fetched.ID != forwarder.ID || fetched.Name != forwarderName || fetched.Filter == nil || fetched.Transform == nil {
-		fatalIfErr("assertion", fmt.Errorf("fetched forwarder fields mismatch: %+v", fetched))
-	}
-	fmt.Printf("Fetched forwarder: %s\n", fetched.Name)
+		smplkit.WithForwarderFilter(invoiceFilter),
+		smplkit.WithForwarderTransform(siemTransform),
+	)
+	fatalIfErr("audit.Forwarders.Save", forwarder.Save(ctx))
+	fmt.Printf("Created forwarder: %s (id=%s)\n", forwarder.Name, forwarder.ID)
 
 	// list forwarders
 	listed, err := manage.Audit().Forwarders().List(ctx, smplkit.ListForwardersInput{})
@@ -113,30 +80,32 @@ func main() {
 	}
 	fmt.Printf("Account has %d forwarder(s)\n", len(listed.Forwarders))
 
-	// update a forwarder
-	renamed := forwarder.Name + "-renamed"
-	updated, err := manage.Audit().Forwarders().Update(ctx, forwarder.ID, smplkit.UpdateForwarderInput{
-		Name:          renamed,
-		ForwarderType: forwarder.ForwarderType,
-		Enabled:       false,
-		HTTP: smplkit.ForwarderHttp{
-			Method:        "POST",
-			URL:           "https://httpbin.org/post",
-			Headers:       []smplkit.HttpHeader{{Name: "X-Showcase", Value: "ok"}},
-			SuccessStatus: "2xx",
-		},
-		Filter:    invoiceFilter,
-		Transform: siemTransform,
-	})
-	fatalIfErr("audit.Forwarders.Update", err)
-	if updated.Name != renamed || updated.Enabled {
-		fatalIfErr("assertion", fmt.Errorf("updated forwarder fields mismatch: %+v", updated))
+	// get a forwarder
+	fetched, err := manage.Audit().Forwarders().Get(ctx, forwarder.ID)
+	fatalIfErr("audit.Forwarders.Get", err)
+	if fetched.ID != forwarder.ID || !fetched.Enabled {
+		fatalIfErr("assertion", fmt.Errorf("fetched forwarder fields mismatch: %+v", fetched))
 	}
-	fmt.Printf("Updated forwarder: %s (enabled=%t)\n", updated.Name, updated.Enabled)
+	fmt.Printf("Fetched forwarder: %s\n", fetched.Name)
 
+	// update a forwarder
+	fetched.Enabled = false
+	fatalIfErr("audit.Forwarders.Save", fetched.Save(ctx))
+	if fetched.Enabled {
+		fatalIfErr("assertion", fmt.Errorf("updated forwarder fields mismatch: %+v", fetched))
+	}
+	fmt.Printf("Disabled forwarder: %s (enabled=%t)\n", fetched.Name, fetched.Enabled)
+
+	// delete a forwarder
+	fatalIfErr("audit.Forwarders.Delete", fetched.Delete(ctx))
 	remaining, err := manage.Audit().Forwarders().List(ctx, smplkit.ListForwardersInput{})
-	fatalIfErr("audit.Forwarders.List after delete", err)
-	_ = remaining
+	fatalIfErr("audit.Forwarders.List", err)
+	for _, f := range remaining.Forwarders {
+		if f.ID == fetched.ID {
+			fatalIfErr("assertion", fmt.Errorf("forwarder %s still present after delete", fetched.ID))
+		}
+	}
+	fmt.Printf("Deleted forwarder: %s\n", fetched.Name)
 
 	fmt.Println("Done!")
 }

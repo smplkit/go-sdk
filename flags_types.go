@@ -10,15 +10,16 @@ import (
 // FlagType represents the value type of a flag.
 type FlagType string
 
+// Supported FlagType values, alphabetical by wire constant.
 const (
 	// FlagTypeBoolean represents a boolean flag.
 	FlagTypeBoolean FlagType = "BOOLEAN"
-	// FlagTypeString represents a string flag.
-	FlagTypeString FlagType = "STRING"
-	// FlagTypeNumeric represents a numeric flag.
-	FlagTypeNumeric FlagType = "NUMERIC"
 	// FlagTypeJSON represents a JSON flag.
 	FlagTypeJSON FlagType = "JSON"
+	// FlagTypeNumeric represents a numeric flag.
+	FlagTypeNumeric FlagType = "NUMERIC"
+	// FlagTypeString represents a string flag.
+	FlagTypeString FlagType = "STRING"
 )
 
 // Context represents a typed evaluation context entity.

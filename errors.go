@@ -8,15 +8,22 @@ import (
 
 // ErrorSource identifies the source of a JSON:API error.
 type ErrorSource struct {
+	// Pointer is the JSON Pointer to the offending member in the
+	// request body (e.g. "/data/attributes/name").
 	Pointer string `json:"pointer,omitempty"`
 }
 
 // ApiErrorDetail holds a single JSON:API error object as surfaced by the
 // smplkit platform's JSON:API responses. Mirrors Python's ApiErrorDetail.
 type ApiErrorDetail struct {
-	Status string      `json:"status,omitempty"`
-	Title  string      `json:"title,omitempty"`
-	Detail string      `json:"detail,omitempty"`
+	// Status is the HTTP status code as a string (e.g. "404").
+	Status string `json:"status,omitempty"`
+	// Title is a short, human-readable summary (e.g. "Not Found").
+	Title string `json:"title,omitempty"`
+	// Detail is a longer, human-readable explanation specific to this
+	// occurrence.
+	Detail string `json:"detail,omitempty"`
+	// Source identifies the source of the error within the request.
 	Source ErrorSource `json:"source,omitempty"`
 }
 
@@ -69,6 +76,8 @@ func (e *Error) Error() string {
 
 // ConnectionError is raised when a network request fails.
 type ConnectionError struct {
+	// Base is the embedded base Error carrying the HTTP status, message,
+	// raw response body, and any parsed JSON:API error details.
 	Base Error
 }
 
@@ -80,6 +89,8 @@ func (e *ConnectionError) Unwrap() error { return &e.Base }
 
 // TimeoutError is raised when an operation exceeds its timeout.
 type TimeoutError struct {
+	// Base is the embedded base Error carrying the HTTP status, message,
+	// raw response body, and any parsed JSON:API error details.
 	Base Error
 }
 
@@ -91,6 +102,8 @@ func (e *TimeoutError) Unwrap() error { return &e.Base }
 
 // NotFoundError is raised when a requested resource does not exist.
 type NotFoundError struct {
+	// Base is the embedded base Error carrying the HTTP status, message,
+	// raw response body, and any parsed JSON:API error details.
 	Base Error
 }
 
@@ -102,6 +115,8 @@ func (e *NotFoundError) Unwrap() error { return &e.Base }
 
 // ConflictError is raised when an operation conflicts with current resource state.
 type ConflictError struct {
+	// Base is the embedded base Error carrying the HTTP status, message,
+	// raw response body, and any parsed JSON:API error details.
 	Base Error
 }
 
@@ -113,6 +128,8 @@ func (e *ConflictError) Unwrap() error { return &e.Base }
 
 // ValidationError is raised when the server rejects a request due to validation errors.
 type ValidationError struct {
+	// Base is the embedded base Error carrying the HTTP status, message,
+	// raw response body, and any parsed JSON:API error details.
 	Base Error
 }
 
@@ -121,18 +138,6 @@ func (e *ValidationError) Error() string { return e.Base.Error() }
 
 // Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
 func (e *ValidationError) Unwrap() error { return &e.Base }
-
-// PaymentRequiredError is raised when the account's subscription plan does not
-// include the required entitlement.
-type PaymentRequiredError struct {
-	Base Error
-}
-
-// Error implements the error interface.
-func (e *PaymentRequiredError) Error() string { return e.Base.Error() }
-
-// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
-func (e *PaymentRequiredError) Unwrap() error { return &e.Base }
 
 // ─── Backward-compatibility aliases ──────────────────────────────────────────
 //

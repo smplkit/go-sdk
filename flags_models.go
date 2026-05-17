@@ -34,7 +34,10 @@ type Flag struct {
 
 // FlagValue represents a named value in a flag's value set.
 type FlagValue struct {
-	Name  string
+	// Name is the human-readable label for this value option.
+	Name string
+	// Value is the raw value returned when this option is selected.
+	// Shape depends on the flag's FlagType.
 	Value interface{}
 }
 
