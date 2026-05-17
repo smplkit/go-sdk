@@ -1947,7 +1947,7 @@
             "maxLength": 2048,
             "minLength": 1,
             "title": "Url",
-            "description": "Destination URL."
+            "description": "Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`)."
           },
           "headers": {
             "items": {
@@ -2174,7 +2174,7 @@
             "maxLength": 2048,
             "minLength": 1,
             "title": "Url",
-            "description": "Destination URL."
+            "description": "Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`)."
           },
           "headers": {
             "items": {
