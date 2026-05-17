@@ -336,33 +336,6 @@ type Forwarder struct {
 	client *AuditForwarders
 }
 
-// CreateForwarderInput is the input for AuditForwarders.Create.
-type CreateForwarderInput struct {
-	// Name is the display name. Free-form.
-	Name string
-	// Description is an optional free-text description.
-	Description string
-	// ForwarderType is the destination type.
-	ForwarderType ForwarderType
-	// Configuration is the destination request configuration.
-	Configuration HttpConfiguration
-	// Enabled controls delivery. Set false to create the forwarder
-	// paused.
-	Enabled bool
-	// Filter is an optional JSON Logic expression evaluated per event.
-	Filter map[string]interface{}
-	// Transform is an optional JSONata template applied to each event
-	// before delivery. Empty sends the event as-is.
-	Transform string
-}
-
-// UpdateForwarderInput is the full-replace input for
-// AuditForwarders.Update. Header values must be re-supplied as
-// plaintext; reads return them redacted, so a body containing
-// "<redacted>" would persist that literal. Track real header values
-// client-side and round-trip them.
-type UpdateForwarderInput = CreateForwarderInput
-
 // ListForwardersInput is the filter + pagination input for List.
 type ListForwardersInput struct {
 	// ForwarderType filters to a single destination type. Zero-valued

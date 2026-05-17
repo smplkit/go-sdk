@@ -122,28 +122,8 @@ func (fwd *Forwarder) apply(other *Forwarder) {
 }
 
 // ---------------------------------------------------------------------------
-// Forwarder collection CRUD
+// Forwarder collection read surface
 // ---------------------------------------------------------------------------
-
-// Create creates a new forwarder. Prefer the active-record flow
-// (New().Save(ctx)) for new forwarders.
-func (f *AuditForwarders) Create(ctx context.Context, input CreateForwarderInput) (*Forwarder, error) {
-	body := genaudit.CreateForwarderApplicationVndAPIPlusJSONRequestBody{
-		Data: forwarderResourceFromInput("", input),
-	}
-	resp, err := f.gen.CreateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, body)
-	if err != nil {
-		return nil, fmt.Errorf("audit Forwarders.Create: %w", err)
-	}
-	if resp.StatusCode() != 201 {
-		return nil, checkStatus(resp.StatusCode(), resp.Body)
-	}
-	if resp.ApplicationvndApiJSON201 == nil {
-		return nil, fmt.Errorf("audit Forwarders.Create: empty 201 body")
-	}
-	out := forwarderFromResource(resp.ApplicationvndApiJSON201.Data, f)
-	return &out, nil
-}
 
 // List returns one page of forwarders. Offset pagination via PageNumber /
 // PageSize (ADR-014).
@@ -192,30 +172,6 @@ func (f *AuditForwarders) Get(ctx context.Context, forwarderID uuid.UUID) (*Forw
 		return nil, fmt.Errorf("audit Forwarders.Get: %w", err)
 	}
 	if resp.StatusCode() != 200 {
-		return nil, checkStatus(resp.StatusCode(), resp.Body)
-	}
-	out := forwarderFromResource(resp.ApplicationvndApiJSON200.Data, f)
-	return &out, nil
-}
-
-// Update fully replaces a forwarder. Re-supply real header values —
-// the GET path returns them redacted, and "<redacted>" sent back
-// would persist that literal. Prefer the active-record flow
-// (forwarder.Save(ctx)) for round-trips initiated from a fetched
-// instance.
-func (f *AuditForwarders) Update(
-	ctx context.Context, forwarderID uuid.UUID, input UpdateForwarderInput,
-) (*Forwarder, error) {
-	body := genaudit.UpdateForwarderApplicationVndAPIPlusJSONRequestBody{
-		Data: forwarderResourceFromInput(forwarderID.String(), input),
-	}
-	resp, err := f.gen.UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(
-		ctx, forwarderID, body,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("audit Forwarders.Update: %w", err)
-	}
-	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
 		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
 	out := forwarderFromResource(resp.ApplicationvndApiJSON200.Data, f)
@@ -275,41 +231,6 @@ func (f *AuditForwarders) update(ctx context.Context, fwd *Forwarder) (*Forwarde
 	}
 	out := forwarderFromResource(resp.ApplicationvndApiJSON200.Data, f)
 	return &out, nil
-}
-
-func forwarderResourceFromInput(id string, input CreateForwarderInput) genaudit.ForwarderResource {
-	rt := "forwarder"
-	enabled := input.Enabled
-	attrs := genaudit.Forwarder{
-		Name:          input.Name,
-		ForwarderType: input.ForwarderType,
-		Enabled:       &enabled,
-		Configuration: httpConfigurationToWire(input.Configuration),
-	}
-	if input.Description != "" {
-		d := input.Description
-		attrs.Description = &d
-	}
-	if input.Filter != nil {
-		f := input.Filter
-		attrs.Filter = &f
-	}
-	if input.Transform != "" {
-		// Transform is a discriminated union; today JSONATA is the only
-		// engine, so we set both the transform body and engine label.
-		attrs.Transform = input.Transform
-		tt := genaudit.JSONATA
-		attrs.TransformType = &tt
-	}
-	var idPtr *string
-	if id != "" {
-		idPtr = &id
-	}
-	return genaudit.ForwarderResource{
-		Id:         idPtr,
-		Type:       &rt,
-		Attributes: attrs,
-	}
 }
 
 func forwarderResourceFromForwarder(id string, fwd *Forwarder) genaudit.ForwarderResource {
