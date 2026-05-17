@@ -294,6 +294,61 @@ func TestAuditEvents_Create_AllOptionalFields(t *testing.T) {
 	events.Flush(2 * time.Second)
 }
 
+// Record passes customer-supplied actor attribution straight onto the
+// wire — the wrapper does not validate or backfill the fields.
+func TestAuditEvents_Record_ForwardsActorFields(t *testing.T) {
+	type captured struct {
+		ActorType, ActorID, ActorLabel string
+	}
+	gotBody := make(chan captured, 1)
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Data struct {
+				Attributes struct {
+					ActorType  *string `json:"actor_type"`
+					ActorId    *string `json:"actor_id"`
+					ActorLabel *string `json:"actor_label"`
+				} `json:"attributes"`
+			} `json:"data"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		c := captured{}
+		if body.Data.Attributes.ActorType != nil {
+			c.ActorType = *body.Data.Attributes.ActorType
+		}
+		if body.Data.Attributes.ActorId != nil {
+			c.ActorID = *body.Data.Attributes.ActorId
+		}
+		if body.Data.Attributes.ActorLabel != nil {
+			c.ActorLabel = *body.Data.Attributes.ActorLabel
+		}
+		gotBody <- c
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(201)
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"action":"x.created","resource_type":"x","resource_id":"1"}}}`))
+	})
+	defer cleanup()
+	if err := events.Record(CreateEventInput{
+		Action:       "user.created",
+		ResourceType: "user",
+		ResourceID:   "u-1",
+		ActorType:    "EXTERNAL_SERVICE",
+		ActorID:      "not-a-uuid:billing-bot",
+		ActorLabel:   "Billing Bot",
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	events.Flush(2 * time.Second)
+	select {
+	case c := <-gotBody:
+		if c.ActorType != "EXTERNAL_SERVICE" || c.ActorID != "not-a-uuid:billing-bot" || c.ActorLabel != "Billing Bot" {
+			t.Fatalf("unexpected actor fields on wire: %+v", c)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server never received a POST")
+	}
+}
+
 func TestAuditEvents_List_Error(t *testing.T) {
 	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "boom", 500)
@@ -304,14 +359,22 @@ func TestAuditEvents_List_Error(t *testing.T) {
 	}
 }
 
-func TestAuditEvents_List_BadActorID(t *testing.T) {
-	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
+// ActorID is a free-form string on the wire — non-UUID filter values
+// pass straight through to the server.
+func TestAuditEvents_List_FreeFormActorID(t *testing.T) {
+	var capturedQuery string
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(200)
-		_, _ = w.Write([]byte(`{"data":[]}`))
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
 	})
 	defer cleanup()
-	if _, err := events.List(context.Background(), ListEventsInput{ActorID: "not-a-uuid"}); err == nil {
-		t.Fatal("expected error from invalid UUID")
+	if _, err := events.List(context.Background(), ListEventsInput{ActorID: "not-a-uuid:bot"}); err != nil {
+		t.Fatalf("expected non-UUID actor id to pass through, got %v", err)
+	}
+	if !strings.Contains(capturedQuery, "not-a-uuid%3Abot") {
+		t.Fatalf("expected raw query to forward actor id verbatim, got %q", capturedQuery)
 	}
 }
 
@@ -327,7 +390,7 @@ func TestAuditEvents_List_AllFilters(t *testing.T) {
 		ResourceType:    "user",
 		ResourceID:      "u-1",
 		ActorType:       "USER",
-		ActorID:         "11111111-2222-3333-4444-555555555555",
+		ActorID:         "not-a-uuid:billing-bot",
 		OccurredAtRange: "[2026-04-01T00:00:00Z,*)",
 		Search:          "inv-",
 		PageSize:        1,
@@ -350,10 +413,10 @@ func TestAuditEvents_Get_500(t *testing.T) {
 
 // Exercise eventFromResource's nullable-attr branches.
 func TestEventFromResource_PopulatedActor(t *testing.T) {
-	actorID := uuid.New()
+	actorID := "not-a-uuid:billing-bot"
 	at := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
-	actorType := "USER"
-	actorLabel := "mike@example.com"
+	actorType := "EXTERNAL_SERVICE"
+	actorLabel := "Billing Bot"
 	idemKey := "auto-1"
 	idStr := "11111111-2222-3333-4444-555555555555"
 	res := genaudit.EventResource{
@@ -372,10 +435,10 @@ func TestEventFromResource_PopulatedActor(t *testing.T) {
 		},
 	}
 	got := eventFromResource(res)
-	if got.ActorID == nil || *got.ActorID != actorID {
-		t.Fatalf("ActorID not populated: %v", got.ActorID)
+	if got.ActorID != actorID {
+		t.Fatalf("ActorID not populated: %q", got.ActorID)
 	}
-	if got.ActorType != "USER" || got.ActorLabel != actorLabel {
+	if got.ActorType != "EXTERNAL_SERVICE" || got.ActorLabel != actorLabel {
 		t.Fatal("actor fields not propagated")
 	}
 	if got.Data == nil {

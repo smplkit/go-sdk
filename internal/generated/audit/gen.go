@@ -283,16 +283,16 @@ type ActionResource struct {
 // place it inside `data`. smplkit's own integrations nest it under
 // `data.snapshot`, but the slot is yours to use however you like.
 type Event struct {
-	// Action Slug for what happened, e.g. `user.created`. Lowercase, dot-separated.
+	// Action What happened, e.g. `user.created`. Any non-empty string.
 	Action string `json:"action"`
 
-	// ActorId Identifier of the actor that emitted the event.
-	ActorId *openapi_types.UUID `json:"actor_id,omitempty"`
+	// ActorId Identifier of the actor that caused the event. Free-form string — any identifier scheme is accepted.
+	ActorId *string `json:"actor_id,omitempty"`
 
-	// ActorLabel Human-readable label for the actor (e.g. the user's email address or the API key name) at the time the event was recorded.
+	// ActorLabel Human-readable label for the actor (e.g. an email address or API key name) at the time the event was recorded.
 	ActorLabel *string `json:"actor_label,omitempty"`
 
-	// ActorType Kind of credential that emitted the event, e.g. `USER` or `API_KEY`. Resolved server-side from the request credential.
+	// ActorType Kind of actor that caused the event, e.g. `USER`, `API_KEY`, `SYSTEM`, or any other label you choose. Free-form string; the API does not constrain or interpret it.
 	ActorType *string `json:"actor_type,omitempty"`
 
 	// CreatedAt When the event was received and recorded.
@@ -316,7 +316,7 @@ type Event struct {
 	// ResourceId Identifier of the specific resource the event is about.
 	ResourceId string `json:"resource_id"`
 
-	// ResourceType Slug for the kind of resource the event is about, e.g. `user`. Lowercase, dot-separated.
+	// ResourceType Kind of resource the event is about, e.g. `user`. Any non-empty string.
 	ResourceType string `json:"resource_type"`
 }
 
@@ -764,12 +764,12 @@ type ListActionsParamsSort string
 
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
-	FilterOccurredAt   *string             `form:"filter[occurred_at],omitempty" json:"filter[occurred_at],omitempty"`
-	FilterActorType    *string             `form:"filter[actor_type],omitempty" json:"filter[actor_type],omitempty"`
-	FilterActorId      *openapi_types.UUID `form:"filter[actor_id],omitempty" json:"filter[actor_id],omitempty"`
-	FilterAction       *string             `form:"filter[action],omitempty" json:"filter[action],omitempty"`
-	FilterResourceType *string             `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
-	FilterResourceId   *string             `form:"filter[resource_id],omitempty" json:"filter[resource_id],omitempty"`
+	FilterOccurredAt   *string `form:"filter[occurred_at],omitempty" json:"filter[occurred_at],omitempty"`
+	FilterActorType    *string `form:"filter[actor_type],omitempty" json:"filter[actor_type],omitempty"`
+	FilterActorId      *string `form:"filter[actor_id],omitempty" json:"filter[actor_id],omitempty"`
+	FilterAction       *string `form:"filter[action],omitempty" json:"filter[action],omitempty"`
+	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
+	FilterResourceId   *string `form:"filter[resource_id],omitempty" json:"filter[resource_id],omitempty"`
 
 	// FilterSearch Case-insensitive substring match against `resource_id` or `description`. Use `filter[resource_id]` for an exact match on `resource_id`.
 	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
@@ -1380,7 +1380,7 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 
 		if params.FilterActorId != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[actor_id]", *params.FilterActorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[actor_id]", *params.FilterActorId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

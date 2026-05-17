@@ -85,6 +85,18 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 	if input.OccurredAt != nil {
 		attrs.OccurredAt = input.OccurredAt
 	}
+	if input.ActorType != "" {
+		at := input.ActorType
+		attrs.ActorType = &at
+	}
+	if input.ActorID != "" {
+		aid := input.ActorID
+		attrs.ActorId = &aid
+	}
+	if input.ActorLabel != "" {
+		al := input.ActorLabel
+		attrs.ActorLabel = &al
+	}
 	if input.Data != nil {
 		d := input.Data
 		attrs.Data = &d
@@ -123,11 +135,7 @@ func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEve
 		params.FilterActorType = &input.ActorType
 	}
 	if input.ActorID != "" {
-		actorUUID, err := uuid.Parse(input.ActorID)
-		if err != nil {
-			return nil, fmt.Errorf("audit List: invalid ActorID: %w", err)
-		}
-		params.FilterActorId = &actorUUID
+		params.FilterActorId = &input.ActorID
 	}
 	if input.OccurredAtRange != "" {
 		params.FilterOccurredAt = &input.OccurredAtRange
@@ -307,8 +315,7 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 		out.ActorType = *attrs.ActorType
 	}
 	if attrs.ActorId != nil {
-		actorID := *attrs.ActorId
-		out.ActorID = &actorID
+		out.ActorID = *attrs.ActorId
 	}
 	if attrs.ActorLabel != nil {
 		out.ActorLabel = *attrs.ActorLabel
