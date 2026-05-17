@@ -87,14 +87,17 @@ type AuditEvent struct {
 	OccurredAt time.Time
 	// CreatedAt is when the audit service first ingested this event.
 	CreatedAt time.Time
-	// ActorType identifies the kind of actor that performed the action
-	// ("user", "api_key", "system", …). Empty when unknown.
+	// ActorType is a free-form label for the kind of actor that caused
+	// the event (e.g. "USER", "API_KEY", "SYSTEM", or any custom value).
+	// Empty when the caller did not supply one; the audit service never
+	// backfills from the request credential.
 	ActorType string
-	// ActorID is the UUID of the actor when the actor is a tracked
-	// entity (user, api_key). Nil for system actors or anonymous events.
-	ActorID *uuid.UUID
-	// ActorLabel is a display label for the actor — typically a name or
-	// email. Empty when unknown.
+	// ActorID is the actor identifier. Free-form — any string scheme
+	// is accepted; non-UUID values round-trip verbatim. Empty when not
+	// supplied.
+	ActorID string
+	// ActorLabel is a human-readable label for the actor (e.g. an email
+	// address or API key name). Empty when not supplied.
 	ActorLabel string
 	// Data is the free-form per-event payload defined by the customer.
 	Data map[string]interface{}
@@ -130,6 +133,17 @@ type CreateEventInput struct {
 	// OccurredAt is when the action actually happened. Defaults to the
 	// server's receive time when nil.
 	OccurredAt *time.Time
+	// ActorType is a free-form label for the kind of actor that caused
+	// the event (e.g. "USER", "API_KEY", "SYSTEM", or any custom value).
+	// The audit service never backfills this from the request
+	// credential — set it explicitly when you want the event attributed.
+	ActorType string
+	// ActorID is the actor identifier. Free-form — any string scheme is
+	// accepted.
+	ActorID string
+	// ActorLabel is a human-readable label for the actor (e.g. an email
+	// address or API key name).
+	ActorLabel string
 	// Data is free-form contextual JSON. To record a resource snapshot,
 	// nest it inside Data — the smplkit internal convention is
 	// Data["snapshot"], but the shape is unconstrained.
@@ -150,9 +164,11 @@ type ListEventsInput struct {
 	ResourceType string
 	// ResourceID filters by exact resource id.
 	ResourceID string
-	// ActorType filters by exact actor type.
+	// ActorType filters by exact actor type. Matches the literal string
+	// stored on the event.
 	ActorType string
-	// ActorID filters by exact actor UUID (string form).
+	// ActorID filters by exact actor id. Matches the literal string
+	// stored on the event — any identifier scheme works.
 	ActorID string
 	// OccurredAtRange filters by occurred_at using the platform's range
 	// syntax (e.g. "[2026-01-01T00:00:00Z,*)" — ADR-014).
