@@ -666,6 +666,113 @@ type RetryFailedDeliveriesSummary struct {
 	Succeeded int `json:"succeeded"`
 }
 
+// SearchEventsListLinks defines model for SearchEventsListLinks.
+type SearchEventsListLinks struct {
+	// Next Opaque cursor token for the next page. POST the same body with `page[after]` set to this value to fetch the next page. Unlike the URL-form `links.next` returned by `GET /api/v1/events`, this is a bare cursor token — the client must re-issue a POST with its body, which the URL form cannot capture.
+	Next *string `json:"next,omitempty"`
+}
+
+// SearchEventsListMeta Cursor-pagination + scan meta for the search response.
+//
+// Mirrors `EventListMeta` (cursor pagination — `page_size` is the
+// only pagination field) and adds the `scan` block above.
+type SearchEventsListMeta struct {
+	PageSize int `json:"page_size"`
+
+	// Scan Scan statistics for a search response.
+	//
+	// Exposed so a selective JSON Logic filter doesn't silently look like
+	// "0 matches" when the truth is "the scan ceiling was reached before
+	// the filter had a chance to find page[size] matches."
+	Scan SearchScanMeta `json:"scan"`
+}
+
+// SearchEventsRequest Request body for “POST /api/v1/search/events“.
+//
+// Mirrors every column filter accepted by “GET /api/v1/events“ with
+// identical semantics, and adds a top-level “filter“ field carrying
+// a JSON Logic expression. When “filter“ is present the search is
+// silently capped to the last 30 days by “occurred_at“; the
+// expression is then evaluated in memory against each row that passes
+// the column filters using the same “json-logic-qubit“ evaluator
+// that runs in the forwarder pipeline (so search results match what
+// would be forwarded).
+//
+// Filter-combination rules match “GET /api/v1/events“ exactly:
+//
+//   - “filter[resource_id]“ must be accompanied by
+//     “filter[resource_type]“ — the index is keyed on the pair.
+//   - “filter[search]“ must be accompanied by either
+//     “filter[occurred_at]“ or “filter[resource_type]“ +
+//     “filter[resource_id]“ — substring matching has no index, so an
+//     unbounded substring scan is rejected.
+type SearchEventsRequest struct {
+	// Filter Optional JSON Logic expression evaluated against each row after column filters narrow the candidate set. Null, absent, or an empty object disables JSON Logic filtering. When present, the search is silently capped to the last 30 days by `occurred_at` (intersected with any explicit `filter[occurred_at]` the caller supplied).
+	Filter *map[string]interface{} `json:"filter,omitempty"`
+
+	// FilterAction Exact match on the event's `action` field.
+	FilterAction *string `json:"filter[action],omitempty"`
+
+	// FilterActorId Exact match on the event's `actor_id` field.
+	FilterActorId *string `json:"filter[actor_id],omitempty"`
+
+	// FilterActorType Exact match on the event's `actor_type` field.
+	FilterActorType *string `json:"filter[actor_type],omitempty"`
+
+	// FilterOccurredAt Date range using interval notation, e.g. `[2026-04-01T00:00:00Z,2026-04-15T00:00:00Z)`. Required by `filter[search]` when the resource pair isn't provided. When a JSON Logic `filter` is present, the effective range is intersected with the last 30 days.
+	FilterOccurredAt *string `json:"filter[occurred_at],omitempty"`
+
+	// FilterResourceId Exact match on the event's `resource_id` field. Must be accompanied by `filter[resource_type]`.
+	FilterResourceId *string `json:"filter[resource_id],omitempty"`
+
+	// FilterResourceType Exact match on the event's `resource_type` field.
+	FilterResourceType *string `json:"filter[resource_type],omitempty"`
+
+	// FilterSearch Case-insensitive substring match on `resource_id` or `description`. Must be accompanied by either `filter[occurred_at]` or `filter[resource_type]` + `filter[resource_id]`.
+	FilterSearch *string `json:"filter[search],omitempty"`
+
+	// PageAfter Opaque cursor — pass the previous response's `links.next` cursor verbatim to fetch the next page. Keep the same `sort` value across paginated requests.
+	PageAfter *string `json:"page[after],omitempty"`
+
+	// PageSize Maximum events to return. Range 1..1000, default 1000 — matches every other list / search endpoint on the platform. Set explicitly to a smaller value when the consumer is rendering results card-by-card.
+	PageSize *int `json:"page[size],omitempty"`
+
+	// Sort Sort field: `occurred_at` or `created_at`, optionally prefixed with `-` for descending order. Default `-occurred_at` (newest first).
+	Sort *string `json:"sort,omitempty"`
+}
+
+// SearchEventsResponse JSON:API list envelope returned by the search endpoint.
+//
+// Structurally identical to “EventListResponse“ from the list
+// endpoint — the only difference is the extra `scan` block inside
+// `meta` (`SearchEventsListMeta` vs `EventListMeta`).
+type SearchEventsResponse struct {
+	Data  []EventResource        `json:"data"`
+	Links *SearchEventsListLinks `json:"links,omitempty"`
+
+	// Meta Cursor-pagination + scan meta for the search response.
+	//
+	// Mirrors `EventListMeta` (cursor pagination — `page_size` is the
+	// only pagination field) and adds the `scan` block above.
+	Meta SearchEventsListMeta `json:"meta"`
+}
+
+// SearchScanMeta Scan statistics for a search response.
+//
+// Exposed so a selective JSON Logic filter doesn't silently look like
+// "0 matches" when the truth is "the scan ceiling was reached before
+// the filter had a chance to find page[size] matches."
+type SearchScanMeta struct {
+	// Exhausted `true` if the server hit the per-request scan ceiling before finding `page[size]` matches. When true, paginate again with the returned `links.next` cursor to continue scanning past the ceiling.
+	Exhausted bool `json:"exhausted"`
+
+	// Matched Rows the JSON Logic expression matched. Equal to `len(data)` for the page being returned plus any matches found beyond the page size.
+	Matched int `json:"matched"`
+
+	// Scanned Rows scanned after column filters narrowed the candidate set, before the JSON Logic expression was applied.
+	Scanned int `json:"scanned"`
+}
+
 // TestForwarderRequest Inputs to the test-forwarder action.
 //
 // Mirrors a forwarder's HTTP destination configuration with one
@@ -869,6 +976,9 @@ type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderRequest
 // ExecuteTestForwarderJSONRequestBody defines body for ExecuteTestForwarder for application/json ContentType.
 type ExecuteTestForwarderJSONRequestBody = TestForwarderRequest
 
+// SearchEventsJSONRequestBody defines body for SearchEvents for application/json ContentType.
+type SearchEventsJSONRequestBody = SearchEventsRequest
+
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
 
@@ -991,6 +1101,11 @@ type ClientInterface interface {
 
 	// ListResourceTypes request
 	ListResourceTypes(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchEventsWithBody request with any body
+	SearchEventsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SearchEvents(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListUsage request
 	ListUsage(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1202,6 +1317,30 @@ func (c *Client) ExecuteTestForwarder(ctx context.Context, body ExecuteTestForwa
 
 func (c *Client) ListResourceTypes(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListResourceTypesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchEventsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchEventsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchEvents(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchEventsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2172,6 +2311,46 @@ func NewListResourceTypesRequest(server string, params *ListResourceTypesParams)
 	return req, nil
 }
 
+// NewSearchEventsRequest calls the generic SearchEvents builder with application/json body
+func NewSearchEventsRequest(server string, body SearchEventsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSearchEventsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSearchEventsRequestWithBody generates requests for SearchEvents with any type of body
+func NewSearchEventsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/search/events")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListUsageRequest generates requests for ListUsage
 func NewListUsageRequest(server string, params *ListUsageParams) (*http.Request, error) {
 	var err error
@@ -2350,6 +2529,11 @@ type ClientWithResponsesInterface interface {
 
 	// ListResourceTypesWithResponse request
 	ListResourceTypesWithResponse(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*ListResourceTypesResponse, error)
+
+	// SearchEventsWithBodyWithResponse request with any body
+	SearchEventsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error)
+
+	SearchEventsWithResponse(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error)
 
 	// ListUsageWithResponse request
 	ListUsageWithResponse(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*ListUsageResponse, error)
@@ -2775,6 +2959,36 @@ func (r ListResourceTypesResponse) ContentType() string {
 	return ""
 }
 
+type SearchEventsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SearchEventsResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchEventsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchEventsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchEventsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListUsageResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -2961,6 +3175,23 @@ func (c *ClientWithResponses) ListResourceTypesWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseListResourceTypesResponse(rsp)
+}
+
+// SearchEventsWithBodyWithResponse request with arbitrary body returning *SearchEventsResponse
+func (c *ClientWithResponses) SearchEventsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error) {
+	rsp, err := c.SearchEventsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchEventsResponse(rsp)
+}
+
+func (c *ClientWithResponses) SearchEventsWithResponse(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error) {
+	rsp, err := c.SearchEvents(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchEventsResponse(rsp)
 }
 
 // ListUsageWithResponse request returning *ListUsageResponse
@@ -3327,6 +3558,32 @@ func ParseListResourceTypesResponse(rsp *http.Response) (*ListResourceTypesRespo
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchEventsResponse parses an HTTP response from a SearchEventsWithResponse call
+func ParseSearchEventsResponse(rsp *http.Response) (*SearchEventsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchEventsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SearchEventsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 
