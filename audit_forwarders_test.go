@@ -319,7 +319,7 @@ func TestForwarderFromResource_PopulatesOptionalFields(t *testing.T) {
 	if fwd.Filter == nil {
 		t.Errorf("expected Filter populated, got nil")
 	}
-	if fwd.Transform == nil || *fwd.Transform != "$" {
+	if s, ok := fwd.Transform.(string); !ok || s != "$" {
 		t.Errorf("expected Transform=\"$\", got %v", fwd.Transform)
 	}
 	if fwd.Description == nil || *fwd.Description != "a forwarder" {
@@ -691,7 +691,7 @@ func TestAuditForwarders_New_DefaultsAndOptions(t *testing.T) {
 		WithForwarderDescription("a description"),
 		WithForwarderEnabled(false),
 		WithForwarderFilter(map[string]interface{}{"==": []any{"x", "x"}}),
-		WithForwarderTransform("$"),
+		WithForwarderTransform(ForwarderTransformTypeJSONata, "$"),
 	)
 	if fwd.Name != "my-forwarder" {
 		t.Errorf("expected Name=my-forwarder, got %q", fwd.Name)
@@ -711,7 +711,7 @@ func TestAuditForwarders_New_DefaultsAndOptions(t *testing.T) {
 	if fwd.Filter == nil {
 		t.Errorf("expected Filter set, got nil")
 	}
-	if fwd.Transform == nil || *fwd.Transform != "$" {
+	if s, ok := fwd.Transform.(string); !ok || s != "$" {
 		t.Errorf("expected Transform=$, got %v", fwd.Transform)
 	}
 	if fwd.TransformType == nil || *fwd.TransformType != ForwarderTransformTypeJSONata {
@@ -757,7 +757,7 @@ func TestForwarder_Save_CreatePath(t *testing.T) {
 		HttpConfiguration{Method: HttpMethodPost, URL: "https://x"},
 		WithForwarderDescription("hi"),
 		WithForwarderFilter(map[string]interface{}{"==": []any{1, 1}}),
-		WithForwarderTransform("$"),
+		WithForwarderTransform(ForwarderTransformTypeJSONata, "$"),
 	)
 	if err := fwd.Save(context.Background()); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -914,7 +914,6 @@ func TestForwarder_Delete_Success(t *testing.T) {
 func TestForwarderResourceFromForwarder_AllBranches(t *testing.T) {
 	tt := ForwarderTransformTypeJSONata
 	desc := "d"
-	transform := "$"
 	cases := []struct {
 		name string
 		fwd  *Forwarder
@@ -928,14 +927,14 @@ func TestForwarderResourceFromForwarder_AllBranches(t *testing.T) {
 			},
 		},
 		{
-			name: "with-all-fields",
+			name: "with-string-transform",
 			fwd: &Forwarder{
 				Name:          "x",
 				Description:   &desc,
 				ForwarderType: ForwarderTypeHTTP,
 				Enabled:       true,
 				Filter:        map[string]interface{}{"==": []any{1, 1}},
-				Transform:     &transform,
+				Transform:     "$",
 				TransformType: &tt,
 				Configuration: HttpConfiguration{
 					Method:        HttpMethodPost,
@@ -943,6 +942,19 @@ func TestForwarderResourceFromForwarder_AllBranches(t *testing.T) {
 					Headers:       []HttpHeader{{Name: "H", Value: "v"}},
 					SuccessStatus: "2xx",
 				},
+			},
+		},
+		{
+			name: "with-object-transform",
+			fwd: &Forwarder{
+				Name:          "x",
+				ForwarderType: ForwarderTypeHTTP,
+				Configuration: HttpConfiguration{URL: "https://x"},
+				// Transform is engine-defined; a future engine could
+				// carry a structured payload. The wrapper passes it
+				// through untyped.
+				Transform:     map[string]interface{}{"event": "action"},
+				TransformType: &tt,
 			},
 		},
 	}

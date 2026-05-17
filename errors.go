@@ -126,6 +126,23 @@ func (e *ConflictError) Error() string { return e.Base.Error() }
 // Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
 func (e *ConflictError) Unwrap() error { return &e.Base }
 
+// PaymentRequiredError is raised when the server rejects a request
+// with a 402 — typically because the account's subscription plan
+// doesn't include the required entitlement. Surfaced as a typed error
+// so callers that care about plan-gated paths can errors.As on it; no
+// curated method in the SDK anticipates 402 specifically.
+type PaymentRequiredError struct {
+	// Base is the embedded base Error carrying the HTTP status, message,
+	// raw response body, and any parsed JSON:API error details.
+	Base Error
+}
+
+// Error implements the error interface.
+func (e *PaymentRequiredError) Error() string { return e.Base.Error() }
+
+// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
+func (e *PaymentRequiredError) Unwrap() error { return &e.Base }
+
 // ValidationError is raised when the server rejects a request due to validation errors.
 type ValidationError struct {
 	// Base is the embedded base Error carrying the HTTP status, message,

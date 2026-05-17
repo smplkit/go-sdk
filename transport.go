@@ -68,6 +68,8 @@ func checkStatus(code int, body []byte) error {
 		return &NotFoundError{Base: base}
 	case http.StatusConflict:
 		return &ConflictError{Base: base}
+	case http.StatusPaymentRequired:
+		return &PaymentRequiredError{Base: base}
 	default:
 		return &base
 	}

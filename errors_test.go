@@ -250,6 +250,32 @@ func TestCheckStatus_409Response(t *testing.T) {
 	assert.Contains(t, conflict.Base.Message, "A config with this key already exists.")
 }
 
+func TestCheckStatus_402Response(t *testing.T) {
+	body := []byte(`{
+		"errors": [{
+			"status": "402",
+			"title": "Payment Required",
+			"detail": "This feature requires the Pro plan."
+		}]
+	}`)
+
+	err := smplkit.CheckStatusForTest(402, body)
+	require.Error(t, err)
+
+	var pre *smplkit.PaymentRequiredError
+	require.True(t, errors.As(err, &pre), "expected PaymentRequiredError")
+	assert.Contains(t, pre.Base.Message, "This feature requires the Pro plan.")
+	// Unwrap walks to the embedded base Error.
+	var base *smplkit.SmplError
+	require.True(t, errors.As(err, &base))
+	if pre.Error() == "" {
+		t.Fatal("Error() returned empty string")
+	}
+	if pre.Unwrap() == nil {
+		t.Fatal("Unwrap() returned nil")
+	}
+}
+
 func TestCheckStatus_NonJSON502(t *testing.T) {
 	body := []byte(`<html>Bad Gateway</html>`)
 

@@ -331,11 +331,15 @@ type Forwarder struct {
 	// deliveries instead of being POSTed to the destination.
 	Filter map[string]interface{}
 	// Transform is an optional template applied to each event before
-	// delivery. Shape depends on TransformType; for JSONATA, a
-	// JSONata expression. Nil delivers the event JSON as-is.
-	Transform *string
+	// delivery. Shape depends on TransformType; for JSONATA, a string
+	// containing a JSONata expression. Future engines may carry richer
+	// shapes (objects, arrays, …), so the field is untyped. Nil
+	// delivers the event JSON as-is; when set, TransformType must also
+	// be set.
+	Transform interface{}
 	// TransformType identifies the engine used to evaluate Transform.
-	// Currently only ForwarderTransformTypeJSONata is supported.
+	// Currently only ForwarderTransformTypeJSONata is supported. Must
+	// be set whenever Transform is set.
 	TransformType *ForwarderTransformType
 	// Configuration is the destination request configuration.
 	Configuration HttpConfiguration

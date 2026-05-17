@@ -8,25 +8,25 @@ import (
 // LogLevel represents a smplkit canonical log level.
 type LogLevel string
 
-// Supported LogLevel values, alphabetical by wire constant.
-// Severity order (least to most severe) is: TRACE, DEBUG, INFO, WARN,
-// ERROR, FATAL, SILENT — but the constants are declared alphabetically
-// to match the cross-SDK ordering convention.
+// Supported LogLevel values, declared in increasing order of severity
+// to match Go's log/slog convention (where higher-severity levels have
+// larger numeric values). LogLevelSilent is the cut-off above any real
+// severity and suppresses all output.
 const (
+	// LogLevelTrace is the most verbose level; finer-grained than DEBUG.
+	LogLevelTrace LogLevel = "TRACE"
 	// LogLevelDebug emits diagnostic detail useful while debugging.
 	LogLevelDebug LogLevel = "DEBUG"
+	// LogLevelInfo is the default level for routine informational messages.
+	LogLevelInfo LogLevel = "INFO"
+	// LogLevelWarn signals a non-fatal condition that warrants attention.
+	LogLevelWarn LogLevel = "WARN"
 	// LogLevelError signals a failure that the caller should handle.
 	LogLevelError LogLevel = "ERROR"
 	// LogLevelFatal signals a non-recoverable failure.
 	LogLevelFatal LogLevel = "FATAL"
-	// LogLevelInfo is the default level for routine informational messages.
-	LogLevelInfo LogLevel = "INFO"
 	// LogLevelSilent suppresses all output.
 	LogLevelSilent LogLevel = "SILENT"
-	// LogLevelTrace is the most verbose level; finer-grained than DEBUG.
-	LogLevelTrace LogLevel = "TRACE"
-	// LogLevelWarn signals a non-fatal condition that warrants attention.
-	LogLevelWarn LogLevel = "WARN"
 )
 
 // Logger represents a logger resource from the smplkit platform.

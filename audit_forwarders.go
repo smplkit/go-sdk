@@ -60,12 +60,17 @@ func WithForwarderFilter(filter map[string]interface{}) ForwarderOption {
 	return func(fwd *Forwarder) { fwd.Filter = filter }
 }
 
-// WithForwarderTransform sets the optional JSONata template applied to
-// each event before delivery.
-func WithForwarderTransform(transform string) ForwarderOption {
+// WithForwarderTransform sets the optional template applied to each
+// event before delivery, paired with the engine used to evaluate it.
+// transform is intentionally untyped — today JSONATA carries a string
+// expression, but the field shape is engine-defined and future engines
+// may carry richer payloads. Both arguments must be supplied together;
+// passing a non-nil transform without a transformType (or vice versa)
+// is rejected server-side.
+func WithForwarderTransform(transformType ForwarderTransformType, transform interface{}) ForwarderOption {
 	return func(fwd *Forwarder) {
-		fwd.Transform = &transform
-		tt := ForwarderTransformTypeJSONata
+		fwd.Transform = transform
+		tt := transformType
 		fwd.TransformType = &tt
 	}
 }
@@ -249,12 +254,14 @@ func forwarderResourceFromForwarder(id string, fwd *Forwarder) genaudit.Forwarde
 		f := fwd.Filter
 		attrs.Filter = &f
 	}
-	if fwd.Transform != nil && *fwd.Transform != "" {
-		attrs.Transform = *fwd.Transform
-		tt := genaudit.JSONATA
-		if fwd.TransformType != nil {
-			tt = *fwd.TransformType
-		}
+	// Transform body is engine-defined; pass through whatever the
+	// caller set. TransformType must be set whenever Transform is set
+	// — the server enforces that, so we just forward both.
+	if fwd.Transform != nil {
+		attrs.Transform = fwd.Transform
+	}
+	if fwd.TransformType != nil {
+		tt := *fwd.TransformType
 		attrs.TransformType = &tt
 	}
 	var idPtr *string
@@ -315,11 +322,12 @@ func forwarderFromResource(r genaudit.ForwarderResource, client *AuditForwarders
 	if a.Filter != nil {
 		out.Filter = *a.Filter
 	}
-	// Transform is a discriminated union; for the only supported engine
-	// (JSONATA) the body is a string. Surface other shapes as nil rather
-	// than panicking on the type assertion.
-	if s, ok := a.Transform.(string); ok && s != "" {
-		out.Transform = &s
+	// Transform body is engine-defined; pass the server-returned value
+	// through verbatim. The Go zero value (nil interface{}) signals
+	// "no transform"; any other value — string, map, slice — is
+	// surfaced as-is.
+	if a.Transform != nil {
+		out.Transform = a.Transform
 	}
 	return out
 }
