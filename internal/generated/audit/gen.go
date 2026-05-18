@@ -524,7 +524,7 @@ type Forwarder struct {
 	// ForwarderType Supported forwarder destination types.
 	ForwarderType ForwarderType `json:"forwarder_type"`
 
-	// Name Human-readable name for the forwarder.
+	// Name Human-readable name for the forwarder. Must contain at least one non-whitespace character.
 	Name string `json:"name"`
 
 	// Transform Template applied to each event before delivery. The shape depends on ``transform_type``: for `JSONATA`, a string containing a JSONata expression. Omit to deliver the event JSON unchanged.
