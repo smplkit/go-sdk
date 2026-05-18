@@ -690,8 +690,9 @@
         "properties": {
           "name": {
             "type": "string",
+            "minLength": 1,
             "title": "Name",
-            "description": "Human-readable display name for the flag."
+            "description": "Human-readable display name for the flag. Cannot be empty or whitespace-only."
           },
           "description": {
             "anyOf": [

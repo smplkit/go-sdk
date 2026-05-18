@@ -292,7 +292,7 @@ type Flag struct {
 	// Managed `true` when the flag was created through the API, `false` when it was auto-discovered from a bulk-register call. Auto-discovered flags can be edited and converted to managed by setting this to `true`.
 	Managed *bool `json:"managed,omitempty"`
 
-	// Name Human-readable display name for the flag.
+	// Name Human-readable display name for the flag. Cannot be empty or whitespace-only.
 	Name string `json:"name"`
 
 	// Sources SDK-reported observations of this flag, grouped by service and environment. Populated automatically by the bulk-register endpoint.
