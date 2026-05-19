@@ -69,33 +69,66 @@ func (e LogGroupResourceType) Valid() bool {
 	}
 }
 
+// Defines values for LoggerEffectiveLevels.
+const (
+	LoggerEffectiveLevelsDEBUG  LoggerEffectiveLevels = "DEBUG"
+	LoggerEffectiveLevelsERROR  LoggerEffectiveLevels = "ERROR"
+	LoggerEffectiveLevelsFATAL  LoggerEffectiveLevels = "FATAL"
+	LoggerEffectiveLevelsINFO   LoggerEffectiveLevels = "INFO"
+	LoggerEffectiveLevelsSILENT LoggerEffectiveLevels = "SILENT"
+	LoggerEffectiveLevelsTRACE  LoggerEffectiveLevels = "TRACE"
+	LoggerEffectiveLevelsWARN   LoggerEffectiveLevels = "WARN"
+)
+
+// Valid indicates whether the value is a known member of the LoggerEffectiveLevels enum.
+func (e LoggerEffectiveLevels) Valid() bool {
+	switch e {
+	case LoggerEffectiveLevelsDEBUG:
+		return true
+	case LoggerEffectiveLevelsERROR:
+		return true
+	case LoggerEffectiveLevelsFATAL:
+		return true
+	case LoggerEffectiveLevelsINFO:
+		return true
+	case LoggerEffectiveLevelsSILENT:
+		return true
+	case LoggerEffectiveLevelsTRACE:
+		return true
+	case LoggerEffectiveLevelsWARN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LoggerLevel.
 const (
-	LoggerLevelDEBUG  LoggerLevel = "DEBUG"
-	LoggerLevelERROR  LoggerLevel = "ERROR"
-	LoggerLevelFATAL  LoggerLevel = "FATAL"
-	LoggerLevelINFO   LoggerLevel = "INFO"
-	LoggerLevelSILENT LoggerLevel = "SILENT"
-	LoggerLevelTRACE  LoggerLevel = "TRACE"
-	LoggerLevelWARN   LoggerLevel = "WARN"
+	DEBUG  LoggerLevel = "DEBUG"
+	ERROR  LoggerLevel = "ERROR"
+	FATAL  LoggerLevel = "FATAL"
+	INFO   LoggerLevel = "INFO"
+	SILENT LoggerLevel = "SILENT"
+	TRACE  LoggerLevel = "TRACE"
+	WARN   LoggerLevel = "WARN"
 )
 
 // Valid indicates whether the value is a known member of the LoggerLevel enum.
 func (e LoggerLevel) Valid() bool {
 	switch e {
-	case LoggerLevelDEBUG:
+	case DEBUG:
 		return true
-	case LoggerLevelERROR:
+	case ERROR:
 		return true
-	case LoggerLevelFATAL:
+	case FATAL:
 		return true
-	case LoggerLevelINFO:
+	case INFO:
 		return true
-	case LoggerLevelSILENT:
+	case SILENT:
 		return true
-	case LoggerLevelTRACE:
+	case TRACE:
 		return true
-	case LoggerLevelWARN:
+	case WARN:
 		return true
 	default:
 		return false
@@ -434,8 +467,8 @@ type Logger struct {
 	// CreatedAt When the logger was first created or discovered.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
-	// EffectiveLevels Per-environment summary of what runtimes are reporting for this logger. Keyed by environment name; each entry is one of `{"status": "none"}`, `{"status": "agrees", "level": "<LEVEL>"}`, or `{"status": "varies"}`. `agrees` means every observed source in that environment reports the same resolved level; `varies` means at least two sources disagree.
-	EffectiveLevels *map[string]interface{} `json:"effective_levels,omitempty"`
+	// EffectiveLevels Per-environment summary of what runtimes are reporting for this logger. Keyed by environment name; each value is the list of distinct resolved levels observed across all source rows in that environment, ordered from most-verbose (`TRACE`) to least-verbose (`SILENT`). A single-element list means every source agrees; a multi-element list means sources disagree. Environments with no observed sources are omitted — cross-reference `environments` to find environments that are configured but have not yet been reported in.
+	EffectiveLevels *map[string][]LoggerEffectiveLevels `json:"effective_levels,omitempty"`
 
 	// Environments Per-environment level overrides keyed by environment name. Each value is an object with an optional `level` field, e.g. `{"production": {"level": "WARN"}}`. An environment may be present with no `level` to record that the logger applies there without changing the resolved level.
 	Environments *map[string]interface{} `json:"environments,omitempty"`
@@ -458,6 +491,9 @@ type Logger struct {
 	// UpdatedAt When the logger was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
+
+// LoggerEffectiveLevels defines model for Logger.EffectiveLevels.
+type LoggerEffectiveLevels string
 
 // LoggerLevel Account-wide log level applied to this logger. `null` means no override at the logger level — the level is inherited from the logger's group or the framework default.
 type LoggerLevel string
