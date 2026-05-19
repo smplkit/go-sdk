@@ -1,12 +1,10 @@
 package smplkit
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 
 	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
 )
@@ -759,20 +757,11 @@ func (m *AccountSettingsManagement) Get(ctx context.Context) (*AccountSettings, 
 
 // save writes the settings back to the server and updates s in place.
 func (m *AccountSettingsManagement) save(ctx context.Context, s *AccountSettings) error {
-	bodyBytes, err := json.Marshal(s.Raw)
-	if err != nil {
-		return fmt.Errorf("smplkit: failed to marshal account settings: %w", err)
-	}
-
-	bodyBuf := bytes.NewReader(bodyBytes)
-	bodyEditor := genapp.RequestEditorFn(func(_ context.Context, req *http.Request) error {
-		req.Body = io.NopCloser(bodyBuf)
-		req.ContentLength = int64(len(bodyBytes))
-		req.Header.Set("Content-Type", "application/json")
-		return nil
-	})
-
-	resp, err := m.client.appClient.PutAccountSettings(ctx, bodyEditor)
+	// The spec now declares an explicit request body for put_account_settings,
+	// so the generator only emits the typed/-WithBody variants. Hand the raw
+	// map directly to the typed call — the generated client marshals it as
+	// application/vnd.api+json under the hood.
+	resp, err := m.client.appClient.PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx, s.Raw)
 	if err != nil {
 		return classifyError(err)
 	}
