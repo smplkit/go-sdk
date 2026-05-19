@@ -969,6 +969,18 @@
         "summary": "Update User Settings",
         "description": "Replace the current user's settings with the provided JSON object.",
         "operationId": "put_user_settings",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1054,6 +1066,18 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1185,6 +1209,18 @@
         "summary": "Update Account Settings",
         "description": "Replace the current account's settings with the provided JSON object. Requires admin role.",
         "operationId": "put_account_settings",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5544,6 +5580,124 @@
         }
       }
     },
+    "/api/v1/discount_tiers": {
+      "get": {
+        "tags": [
+          "Discount Tiers"
+        ],
+        "summary": "List Discount Tiers",
+        "description": "Return the multi-product volume discount schedule.\n\nEach tier is identified by the minimum number of paid products at\nwhich the discount applies. The first tier (1 product) carries no\ndiscount; subsequent tiers grant a progressively larger percent off\nevery paid subscription item. Default sort is `products_count`\nascending, which is the natural ladder customers traverse as they\nadd products.",
+        "operationId": "list_discount_tiers",
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `products_count`. Allowed values: `percent_off`, `-percent_off`, `products_count`, `-products_count`.",
+              "enum": [
+                "percent_off",
+                "-percent_off",
+                "products_count",
+                "-products_count"
+              ],
+              "default": "products_count",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `products_count`. Allowed values: `percent_off`, `-percent_off`, `products_count`, `-products_count`."
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error.",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
+              "default": 1000,
+              "title": "Page[Size]"
+            },
+            "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
+          },
+          {
+            "name": "meta[total]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.",
+              "default": false,
+              "title": "Meta[Total]"
+            },
+            "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscountTierListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/current/subscription": {
       "get": {
         "tags": [
@@ -7639,6 +7793,82 @@
           },
           "id": "Michael",
           "type": "context_value"
+        }
+      },
+      "DiscountTier": {
+        "properties": {
+          "products_count": {
+            "type": "integer",
+            "title": "Products Count",
+            "description": "Minimum number of paid product subscriptions a customer must hold for this tier's discount to apply. Counts above the highest defined tier are clamped to that tier."
+          },
+          "percent_off": {
+            "type": "integer",
+            "title": "Percent Off",
+            "description": "Discount percentage applied to every paid subscription item when the customer holds at least ``products_count`` paid products. 0 means no discount at this tier."
+          }
+        },
+        "type": "object",
+        "required": [
+          "products_count",
+          "percent_off"
+        ],
+        "title": "DiscountTier",
+        "description": "A single tier of the multi-product volume discount schedule."
+      },
+      "DiscountTierListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DiscountTierResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "DiscountTierListResponse",
+        "description": "JSON:API collection response for the volume discount schedule."
+      },
+      "DiscountTierResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "discount_tier"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/DiscountTier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "DiscountTierResource",
+        "description": "JSON:API resource envelope for a volume discount tier.",
+        "example": {
+          "attributes": {
+            "percent_off": 15,
+            "products_count": 2
+          },
+          "id": "2",
+          "type": "discount_tier"
         }
       },
       "Email": {
@@ -10194,6 +10424,9 @@
     },
     {
       "name": "Contexts"
+    },
+    {
+      "name": "Discount Tiers"
     },
     {
       "name": "Email Registrations"
