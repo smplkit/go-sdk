@@ -154,6 +154,21 @@ func (e ContextValueResourceType) Valid() bool {
 	}
 }
 
+// Defines values for DiscountTierResourceType.
+const (
+	DiscountTierResourceTypeDiscountTier DiscountTierResourceType = "discount_tier"
+)
+
+// Valid indicates whether the value is a known member of the DiscountTierResourceType enum.
+func (e DiscountTierResourceType) Valid() bool {
+	switch e {
+	case DiscountTierResourceTypeDiscountTier:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailResourceType.
 const (
 	EmailResourceTypeEmail EmailResourceType = "email"
@@ -631,6 +646,30 @@ func (e ListContextsParamsSort) Valid() bool {
 	case ListContextsParamsSortName:
 		return true
 	case ListContextsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListDiscountTiersParamsSort.
+const (
+	MinusPercentOff    ListDiscountTiersParamsSort = "-percent_off"
+	MinusProductsCount ListDiscountTiersParamsSort = "-products_count"
+	PercentOff         ListDiscountTiersParamsSort = "percent_off"
+	ProductsCount      ListDiscountTiersParamsSort = "products_count"
+)
+
+// Valid indicates whether the value is a known member of the ListDiscountTiersParamsSort enum.
+func (e ListDiscountTiersParamsSort) Valid() bool {
+	switch e {
+	case MinusPercentOff:
+		return true
+	case MinusProductsCount:
+		return true
+	case PercentOff:
+		return true
+	case ProductsCount:
 		return true
 	default:
 		return false
@@ -1370,6 +1409,34 @@ type ContextValueResource struct {
 
 // ContextValueResourceType defines model for ContextValueResource.Type.
 type ContextValueResourceType string
+
+// DiscountTier A single tier of the multi-product volume discount schedule.
+type DiscountTier struct {
+	// PercentOff Discount percentage applied to every paid subscription item when the customer holds at least ``products_count`` paid products. 0 means no discount at this tier.
+	PercentOff int `json:"percent_off"`
+
+	// ProductsCount Minimum number of paid product subscriptions a customer must hold for this tier's discount to apply. Counts above the highest defined tier are clamped to that tier.
+	ProductsCount int `json:"products_count"`
+}
+
+// DiscountTierListResponse JSON:API collection response for the volume discount schedule.
+type DiscountTierListResponse struct {
+	Data []DiscountTierResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
+}
+
+// DiscountTierResource JSON:API resource envelope for a volume discount tier.
+type DiscountTierResource struct {
+	// Attributes A single tier of the multi-product volume discount schedule.
+	Attributes DiscountTier             `json:"attributes"`
+	Id         *string                  `json:"id,omitempty"`
+	Type       DiscountTierResourceType `json:"type"`
+}
+
+// DiscountTierResourceType defines model for DiscountTierResource.Type.
+type DiscountTierResourceType string
 
 // Email A contact-us submission. Sending the resource delivers a support
 // ticket and an auto-response email; nothing is persisted. The `id`
@@ -2389,6 +2456,9 @@ type VerifyEmailRequest struct {
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
 type hTTPBearerContextKey string
 
+// PutAccountSettingsApplicationVndAPIPlusJSONBody defines parameters for PutAccountSettings.
+type PutAccountSettingsApplicationVndAPIPlusJSONBody map[string]interface{}
+
 // ListApiKeysParams defines parameters for ListApiKeys.
 type ListApiKeysParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
@@ -2486,6 +2556,24 @@ type ListContextsParams struct {
 
 // ListContextsParamsSort defines parameters for ListContexts.
 type ListContextsParamsSort string
+
+// ListDiscountTiersParams defines parameters for ListDiscountTiers.
+type ListDiscountTiersParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `products_count`. Allowed values: `percent_off`, `-percent_off`, `products_count`, `-products_count`.
+	Sort *ListDiscountTiersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
+}
+
+// ListDiscountTiersParamsSort defines parameters for ListDiscountTiers.
+type ListDiscountTiersParamsSort string
 
 // CreateEmailRegistrationApplicationVndAPIPlusJSONBody defines parameters for CreateEmailRegistration.
 type CreateEmailRegistrationApplicationVndAPIPlusJSONBody map[string]interface{}
@@ -2713,11 +2801,20 @@ type ListUsersParams struct {
 // ListUsersParamsSort defines parameters for ListUsers.
 type ListUsersParamsSort string
 
+// PutUserSettingsApplicationVndAPIPlusJSONBody defines parameters for PutUserSettings.
+type PutUserSettingsApplicationVndAPIPlusJSONBody map[string]interface{}
+
+// PutUserSettingsKeyApplicationVndAPIPlusJSONBody defines parameters for PutUserSettingsKey.
+type PutUserSettingsKeyApplicationVndAPIPlusJSONBody map[string]interface{}
+
 // UpdateAccountApplicationVndAPIPlusJSONRequestBody defines body for UpdateAccount for application/vnd.api+json ContentType.
 type UpdateAccountApplicationVndAPIPlusJSONRequestBody = AccountRequest
 
 // WipeAccountDataApplicationVndAPIPlusJSONRequestBody defines body for WipeAccountData for application/vnd.api+json ContentType.
 type WipeAccountDataApplicationVndAPIPlusJSONRequestBody = AccountWipeRequest
+
+// PutAccountSettingsApplicationVndAPIPlusJSONRequestBody defines body for PutAccountSettings for application/vnd.api+json ContentType.
+type PutAccountSettingsApplicationVndAPIPlusJSONRequestBody PutAccountSettingsApplicationVndAPIPlusJSONBody
 
 // PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for PutCurrentSubscription for application/vnd.api+json ContentType.
 type PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody = SubscriptionRequest
@@ -2790,6 +2887,12 @@ type UpdateServiceApplicationVndAPIPlusJSONRequestBody = ServiceRequest
 
 // UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody defines body for UpdateCurrentUser for application/vnd.api+json ContentType.
 type UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody = UserRequest
+
+// PutUserSettingsApplicationVndAPIPlusJSONRequestBody defines body for PutUserSettings for application/vnd.api+json ContentType.
+type PutUserSettingsApplicationVndAPIPlusJSONRequestBody PutUserSettingsApplicationVndAPIPlusJSONBody
+
+// PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody defines body for PutUserSettingsKey for application/vnd.api+json ContentType.
+type PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody PutUserSettingsKeyApplicationVndAPIPlusJSONBody
 
 // UpdateUserRoleApplicationVndAPIPlusJSONRequestBody defines body for UpdateUserRole for application/vnd.api+json ContentType.
 type UpdateUserRoleApplicationVndAPIPlusJSONRequestBody = UserRequest
@@ -2948,8 +3051,10 @@ type ClientInterface interface {
 	// GetAccountSettings request
 	GetAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutAccountSettings request
-	PutAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// PutAccountSettingsWithBody request with any body
+	PutAccountSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCurrentSubscription request
 	GetCurrentSubscription(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3055,6 +3160,9 @@ type ClientInterface interface {
 	UpdateContextWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateContextWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListDiscountTiers request
+	ListDiscountTiers(ctx context.Context, params *ListDiscountTiersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateEmailRegistrationWithBody request with any body
 	CreateEmailRegistrationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3191,11 +3299,15 @@ type ClientInterface interface {
 	// GetUserSettings request
 	GetUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutUserSettings request
-	PutUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// PutUserSettingsWithBody request with any body
+	PutUserSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutUserSettingsKey request
-	PutUserSettingsKey(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PutUserSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutUserSettingsKeyWithBody request with any body
+	PutUserSettingsKeyWithBody(ctx context.Context, key string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutUserSettingsKeyWithApplicationVndAPIPlusJSONBody(ctx context.Context, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RemoveUser request
 	RemoveUser(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3293,8 +3405,20 @@ func (c *Client) GetAccountSettings(ctx context.Context, reqEditors ...RequestEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) PutAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutAccountSettingsRequest(c.Server)
+func (c *Client) PutAccountSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutAccountSettingsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutAccountSettingsRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3763,6 +3887,18 @@ func (c *Client) UpdateContextWithBody(ctx context.Context, id string, contentTy
 
 func (c *Client) UpdateContextWithApplicationVndAPIPlusJSONBody(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateContextRequestWithApplicationVndAPIPlusJSONBody(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListDiscountTiers(ctx context.Context, params *ListDiscountTiersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListDiscountTiersRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4361,8 +4497,8 @@ func (c *Client) GetUserSettings(ctx context.Context, reqEditors ...RequestEdito
 	return c.Client.Do(req)
 }
 
-func (c *Client) PutUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutUserSettingsRequest(c.Server)
+func (c *Client) PutUserSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4373,8 +4509,32 @@ func (c *Client) PutUserSettings(ctx context.Context, reqEditors ...RequestEdito
 	return c.Client.Do(req)
 }
 
-func (c *Client) PutUserSettingsKey(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutUserSettingsKeyRequest(c.Server, key)
+func (c *Client) PutUserSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutUserSettingsKeyWithBody(ctx context.Context, key string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsKeyRequestWithBody(c.Server, key, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutUserSettingsKeyWithApplicationVndAPIPlusJSONBody(ctx context.Context, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsKeyRequestWithApplicationVndAPIPlusJSONBody(c.Server, key, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4594,8 +4754,19 @@ func NewGetAccountSettingsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPutAccountSettingsRequest generates requests for PutAccountSettings
-func NewPutAccountSettingsRequest(server string) (*http.Request, error) {
+// NewPutAccountSettingsRequestWithApplicationVndAPIPlusJSONBody calls the generic PutAccountSettings builder with application/vnd.api+json body
+func NewPutAccountSettingsRequestWithApplicationVndAPIPlusJSONBody(server string, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutAccountSettingsRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewPutAccountSettingsRequestWithBody generates requests for PutAccountSettings with any type of body
+func NewPutAccountSettingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4613,10 +4784,12 @@ func NewPutAccountSettingsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6019,6 +6192,96 @@ func NewUpdateContextRequestWithBody(server string, id string, contentType strin
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListDiscountTiersRequest generates requests for ListDiscountTiers
+func NewListDiscountTiersRequest(server string, params *ListDiscountTiersParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/discount_tiers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -8104,8 +8367,19 @@ func NewGetUserSettingsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPutUserSettingsRequest generates requests for PutUserSettings
-func NewPutUserSettingsRequest(server string) (*http.Request, error) {
+// NewPutUserSettingsRequestWithApplicationVndAPIPlusJSONBody calls the generic PutUserSettings builder with application/vnd.api+json body
+func NewPutUserSettingsRequestWithApplicationVndAPIPlusJSONBody(server string, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutUserSettingsRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewPutUserSettingsRequestWithBody generates requests for PutUserSettings with any type of body
+func NewPutUserSettingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -8123,16 +8397,29 @@ func NewPutUserSettingsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPutUserSettingsKeyRequest generates requests for PutUserSettingsKey
-func NewPutUserSettingsKeyRequest(server string, key string) (*http.Request, error) {
+// NewPutUserSettingsKeyRequestWithApplicationVndAPIPlusJSONBody calls the generic PutUserSettingsKey builder with application/vnd.api+json body
+func NewPutUserSettingsKeyRequestWithApplicationVndAPIPlusJSONBody(server string, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutUserSettingsKeyRequestWithBody(server, key, "application/vnd.api+json", bodyReader)
+}
+
+// NewPutUserSettingsKeyRequestWithBody generates requests for PutUserSettingsKey with any type of body
+func NewPutUserSettingsKeyRequestWithBody(server string, key string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8157,10 +8444,12 @@ func NewPutUserSettingsKeyRequest(server string, key string) (*http.Request, err
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -8342,8 +8631,10 @@ type ClientWithResponsesInterface interface {
 	// GetAccountSettingsWithResponse request
 	GetAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountSettingsResponse, error)
 
-	// PutAccountSettingsWithResponse request
-	PutAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
+	// PutAccountSettingsWithBodyWithResponse request with any body
+	PutAccountSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
+
+	PutAccountSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
 
 	// GetCurrentSubscriptionWithResponse request
 	GetCurrentSubscriptionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentSubscriptionResponse, error)
@@ -8449,6 +8740,9 @@ type ClientWithResponsesInterface interface {
 	UpdateContextWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateContextResponse, error)
 
 	UpdateContextWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, id string, body UpdateContextApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateContextResponse, error)
+
+	// ListDiscountTiersWithResponse request
+	ListDiscountTiersWithResponse(ctx context.Context, params *ListDiscountTiersParams, reqEditors ...RequestEditorFn) (*ListDiscountTiersResponse, error)
 
 	// CreateEmailRegistrationWithBodyWithResponse request with any body
 	CreateEmailRegistrationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEmailRegistrationResponse, error)
@@ -8585,11 +8879,15 @@ type ClientWithResponsesInterface interface {
 	// GetUserSettingsWithResponse request
 	GetUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserSettingsResponse, error)
 
-	// PutUserSettingsWithResponse request
-	PutUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error)
+	// PutUserSettingsWithBodyWithResponse request with any body
+	PutUserSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error)
 
-	// PutUserSettingsKeyWithResponse request
-	PutUserSettingsKeyWithResponse(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error)
+	PutUserSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error)
+
+	// PutUserSettingsKeyWithBodyWithResponse request with any body
+	PutUserSettingsKeyWithBodyWithResponse(ctx context.Context, key string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error)
+
+	PutUserSettingsKeyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error)
 
 	// RemoveUserWithResponse request
 	RemoveUserWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveUserResponse, error)
@@ -9711,6 +10009,40 @@ func (r UpdateContextResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateContextResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListDiscountTiersResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *DiscountTierListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListDiscountTiersResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListDiscountTiersResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListDiscountTiersResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -11205,9 +11537,17 @@ func (c *ClientWithResponses) GetAccountSettingsWithResponse(ctx context.Context
 	return ParseGetAccountSettingsResponse(rsp)
 }
 
-// PutAccountSettingsWithResponse request returning *PutAccountSettingsResponse
-func (c *ClientWithResponses) PutAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error) {
-	rsp, err := c.PutAccountSettings(ctx, reqEditors...)
+// PutAccountSettingsWithBodyWithResponse request with arbitrary body returning *PutAccountSettingsResponse
+func (c *ClientWithResponses) PutAccountSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error) {
+	rsp, err := c.PutAccountSettingsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutAccountSettingsResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutAccountSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error) {
+	rsp, err := c.PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -11551,6 +11891,15 @@ func (c *ClientWithResponses) UpdateContextWithApplicationVndAPIPlusJSONBodyWith
 		return nil, err
 	}
 	return ParseUpdateContextResponse(rsp)
+}
+
+// ListDiscountTiersWithResponse request returning *ListDiscountTiersResponse
+func (c *ClientWithResponses) ListDiscountTiersWithResponse(ctx context.Context, params *ListDiscountTiersParams, reqEditors ...RequestEditorFn) (*ListDiscountTiersResponse, error) {
+	rsp, err := c.ListDiscountTiers(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListDiscountTiersResponse(rsp)
 }
 
 // CreateEmailRegistrationWithBodyWithResponse request with arbitrary body returning *CreateEmailRegistrationResponse
@@ -11982,18 +12331,34 @@ func (c *ClientWithResponses) GetUserSettingsWithResponse(ctx context.Context, r
 	return ParseGetUserSettingsResponse(rsp)
 }
 
-// PutUserSettingsWithResponse request returning *PutUserSettingsResponse
-func (c *ClientWithResponses) PutUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error) {
-	rsp, err := c.PutUserSettings(ctx, reqEditors...)
+// PutUserSettingsWithBodyWithResponse request with arbitrary body returning *PutUserSettingsResponse
+func (c *ClientWithResponses) PutUserSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error) {
+	rsp, err := c.PutUserSettingsWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePutUserSettingsResponse(rsp)
 }
 
-// PutUserSettingsKeyWithResponse request returning *PutUserSettingsKeyResponse
-func (c *ClientWithResponses) PutUserSettingsKeyWithResponse(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error) {
-	rsp, err := c.PutUserSettingsKey(ctx, key, reqEditors...)
+func (c *ClientWithResponses) PutUserSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error) {
+	rsp, err := c.PutUserSettingsWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserSettingsResponse(rsp)
+}
+
+// PutUserSettingsKeyWithBodyWithResponse request with arbitrary body returning *PutUserSettingsKeyResponse
+func (c *ClientWithResponses) PutUserSettingsKeyWithBodyWithResponse(ctx context.Context, key string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error) {
+	rsp, err := c.PutUserSettingsKeyWithBody(ctx, key, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserSettingsKeyResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutUserSettingsKeyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error) {
+	rsp, err := c.PutUserSettingsKeyWithApplicationVndAPIPlusJSONBody(ctx, key, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -13723,6 +14088,60 @@ func ParseUpdateContextResponse(rsp *http.Response) (*UpdateContextResponse, err
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ContextResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListDiscountTiersResponse parses an HTTP response from a ListDiscountTiersWithResponse call
+func ParseListDiscountTiersResponse(rsp *http.Response) (*ListDiscountTiersResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListDiscountTiersResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DiscountTierListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
