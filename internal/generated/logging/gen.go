@@ -21,39 +21,6 @@ const (
 	HTTPBearerScopes hTTPBearerContextKey = "HTTPBearer.Scopes"
 )
 
-// Defines values for LogGroupLevel.
-const (
-	LogGroupLevelDEBUG  LogGroupLevel = "DEBUG"
-	LogGroupLevelERROR  LogGroupLevel = "ERROR"
-	LogGroupLevelFATAL  LogGroupLevel = "FATAL"
-	LogGroupLevelINFO   LogGroupLevel = "INFO"
-	LogGroupLevelSILENT LogGroupLevel = "SILENT"
-	LogGroupLevelTRACE  LogGroupLevel = "TRACE"
-	LogGroupLevelWARN   LogGroupLevel = "WARN"
-)
-
-// Valid indicates whether the value is a known member of the LogGroupLevel enum.
-func (e LogGroupLevel) Valid() bool {
-	switch e {
-	case LogGroupLevelDEBUG:
-		return true
-	case LogGroupLevelERROR:
-		return true
-	case LogGroupLevelFATAL:
-		return true
-	case LogGroupLevelINFO:
-		return true
-	case LogGroupLevelSILENT:
-		return true
-	case LogGroupLevelTRACE:
-		return true
-	case LogGroupLevelWARN:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for LogGroupResourceType.
 const (
 	LogGroupResourceTypeLogGroup LogGroupResourceType = "log_group"
@@ -69,52 +36,19 @@ func (e LogGroupResourceType) Valid() bool {
 	}
 }
 
-// Defines values for LoggerEffectiveLevels.
+// Defines values for LogLevel.
 const (
-	LoggerEffectiveLevelsDEBUG  LoggerEffectiveLevels = "DEBUG"
-	LoggerEffectiveLevelsERROR  LoggerEffectiveLevels = "ERROR"
-	LoggerEffectiveLevelsFATAL  LoggerEffectiveLevels = "FATAL"
-	LoggerEffectiveLevelsINFO   LoggerEffectiveLevels = "INFO"
-	LoggerEffectiveLevelsSILENT LoggerEffectiveLevels = "SILENT"
-	LoggerEffectiveLevelsTRACE  LoggerEffectiveLevels = "TRACE"
-	LoggerEffectiveLevelsWARN   LoggerEffectiveLevels = "WARN"
+	DEBUG  LogLevel = "DEBUG"
+	ERROR  LogLevel = "ERROR"
+	FATAL  LogLevel = "FATAL"
+	INFO   LogLevel = "INFO"
+	SILENT LogLevel = "SILENT"
+	TRACE  LogLevel = "TRACE"
+	WARN   LogLevel = "WARN"
 )
 
-// Valid indicates whether the value is a known member of the LoggerEffectiveLevels enum.
-func (e LoggerEffectiveLevels) Valid() bool {
-	switch e {
-	case LoggerEffectiveLevelsDEBUG:
-		return true
-	case LoggerEffectiveLevelsERROR:
-		return true
-	case LoggerEffectiveLevelsFATAL:
-		return true
-	case LoggerEffectiveLevelsINFO:
-		return true
-	case LoggerEffectiveLevelsSILENT:
-		return true
-	case LoggerEffectiveLevelsTRACE:
-		return true
-	case LoggerEffectiveLevelsWARN:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for LoggerLevel.
-const (
-	DEBUG  LoggerLevel = "DEBUG"
-	ERROR  LoggerLevel = "ERROR"
-	FATAL  LoggerLevel = "FATAL"
-	INFO   LoggerLevel = "INFO"
-	SILENT LoggerLevel = "SILENT"
-	TRACE  LoggerLevel = "TRACE"
-	WARN   LoggerLevel = "WARN"
-)
-
-// Valid indicates whether the value is a known member of the LoggerLevel enum.
-func (e LoggerLevel) Valid() bool {
+// Valid indicates whether the value is a known member of the LogLevel enum.
+func (e LogLevel) Valid() bool {
 	switch e {
 	case DEBUG:
 		return true
@@ -393,8 +327,10 @@ type LogGroup struct {
 	// Environments Per-environment level overrides keyed by environment name. Each value is an object with an optional `level` field, e.g. `{"production": {"level": "ERROR"}}`. Member loggers inherit the per-environment level unless they set their own override.
 	Environments *map[string]interface{} `json:"environments,omitempty"`
 
-	// Level Default level applied to every logger in the group. `null` leaves member loggers to inherit from elsewhere.
-	Level *LogGroupLevel `json:"level,omitempty"`
+	// Level Severity level of a logger.
+	//
+	// Ordered from most-verbose (`TRACE`) to least-verbose (`SILENT`).
+	Level *LogLevel `json:"level,omitempty"`
 
 	// Name Human-readable label for the group.
 	Name string `json:"name"`
@@ -405,9 +341,6 @@ type LogGroup struct {
 	// UpdatedAt When the group was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
-
-// LogGroupLevel Default level applied to every logger in the group. `null` leaves member loggers to inherit from elsewhere.
-type LogGroupLevel string
 
 // LogGroupListResponse JSON:API collection response for log groups.
 type LogGroupListResponse struct {
@@ -456,6 +389,11 @@ type LogGroupResponse struct {
 	Data LogGroupResource `json:"data"`
 }
 
+// LogLevel Severity level of a logger.
+//
+// Ordered from most-verbose (`TRACE`) to least-verbose (`SILENT`).
+type LogLevel string
+
 // Logger A logger configured for the account.
 //
 // Loggers are organized by dot-separated key (for example, `sqlalchemy.engine`),
@@ -468,7 +406,7 @@ type Logger struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
 	// EffectiveLevels Per-environment summary of what runtimes are reporting for this logger. Keyed by environment name; each value is the list of distinct resolved levels observed across all source rows in that environment, ordered from most-verbose (`TRACE`) to least-verbose (`SILENT`). A single-element list means every source agrees; a multi-element list means sources disagree. Environments with no observed sources are omitted — cross-reference `environments` to find environments that are configured but have not yet been reported in.
-	EffectiveLevels *map[string][]LoggerEffectiveLevels `json:"effective_levels,omitempty"`
+	EffectiveLevels *map[string][]LogLevel `json:"effective_levels,omitempty"`
 
 	// Environments Per-environment level overrides keyed by environment name. Each value is an object with an optional `level` field, e.g. `{"production": {"level": "WARN"}}`. An environment may be present with no `level` to record that the logger applies there without changing the resolved level.
 	Environments *map[string]interface{} `json:"environments,omitempty"`
@@ -476,8 +414,10 @@ type Logger struct {
 	// Group Key of the log group this logger belongs to, or `null` if the logger is not grouped. Assigning a logger to a group promotes it to managed; assigning a group cascades to unmanaged descendants by clearing their group reference.
 	Group *string `json:"group,omitempty"`
 
-	// Level Account-wide log level applied to this logger. `null` means no override at the logger level — the level is inherited from the logger's group or the framework default.
-	Level *LoggerLevel `json:"level,omitempty"`
+	// Level Severity level of a logger.
+	//
+	// Ordered from most-verbose (`TRACE`) to least-verbose (`SILENT`).
+	Level *LogLevel `json:"level,omitempty"`
 
 	// Managed When `true`, the logger is part of the account's managed configuration and counts toward the managed-loggers usage counter. Setting `level`, `group`, or `environments` on an unmanaged logger promotes it to managed automatically.
 	Managed *bool `json:"managed,omitempty"`
@@ -491,12 +431,6 @@ type Logger struct {
 	// UpdatedAt When the logger was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
-
-// LoggerEffectiveLevels defines model for Logger.EffectiveLevels.
-type LoggerEffectiveLevels string
-
-// LoggerLevel Account-wide log level applied to this logger. `null` means no override at the logger level — the level is inherited from the logger's group or the framework default.
-type LoggerLevel string
 
 // LoggerBulkItem One logger discovered by an SDK during a bulk registration call.
 type LoggerBulkItem struct {

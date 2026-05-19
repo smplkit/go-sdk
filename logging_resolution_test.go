@@ -631,7 +631,7 @@ func TestBuildLoggerAttributes_WithLevel(t *testing.T) {
 
 	attrs := buildLoggerAttributes(logger)
 	require.NotNil(t, attrs.Level)
-	assert.Equal(t, genlogging.LoggerLevel("DEBUG"), *attrs.Level)
+	assert.Equal(t, genlogging.LogLevel("DEBUG"), *attrs.Level)
 	require.NotNil(t, attrs.Managed)
 	assert.True(t, *attrs.Managed)
 	require.NotNil(t, attrs.Environments)
@@ -686,7 +686,7 @@ func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
 
 	attrs := buildLogGroupAttributes(group)
 	require.NotNil(t, attrs.Level)
-	assert.Equal(t, genlogging.LogGroupLevel("WARN"), *attrs.Level)
+	assert.Equal(t, genlogging.LogLevel("WARN"), *attrs.Level)
 	require.NotNil(t, attrs.ParentId)
 	assert.Equal(t, "parent-id", *attrs.ParentId)
 	require.NotNil(t, attrs.Environments)
@@ -1218,7 +1218,7 @@ func TestResourceToLogger_EmptyLevel(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, nil)
 
-	emptyLevel := genlogging.LoggerLevel("")
+	emptyLevel := genlogging.LogLevel("")
 	r := genlogging.LoggerResource{
 		Attributes: genlogging.Logger{
 			Name:  "Test Logger",
@@ -1269,7 +1269,7 @@ func TestResourceToLogGroup_EmptyLevel(t *testing.T) {
 	c := &Client{environment: "test", service: "test-service"}
 	lc := newLoggingClient(c, nil)
 
-	emptyLevel := genlogging.LogGroupLevel("")
+	emptyLevel := genlogging.LogLevel("")
 	r := genlogging.LogGroupResource{
 		Attributes: genlogging.LogGroup{
 			Name:  "Test Group",
