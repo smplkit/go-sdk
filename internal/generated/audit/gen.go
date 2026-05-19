@@ -435,6 +435,9 @@ type EventSearchRequest struct {
 	// FilterActorType Exact match on the event's `actor_type` field.
 	FilterActorType *string `json:"filter[actor_type],omitempty"`
 
+	// FilterDoNotForward When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline).
+	FilterDoNotForward *bool `json:"filter[do_not_forward],omitempty"`
+
 	// FilterOccurredAt Date range using interval notation, e.g. `[2026-04-01T00:00:00Z,2026-04-15T00:00:00Z)`. Required by `filter[search]` when the resource pair isn't provided. When a JSON Logic `filter` is present, the effective range is intersected with the last 30 days.
 	FilterOccurredAt *string `json:"filter[occurred_at],omitempty"`
 
@@ -888,6 +891,9 @@ type RetryFailedDeliveriesSummary struct {
 // Mirrors a forwarder's HTTP destination configuration with one
 // addition: `timeout_ms`, applied per-request and capped server-side.
 type TestForwarderRequest struct {
+	// Body Request body sent to the destination. When omitted, an empty body is sent (suitable for connectivity probes). When set, the body is sent verbatim — pair with an appropriate `Content-Type` entry in `headers` so the destination interprets it correctly. Limit 1 MiB.
+	Body *string `json:"body,omitempty"`
+
 	// Headers HTTP headers attached to the test request.
 	Headers *[]HttpHeader `json:"headers,omitempty"`
 
@@ -990,8 +996,11 @@ type ListEventsParams struct {
 
 	// FilterSearch Case-insensitive substring match against `resource_id` or `description`. Use `filter[resource_id]` for an exact match on `resource_id`.
 	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
-	PageSize     *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
-	PageAfter    *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+
+	// FilterDoNotForward When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline).
+	FilterDoNotForward *bool   `form:"filter[do_not_forward],omitempty" json:"filter[do_not_forward],omitempty"`
+	PageSize           *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
+	PageAfter          *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-occurred_at`. Allowed values: `created_at`, `-created_at`, `occurred_at`, `-occurred_at`.
 	Sort *ListEventsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
@@ -1708,6 +1717,18 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 		if params.FilterSearch != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterDoNotForward != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[do_not_forward]", *params.FilterDoNotForward, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
