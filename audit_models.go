@@ -15,13 +15,13 @@ type ForwarderType = genaudit.ForwarderType
 
 // Supported ForwarderType values, alphabetical by wire constant.
 const (
-	ForwarderTypeDatadog   = genaudit.DATADOG
-	ForwarderTypeElastic   = genaudit.ELASTIC
-	ForwarderTypeHoneycomb = genaudit.HONEYCOMB
-	ForwarderTypeHTTP      = genaudit.HTTP
-	ForwarderTypeNewRelic  = genaudit.NEWRELIC
-	ForwarderTypeSplunkHEC = genaudit.SPLUNKHEC
-	ForwarderTypeSumoLogic = genaudit.SUMOLOGIC
+	ForwarderTypeDatadog   = genaudit.Datadog
+	ForwarderTypeElastic   = genaudit.Elastic
+	ForwarderTypeHoneycomb = genaudit.Honeycomb
+	ForwarderTypeHTTP      = genaudit.Http
+	ForwarderTypeNewRelic  = genaudit.NewRelic
+	ForwarderTypeSplunkHEC = genaudit.SplunkHec
+	ForwarderTypeSumoLogic = genaudit.SumoLogic
 )
 
 // ForwarderTypes enumerates every supported ForwarderType value. Useful
