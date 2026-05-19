@@ -1549,22 +1549,12 @@
           "level": {
             "anyOf": [
               {
-                "type": "string",
-                "enum": [
-                  "TRACE",
-                  "DEBUG",
-                  "INFO",
-                  "WARN",
-                  "ERROR",
-                  "FATAL",
-                  "SILENT"
-                ]
+                "$ref": "#/components/schemas/LogLevel"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Level",
             "description": "Default level applied to every logger in the group. `null` leaves member loggers to inherit from elsewhere."
           },
           "parent_id": {
@@ -1731,6 +1721,20 @@
         "title": "LogGroupResponse",
         "description": "JSON:API single-resource response envelope for a log group."
       },
+      "LogLevel": {
+        "type": "string",
+        "enum": [
+          "TRACE",
+          "DEBUG",
+          "INFO",
+          "WARN",
+          "ERROR",
+          "FATAL",
+          "SILENT"
+        ],
+        "title": "LogLevel",
+        "description": "Severity level of a logger.\n\nOrdered from most-verbose (`TRACE`) to least-verbose (`SILENT`)."
+      },
       "Logger": {
         "properties": {
           "name": {
@@ -1742,22 +1746,12 @@
           "level": {
             "anyOf": [
               {
-                "type": "string",
-                "enum": [
-                  "TRACE",
-                  "DEBUG",
-                  "INFO",
-                  "WARN",
-                  "ERROR",
-                  "FATAL",
-                  "SILENT"
-                ]
+                "$ref": "#/components/schemas/LogLevel"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Level",
             "description": "Account-wide log level applied to this logger. `null` means no override at the logger level \u2014 the level is inherited from the logger's group or the framework default."
           },
           "group": {
@@ -1819,16 +1813,7 @@
               {
                 "additionalProperties": {
                   "items": {
-                    "type": "string",
-                    "enum": [
-                      "TRACE",
-                      "DEBUG",
-                      "INFO",
-                      "WARN",
-                      "ERROR",
-                      "FATAL",
-                      "SILENT"
-                    ]
+                    "$ref": "#/components/schemas/LogLevel"
                   },
                   "type": "array"
                 },
