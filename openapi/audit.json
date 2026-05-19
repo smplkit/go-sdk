@@ -198,6 +198,24 @@
             "description": "Case-insensitive substring match against `resource_id` or `description`. Use `filter[resource_id]` for an exact match on `resource_id`."
           },
           {
+            "name": "filter[do_not_forward]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline).",
+              "title": "Filter[Do Not Forward]"
+            },
+            "description": "When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline)."
+          },
+          {
             "name": "page[size]",
             "in": "query",
             "required": false,
@@ -1655,6 +1673,18 @@
             "title": "Filter[Search]",
             "description": "Case-insensitive substring match on `resource_id` or `description`. Must be accompanied by either `filter[occurred_at]` or `filter[resource_type]` + `filter[resource_id]`."
           },
+          "filter[do_not_forward]": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Do Not Forward]",
+            "description": "When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline)."
+          },
           "page[size]": {
             "type": "integer",
             "maximum": 1000.0,
@@ -2839,6 +2869,19 @@
             ],
             "title": "Timeout Ms",
             "description": "Per-request timeout in milliseconds. Capped at 30 seconds."
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1048576
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body",
+            "description": "Request body sent to the destination. When omitted, an empty body is sent (suitable for connectivity probes). When set, the body is sent verbatim \u2014 pair with an appropriate `Content-Type` entry in `headers` so the destination interprets it correctly. Limit 1 MiB."
           }
         },
         "additionalProperties": false,
