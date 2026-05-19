@@ -355,9 +355,9 @@ func resourceToLogGroup(r genlogging.LogGroupResource, m *LoggingManagement) *Lo
 }
 
 func buildLoggerAttributes(l *Logger) genlogging.Logger {
-	var level *genlogging.LoggerLevel
+	var level *genlogging.LogLevel
 	if l.Level != nil {
-		lv := genlogging.LoggerLevel(*l.Level)
+		lv := genlogging.LogLevel(*l.Level)
 		level = &lv
 	}
 	var envs *map[string]interface{}
@@ -379,9 +379,9 @@ func buildLoggerAttributes(l *Logger) genlogging.Logger {
 }
 
 func buildLogGroupAttributes(g *LogGroup) genlogging.LogGroup {
-	var level *genlogging.LogGroupLevel
+	var level *genlogging.LogLevel
 	if g.Level != nil {
-		lv := genlogging.LogGroupLevel(*g.Level)
+		lv := genlogging.LogLevel(*g.Level)
 		level = &lv
 	}
 	var envs *map[string]interface{}
