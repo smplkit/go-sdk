@@ -63,31 +63,31 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 
 // Defines values for ForwarderType.
 const (
-	DATADOG   ForwarderType = "DATADOG"
-	ELASTIC   ForwarderType = "ELASTIC"
-	HONEYCOMB ForwarderType = "HONEYCOMB"
-	HTTP      ForwarderType = "HTTP"
-	NEWRELIC  ForwarderType = "NEW_RELIC"
-	SPLUNKHEC ForwarderType = "SPLUNK_HEC"
-	SUMOLOGIC ForwarderType = "SUMO_LOGIC"
+	Datadog   ForwarderType = "datadog"
+	Elastic   ForwarderType = "elastic"
+	Honeycomb ForwarderType = "honeycomb"
+	Http      ForwarderType = "http"
+	NewRelic  ForwarderType = "new_relic"
+	SplunkHec ForwarderType = "splunk_hec"
+	SumoLogic ForwarderType = "sumo_logic"
 )
 
 // Valid indicates whether the value is a known member of the ForwarderType enum.
 func (e ForwarderType) Valid() bool {
 	switch e {
-	case DATADOG:
+	case Datadog:
 		return true
-	case ELASTIC:
+	case Elastic:
 		return true
-	case HONEYCOMB:
+	case Honeycomb:
 		return true
-	case HTTP:
+	case Http:
 		return true
-	case NEWRELIC:
+	case NewRelic:
 		return true
-	case SPLUNKHEC:
+	case SplunkHec:
 		return true
-	case SUMOLOGIC:
+	case SumoLogic:
 		return true
 	default:
 		return false
@@ -521,7 +521,7 @@ type Forwarder struct {
 	// Filter JSON Logic expression evaluated against each event. The event is delivered only if the expression returns truthy. Omit to deliver every event.
 	Filter *map[string]interface{} `json:"filter,omitempty"`
 
-	// ForwarderType Supported forwarder destination types.
+	// ForwarderType Supported forwarder destination types (ADR-050).
 	ForwarderType ForwarderType `json:"forwarder_type"`
 
 	// Name Human-readable name for the forwarder. Must contain at least one non-whitespace character.
@@ -663,8 +663,116 @@ type ForwarderResponse struct {
 	Data ForwarderResource `json:"data"`
 }
 
-// ForwarderType Supported forwarder destination types.
+// ForwarderType Supported forwarder destination types (ADR-050).
 type ForwarderType string
+
+// ForwarderTypeAttributes The catalog entry's attributes — one branded forwarder type or the
+// synthetic Custom HTTP entry.
+type ForwarderTypeAttributes struct {
+	// BaseType Transport family — today only `HTTP`. New base types will add their own configuration shape and runtime handler.
+	BaseType string `json:"base_type"`
+
+	// Configuration HTTP-base-type delivery template.
+	Configuration ForwarderTypeHttpConfiguration `json:"configuration"`
+
+	// DocsUrl Link to the vendor's own documentation for this destination.
+	DocsUrl *string `json:"docs_url,omitempty"`
+
+	// Icon Absolute URL to the icon asset, served by audit at `/api/v1/forwarder_types/{id}/icon`.
+	Icon string `json:"icon"`
+
+	// IsCustom True for the synthetic `http` Custom HTTP entry, which has no vendor template — the customer supplies URL, headers, and transform from scratch. False for branded types.
+	IsCustom bool `json:"is_custom"`
+
+	// Name Human-readable label shown in the type-picker.
+	Name string `json:"name"`
+
+	// Placeholders UI metadata keyed by placeholder name. Each `{name}` token appearing in `configuration` (URL, header value) has a matching entry here describing how to prompt for it.
+	Placeholders map[string]ForwarderTypePlaceholder `json:"placeholders"`
+
+	// Transform Default transform shipped with the type.
+	Transform *ForwarderTypeTransform `json:"transform,omitempty"`
+}
+
+// ForwarderTypeHeader A header entry in a catalog entry's configuration template.
+//
+// “value“ may contain “{placeholder}“ tokens that the customer fills
+// in at create time; header values without placeholders are fixed by the
+// vendor and the server enforces the literal value.
+type ForwarderTypeHeader struct {
+	// Name Header name.
+	Name string `json:"name"`
+
+	// Value Header value template. Strings of the form `{name}` are placeholders the customer fills in; look up `name` in `placeholders` for the UI metadata.
+	Value string `json:"value"`
+}
+
+// ForwarderTypeHttpConfiguration HTTP-base-type delivery template.
+type ForwarderTypeHttpConfiguration struct {
+	// Headers Headers attached to each delivery request.
+	Headers []ForwarderTypeHeader `json:"headers"`
+
+	// Method HTTP method.
+	Method string `json:"method"`
+
+	// SuccessStatus HTTP response status indicating a successful delivery — either a specific code (`200`, `204`) or a class (`2xx`).
+	SuccessStatus string `json:"success_status"`
+
+	// Url URL template. `null` for the synthetic `http` (Custom HTTP) entry, where the customer supplies the URL from scratch. May contain `{name}` placeholders that map to the `placeholders` block.
+	Url *string `json:"url"`
+}
+
+// ForwarderTypeListResponse JSON:API collection response for forwarder types.
+type ForwarderTypeListResponse struct {
+	Data []ForwarderTypeResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
+}
+
+// ForwarderTypePlaceholder UI metadata for one “{name}“ placeholder in the configuration.
+type ForwarderTypePlaceholder struct {
+	// Default Pre-selected value when `enum` is set, or the default for a free-text field.
+	Default *string `json:"default,omitempty"`
+
+	// Enum If set, the value must be one of the listed strings — render as a dropdown.
+	Enum *[]string `json:"enum,omitempty"`
+
+	// Label Human-readable label for the input.
+	Label string `json:"label"`
+
+	// Placeholder HTML-input hint text shown when the field is empty.
+	Placeholder *string `json:"placeholder,omitempty"`
+
+	// Secret If true, mask the value in the UI and treat as a credential.
+	Secret *bool `json:"secret,omitempty"`
+}
+
+// ForwarderTypeResource JSON:API resource envelope for a forwarder type.
+type ForwarderTypeResource struct {
+	// Attributes The catalog entry's attributes — one branded forwarder type or the
+	// synthetic Custom HTTP entry.
+	Attributes ForwarderTypeAttributes `json:"attributes"`
+
+	// Id Lowercase forwarder type id — matches `forwarder.forwarder_type` values and is the filename stem of `forwarder_types/<id>.yaml`.
+	Id   string  `json:"id"`
+	Type *string `json:"type,omitempty"`
+}
+
+// ForwarderTypeResponse JSON:API single-resource response for a forwarder type.
+type ForwarderTypeResponse struct {
+	// Data JSON:API resource envelope for a forwarder type.
+	Data ForwarderTypeResource `json:"data"`
+}
+
+// ForwarderTypeTransform Default transform shipped with the type.
+type ForwarderTypeTransform struct {
+	// Default Default template; customers can override per forwarder.
+	Default string `json:"default"`
+
+	// Type Engine name. Today only `JSONATA`.
+	Type string `json:"type"`
+}
 
 // HttpConfiguration HTTP request configuration used to deliver an event to the destination.
 //
@@ -1068,6 +1176,12 @@ type ClientInterface interface {
 	// GetEvent request
 	GetEvent(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListForwarderTypesApiV1ForwarderTypesGet request
+	ListForwarderTypesApiV1ForwarderTypesGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetForwarderTypeApiV1ForwarderTypesIdGet request
+	GetForwarderTypeApiV1ForwarderTypesIdGet(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListForwarders request
 	ListForwarders(ctx context.Context, params *ListForwardersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1163,6 +1277,30 @@ func (c *Client) RecordEventWithApplicationVndAPIPlusJSONBody(ctx context.Contex
 
 func (c *Client) GetEvent(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetEventRequest(c.Server, eventId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListForwarderTypesApiV1ForwarderTypesGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListForwarderTypesApiV1ForwarderTypesGetRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetForwarderTypeApiV1ForwarderTypesIdGet(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetForwarderTypeApiV1ForwarderTypesIdGetRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -1701,6 +1839,67 @@ func NewGetEventRequest(server string, eventId openapi_types.UUID) (*http.Reques
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/events/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListForwarderTypesApiV1ForwarderTypesGetRequest generates requests for ListForwarderTypesApiV1ForwarderTypesGet
+func NewListForwarderTypesApiV1ForwarderTypesGetRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarder_types")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetForwarderTypeApiV1ForwarderTypesIdGetRequest generates requests for GetForwarderTypeApiV1ForwarderTypesIdGet
+func NewGetForwarderTypeApiV1ForwarderTypesIdGetRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/forwarder_types/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2496,6 +2695,12 @@ type ClientWithResponsesInterface interface {
 	// GetEventWithResponse request
 	GetEventWithResponse(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetEventResponse, error)
 
+	// ListForwarderTypesApiV1ForwarderTypesGetWithResponse request
+	ListForwarderTypesApiV1ForwarderTypesGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListForwarderTypesApiV1ForwarderTypesGetResponse, error)
+
+	// GetForwarderTypeApiV1ForwarderTypesIdGetWithResponse request
+	GetForwarderTypeApiV1ForwarderTypesIdGetWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetForwarderTypeApiV1ForwarderTypesIdGetResponse, error)
+
 	// ListForwardersWithResponse request
 	ListForwardersWithResponse(ctx context.Context, params *ListForwardersParams, reqEditors ...RequestEditorFn) (*ListForwardersResponse, error)
 
@@ -2656,6 +2861,66 @@ func (r GetEventResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetEventResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListForwarderTypesApiV1ForwarderTypesGetResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ForwarderTypeListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListForwarderTypesApiV1ForwarderTypesGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListForwarderTypesApiV1ForwarderTypesGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListForwarderTypesApiV1ForwarderTypesGetResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetForwarderTypeApiV1ForwarderTypesIdGetResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ForwarderTypeResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetForwarderTypeApiV1ForwarderTypesIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetForwarderTypeApiV1ForwarderTypesIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetForwarderTypeApiV1ForwarderTypesIdGetResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3065,6 +3330,24 @@ func (c *ClientWithResponses) GetEventWithResponse(ctx context.Context, eventId 
 	return ParseGetEventResponse(rsp)
 }
 
+// ListForwarderTypesApiV1ForwarderTypesGetWithResponse request returning *ListForwarderTypesApiV1ForwarderTypesGetResponse
+func (c *ClientWithResponses) ListForwarderTypesApiV1ForwarderTypesGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListForwarderTypesApiV1ForwarderTypesGetResponse, error) {
+	rsp, err := c.ListForwarderTypesApiV1ForwarderTypesGet(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListForwarderTypesApiV1ForwarderTypesGetResponse(rsp)
+}
+
+// GetForwarderTypeApiV1ForwarderTypesIdGetWithResponse request returning *GetForwarderTypeApiV1ForwarderTypesIdGetResponse
+func (c *ClientWithResponses) GetForwarderTypeApiV1ForwarderTypesIdGetWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetForwarderTypeApiV1ForwarderTypesIdGetResponse, error) {
+	rsp, err := c.GetForwarderTypeApiV1ForwarderTypesIdGet(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetForwarderTypeApiV1ForwarderTypesIdGetResponse(rsp)
+}
+
 // ListForwardersWithResponse request returning *ListForwardersResponse
 func (c *ClientWithResponses) ListForwardersWithResponse(ctx context.Context, params *ListForwardersParams, reqEditors ...RequestEditorFn) (*ListForwardersResponse, error) {
 	rsp, err := c.ListForwarders(ctx, params, reqEditors...)
@@ -3306,6 +3589,58 @@ func ParseGetEventResponse(rsp *http.Response) (*GetEventResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest EventResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListForwarderTypesApiV1ForwarderTypesGetResponse parses an HTTP response from a ListForwarderTypesApiV1ForwarderTypesGetWithResponse call
+func ParseListForwarderTypesApiV1ForwarderTypesGetResponse(rsp *http.Response) (*ListForwarderTypesApiV1ForwarderTypesGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListForwarderTypesApiV1ForwarderTypesGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ForwarderTypeListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetForwarderTypeApiV1ForwarderTypesIdGetResponse parses an HTTP response from a GetForwarderTypeApiV1ForwarderTypesIdGetWithResponse call
+func ParseGetForwarderTypeApiV1ForwarderTypesIdGetResponse(rsp *http.Response) (*GetForwarderTypeApiV1ForwarderTypesIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetForwarderTypeApiV1ForwarderTypesIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ForwarderTypeResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
