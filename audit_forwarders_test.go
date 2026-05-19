@@ -66,7 +66,7 @@ func writeForwarderResource(w http.ResponseWriter, status int, name, _ string) {
 			"type": "forwarder",
 			"attributes": map[string]any{
 				"name":           name,
-				"forwarder_type": "DATADOG",
+				"forwarder_type": "datadog",
 				"enabled":        true,
 				"configuration": map[string]any{
 					"method": "POST",
