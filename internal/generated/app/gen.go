@@ -2389,6 +2389,9 @@ type VerifyEmailRequest struct {
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
 type hTTPBearerContextKey string
 
+// PutAccountSettingsApplicationVndAPIPlusJSONBody defines parameters for PutAccountSettings.
+type PutAccountSettingsApplicationVndAPIPlusJSONBody map[string]interface{}
+
 // ListApiKeysParams defines parameters for ListApiKeys.
 type ListApiKeysParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
@@ -2713,11 +2716,20 @@ type ListUsersParams struct {
 // ListUsersParamsSort defines parameters for ListUsers.
 type ListUsersParamsSort string
 
+// PutUserSettingsApplicationVndAPIPlusJSONBody defines parameters for PutUserSettings.
+type PutUserSettingsApplicationVndAPIPlusJSONBody map[string]interface{}
+
+// PutUserSettingsKeyApplicationVndAPIPlusJSONBody defines parameters for PutUserSettingsKey.
+type PutUserSettingsKeyApplicationVndAPIPlusJSONBody map[string]interface{}
+
 // UpdateAccountApplicationVndAPIPlusJSONRequestBody defines body for UpdateAccount for application/vnd.api+json ContentType.
 type UpdateAccountApplicationVndAPIPlusJSONRequestBody = AccountRequest
 
 // WipeAccountDataApplicationVndAPIPlusJSONRequestBody defines body for WipeAccountData for application/vnd.api+json ContentType.
 type WipeAccountDataApplicationVndAPIPlusJSONRequestBody = AccountWipeRequest
+
+// PutAccountSettingsApplicationVndAPIPlusJSONRequestBody defines body for PutAccountSettings for application/vnd.api+json ContentType.
+type PutAccountSettingsApplicationVndAPIPlusJSONRequestBody PutAccountSettingsApplicationVndAPIPlusJSONBody
 
 // PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for PutCurrentSubscription for application/vnd.api+json ContentType.
 type PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody = SubscriptionRequest
@@ -2790,6 +2802,12 @@ type UpdateServiceApplicationVndAPIPlusJSONRequestBody = ServiceRequest
 
 // UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody defines body for UpdateCurrentUser for application/vnd.api+json ContentType.
 type UpdateCurrentUserApplicationVndAPIPlusJSONRequestBody = UserRequest
+
+// PutUserSettingsApplicationVndAPIPlusJSONRequestBody defines body for PutUserSettings for application/vnd.api+json ContentType.
+type PutUserSettingsApplicationVndAPIPlusJSONRequestBody PutUserSettingsApplicationVndAPIPlusJSONBody
+
+// PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody defines body for PutUserSettingsKey for application/vnd.api+json ContentType.
+type PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody PutUserSettingsKeyApplicationVndAPIPlusJSONBody
 
 // UpdateUserRoleApplicationVndAPIPlusJSONRequestBody defines body for UpdateUserRole for application/vnd.api+json ContentType.
 type UpdateUserRoleApplicationVndAPIPlusJSONRequestBody = UserRequest
@@ -2948,8 +2966,10 @@ type ClientInterface interface {
 	// GetAccountSettings request
 	GetAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutAccountSettings request
-	PutAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// PutAccountSettingsWithBody request with any body
+	PutAccountSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCurrentSubscription request
 	GetCurrentSubscription(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3191,11 +3211,15 @@ type ClientInterface interface {
 	// GetUserSettings request
 	GetUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutUserSettings request
-	PutUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// PutUserSettingsWithBody request with any body
+	PutUserSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutUserSettingsKey request
-	PutUserSettingsKey(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	PutUserSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutUserSettingsKeyWithBody request with any body
+	PutUserSettingsKeyWithBody(ctx context.Context, key string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutUserSettingsKeyWithApplicationVndAPIPlusJSONBody(ctx context.Context, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RemoveUser request
 	RemoveUser(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3293,8 +3317,20 @@ func (c *Client) GetAccountSettings(ctx context.Context, reqEditors ...RequestEd
 	return c.Client.Do(req)
 }
 
-func (c *Client) PutAccountSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutAccountSettingsRequest(c.Server)
+func (c *Client) PutAccountSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutAccountSettingsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutAccountSettingsRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4361,8 +4397,8 @@ func (c *Client) GetUserSettings(ctx context.Context, reqEditors ...RequestEdito
 	return c.Client.Do(req)
 }
 
-func (c *Client) PutUserSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutUserSettingsRequest(c.Server)
+func (c *Client) PutUserSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4373,8 +4409,32 @@ func (c *Client) PutUserSettings(ctx context.Context, reqEditors ...RequestEdito
 	return c.Client.Do(req)
 }
 
-func (c *Client) PutUserSettingsKey(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutUserSettingsKeyRequest(c.Server, key)
+func (c *Client) PutUserSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutUserSettingsKeyWithBody(ctx context.Context, key string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsKeyRequestWithBody(c.Server, key, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutUserSettingsKeyWithApplicationVndAPIPlusJSONBody(ctx context.Context, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserSettingsKeyRequestWithApplicationVndAPIPlusJSONBody(c.Server, key, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4594,8 +4654,19 @@ func NewGetAccountSettingsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPutAccountSettingsRequest generates requests for PutAccountSettings
-func NewPutAccountSettingsRequest(server string) (*http.Request, error) {
+// NewPutAccountSettingsRequestWithApplicationVndAPIPlusJSONBody calls the generic PutAccountSettings builder with application/vnd.api+json body
+func NewPutAccountSettingsRequestWithApplicationVndAPIPlusJSONBody(server string, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutAccountSettingsRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewPutAccountSettingsRequestWithBody generates requests for PutAccountSettings with any type of body
+func NewPutAccountSettingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4613,10 +4684,12 @@ func NewPutAccountSettingsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -8104,8 +8177,19 @@ func NewGetUserSettingsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPutUserSettingsRequest generates requests for PutUserSettings
-func NewPutUserSettingsRequest(server string) (*http.Request, error) {
+// NewPutUserSettingsRequestWithApplicationVndAPIPlusJSONBody calls the generic PutUserSettings builder with application/vnd.api+json body
+func NewPutUserSettingsRequestWithApplicationVndAPIPlusJSONBody(server string, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutUserSettingsRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewPutUserSettingsRequestWithBody generates requests for PutUserSettings with any type of body
+func NewPutUserSettingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -8123,16 +8207,29 @@ func NewPutUserSettingsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", contentType)
+
 	return req, nil
 }
 
-// NewPutUserSettingsKeyRequest generates requests for PutUserSettingsKey
-func NewPutUserSettingsKeyRequest(server string, key string) (*http.Request, error) {
+// NewPutUserSettingsKeyRequestWithApplicationVndAPIPlusJSONBody calls the generic PutUserSettingsKey builder with application/vnd.api+json body
+func NewPutUserSettingsKeyRequestWithApplicationVndAPIPlusJSONBody(server string, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutUserSettingsKeyRequestWithBody(server, key, "application/vnd.api+json", bodyReader)
+}
+
+// NewPutUserSettingsKeyRequestWithBody generates requests for PutUserSettingsKey with any type of body
+func NewPutUserSettingsKeyRequestWithBody(server string, key string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8157,10 +8254,12 @@ func NewPutUserSettingsKeyRequest(server string, key string) (*http.Request, err
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -8342,8 +8441,10 @@ type ClientWithResponsesInterface interface {
 	// GetAccountSettingsWithResponse request
 	GetAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountSettingsResponse, error)
 
-	// PutAccountSettingsWithResponse request
-	PutAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
+	// PutAccountSettingsWithBodyWithResponse request with any body
+	PutAccountSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
+
+	PutAccountSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
 
 	// GetCurrentSubscriptionWithResponse request
 	GetCurrentSubscriptionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentSubscriptionResponse, error)
@@ -8585,11 +8686,15 @@ type ClientWithResponsesInterface interface {
 	// GetUserSettingsWithResponse request
 	GetUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserSettingsResponse, error)
 
-	// PutUserSettingsWithResponse request
-	PutUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error)
+	// PutUserSettingsWithBodyWithResponse request with any body
+	PutUserSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error)
 
-	// PutUserSettingsKeyWithResponse request
-	PutUserSettingsKeyWithResponse(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error)
+	PutUserSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error)
+
+	// PutUserSettingsKeyWithBodyWithResponse request with any body
+	PutUserSettingsKeyWithBodyWithResponse(ctx context.Context, key string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error)
+
+	PutUserSettingsKeyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error)
 
 	// RemoveUserWithResponse request
 	RemoveUserWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveUserResponse, error)
@@ -11205,9 +11310,17 @@ func (c *ClientWithResponses) GetAccountSettingsWithResponse(ctx context.Context
 	return ParseGetAccountSettingsResponse(rsp)
 }
 
-// PutAccountSettingsWithResponse request returning *PutAccountSettingsResponse
-func (c *ClientWithResponses) PutAccountSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error) {
-	rsp, err := c.PutAccountSettings(ctx, reqEditors...)
+// PutAccountSettingsWithBodyWithResponse request with arbitrary body returning *PutAccountSettingsResponse
+func (c *ClientWithResponses) PutAccountSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error) {
+	rsp, err := c.PutAccountSettingsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutAccountSettingsResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutAccountSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error) {
+	rsp, err := c.PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -11982,18 +12095,34 @@ func (c *ClientWithResponses) GetUserSettingsWithResponse(ctx context.Context, r
 	return ParseGetUserSettingsResponse(rsp)
 }
 
-// PutUserSettingsWithResponse request returning *PutUserSettingsResponse
-func (c *ClientWithResponses) PutUserSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error) {
-	rsp, err := c.PutUserSettings(ctx, reqEditors...)
+// PutUserSettingsWithBodyWithResponse request with arbitrary body returning *PutUserSettingsResponse
+func (c *ClientWithResponses) PutUserSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error) {
+	rsp, err := c.PutUserSettingsWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePutUserSettingsResponse(rsp)
 }
 
-// PutUserSettingsKeyWithResponse request returning *PutUserSettingsKeyResponse
-func (c *ClientWithResponses) PutUserSettingsKeyWithResponse(ctx context.Context, key string, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error) {
-	rsp, err := c.PutUserSettingsKey(ctx, key, reqEditors...)
+func (c *ClientWithResponses) PutUserSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutUserSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserSettingsResponse, error) {
+	rsp, err := c.PutUserSettingsWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserSettingsResponse(rsp)
+}
+
+// PutUserSettingsKeyWithBodyWithResponse request with arbitrary body returning *PutUserSettingsKeyResponse
+func (c *ClientWithResponses) PutUserSettingsKeyWithBodyWithResponse(ctx context.Context, key string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error) {
+	rsp, err := c.PutUserSettingsKeyWithBody(ctx, key, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserSettingsKeyResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutUserSettingsKeyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, key string, body PutUserSettingsKeyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserSettingsKeyResponse, error) {
+	rsp, err := c.PutUserSettingsKeyWithApplicationVndAPIPlusJSONBody(ctx, key, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
