@@ -1363,7 +1363,7 @@
           "Environments"
         ],
         "summary": "List Environments",
-        "description": "List all environments for the authenticated account.",
+        "description": "List all environments for the authenticated account. `filter[search]` does a case-insensitive substring match against the environment `key` and `name`. `filter[classification]` narrows the result to one classification (`STANDARD` or `AD_HOC`).",
         "operationId": "list_environments",
         "security": [
           {
@@ -1371,6 +1371,30 @@
           }
         ],
         "parameters": [
+          {
+            "name": "filter[search]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "description": "Case-insensitive substring match against the environment `key` and `name`. An environment is returned if either field contains the search term.",
+              "title": "Filter[Search]"
+            },
+            "description": "Case-insensitive substring match against the environment `key` and `name`. An environment is returned if either field contains the search term."
+          },
+          {
+            "name": "filter[classification]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "description": "Narrow the result to environments with the given classification. One of `STANDARD` or `AD_HOC`.",
+              "title": "Filter[Classification]"
+            },
+            "description": "Narrow the result to environments with the given classification. One of `STANDARD` or `AD_HOC`."
+          },
           {
             "name": "sort",
             "in": "query",
@@ -1888,7 +1912,7 @@
           "API Keys"
         ],
         "summary": "List API Keys",
-        "description": "List all API keys for the authenticated account.",
+        "description": "List all API keys for the authenticated account. `filter[search]` does a case-insensitive substring match against the API key `name`.",
         "operationId": "list_api_keys",
         "security": [
           {
@@ -1905,6 +1929,18 @@
               "nullable": true,
               "title": "Filter[Status]"
             }
+          },
+          {
+            "name": "filter[search]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "description": "Case-insensitive substring match against the API key `name`.",
+              "title": "Filter[Search]"
+            },
+            "description": "Case-insensitive substring match against the API key `name`."
           },
           {
             "name": "sort",
@@ -3454,7 +3490,7 @@
           "Services"
         ],
         "summary": "List Services",
-        "description": "List all services for the authenticated account.",
+        "description": "List all services for the authenticated account. `filter[search]` does a case-insensitive substring match against the service `key` and `name`.",
         "operationId": "list_services",
         "security": [
           {
@@ -3462,6 +3498,18 @@
           }
         ],
         "parameters": [
+          {
+            "name": "filter[search]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "description": "Case-insensitive substring match against the service `key` and `name`. A service is returned if either field contains the search term.",
+              "title": "Filter[Search]"
+            },
+            "description": "Case-insensitive substring match against the service `key` and `name`. A service is returned if either field contains the search term."
+          },
           {
             "name": "sort",
             "in": "query",

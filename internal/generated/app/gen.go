@@ -2463,6 +2463,9 @@ type PutAccountSettingsApplicationVndAPIPlusJSONBody map[string]interface{}
 type ListApiKeysParams struct {
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
 
+	// FilterSearch Case-insensitive substring match against the API key `name`.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `expires_at`, `-expires_at`, `last_used_at`, `-last_used_at`, `name`, `-name`, `status`, `-status`.
 	Sort *ListApiKeysParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -2583,6 +2586,12 @@ type SendContactEmailApplicationVndAPIPlusJSONBody map[string]interface{}
 
 // ListEnvironmentsParams defines parameters for ListEnvironments.
 type ListEnvironmentsParams struct {
+	// FilterSearch Case-insensitive substring match against the environment `key` and `name`. An environment is returned if either field contains the search term.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+
+	// FilterClassification Narrow the result to environments with the given classification. One of `STANDARD` or `AD_HOC`.
+	FilterClassification *string `form:"filter[classification],omitempty" json:"filter[classification],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListEnvironmentsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -2761,6 +2770,9 @@ type ListProductsParamsSort string
 
 // ListServicesParams defines parameters for ListServices.
 type ListServicesParams struct {
+	// FilterSearch Case-insensitive substring match against the service `key` and `name`. A service is returned if either field contains the search term.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListServicesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -4988,6 +5000,18 @@ func NewListApiKeysRequest(server string, params *ListApiKeysParams) (*http.Requ
 
 		}
 
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -6393,6 +6417,30 @@ func NewListEnvironmentsRequest(server string, params *ListEnvironmentsParams) (
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
+
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterClassification != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[classification]", *params.FilterClassification, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
 
 		if params.Sort != nil {
 
@@ -7929,6 +7977,18 @@ func NewListServicesRequest(server string, params *ListServicesParams) (*http.Re
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
+
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
 
 		if params.Sort != nil {
 
