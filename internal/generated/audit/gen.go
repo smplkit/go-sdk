@@ -148,18 +148,18 @@ func (e TestForwarderRequestMethod) Valid() bool {
 	}
 }
 
-// Defines values for ListActionsParamsSort.
+// Defines values for ListEventTypesParamsSort.
 const (
-	ListActionsParamsSortKey      ListActionsParamsSort = "key"
-	ListActionsParamsSortMinusKey ListActionsParamsSort = "-key"
+	ListEventTypesParamsSortKey      ListEventTypesParamsSort = "key"
+	ListEventTypesParamsSortMinusKey ListEventTypesParamsSort = "-key"
 )
 
-// Valid indicates whether the value is a known member of the ListActionsParamsSort enum.
-func (e ListActionsParamsSort) Valid() bool {
+// Valid indicates whether the value is a known member of the ListEventTypesParamsSort enum.
+func (e ListEventTypesParamsSort) Valid() bool {
 	switch e {
-	case ListActionsParamsSortKey:
+	case ListEventTypesParamsSortKey:
 		return true
-	case ListActionsParamsSortMinusKey:
+	case ListEventTypesParamsSortMinusKey:
 		return true
 	default:
 		return false
@@ -250,32 +250,6 @@ func (e ListResourceTypesParamsSort) Valid() bool {
 	}
 }
 
-// ActionAttributes defines model for ActionAttributes.
-type ActionAttributes struct {
-	// Action The action slug. Same as the JSON:API ``id``.
-	Action string `json:"action"`
-
-	// CreatedAt First sighting of this action for the account. When the request includes ``filter[resource_type]``, this is the first sighting of the (action, resource_type) triple rather than the action overall.
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// ActionListResponse defines model for ActionListResponse.
-type ActionListResponse struct {
-	Data []ActionResource `json:"data"`
-
-	// Meta Top-level ``meta`` block included on every JSON:API list response.
-	Meta ListMeta `json:"meta"`
-}
-
-// ActionResource defines model for ActionResource.
-type ActionResource struct {
-	Attributes ActionAttributes `json:"attributes"`
-
-	// Id The action slug.
-	Id   string  `json:"id"`
-	Type *string `json:"type,omitempty"`
-}
-
 // Event An audit event — a record that something happened, attributed to
 // an actor and a resource.
 //
@@ -283,9 +257,6 @@ type ActionResource struct {
 // place it inside `data`. smplkit's own integrations nest it under
 // `data.snapshot`, but the slot is yours to use however you like.
 type Event struct {
-	// Action What happened, e.g. `user.created`. Any non-empty string.
-	Action string `json:"action"`
-
 	// ActorId Identifier of the actor that caused the event. Free-form string — any identifier scheme is accepted.
 	ActorId *string `json:"actor_id,omitempty"`
 
@@ -306,6 +277,9 @@ type Event struct {
 
 	// DoNotForward When `true`, the event is recorded but not delivered to any forwarder. A delivery log entry with status `SKIPPED_DO_NOT_FORWARD` is written for each enabled forwarder so the skip is visible in the delivery log.
 	DoNotForward *bool `json:"do_not_forward,omitempty"`
+
+	// EventType What happened, e.g. `user.created`. Any non-empty string.
+	EventType string `json:"event_type"`
 
 	// IdempotencyKey The idempotency key used to deduplicate the record. Echoes the `Idempotency-Key` header if one was supplied, otherwise a key derived from the event's content.
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
@@ -426,9 +400,6 @@ type EventSearchRequest struct {
 	// Filter Optional JSON Logic expression evaluated against each row after column filters narrow the candidate set. Null, absent, or an empty object disables JSON Logic filtering. When present, the search is silently capped to the last 30 days by `occurred_at` (intersected with any explicit `filter[occurred_at]` the caller supplied).
 	Filter *map[string]interface{} `json:"filter,omitempty"`
 
-	// FilterAction Exact match on the event's `action` field.
-	FilterAction *string `json:"filter[action],omitempty"`
-
 	// FilterActorId Exact match on the event's `actor_id` field.
 	FilterActorId *string `json:"filter[actor_id],omitempty"`
 
@@ -437,6 +408,9 @@ type EventSearchRequest struct {
 
 	// FilterDoNotForward When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline).
 	FilterDoNotForward *bool `json:"filter[do_not_forward],omitempty"`
+
+	// FilterEventType Exact match on the event's `event_type` field.
+	FilterEventType *string `json:"filter[event_type],omitempty"`
 
 	// FilterOccurredAt Date range using interval notation, e.g. `[2026-04-01T00:00:00Z,2026-04-15T00:00:00Z)`. Required by `filter[search]` when the resource pair isn't provided. When a JSON Logic `filter` is present, the effective range is intersected with the last 30 days.
 	FilterOccurredAt *string `json:"filter[occurred_at],omitempty"`
@@ -490,6 +464,32 @@ type EventSearchScanMeta struct {
 
 	// Scanned Rows scanned after column filters narrowed the candidate set, before the JSON Logic expression was applied.
 	Scanned int `json:"scanned"`
+}
+
+// EventTypeAttributes defines model for EventTypeAttributes.
+type EventTypeAttributes struct {
+	// CreatedAt First sighting of this event_type for the account. When the request includes ``filter[resource_type]``, this is the first sighting of the (event_type, resource_type) triple rather than the event_type overall.
+	CreatedAt time.Time `json:"created_at"`
+
+	// EventType The event_type slug. Same as the JSON:API ``id``.
+	EventType string `json:"event_type"`
+}
+
+// EventTypeListResponse defines model for EventTypeListResponse.
+type EventTypeListResponse struct {
+	Data []EventTypeResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
+}
+
+// EventTypeResource defines model for EventTypeResource.
+type EventTypeResource struct {
+	Attributes EventTypeAttributes `json:"attributes"`
+
+	// Id The event_type slug.
+	Id   string  `json:"id"`
+	Type *string `json:"type,omitempty"`
 }
 
 // Forwarder A destination that receives audit events recorded for the account.
@@ -965,12 +965,12 @@ type UsageResponse struct {
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
 type hTTPBearerContextKey string
 
-// ListActionsParams defines parameters for ListActions.
-type ListActionsParams struct {
+// ListEventTypesParams defines parameters for ListEventTypes.
+type ListEventTypesParams struct {
 	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
-	Sort *ListActionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Sort *ListEventTypesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
 	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
@@ -982,15 +982,15 @@ type ListActionsParams struct {
 	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
-// ListActionsParamsSort defines parameters for ListActions.
-type ListActionsParamsSort string
+// ListEventTypesParamsSort defines parameters for ListEventTypes.
+type ListEventTypesParamsSort string
 
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
 	FilterOccurredAt   *string `form:"filter[occurred_at],omitempty" json:"filter[occurred_at],omitempty"`
 	FilterActorType    *string `form:"filter[actor_type],omitempty" json:"filter[actor_type],omitempty"`
 	FilterActorId      *string `form:"filter[actor_id],omitempty" json:"filter[actor_id],omitempty"`
-	FilterAction       *string `form:"filter[action],omitempty" json:"filter[action],omitempty"`
+	FilterEventType    *string `form:"filter[event_type],omitempty" json:"filter[event_type],omitempty"`
 	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 	FilterResourceId   *string `form:"filter[resource_id],omitempty" json:"filter[resource_id],omitempty"`
 
@@ -1171,8 +1171,8 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
-	// ListActions request
-	ListActions(ctx context.Context, params *ListActionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// ListEventTypes request
+	ListEventTypes(ctx context.Context, params *ListEventTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListEvents request
 	ListEvents(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1236,8 +1236,8 @@ type ClientInterface interface {
 	ListUsage(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) ListActions(ctx context.Context, params *ListActionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListActionsRequest(c.Server, params)
+func (c *Client) ListEventTypes(ctx context.Context, params *ListEventTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEventTypesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1512,8 +1512,8 @@ func (c *Client) ListUsage(ctx context.Context, params *ListUsageParams, reqEdit
 	return c.Client.Do(req)
 }
 
-// NewListActionsRequest generates requests for ListActions
-func NewListActionsRequest(server string, params *ListActionsParams) (*http.Request, error) {
+// NewListEventTypesRequest generates requests for ListEventTypes
+func NewListEventTypesRequest(server string, params *ListEventTypesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1521,7 +1521,7 @@ func NewListActionsRequest(server string, params *ListActionsParams) (*http.Requ
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v1/actions")
+	operationPath := fmt.Sprintf("/api/v1/event_types")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1678,9 +1678,9 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 
 		}
 
-		if params.FilterAction != nil {
+		if params.FilterEventType != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[action]", *params.FilterAction, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[event_type]", *params.FilterEventType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2702,8 +2702,8 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
-	// ListActionsWithResponse request
-	ListActionsWithResponse(ctx context.Context, params *ListActionsParams, reqEditors ...RequestEditorFn) (*ListActionsResponse, error)
+	// ListEventTypesWithResponse request
+	ListEventTypesWithResponse(ctx context.Context, params *ListEventTypesParams, reqEditors ...RequestEditorFn) (*ListEventTypesResponse, error)
 
 	// ListEventsWithResponse request
 	ListEventsWithResponse(ctx context.Context, params *ListEventsParams, reqEditors ...RequestEditorFn) (*ListEventsResponse, error)
@@ -2767,14 +2767,14 @@ type ClientWithResponsesInterface interface {
 	ListUsageWithResponse(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*ListUsageResponse, error)
 }
 
-type ListActionsResponse struct {
+type ListEventTypesResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *ActionListResponse
+	ApplicationvndApiJSON200 *EventTypeListResponse
 }
 
 // Status returns HTTPResponse.Status
-func (r ListActionsResponse) Status() string {
+func (r ListEventTypesResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -2782,7 +2782,7 @@ func (r ListActionsResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r ListActionsResponse) StatusCode() int {
+func (r ListEventTypesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2790,7 +2790,7 @@ func (r ListActionsResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListActionsResponse) ContentType() string {
+func (r ListEventTypesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3307,13 +3307,13 @@ func (r ListUsageResponse) ContentType() string {
 	return ""
 }
 
-// ListActionsWithResponse request returning *ListActionsResponse
-func (c *ClientWithResponses) ListActionsWithResponse(ctx context.Context, params *ListActionsParams, reqEditors ...RequestEditorFn) (*ListActionsResponse, error) {
-	rsp, err := c.ListActions(ctx, params, reqEditors...)
+// ListEventTypesWithResponse request returning *ListEventTypesResponse
+func (c *ClientWithResponses) ListEventTypesWithResponse(ctx context.Context, params *ListEventTypesParams, reqEditors ...RequestEditorFn) (*ListEventTypesResponse, error) {
+	rsp, err := c.ListEventTypes(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseListActionsResponse(rsp)
+	return ParseListEventTypesResponse(rsp)
 }
 
 // ListEventsWithResponse request returning *ListEventsResponse
@@ -3509,22 +3509,22 @@ func (c *ClientWithResponses) ListUsageWithResponse(ctx context.Context, params 
 	return ParseListUsageResponse(rsp)
 }
 
-// ParseListActionsResponse parses an HTTP response from a ListActionsWithResponse call
-func ParseListActionsResponse(rsp *http.Response) (*ListActionsResponse, error) {
+// ParseListEventTypesResponse parses an HTTP response from a ListEventTypesWithResponse call
+func ParseListEventTypesResponse(rsp *http.Response) (*ListEventTypesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &ListActionsResponse{
+	response := &ListEventTypesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ActionListResponse
+		var dest EventTypeListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
