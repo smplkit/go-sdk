@@ -286,6 +286,9 @@ type hTTPBearerContextKey string
 type ListConfigsParams struct {
 	FilterParent *string `form:"filter[parent],omitempty" json:"filter[parent],omitempty"`
 
+	// FilterSearch Case-insensitive substring match against the config `key` and `name`. A config is returned if either field contains the search term.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListConfigsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -546,6 +549,18 @@ func NewListConfigsRequest(server string, params *ListConfigsParams) (*http.Requ
 		if params.FilterParent != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[parent]", *params.FilterParent, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
