@@ -12,7 +12,7 @@
           "Loggers"
         ],
         "summary": "List Loggers",
-        "description": "List loggers for this account.\n\nDefault sort is `key` ascending. Supports `filter[managed]` to narrow\nto managed (or unmanaged) loggers, `filter[service]` to keep only\nloggers observed in a specific service, and `filter[last_seen]`\n(interval notation `[<from>,*)`) to keep only loggers with a source\nobservation at or after the given timestamp.\n\n``filter[service]`` and ``filter[last_seen]`` are applied via a\ncross-table membership check in Python after the SQL fetch, so\npagination for those calls is applied in memory after the filter;\nthe common path (no source-bound filter) paginates at the SQL level.",
+        "description": "List loggers for this account.\n\nDefault sort is `key` ascending. Supports `filter[managed]` to narrow\nto managed (or unmanaged) loggers, `filter[service]` to keep only\nloggers observed in a specific service, `filter[last_seen]`\n(interval notation `[<from>,*)`) to keep only loggers with a source\nobservation at or after the given timestamp, and `filter[search]`\nfor a case-insensitive substring match against `key` or `name`.\n\n``filter[service]`` and ``filter[last_seen]`` are applied via a\ncross-table membership check in Python after the SQL fetch, so\npagination for those calls is applied in memory after the filter;\nthe common path (no source-bound filter) paginates at the SQL level.",
         "operationId": "list_loggers",
         "security": [
           {
@@ -67,6 +67,24 @@
               ],
               "title": "Filter[Last Seen]"
             }
+          },
+          {
+            "name": "filter[search]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match against the logger `key` and `name`. A logger is returned if either field contains the search term.",
+              "title": "Filter[Search]"
+            },
+            "description": "Case-insensitive substring match against the logger `key` and `name`. A logger is returned if either field contains the search term."
           },
           {
             "name": "sort",
