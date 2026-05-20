@@ -650,6 +650,9 @@ type ListFlagsParams struct {
 	// FilterReferencesContextType Return flags whose rules reference any attribute of the given context type.
 	FilterReferencesContextType *string `form:"filter[references_context_type],omitempty" json:"filter[references_context_type],omitempty"`
 
+	// FilterSearch Case-insensitive substring match against the flag `key` and `name`. A flag is returned if either field contains the search term.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `type`, `-type`, `updated_at`, `-updated_at`.
 	Sort *ListFlagsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -1171,6 +1174,18 @@ func NewListFlagsRequest(server string, params *ListFlagsParams) (*http.Request,
 		if params.FilterReferencesContextType != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[references_context_type]", *params.FilterReferencesContextType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

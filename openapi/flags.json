@@ -123,6 +123,24 @@
             "description": "Return flags whose rules reference any attribute of the given context type."
           },
           {
+            "name": "filter[search]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match against the flag `key` and `name`. A flag is returned if either field contains the search term.",
+              "title": "Filter[Search]"
+            },
+            "description": "Case-insensitive substring match against the flag `key` and `name`. A flag is returned if either field contains the search term."
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
