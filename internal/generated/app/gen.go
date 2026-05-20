@@ -997,17 +997,8 @@ type Account struct {
 	// DeletedAt When the account was deleted. `null` for active accounts.
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 
-	// DiscountOverridePct Custom discount percentage applied to the account in place of the volume-based discount schedule. `null` means the volume schedule applies.
+	// DiscountOverridePct Custom discount percentage applied to the account in place of the volume-based discount schedule. `null` means the volume schedule applies. Who set it, when, and why are captured in the audit-event stream rather than on the subscription row.
 	DiscountOverridePct *int `json:"discount_override_pct,omitempty"`
-
-	// DiscountOverrideReason Free-form note explaining why the override was set.
-	DiscountOverrideReason *string `json:"discount_override_reason,omitempty"`
-
-	// DiscountOverrideSetAt When the override was last changed.
-	DiscountOverrideSetAt *time.Time `json:"discount_override_set_at,omitempty"`
-
-	// DiscountOverrideSetByUserId UUID of the user who set the override.
-	DiscountOverrideSetByUserId *string `json:"discount_override_set_by_user_id,omitempty"`
 
 	// EntryPoint How the account first reached smplkit (e.g. `LOGIN`, `GET_STARTED`, `LIVE_DEMO`).
 	EntryPoint *string `json:"entry_point,omitempty"`
