@@ -16,7 +16,7 @@ import (
 //
 // Sub-clients: Events for event recording / listing / retrieval,
 // ResourceTypes for the distinct resource-type index,
-// Actions for the distinct action index.
+// EventTypes for the distinct event-type index.
 //
 // SIEM forwarder CRUD lives on the management plane:
 // Client.Manage().Audit().Forwarders().
@@ -25,7 +25,7 @@ type AuditClient struct {
 	gen           *genaudit.ClientWithResponses
 	events        *AuditEvents
 	resourceTypes *AuditResourceTypes
-	actions       *AuditActions
+	eventTypes    *AuditEventTypes
 }
 
 // AuditEvents handles event recording, listing, and retrieval. Writes are
@@ -41,8 +41,8 @@ type AuditResourceTypes struct {
 	gen *genaudit.ClientWithResponses
 }
 
-// AuditActions lists the distinct action slugs seen in the account.
-type AuditActions struct {
+// AuditEventTypes lists the distinct event type slugs seen in the account.
+type AuditEventTypes struct {
 	gen *genaudit.ClientWithResponses
 }
 
@@ -61,9 +61,9 @@ func (a *AuditClient) ResourceTypes() *AuditResourceTypes {
 	return a.resourceTypes
 }
 
-// Actions returns the actions index sub-client.
-func (a *AuditClient) Actions() *AuditActions {
-	return a.actions
+// EventTypes returns the event-types index sub-client.
+func (a *AuditClient) EventTypes() *AuditEventTypes {
+	return a.eventTypes
 }
 
 // Record enqueues an audit event for asynchronous delivery.
@@ -73,12 +73,12 @@ func (a *AuditClient) Actions() *AuditActions {
 // "smpl." is rejected by the server with 403 — that namespace is
 // reserved for smplkit-emitted events.
 func (e *AuditEvents) Record(input CreateEventInput) error {
-	if input.Action == "" || input.ResourceType == "" || input.ResourceID == "" {
-		return errors.New("audit Record requires Action, ResourceType, and ResourceID")
+	if input.EventType == "" || input.ResourceType == "" || input.ResourceID == "" {
+		return errors.New("audit Record requires EventType, ResourceType, and ResourceID")
 	}
 
 	attrs := genaudit.Event{
-		Action:       input.Action,
+		EventType:    input.EventType,
 		ResourceType: input.ResourceType,
 		ResourceId:   input.ResourceID,
 	}
@@ -122,8 +122,8 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 // the previous page's NextCursor as PageAfter to walk subsequent pages.
 func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEventsPage, error) {
 	params := &genaudit.ListEventsParams{}
-	if input.Action != "" {
-		params.FilterAction = &input.Action
+	if input.EventType != "" {
+		params.FilterEventType = &input.EventType
 	}
 	if input.ResourceType != "" {
 		params.FilterResourceType = &input.ResourceType
@@ -238,13 +238,13 @@ func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesI
 	return page, nil
 }
 
-// List returns one page of distinct action slugs seen in the account.
+// List returns one page of distinct event type slugs seen in the account.
 //
-// Without FilterResourceType, returns one row per distinct action. With
-// the filter, returns only the actions seen with that specific resource
+// Without FilterResourceType, returns one row per distinct event type. With
+// the filter, returns only the event types seen with that specific resource
 // type. Sorted alphabetically; offset pagination via PageNumber / PageSize.
-func (ac *AuditActions) List(ctx context.Context, input ListActionsInput) (*ActionListPage, error) {
-	params := &genaudit.ListActionsParams{}
+func (et *AuditEventTypes) List(ctx context.Context, input ListEventTypesInput) (*EventTypeListPage, error) {
+	params := &genaudit.ListEventTypesParams{}
 	if input.FilterResourceType != "" {
 		params.FilterResourceType = &input.FilterResourceType
 	}
@@ -258,22 +258,22 @@ func (ac *AuditActions) List(ctx context.Context, input ListActionsInput) (*Acti
 		mt := true
 		params.MetaTotal = &mt
 	}
-	resp, err := ac.gen.ListActionsWithResponse(ctx, params)
+	resp, err := et.gen.ListEventTypesWithResponse(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("audit Actions.List: %w", err)
+		return nil, fmt.Errorf("audit EventTypes.List: %w", err)
 	}
 	if resp.StatusCode() != 200 {
 		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
 	body := resp.ApplicationvndApiJSON200
-	page := &ActionListPage{
-		Actions:    make([]AuditAction, 0, len(body.Data)),
+	page := &EventTypeListPage{
+		EventTypes: make([]AuditEventType, 0, len(body.Data)),
 		Pagination: paginationFromMeta(body.Meta.Pagination),
 	}
 	for _, r := range body.Data {
-		page.Actions = append(page.Actions, AuditAction{
-			ID:     r.Id,
-			Action: r.Attributes.Action,
+		page.EventTypes = append(page.EventTypes, AuditEventType{
+			ID:        r.Id,
+			EventType: r.Attributes.EventType,
 		})
 	}
 	return page, nil
@@ -301,7 +301,7 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 	attrs := r.Attributes
 	out := AuditEvent{
 		ID:           id,
-		Action:       attrs.Action,
+		EventType:    attrs.EventType,
 		ResourceType: attrs.ResourceType,
 		ResourceID:   attrs.ResourceId,
 	}
