@@ -691,6 +691,9 @@ type ListLoggersParams struct {
 	FilterService  *string `form:"filter[service],omitempty" json:"filter[service],omitempty"`
 	FilterLastSeen *string `form:"filter[last_seen],omitempty" json:"filter[last_seen],omitempty"`
 
+	// FilterSearch Case-insensitive substring match against the logger `key` and `name`. A logger is returned if either field contains the search term.
+	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListLoggersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -1523,6 +1526,18 @@ func NewListLoggersRequest(server string, params *ListLoggersParams) (*http.Requ
 		if params.FilterLastSeen != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[last_seen]", *params.FilterLastSeen, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterSearch != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
