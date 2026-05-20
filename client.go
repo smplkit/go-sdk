@@ -227,7 +227,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 		gen:           genAuditClient,
 		events:        auditEvents,
 		resourceTypes: &AuditResourceTypes{gen: genAuditClient},
-		actions:       &AuditActions{gen: genAuditClient},
+		eventTypes:    &AuditEventTypes{gen: genAuditClient},
 	}
 
 	// Build the management surface directly against the generated API

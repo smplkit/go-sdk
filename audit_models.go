@@ -77,13 +77,13 @@ const (
 type AuditEvent struct {
 	// ID is the server-assigned UUID for this event.
 	ID uuid.UUID
-	// Action is the action slug — e.g. "user.created", "invoice.paid".
-	Action string
-	// ResourceType is the type of resource the action operated on — e.g. "invoice".
+	// EventType is the event type slug — e.g. "user.created", "invoice.paid".
+	EventType string
+	// ResourceType is the type of resource the event operated on — e.g. "invoice".
 	ResourceType string
-	// ResourceID is the customer-facing id of the resource the action operated on.
+	// ResourceID is the customer-facing id of the resource the event operated on.
 	ResourceID string
-	// OccurredAt is when the action actually happened, as reported by the source.
+	// OccurredAt is when the event actually happened, as reported by the source.
 	OccurredAt time.Time
 	// CreatedAt is when the audit service first ingested this event.
 	CreatedAt time.Time
@@ -123,14 +123,14 @@ type AuditEvent struct {
 // nest it inside Data — smplkit's internal convention is
 // Data["snapshot"], but the shape is unconstrained.
 type CreateEventInput struct {
-	// Action is the action slug — required.
-	Action string
-	// ResourceType is the type of resource the action operated on. Must
+	// EventType is the event type slug — required.
+	EventType string
+	// ResourceType is the type of resource the event operated on. Must
 	// not start with "smpl." (reserved for SDK-emitted events).
 	ResourceType string
 	// ResourceID is the customer-facing id of the resource.
 	ResourceID string
-	// OccurredAt is when the action actually happened. Defaults to the
+	// OccurredAt is when the event actually happened. Defaults to the
 	// server's receive time when nil.
 	OccurredAt *time.Time
 	// ActorType is a free-form label for the kind of actor that caused
@@ -158,8 +158,8 @@ type CreateEventInput struct {
 
 // ListEventsInput passes filters and pagination to AuditEvents.List.
 type ListEventsInput struct {
-	// Action filters by exact action slug.
-	Action string
+	// EventType filters by exact event type slug.
+	EventType string
 	// ResourceType filters by exact resource type.
 	ResourceType string
 	// ResourceID filters by exact resource id.
@@ -195,7 +195,7 @@ type ListEventsPage struct {
 }
 
 // ---------------------------------------------------------------------------
-// Resource types and actions (read-only index surfaces)
+// Resource types and event types (read-only index surfaces)
 // ---------------------------------------------------------------------------
 
 // Pagination is the offset-pagination meta block returned on every standard
@@ -242,17 +242,17 @@ type ResourceTypeListPage struct {
 	Pagination Pagination
 }
 
-// AuditAction is one row from the actions index.
-type AuditAction struct {
-	// ID is the action slug (e.g. "invoice.created").
+// AuditEventType is one row from the event-types index.
+type AuditEventType struct {
+	// ID is the event type slug (e.g. "invoice.created").
 	ID string
-	// Action is the same slug as ID; both fields are populated for clarity.
-	Action string
+	// EventType is the same slug as ID; both fields are populated for clarity.
+	EventType string
 }
 
-// ListActionsInput is the filter + pagination input for AuditActions.List.
-type ListActionsInput struct {
-	// FilterResourceType, when set, returns only actions seen with that
+// ListEventTypesInput is the filter + pagination input for AuditEventTypes.List.
+type ListEventTypesInput struct {
+	// FilterResourceType, when set, returns only event types seen with that
 	// specific resource type.
 	FilterResourceType string
 	// PageNumber is the 1-based page index. Zero defers to the server default.
@@ -263,10 +263,10 @@ type ListActionsInput struct {
 	MetaTotal bool
 }
 
-// ActionListPage is one page of action slugs.
-type ActionListPage struct {
-	// Actions is the slice of actions on this page.
-	Actions []AuditAction
+// EventTypeListPage is one page of event type slugs.
+type EventTypeListPage struct {
+	// EventTypes is the slice of event types on this page.
+	EventTypes []AuditEventType
 	// Pagination describes the page boundaries and totals (if requested).
 	Pagination Pagination
 }

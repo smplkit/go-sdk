@@ -2,7 +2,7 @@
 
 // Demonstrates the smplkit runtime SDK for Smpl Audit.
 //
-// Covers: event record / list / get, resource_types.list, actions.list.
+// Covers: event record / list / get, resource_types.list, event_types.list.
 //
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk/v3
@@ -41,7 +41,7 @@ func main() {
 	// record an event
 	now := time.Now().UTC()
 	client.Audit().Events().Record(smplkit.CreateEventInput{
-		Action:       "invoice.created",
+		EventType:    "invoice.created",
 		ResourceType: "invoice",
 		ResourceID:   someResourceID,
 		OccurredAt:   &now,
@@ -72,10 +72,10 @@ func main() {
 	// fetch an event
 	event, err := client.Audit().Events().Get(ctx, recordedEventID)
 	fatalIfErr("audit.Events.Get", err)
-	if event.ID != recordedEventID || event.ResourceID != someResourceID || event.Action != "invoice.created" {
+	if event.ID != recordedEventID || event.ResourceID != someResourceID || event.EventType != "invoice.created" {
 		fatalIfErr("assertion", fmt.Errorf("event fields mismatch: %+v", event))
 	}
-	fmt.Printf("Fetched event %s: %s\n", event.ID, event.Action)
+	fmt.Printf("Fetched event %s: %s\n", event.ID, event.EventType)
 
 	// list resource types observed
 	resourceTypes, err := client.Audit().ResourceTypes().List(ctx, smplkit.ListResourceTypesInput{})
@@ -93,21 +93,21 @@ func main() {
 	}
 	fmt.Printf("Observed resource types: %v\n", rtNames)
 
-	// list actions observed
-	actions, err := client.Audit().Actions().List(ctx, smplkit.ListActionsInput{})
-	fatalIfErr("audit.Actions.List", err)
+	// list event types observed
+	eventTypes, err := client.Audit().EventTypes().List(ctx, smplkit.ListEventTypesInput{})
+	fatalIfErr("audit.EventTypes.List", err)
 	aIDs := map[string]bool{}
-	for _, a := range actions.Actions {
+	for _, a := range eventTypes.EventTypes {
 		aIDs[a.ID] = true
 	}
 	if !aIDs["invoice.created"] {
-		fatalIfErr("assertion", fmt.Errorf("expected invoice.created in actions"))
+		fatalIfErr("assertion", fmt.Errorf("expected invoice.created in event types"))
 	}
-	aNames := make([]string, 0, len(actions.Actions))
-	for _, a := range actions.Actions {
+	aNames := make([]string, 0, len(eventTypes.EventTypes))
+	for _, a := range eventTypes.EventTypes {
 		aNames = append(aNames, a.ID)
 	}
-	fmt.Printf("Observed actions: %v\n", aNames)
+	fmt.Printf("Observed event types: %v\n", aNames)
 
 	fmt.Println("Done!")
 }

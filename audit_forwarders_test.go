@@ -117,10 +117,10 @@ func TestClient_ManageAuditAccessor(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AuditClient.ResourceTypes() and AuditClient.Actions() accessors
+// AuditClient.ResourceTypes() and AuditClient.EventTypes() accessors
 // ---------------------------------------------------------------------------
 
-func TestAuditClient_ResourceTypesAndActionsAccessors(t *testing.T) {
+func TestAuditClient_ResourceTypesAndEventTypesAccessors(t *testing.T) {
 	c, err := NewClient(Config{APIKey: "sk_api_test", Environment: "dev", Service: "test"})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
@@ -129,8 +129,8 @@ func TestAuditClient_ResourceTypesAndActionsAccessors(t *testing.T) {
 	if c.Audit().ResourceTypes() == nil {
 		t.Fatal("ResourceTypes() returned nil")
 	}
-	if c.Audit().Actions() == nil {
-		t.Fatal("Actions() returned nil")
+	if c.Audit().EventTypes() == nil {
+		t.Fatal("EventTypes() returned nil")
 	}
 }
 
@@ -351,7 +351,7 @@ func newTestAuditClient(t *testing.T, handler http.HandlerFunc) (*AuditClient, f
 		gen:           wrapped,
 		events:        events,
 		resourceTypes: &AuditResourceTypes{gen: wrapped},
-		actions:       &AuditActions{gen: wrapped},
+		eventTypes:    &AuditEventTypes{gen: wrapped},
 	}
 	cleanup := func() {
 		events.close()
@@ -367,12 +367,12 @@ func TestAuditEvents_Record_PassesDoNotForward(t *testing.T) {
 		captured <- string(b)
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"action":"x.created","resource_type":"x","resource_id":"1","do_not_forward":true}}}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1","do_not_forward":true}}}`))
 	})
 	defer cleanup()
 
 	if err := c.Events().Record(CreateEventInput{
-		Action:       "user.created",
+		EventType:    "user.created",
 		ResourceType: "user",
 		ResourceID:   "u-1",
 		DoNotForward: true,
@@ -388,7 +388,7 @@ func TestAuditEvents_Record_PassesDoNotForward(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ResourceTypes and Actions
+// ResourceTypes and EventTypes
 // ---------------------------------------------------------------------------
 
 func newTestAuditResourceTypes(t *testing.T, handler http.HandlerFunc) (*AuditResourceTypes, func()) {
@@ -403,7 +403,7 @@ func newTestAuditResourceTypes(t *testing.T, handler http.HandlerFunc) (*AuditRe
 	return rt, func() { srv.Close() }
 }
 
-func newTestAuditActions(t *testing.T, handler http.HandlerFunc) (*AuditActions, func()) {
+func newTestAuditEventTypes(t *testing.T, handler http.HandlerFunc) (*AuditEventTypes, func()) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	gen, err := genaudit.NewClient(srv.URL)
@@ -411,7 +411,7 @@ func newTestAuditActions(t *testing.T, handler http.HandlerFunc) (*AuditActions,
 		srv.Close()
 		t.Fatalf("genaudit.NewClient: %v", err)
 	}
-	ac := &AuditActions{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
+	ac := &AuditEventTypes{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
 	return ac, func() { srv.Close() }
 }
 
@@ -486,62 +486,62 @@ func TestAuditResourceTypes_List_TransportError(t *testing.T) {
 	}
 }
 
-func TestAuditActions_List_ReturnsSlugs(t *testing.T) {
-	ac, cleanup := newTestAuditActions(t, func(w http.ResponseWriter, _ *http.Request) {
+func TestAuditEventTypes_List_ReturnsSlugs(t *testing.T) {
+	ac, cleanup := newTestAuditEventTypes(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}},{"id":"user.updated","type":"action","attributes":{"action":"user.updated","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":1,"size":1000}}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"event_type","attributes":{"event_type":"invoice.created","created_at":"2026-05-01T00:00:00Z"}},{"id":"user.updated","type":"event_type","attributes":{"event_type":"user.updated","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":1,"size":1000}}}`))
 	})
 	defer cleanup()
 
-	page, err := ac.List(context.Background(), ListActionsInput{})
+	page, err := ac.List(context.Background(), ListEventTypesInput{})
 	if err != nil {
-		t.Fatalf("Actions.List: %v", err)
+		t.Fatalf("EventTypes.List: %v", err)
 	}
-	if len(page.Actions) != 2 {
-		t.Fatalf("expected 2 actions, got %d", len(page.Actions))
+	if len(page.EventTypes) != 2 {
+		t.Fatalf("expected 2 event types, got %d", len(page.EventTypes))
 	}
 	ids := make(map[string]bool)
-	for _, a := range page.Actions {
+	for _, a := range page.EventTypes {
 		ids[a.ID] = true
 	}
 	if !ids["invoice.created"] {
-		t.Error("expected invoice.created in actions")
+		t.Error("expected invoice.created in event types")
 	}
 	if page.Pagination.Page != 1 || page.Pagination.Size != 1000 {
 		t.Errorf("expected pagination page=1 size=1000, got %+v", page.Pagination)
 	}
 }
 
-func TestAuditActions_List_FilterResourceType(t *testing.T) {
+func TestAuditEventTypes_List_FilterResourceType(t *testing.T) {
 	var capturedQuery string
-	ac, cleanup := newTestAuditActions(t, func(w http.ResponseWriter, r *http.Request) {
+	ac, cleanup := newTestAuditEventTypes(t, func(w http.ResponseWriter, r *http.Request) {
 		capturedQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":1,"size":1000}}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"event_type","attributes":{"event_type":"invoice.created","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":1,"size":1000}}}`))
 	})
 	defer cleanup()
 
-	if _, err := ac.List(context.Background(), ListActionsInput{FilterResourceType: "invoice"}); err != nil {
-		t.Fatalf("Actions.List: %v", err)
+	if _, err := ac.List(context.Background(), ListEventTypesInput{FilterResourceType: "invoice"}); err != nil {
+		t.Fatalf("EventTypes.List: %v", err)
 	}
 	if !strings.Contains(capturedQuery, "invoice") {
 		t.Errorf("expected filter[resource_type] in query, got %q", capturedQuery)
 	}
 }
 
-func TestAuditActions_List_ParsesPaginationWithTotals(t *testing.T) {
-	ac, cleanup := newTestAuditActions(t, func(w http.ResponseWriter, _ *http.Request) {
+func TestAuditEventTypes_List_ParsesPaginationWithTotals(t *testing.T) {
+	ac, cleanup := newTestAuditEventTypes(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"action","attributes":{"action":"invoice.created","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":2,"size":1,"total":3,"total_pages":3}}}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"invoice.created","type":"event_type","attributes":{"event_type":"invoice.created","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":2,"size":1,"total":3,"total_pages":3}}}`))
 	})
 	defer cleanup()
 
-	page, err := ac.List(context.Background(), ListActionsInput{PageNumber: 2, PageSize: 1, MetaTotal: true})
+	page, err := ac.List(context.Background(), ListEventTypesInput{PageNumber: 2, PageSize: 1, MetaTotal: true})
 	if err != nil {
-		t.Fatalf("Actions.List: %v", err)
+		t.Fatalf("EventTypes.List: %v", err)
 	}
 	if page.Pagination.Page != 2 || page.Pagination.Size != 1 {
 		t.Errorf("expected page=2 size=1, got %+v", page.Pagination)
@@ -554,29 +554,29 @@ func TestAuditActions_List_ParsesPaginationWithTotals(t *testing.T) {
 	}
 }
 
-func TestAuditActions_List_Error(t *testing.T) {
-	ac, cleanup := newTestAuditActions(t, func(w http.ResponseWriter, _ *http.Request) {
+func TestAuditEventTypes_List_Error(t *testing.T) {
+	ac, cleanup := newTestAuditEventTypes(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	defer cleanup()
-	if _, err := ac.List(context.Background(), ListActionsInput{}); err == nil {
+	if _, err := ac.List(context.Background(), ListEventTypesInput{}); err == nil {
 		t.Fatal("expected error from 500")
 	}
 }
 
-func TestAuditActions_List_TransportError(t *testing.T) {
+func TestAuditEventTypes_List_TransportError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	url := srv.URL
 	srv.Close()
 	gen, _ := genaudit.NewClient(url)
-	ac := &AuditActions{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
-	if _, err := ac.List(context.Background(), ListActionsInput{}); err == nil {
+	ac := &AuditEventTypes{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
+	if _, err := ac.List(context.Background(), ListEventTypesInput{}); err == nil {
 		t.Fatal("expected transport error")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// ResourceTypes.List and Actions.List — PageNumber/PageSize query coverage
+// ResourceTypes.List and EventTypes.List — PageNumber/PageSize query coverage
 // ---------------------------------------------------------------------------
 
 func TestAuditResourceTypes_List_WithPageNumber(t *testing.T) {
@@ -598,9 +598,9 @@ func TestAuditResourceTypes_List_WithPageNumber(t *testing.T) {
 	}
 }
 
-func TestAuditActions_List_WithPageNumber(t *testing.T) {
+func TestAuditEventTypes_List_WithPageNumber(t *testing.T) {
 	var capturedQuery string
-	ac, cleanup := newTestAuditActions(t, func(w http.ResponseWriter, r *http.Request) {
+	ac, cleanup := newTestAuditEventTypes(t, func(w http.ResponseWriter, r *http.Request) {
 		capturedQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
@@ -608,8 +608,8 @@ func TestAuditActions_List_WithPageNumber(t *testing.T) {
 	})
 	defer cleanup()
 
-	if _, err := ac.List(context.Background(), ListActionsInput{PageNumber: 3, PageSize: 1}); err != nil {
-		t.Fatalf("Actions.List: %v", err)
+	if _, err := ac.List(context.Background(), ListEventTypesInput{PageNumber: 3, PageSize: 1}); err != nil {
+		t.Fatalf("EventTypes.List: %v", err)
 	}
 	if !strings.Contains(capturedQuery, "page%5Bnumber%5D=3") ||
 		!strings.Contains(capturedQuery, "page%5Bsize%5D=1") {
@@ -953,7 +953,7 @@ func TestForwarderResourceFromForwarder_AllBranches(t *testing.T) {
 				// Transform is engine-defined; a future engine could
 				// carry a structured payload. The wrapper passes it
 				// through untyped.
-				Transform:     map[string]interface{}{"event": "action"},
+				Transform:     map[string]interface{}{"event": "event_type"},
 				TransformType: &tt,
 			},
 		},
@@ -1006,7 +1006,7 @@ func TestForwarder_Save_JSONataTransformMustBeString(t *testing.T) {
 	fwds := &AuditForwarders{}
 	tt := ForwarderTransformTypeJSONata
 	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
-	fwd.Transform = map[string]interface{}{"event": "action"}
+	fwd.Transform = map[string]interface{}{"event": "event_type"}
 	fwd.TransformType = &tt
 
 	err := fwd.Save(context.Background())

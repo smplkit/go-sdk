@@ -132,7 +132,7 @@
             }
           },
           {
-            "name": "filter[action]",
+            "name": "filter[event_type]",
             "in": "query",
             "required": false,
             "schema": {
@@ -144,7 +144,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Filter[Action]"
+              "title": "Filter[Event Type]"
             }
           },
           {
@@ -1096,14 +1096,14 @@
         }
       }
     },
-    "/api/v1/actions": {
+    "/api/v1/event_types": {
       "get": {
         "tags": [
-          "Actions"
+          "Event Types"
         ],
-        "summary": "List Actions",
-        "description": "List the distinct `action` slugs recorded for this account.\n\nDefault sort is `key` ascending; pass `sort=-key` for descending.\nWithout `filter[resource_type]`, returns one row per distinct\naction. With `filter[resource_type]`, returns the actions recorded\nfor that specific resource type.",
-        "operationId": "list_actions",
+        "summary": "List Event Types",
+        "description": "List the distinct `event_type` slugs recorded for this account.\n\nDefault sort is `key` ascending; pass `sort=-key` for descending.\nWithout `filter[resource_type]`, returns one row per distinct\nevent_type. With `filter[resource_type]`, returns the event_types\nrecorded for that specific resource type.",
+        "operationId": "list_event_types",
         "security": [
           {
             "HTTPBearer": []
@@ -1185,7 +1185,7 @@
             "content": {
               "application/vnd.api+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ActionListResponse"
+                  "$ref": "#/components/schemas/EventTypeListResponse"
                 }
               }
             }
@@ -1196,84 +1196,12 @@
   },
   "components": {
     "schemas": {
-      "ActionAttributes": {
-        "properties": {
-          "action": {
-            "type": "string",
-            "title": "Action",
-            "description": "The action slug. Same as the JSON:API ``id``."
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At",
-            "description": "First sighting of this action for the account. When the request includes ``filter[resource_type]``, this is the first sighting of the (action, resource_type) triple rather than the action overall."
-          }
-        },
-        "type": "object",
-        "required": [
-          "action",
-          "created_at"
-        ],
-        "title": "ActionAttributes"
-      },
-      "ActionListResponse": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/ActionResource"
-            },
-            "type": "array",
-            "title": "Data"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/ListMeta"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data",
-          "meta"
-        ],
-        "title": "ActionListResponse"
-      },
-      "ActionResource": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id",
-            "description": "The action slug."
-          },
-          "type": {
-            "type": "string",
-            "title": "Type",
-            "default": "action"
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/ActionAttributes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "attributes"
-        ],
-        "title": "ActionResource",
-        "example": {
-          "attributes": {
-            "action": "smpl.flag.created",
-            "created_at": "2026-04-12T15:23:01Z"
-          },
-          "id": "smpl.flag.created",
-          "type": "action"
-        }
-      },
       "Event": {
         "properties": {
-          "action": {
+          "event_type": {
             "type": "string",
             "minLength": 1,
-            "title": "Action",
+            "title": "Event Type",
             "description": "What happened, e.g. `user.created`. Any non-empty string."
           },
           "resource_type": {
@@ -1391,7 +1319,7 @@
         },
         "type": "object",
         "required": [
-          "action",
+          "event_type",
           "resource_type",
           "resource_id"
         ],
@@ -1503,7 +1431,6 @@
         "description": "JSON:API resource envelope for an audit event.\n\n`id` must not be specified for create requests (the server assigns it).",
         "example": {
           "attributes": {
-            "action": "user.created",
             "actor_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
             "actor_label": "alice@example.com",
             "actor_type": "USER",
@@ -1516,6 +1443,7 @@
             },
             "description": "Alice signed up via the marketing site.",
             "do_not_forward": false,
+            "event_type": "user.created",
             "idempotency_key": "auto-1234abcd",
             "occurred_at": "2026-05-06T20:00:00Z",
             "resource_id": "u-1",
@@ -1589,7 +1517,7 @@
             "title": "Filter",
             "description": "Optional JSON Logic expression evaluated against each row after column filters narrow the candidate set. Null, absent, or an empty object disables JSON Logic filtering. When present, the search is silently capped to the last 30 days by `occurred_at` (intersected with any explicit `filter[occurred_at]` the caller supplied)."
           },
-          "filter[action]": {
+          "filter[event_type]": {
             "anyOf": [
               {
                 "type": "string"
@@ -1598,8 +1526,8 @@
                 "type": "null"
               }
             ],
-            "title": "Filter[Action]",
-            "description": "Exact match on the event's `action` field."
+            "title": "Filter[Event Type]",
+            "description": "Exact match on the event's `event_type` field."
           },
           "filter[resource_type]": {
             "anyOf": [
@@ -1774,6 +1702,78 @@
         ],
         "title": "EventSearchScanMeta",
         "description": "Scan statistics for a search response.\n\nExposed so a selective JSON Logic filter doesn't silently look like\n\"0 matches\" when the truth is \"the scan ceiling was reached before\nthe filter had a chance to find page[size] matches.\""
+      },
+      "EventTypeAttributes": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "title": "Event Type",
+            "description": "The event_type slug. Same as the JSON:API ``id``."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "First sighting of this event_type for the account. When the request includes ``filter[resource_type]``, this is the first sighting of the (event_type, resource_type) triple rather than the event_type overall."
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_type",
+          "created_at"
+        ],
+        "title": "EventTypeAttributes"
+      },
+      "EventTypeListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EventTypeResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "EventTypeListResponse"
+      },
+      "EventTypeResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "The event_type slug."
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "event_type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/EventTypeAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "EventTypeResource",
+        "example": {
+          "attributes": {
+            "created_at": "2026-04-12T15:23:01Z",
+            "event_type": "smpl.flag.created"
+          },
+          "id": "smpl.flag.created",
+          "type": "event_type"
+        }
       },
       "Forwarder": {
         "properties": {
@@ -2119,7 +2119,7 @@
             "forwarder_id": "11111111-2222-3333-4444-555555555555",
             "latency_ms": 187,
             "request": {
-              "body": "{\"action\":\"user.created\",\"resource_id\":\"u-1\"}",
+              "body": "{\"event_type\":\"user.created\",\"resource_id\":\"u-1\"}",
               "headers": [
                 {
                   "name": "DD-API-KEY",
@@ -2235,14 +2235,14 @@
             "filter": {
               "==": [
                 {
-                  "var": "action"
+                  "var": "event_type"
                 },
                 "user.created"
               ]
             },
             "forwarder_type": "datadog",
             "name": "Datadog production",
-            "transform": "{ \"message\": action & ' on ' & resource_type }",
+            "transform": "{ \"message\": event_type & ' on ' & resource_type }",
             "transform_type": "JSONATA",
             "updated_at": "2026-05-07T12:00:00Z",
             "version": 1
@@ -2549,7 +2549,7 @@
               }
             },
             "transform": {
-              "default": "{ \"ddsource\": \"smplkit\", \"message\": action }",
+              "default": "{ \"ddsource\": \"smplkit\", \"message\": event_type }",
               "type": "JSONATA"
             }
           },
@@ -3053,7 +3053,7 @@
   },
   "tags": [
     {
-      "name": "Actions"
+      "name": "Event Types"
     },
     {
       "name": "Events"

@@ -44,14 +44,14 @@ func TestAuditEvents_Create_FireAndForget(t *testing.T) {
 		posts.Add(1)
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"action":"x.created","resource_type":"x","resource_id":"1"}}}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1"}}}`))
 	})
 	defer cleanup()
 
 	start := time.Now()
 	for i := 0; i < 20; i++ {
 		if err := events.Record(CreateEventInput{
-			Action:       "user.created",
+			EventType:    "user.created",
 			ResourceType: "user",
 			ResourceID:   "u-1",
 		}); err != nil {
@@ -75,8 +75,8 @@ func TestAuditEvents_Create_RequiresFields(t *testing.T) {
 	defer cleanup()
 
 	err := events.Record(CreateEventInput{ResourceType: "user", ResourceID: "u-1"})
-	if err == nil || !strings.Contains(err.Error(), "Action") {
-		t.Fatalf("expected Action-required error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "EventType") {
+		t.Fatalf("expected EventType-required error, got %v", err)
 	}
 }
 
@@ -86,12 +86,12 @@ func TestAuditEvents_Create_PassesIdempotencyKeyHeader(t *testing.T) {
 		gotKey <- r.Header.Get("Idempotency-Key")
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"action":"x.created","resource_type":"x","resource_id":"1"}}}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1"}}}`))
 	})
 	defer cleanup()
 
 	if err := events.Record(CreateEventInput{
-		Action:         "user.created",
+		EventType:      "user.created",
 		ResourceType:   "user",
 		ResourceID:     "u-1",
 		IdempotencyKey: "key-abc",
@@ -124,7 +124,7 @@ func TestAuditEvents_Get_RoundTrip(t *testing.T) {
 				"id":   eventID.String(),
 				"type": "event",
 				"attributes": map[string]any{
-					"action":          "user.created",
+					"event_type":      "user.created",
 					"resource_type":   "user",
 					"resource_id":     "u-1",
 					"occurred_at":     "2026-05-06T12:00:00Z",
@@ -149,8 +149,8 @@ func TestAuditEvents_Get_RoundTrip(t *testing.T) {
 	if ev.ID != eventID {
 		t.Fatalf("ID mismatch: %s", ev.ID)
 	}
-	if ev.Action != "user.created" {
-		t.Fatalf("Action=%q", ev.Action)
+	if ev.EventType != "user.created" {
+		t.Fatalf("EventType=%q", ev.EventType)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestAuditEvents_List_ParsesNextCursor(t *testing.T) {
 		  "data":[{
 		    "id":"11111111-2222-3333-4444-555555555555",
 		    "type":"event",
-		    "attributes":{"action":"a.b","resource_type":"a","resource_id":"1","occurred_at":"2026-05-06T12:00:00Z","created_at":"2026-05-06T12:00:01Z","actor_type":"API_KEY","actor_id":null,"actor_label":"","snapshot":null,"data":{},"idempotency_key":"k"}
+		    "attributes":{"event_type":"a.b","resource_type":"a","resource_id":"1","occurred_at":"2026-05-06T12:00:00Z","created_at":"2026-05-06T12:00:01Z","actor_type":"API_KEY","actor_id":null,"actor_label":"","snapshot":null,"data":{},"idempotency_key":"k"}
 		  }],
 		  "meta":{"page_size":1},
 		  "links":{"next":"/api/v1/events?page[size]=1&page[after]=tok-xyz"}
@@ -266,8 +266,8 @@ func TestAuditEvents_Create_RequiredFields(t *testing.T) {
 	defer cleanup()
 	for _, in := range []CreateEventInput{
 		{ResourceType: "user", ResourceID: "u-1"},
-		{Action: "x", ResourceID: "u-1"},
-		{Action: "x", ResourceType: "user"},
+		{EventType: "x", ResourceID: "u-1"},
+		{EventType: "x", ResourceType: "user"},
 	} {
 		if err := events.Record(in); err == nil {
 			t.Fatalf("expected error for missing fields: %+v", in)
@@ -282,7 +282,7 @@ func TestAuditEvents_Create_AllOptionalFields(t *testing.T) {
 	defer cleanup()
 	occurred := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
 	if err := events.Record(CreateEventInput{
-		Action:         "invoice.created",
+		EventType:      "invoice.created",
 		ResourceType:   "invoice",
 		ResourceID:     "inv-1",
 		OccurredAt:     &occurred,
@@ -325,11 +325,11 @@ func TestAuditEvents_Record_ForwardsActorFields(t *testing.T) {
 		gotBody <- c
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(201)
-		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"action":"x.created","resource_type":"x","resource_id":"1"}}}`))
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1"}}}`))
 	})
 	defer cleanup()
 	if err := events.Record(CreateEventInput{
-		Action:       "user.created",
+		EventType:    "user.created",
 		ResourceType: "user",
 		ResourceID:   "u-1",
 		ActorType:    "EXTERNAL_SERVICE",
@@ -386,7 +386,7 @@ func TestAuditEvents_List_AllFilters(t *testing.T) {
 	})
 	defer cleanup()
 	_, err := events.List(context.Background(), ListEventsInput{
-		Action:          "user.created",
+		EventType:       "user.created",
 		ResourceType:    "user",
 		ResourceID:      "u-1",
 		ActorType:       "USER",
@@ -422,7 +422,7 @@ func TestEventFromResource_PopulatedActor(t *testing.T) {
 	res := genaudit.EventResource{
 		Id: &idStr,
 		Attributes: genaudit.Event{
-			Action:         "user.created",
+			EventType:      "user.created",
 			ResourceType:   "user",
 			ResourceId:     "u-1",
 			OccurredAt:     &at,
@@ -455,7 +455,7 @@ func TestEventFromResource_PopulatesDoNotForward(t *testing.T) {
 	res := genaudit.EventResource{
 		Id: &idStr2,
 		Attributes: genaudit.Event{
-			Action:       "user.created",
+			EventType:    "user.created",
 			ResourceType: "user",
 			ResourceId:   "u-1",
 			DoNotForward: &dnf,
@@ -478,7 +478,7 @@ func TestAuditEventBuffer_EnqueueAfterCloseIsNoop(t *testing.T) {
 	buf.close(2 * time.Second)
 	// Subsequent enqueue is silently ignored; should not panic.
 	body := genaudit.EventRequest{
-		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
+		Data: genaudit.EventResource{Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
 }
@@ -500,7 +500,7 @@ func TestAuditEventBuffer_OverflowEvictsOldest(t *testing.T) {
 	defer buf.close(2 * time.Second)
 	for i := 0; i < 10; i++ {
 		body := genaudit.EventRequest{
-			Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
+			Data: genaudit.EventResource{Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"}},
 		}
 		buf.enqueue(body, "")
 	}
@@ -526,7 +526,7 @@ func TestAuditEventBuffer_FlushTimesOut(t *testing.T) {
 	defer buf.close(2 * time.Second)
 
 	body := genaudit.EventRequest{
-		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
+		Data: genaudit.EventResource{Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
 	start := time.Now()
@@ -553,7 +553,7 @@ func TestAuditEventBuffer_GivesUpAfterMaxAttempts(t *testing.T) {
 	defer buf.close(2 * time.Second)
 
 	body := genaudit.EventRequest{
-		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
+		Data: genaudit.EventResource{Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
 	deadline := time.Now().Add(5 * time.Second)
@@ -594,7 +594,7 @@ func TestAuditEventBuffer_WatermarkTriggersDrain(t *testing.T) {
 	go buf.run()
 	defer buf.close(2 * time.Second)
 	body := genaudit.EventRequest{
-		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
+		Data: genaudit.EventResource{Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	for i := 0; i < 5; i++ {
 		buf.enqueue(body, "")
@@ -657,7 +657,7 @@ func TestAuditEventBuffer_DropsPermanent4xx(t *testing.T) {
 	defer buf.close(2 * time.Second)
 
 	body := genaudit.EventRequest{
-		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
+		Data: genaudit.EventResource{Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
 	deadline := time.Now().Add(2 * time.Second)
@@ -690,7 +690,7 @@ func TestAuditEventBuffer_BackoffCappedAtMax(t *testing.T) {
 	go buf.run()
 	defer buf.close(2 * time.Second)
 	body := genaudit.EventRequest{
-		Data: genaudit.EventResource{Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"}},
+		Data: genaudit.EventResource{Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"}},
 	}
 	buf.enqueue(body, "")
 	deadline := time.Now().Add(5 * time.Second)
@@ -725,7 +725,7 @@ func TestAuditEventBuffer_RetriesTransient(t *testing.T) {
 
 	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{
-			Attributes: genaudit.Event{Action: "x", ResourceType: "x", ResourceId: "1"},
+			Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"},
 		},
 	}
 	buf.enqueue(body, "")
