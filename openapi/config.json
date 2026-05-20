@@ -47,7 +47,7 @@
           "Configs"
         ],
         "summary": "List Configs",
-        "description": "List configs for this account.\n\nDefault sort is `key` ascending. Pass `filter[parent]=<parent_key>`\nto return only the direct children of a specific config.",
+        "description": "List configs for this account.\n\nDefault sort is `key` ascending. Pass `filter[parent]=<parent_key>`\nto return only the direct children of a specific config, or\n`filter[search]=<term>` to filter by a case-insensitive substring\nagainst `key` or `name`.",
         "operationId": "list_configs",
         "security": [
           {
@@ -70,6 +70,24 @@
               ],
               "title": "Filter[Parent]"
             }
+          },
+          {
+            "name": "filter[search]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match against the config `key` and `name`. A config is returned if either field contains the search term.",
+              "title": "Filter[Search]"
+            },
+            "description": "Case-insensitive substring match against the config `key` and `name`. A config is returned if either field contains the search term."
           },
           {
             "name": "sort",
