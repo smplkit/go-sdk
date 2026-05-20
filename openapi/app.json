@@ -6936,29 +6936,7 @@
             "type": "integer",
             "nullable": true,
             "title": "Discount Override Pct",
-            "description": "Custom discount percentage applied to the account in place of the volume-based discount schedule. `null` means the volume schedule applies.",
-            "readOnly": true
-          },
-          "discount_override_reason": {
-            "type": "string",
-            "nullable": true,
-            "title": "Discount Override Reason",
-            "description": "Free-form note explaining why the override was set.",
-            "readOnly": true
-          },
-          "discount_override_set_by_user_id": {
-            "type": "string",
-            "nullable": true,
-            "title": "Discount Override Set By User Id",
-            "description": "UUID of the user who set the override.",
-            "readOnly": true
-          },
-          "discount_override_set_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "title": "Discount Override Set At",
-            "description": "When the override was last changed.",
+            "description": "Custom discount percentage applied to the account in place of the volume-based discount schedule. `null` means the volume schedule applies. Who set it, when, and why are captured in the audit-event stream rather than on the subscription row.",
             "readOnly": true
           }
         },
