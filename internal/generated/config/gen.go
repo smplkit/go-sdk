@@ -250,7 +250,7 @@ type PaginationMeta struct {
 
 // UsageAttributes Usage counter for a single metered limit.
 type UsageAttributes struct {
-	// LimitKey Identifier of the metered limit, e.g. `config.items` or `config.inheritance_depth`.
+	// LimitKey Identifier of the metered limit, e.g. `config.managed_configurations` or `config.inheritance_depth`.
 	LimitKey string `json:"limit_key"`
 
 	// Period Period the counter covers. `current` is the only supported value.
