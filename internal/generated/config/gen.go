@@ -131,6 +131,9 @@ type Config struct {
 	// Items Map of item keys to item definitions declared on this config. Keys must be unique within the config; declared types are immutable once set and must match any type declared for the same key on an ancestor.
 	Items *map[string]ConfigItemDefinition `json:"items,omitempty"`
 
+	// Managed Whether this config is admin-managed (`true`) or auto-discovered by an SDK and not yet claimed (`false`). Configs created through the console or `POST /api/v1/configs` are always managed. Configs registered via `POST /api/v1/configs/bulk` land unmanaged. Setting this field to `true` on a PUT promotes a discovered config to managed, which consumes a slot of the `config.managed_configurations` entitlement.
+	Managed *bool `json:"managed,omitempty"`
+
 	// Name Human-readable name for the config.
 	Name string `json:"name"`
 
@@ -139,6 +142,46 @@ type Config struct {
 
 	// UpdatedAt When the config was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+// ConfigBulkItem One config declaration reported by an SDK during bulk registration.
+//
+// Each item declares an entire config from code — the config's key,
+// optional parent reference, and the items the calling code uses with
+// their declared types, default values, and descriptions.
+type ConfigBulkItem struct {
+	// Description Optional human-readable description of the config.
+	Description *string `json:"description,omitempty"`
+
+	// Environment Environment reporting the declaration. Defaults to `unknown`.
+	Environment *string `json:"environment,omitempty"`
+
+	// Id Config key as declared in code. URL-safe and stable for the lifetime of the config.
+	Id string `json:"id"`
+
+	// Items Items declared by the SDK with their types, defaults, and descriptions. Used to populate items on a newly-discovered config; ignored on subsequent observations of an existing config.
+	Items *map[string]ConfigItemDefinition `json:"items,omitempty"`
+
+	// Name Display name. Defaults to a humanized version of the `id` when omitted.
+	Name *string `json:"name,omitempty"`
+
+	// Parent Parent config key. Used only when creating a new (discovered) config. Ignored on subsequent observations of an existing config — discovery never modifies parent on a config that already exists.
+	Parent *string `json:"parent,omitempty"`
+
+	// Service Service reporting the declaration. Defaults to `unknown`.
+	Service *string `json:"service,omitempty"`
+}
+
+// ConfigBulkRequest Inputs to the bulk-register-configs action.
+type ConfigBulkRequest struct {
+	// Configs Configs reported by the SDK in this batch.
+	Configs []ConfigBulkItem `json:"configs"`
+}
+
+// ConfigBulkResponse Result of a bulk-register-configs action.
+type ConfigBulkResponse struct {
+	// Registered Number of items in the batch that were registered or refreshed (i.e. for which a source row was written or updated).
+	Registered int `json:"registered"`
 }
 
 // ConfigItemDefinition Type-declared item within a config.
@@ -323,6 +366,9 @@ type ListConfigUsageParams struct {
 // CreateConfigApplicationVndAPIPlusJSONRequestBody defines body for CreateConfig for application/vnd.api+json ContentType.
 type CreateConfigApplicationVndAPIPlusJSONRequestBody = ConfigRequest
 
+// BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterConfigs for application/vnd.api+json ContentType.
+type BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody = ConfigBulkRequest
+
 // UpdateConfigApplicationVndAPIPlusJSONRequestBody defines body for UpdateConfig for application/vnd.api+json ContentType.
 type UpdateConfigApplicationVndAPIPlusJSONRequestBody = ConfigRequest
 
@@ -407,6 +453,11 @@ type ClientInterface interface {
 
 	CreateConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// BulkRegisterConfigsWithBody request with any body
+	BulkRegisterConfigsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	BulkRegisterConfigsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteConfig request
 	DeleteConfig(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -448,6 +499,30 @@ func (c *Client) CreateConfigWithBody(ctx context.Context, contentType string, b
 
 func (c *Client) CreateConfigWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateConfigRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkRegisterConfigsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkRegisterConfigsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkRegisterConfigsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkRegisterConfigsRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -653,6 +728,46 @@ func NewCreateConfigRequestWithBody(server string, contentType string, body io.R
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/configs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewBulkRegisterConfigsRequestWithApplicationVndAPIPlusJSONBody calls the generic BulkRegisterConfigs builder with application/vnd.api+json body
+func NewBulkRegisterConfigsRequestWithApplicationVndAPIPlusJSONBody(server string, body BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBulkRegisterConfigsRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewBulkRegisterConfigsRequestWithBody generates requests for BulkRegisterConfigs with any type of body
+func NewBulkRegisterConfigsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/configs/bulk")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -928,6 +1043,11 @@ type ClientWithResponsesInterface interface {
 
 	CreateConfigWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateConfigApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConfigResponse, error)
 
+	// BulkRegisterConfigsWithBodyWithResponse request with any body
+	BulkRegisterConfigsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkRegisterConfigsResponse, error)
+
+	BulkRegisterConfigsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterConfigsResponse, error)
+
 	// DeleteConfigWithResponse request
 	DeleteConfigWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteConfigResponse, error)
 
@@ -997,6 +1117,36 @@ func (r CreateConfigResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateConfigResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type BulkRegisterConfigsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *ConfigBulkResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r BulkRegisterConfigsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BulkRegisterConfigsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r BulkRegisterConfigsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -1148,6 +1298,23 @@ func (c *ClientWithResponses) CreateConfigWithApplicationVndAPIPlusJSONBodyWithR
 	return ParseCreateConfigResponse(rsp)
 }
 
+// BulkRegisterConfigsWithBodyWithResponse request with arbitrary body returning *BulkRegisterConfigsResponse
+func (c *ClientWithResponses) BulkRegisterConfigsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkRegisterConfigsResponse, error) {
+	rsp, err := c.BulkRegisterConfigsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkRegisterConfigsResponse(rsp)
+}
+
+func (c *ClientWithResponses) BulkRegisterConfigsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkRegisterConfigsResponse, error) {
+	rsp, err := c.BulkRegisterConfigsWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkRegisterConfigsResponse(rsp)
+}
+
 // DeleteConfigWithResponse request returning *DeleteConfigResponse
 func (c *ClientWithResponses) DeleteConfigWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteConfigResponse, error) {
 	rsp, err := c.DeleteConfig(ctx, id, reqEditors...)
@@ -1238,6 +1405,32 @@ func ParseCreateConfigResponse(rsp *http.Response) (*CreateConfigResponse, error
 			return nil, err
 		}
 		response.ApplicationvndApiJSON201 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBulkRegisterConfigsResponse parses an HTTP response from a BulkRegisterConfigsWithResponse call
+func ParseBulkRegisterConfigsResponse(rsp *http.Response) (*BulkRegisterConfigsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BulkRegisterConfigsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ConfigBulkResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
 
 	}
 
