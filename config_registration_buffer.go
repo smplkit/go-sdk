@@ -5,13 +5,13 @@ import "sync"
 // configBufferEntry is the wire-shaped payload for a single config in
 // the bulk-discovery request. Items map to {value, type, description?}.
 type configBufferEntry struct {
-	id           string
-	items        map[string]configBufferItem
-	service      string
-	environment  string
-	parent       string
-	name         string
-	description  string
+	id          string
+	items       map[string]configBufferItem
+	service     string
+	environment string
+	parent      string
+	name        string
+	description string
 }
 
 type configBufferItem struct {

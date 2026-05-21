@@ -188,9 +188,6 @@ func (c *ConfigClient) cachedValues(id string) (map[string]interface{}, bool) {
 // management buffer. Called by GetOrCreate.
 func (c *ConfigClient) observeConfigDeclaration(configID, parent, name, description string) {
 	mgmt := c.Management()
-	if mgmt == nil {
-		return
-	}
 	service := ""
 	environment := ""
 	if c.client != nil {
@@ -203,11 +200,7 @@ func (c *ConfigClient) observeConfigDeclaration(configID, parent, name, descript
 // observeItemDeclaration queues a config item declaration with the
 // management buffer. Called by LiveConfig's typed getters.
 func (c *ConfigClient) observeItemDeclaration(configID, itemKey, itemType string, defaultVal interface{}, description string) {
-	mgmt := c.Management()
-	if mgmt == nil {
-		return
-	}
-	mgmt.RegisterConfigItem(configID, itemKey, itemType, defaultVal, description)
+	c.Management().RegisterConfigItem(configID, itemKey, itemType, defaultVal, description)
 }
 
 // Snapshot returns a one-shot copy of the resolved values for the given
