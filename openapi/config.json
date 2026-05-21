@@ -275,6 +275,43 @@
         }
       }
     },
+    "/api/v1/configs/bulk": {
+      "post": {
+        "tags": [
+          "Configs"
+        ],
+        "summary": "Bulk Register Configs",
+        "description": "Register configs declared by an SDK.\n\nFor each item in the batch:\n- If no config with that key exists, create one with ``managed=false``\n  (auto-discovered) using the declared items, parent, name, and\n  description.\n- If a config with that key already exists, leave the config row\n  untouched (per ADR-024 \u00a72.9).\n- Either way, upsert a ``config_source`` row for ``(config, service,\n  environment)`` and refresh its ``last_seen`` timestamp.\n\nPer ADR-022 \u00a72.11 rule 2 this endpoint never enforces\n``config.managed_configurations`` \u2014 discovered configs do not consume\na managed slot.",
+        "operationId": "bulk_register_configs",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigBulkResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/usage": {
       "get": {
         "tags": [
@@ -427,6 +464,18 @@
             "title": "Environments",
             "description": "Map of environment keys to per-environment override sets. An environment override applies when this config is resolved against that environment."
           },
+          "managed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed",
+            "description": "Whether this config is admin-managed (`true`) or auto-discovered by an SDK and not yet claimed (`false`). Configs created through the console or `POST /api/v1/configs` are always managed. Configs registered via `POST /api/v1/configs/bulk` land unmanaged. Setting this field to `true` on a PUT promotes a discovered config to managed, which consumes a slot of the `config.managed_configurations` entitlement."
+          },
           "created_at": {
             "anyOf": [
               {
@@ -492,6 +541,165 @@
           "name": "Database",
           "parent": "common",
           "updated_at": "2026-05-11T12:00:00Z"
+        }
+      },
+      "ConfigBulkItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Config key as declared in code. URL-safe and stable for the lifetime of the config."
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Display name. Defaults to a humanized version of the `id` when omitted."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional human-readable description of the config."
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent",
+            "description": "Parent config key. Used only when creating a new (discovered) config. Ignored on subsequent observations of an existing config \u2014 discovery never modifies parent on a config that already exists."
+          },
+          "items": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ConfigItemDefinition"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items",
+            "description": "Items declared by the SDK with their types, defaults, and descriptions. Used to populate items on a newly-discovered config; ignored on subsequent observations of an existing config."
+          },
+          "service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service",
+            "description": "Service reporting the declaration. Defaults to `unknown`."
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "Environment reporting the declaration. Defaults to `unknown`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "ConfigBulkItem",
+        "description": "One config declaration reported by an SDK during bulk registration.\n\nEach item declares an entire config from code \u2014 the config's key,\noptional parent reference, and the items the calling code uses with\ntheir declared types, default values, and descriptions.",
+        "example": {
+          "description": "Plan-limit configuration declared by the billing service.",
+          "environment": "production",
+          "id": "billing",
+          "items": {
+            "plan.max_seats": {
+              "description": "Maximum seats per organization on this plan.",
+              "type": "NUMBER",
+              "value": 5
+            }
+          },
+          "name": "Billing",
+          "parent": "common",
+          "service": "billing-service"
+        }
+      },
+      "ConfigBulkRequest": {
+        "properties": {
+          "configs": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigBulkItem"
+            },
+            "type": "array",
+            "title": "Configs",
+            "description": "Configs reported by the SDK in this batch."
+          }
+        },
+        "type": "object",
+        "required": [
+          "configs"
+        ],
+        "title": "ConfigBulkRequest",
+        "description": "Inputs to the bulk-register-configs action.",
+        "example": {
+          "configs": [
+            {
+              "environment": "production",
+              "id": "billing",
+              "items": {
+                "plan.max_seats": {
+                  "description": "Maximum seats per organization.",
+                  "type": "NUMBER",
+                  "value": 5
+                }
+              },
+              "parent": "common",
+              "service": "billing-service"
+            }
+          ]
+        }
+      },
+      "ConfigBulkResponse": {
+        "properties": {
+          "registered": {
+            "type": "integer",
+            "title": "Registered",
+            "description": "Number of items in the batch that were registered or refreshed (i.e. for which a source row was written or updated)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "registered"
+        ],
+        "title": "ConfigBulkResponse",
+        "description": "Result of a bulk-register-configs action.",
+        "example": {
+          "registered": 3
         }
       },
       "ConfigItemDefinition": {
