@@ -47,6 +47,12 @@ type ConfigClient struct {
 	listenersMu sync.Mutex
 	listeners   []configChangeListener
 
+	// proxyCache returns the same *LiveConfig instance on repeat
+	// Get / GetOrCreate calls so callers can hold one as a parent
+	// reference. Mirrors Python's _proxies cache.
+	proxyCacheMu sync.Mutex
+	proxyCache   map[string]*LiveConfig
+
 	wsManager *sharedWebSocket
 
 	management *ConfigManagement
@@ -111,7 +117,97 @@ func (c *ConfigClient) Get(ctx context.Context, id string) (*LiveConfig, error) 
 	if metrics := c.client.metrics; metrics != nil {
 		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config": id})
 	}
-	return &LiveConfig{client: c, id: id}, nil
+	return c.cachedProxy(id), nil
+}
+
+// GetOrCreate declares a configuration from code; returns a live, dict-like view.
+//
+// Idempotent. Repeated calls with the same id return the same
+// *LiveConfig instance. The first call queues a discovery payload (the
+// config plus any items declared via typed getters on the returned
+// handle) for upload to POST /api/v1/configs/bulk on next flush. If
+// the config already exists server-side, managed=true configs are left
+// untouched; managed=false configs receive the SDK's items via
+// source-row upsert per ADR-024 §2.9.
+//
+// Unlike Get, this method does NOT error when the id is absent from
+// the cache — discovery handles that case.
+//
+// Mirrors Python's client.config.get_or_create(id, ...).
+func (c *ConfigClient) GetOrCreate(ctx context.Context, id string, opts ...ConfigOption) (*LiveConfig, error) {
+	cfg := &ConfigEntry{ID: id}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	parent := ""
+	if cfg.Parent != nil {
+		parent = *cfg.Parent
+	}
+	name := ""
+	if cfg.Name != "" {
+		name = cfg.Name
+	}
+	description := ""
+	if cfg.Description != nil {
+		description = *cfg.Description
+	}
+	c.observeConfigDeclaration(id, parent, name, description)
+	if err := c.ensureInit(ctx); err != nil {
+		return nil, err
+	}
+	return c.cachedProxy(id), nil
+}
+
+// cachedProxy returns the canonical *LiveConfig for an id, caching so
+// repeat calls return the same handle (parent-by-reference support).
+func (c *ConfigClient) cachedProxy(id string) *LiveConfig {
+	c.proxyCacheMu.Lock()
+	defer c.proxyCacheMu.Unlock()
+	if c.proxyCache == nil {
+		c.proxyCache = make(map[string]*LiveConfig)
+	}
+	if proxy, ok := c.proxyCache[id]; ok {
+		return proxy
+	}
+	proxy := &LiveConfig{client: c, id: id}
+	c.proxyCache[id] = proxy
+	return proxy
+}
+
+// cachedValues exposes the resolved values map for typed getters on
+// LiveConfig. The second return is false if the id is not in the cache.
+func (c *ConfigClient) cachedValues(id string) (map[string]interface{}, bool) {
+	if c.configCache == nil {
+		return nil, false
+	}
+	resolved, ok := c.configCache[id]
+	return resolved, ok
+}
+
+// observeConfigDeclaration queues a config declaration with the
+// management buffer. Called by GetOrCreate.
+func (c *ConfigClient) observeConfigDeclaration(configID, parent, name, description string) {
+	mgmt := c.Management()
+	if mgmt == nil {
+		return
+	}
+	service := ""
+	environment := ""
+	if c.client != nil {
+		service = c.client.service
+		environment = c.client.environment
+	}
+	mgmt.RegisterConfig(configID, service, environment, parent, name, description)
+}
+
+// observeItemDeclaration queues a config item declaration with the
+// management buffer. Called by LiveConfig's typed getters.
+func (c *ConfigClient) observeItemDeclaration(configID, itemKey, itemType string, defaultVal interface{}, description string) {
+	mgmt := c.Management()
+	if mgmt == nil {
+		return
+	}
+	mgmt.RegisterConfigItem(configID, itemKey, itemType, defaultVal, description)
 }
 
 // Snapshot returns a one-shot copy of the resolved values for the given

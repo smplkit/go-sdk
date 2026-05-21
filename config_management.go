@@ -16,6 +16,8 @@ import (
 // runtime back-reference is set only when ConfigManagement is wired
 // into a runtime Client so active-record Save/Delete can refresh the
 // runtime resolved-config cache.
+const configRegistrationFlushSize = 50
+
 type ConfigManagement struct {
 	gen     genconfig.ClientInterface
 	runtime *ConfigClient // nil when constructed standalone via NewManagementClient
@@ -23,13 +25,18 @@ type ConfigManagement struct {
 	// client is a backwards-compat alias for runtime that older code in
 	// this package may still read. New code uses gen / runtime.
 	client *ConfigClient
+
+	// buffer holds pending config / item declarations for bulk-discovery
+	// upload. Populated by ConfigClient.GetOrCreate and by the typed
+	// getters on LiveConfig.
+	buffer *configRegistrationBuffer
 }
 
 // newConfigManagement constructs a standalone ConfigManagement bound to
 // the given generated client. Used by NewManagementClient to skip the
 // runtime-client skeleton (rule 1).
 func newConfigManagement(gen genconfig.ClientInterface) *ConfigManagement {
-	return &ConfigManagement{gen: gen}
+	return &ConfigManagement{gen: gen, buffer: newConfigRegistrationBuffer()}
 }
 
 // attachRuntime links a runtime ConfigClient. Called once by NewClient.
@@ -172,6 +179,124 @@ func (m *ConfigManagement) List(ctx context.Context, opts ...ListOption) ([]*Con
 }
 
 // Delete removes a config by its ID.
+// RegisterConfig queues a configuration declaration for bulk-discovery
+// upload. Internal — called by ConfigClient.GetOrCreate.
+func (m *ConfigManagement) RegisterConfig(configID, service, environment, parent, name, description string) {
+	if m.buffer == nil {
+		m.buffer = newConfigRegistrationBuffer()
+	}
+	m.buffer.declare(configID, configBufferMeta{
+		service:     service,
+		environment: environment,
+		parent:      parent,
+		name:        name,
+		description: description,
+	})
+	if m.buffer.pendingCount() >= configRegistrationFlushSize {
+		go func() { _ = m.Flush(context.Background()) }()
+	}
+}
+
+// RegisterConfigItem queues a config item declaration for bulk-discovery
+// upload. Internal — called by LiveConfig typed getters.
+func (m *ConfigManagement) RegisterConfigItem(configID, itemKey, itemType string, defaultVal interface{}, description string) {
+	if m.buffer == nil {
+		m.buffer = newConfigRegistrationBuffer()
+	}
+	m.buffer.addItem(configID, itemKey, itemType, defaultVal, description)
+	if m.buffer.pendingCount() >= configRegistrationFlushSize {
+		go func() { _ = m.Flush(context.Background()) }()
+	}
+}
+
+// PendingCount returns the number of pending config declarations
+// awaiting flush.
+func (m *ConfigManagement) PendingCount() int {
+	if m.buffer == nil {
+		return 0
+	}
+	return m.buffer.pendingCount()
+}
+
+// Flush sends any pending declarations to POST /api/v1/configs/bulk.
+// Per ADR-024 §2.9 the bulk endpoint is plan-limit-exempt; failures
+// here never propagate to customer code. Drained entries are not
+// requeued.
+func (m *ConfigManagement) Flush(ctx context.Context) error {
+	if m.buffer == nil {
+		return nil
+	}
+	batch := m.buffer.drain()
+	if len(batch) == 0 {
+		return nil
+	}
+	configs := make([]genconfig.ConfigBulkItem, 0, len(batch))
+	for _, entry := range batch {
+		item := genconfig.ConfigBulkItem{Id: entry.id}
+		if entry.service != "" {
+			s := entry.service
+			item.Service = &s
+		}
+		if entry.environment != "" {
+			e := entry.environment
+			item.Environment = &e
+		}
+		if entry.parent != "" {
+			p := entry.parent
+			item.Parent = &p
+		}
+		if entry.name != "" {
+			n := entry.name
+			item.Name = &n
+		}
+		if entry.description != "" {
+			d := entry.description
+			item.Description = &d
+		}
+		if len(entry.items) > 0 {
+			items := make(map[string]genconfig.ConfigItemDefinition, len(entry.items))
+			for k, v := range entry.items {
+				def := genconfig.ConfigItemDefinition{}
+				// Cast the default value into the wire-typed Value field.
+				val := v.value
+				def.Value = &val
+				// Map our internal type strings to the generated enum if
+				// the generator exposes one; otherwise pass-through.
+				switch v.itemType {
+				case "STRING":
+					typed := genconfig.STRING
+					def.Type = &typed
+				case "NUMBER":
+					typed := genconfig.NUMBER
+					def.Type = &typed
+				case "BOOLEAN":
+					typed := genconfig.BOOLEAN
+					def.Type = &typed
+				case "JSON":
+					typed := genconfig.JSON
+					def.Type = &typed
+				}
+				if v.description != "" {
+					d := v.description
+					def.Description = &d
+				}
+				items[k] = def
+			}
+			item.Items = &items
+		}
+		configs = append(configs, item)
+	}
+	body := genconfig.ConfigBulkRequest{Configs: configs}
+	resp, err := m.gen.BulkRegisterConfigsWithApplicationVndAPIPlusJSONBody(ctx, body)
+	if err != nil {
+		// Fire-and-forget per ADR-024 §2.9.
+		return nil
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+	return nil
+}
+
 func (m *ConfigManagement) Delete(ctx context.Context, id string) error {
 	resp, err := m.gen.DeleteConfig(ctx, id)
 	if err != nil {

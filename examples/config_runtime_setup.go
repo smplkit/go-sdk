@@ -1,5 +1,13 @@
 //go:build ignore
 
+// Setup, simulation, and cleanup helpers for config_runtime_showcase.go.
+//
+// The runtime showcase is intentionally runtime-only — declarations,
+// typed getters, change listeners. In a real deployment the configs
+// would either already exist (admin-curated) or be created by the
+// SDK's discovery on first run. Here we pre-create them through the
+// management API so the showcase can also demonstrate a live admin
+// override end-to-end in a single process.
 package main
 
 import (
@@ -9,62 +17,33 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
-var (
-	configRuntimeDemoEnvironments = []string{"staging", "production"}
-	configRuntimeDemoConfigIDs    = []string{
-		"showcase-user-service",
-		"showcase-auth-module",
-		"showcase-common",
-	}
-)
+var configRuntimeDemoConfigIDs = []string{"showcase-billing", "showcase-common"}
 
 func setupConfigRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	ensureEnvironments(ctx, mgmt, configRuntimeDemoEnvironments...)
 	cleanupConfigRuntimeShowcase(ctx, mgmt)
 
-	shared := mgmt.Config().New("showcase-common",
-		smplkit.WithConfigName("Showcase Common"),
-		smplkit.WithConfigDescription("Showcase-only shared configuration."),
+	common := mgmt.Config().New("showcase-common",
+		smplkit.WithConfigDescription("Shared defaults for showcase services."),
 	)
-	shared.SetString("app_name", "Acme SaaS Platform", "")
-	shared.SetString("support_email", "support@acme.dev", "")
-	shared.SetNumber("max_retries", 3, "")
-	shared.SetNumber("request_timeout_ms", 5000, "")
-	shared.SetNumber("pagination_default_page_size", 25, "")
-	shared.SetNumber("max_retries", 5, "production")
-	shared.SetNumber("request_timeout_ms", 10000, "production")
-	shared.SetNumber("max_retries", 2, "staging")
-	fatalIfErr("save shared", shared.Save(ctx))
+	common.SetString("app.name", "Acme SaaS", "")
+	common.SetString("support.email", "support@acme.dev", "")
+	fatalIfErr("save common", common.Save(ctx))
 
-	userService := mgmt.Config().New("showcase-user-service",
-		smplkit.WithConfigName("Showcase User Service"),
-		smplkit.WithConfigDescription("Configuration for the user microservice."),
-		smplkit.WithConfigParent(shared.ID),
+	billing := mgmt.Config().New("showcase-billing",
+		smplkit.WithConfigDescription("Plan-limit configuration for billing."),
+		smplkit.WithConfigParent(common.ID),
 	)
-	userService.SetString("database.host", "localhost", "")
-	userService.SetNumber("database.port", 5432, "")
-	userService.SetString("database.name", "users_dev", "")
-	userService.SetNumber("database.pool_size", 5, "")
-	userService.SetNumber("cache_ttl_seconds", 300, "")
-	userService.SetBoolean("enable_signup", true, "")
-	userService.SetNumber("pagination_default_page_size", 50, "")
-	userService.SetString("database.host", "prod-users-rds.internal.acme.dev", "production")
-	userService.SetString("database.name", "users_prod", "production")
-	userService.SetNumber("database.pool_size", 20, "production")
-	userService.SetNumber("cache_ttl_seconds", 600, "production")
-	userService.SetBoolean("enable_signup", false, "production")
-	fatalIfErr("save user_service", userService.Save(ctx))
+	billing.SetNumber("plan.max_seats", 5, "")
+	billing.SetNumber("plan.trial_days", 14, "")
+	billing.SetString("plan.tier", "free", "")
+	fatalIfErr("save billing", billing.Save(ctx))
+}
 
-	authModule := mgmt.Config().New("showcase-auth-module",
-		smplkit.WithConfigName("Showcase Auth Module"),
-		smplkit.WithConfigDescription("Authentication module within the user service."),
-		smplkit.WithConfigParent(shared.ID),
-	)
-	authModule.SetNumber("session_ttl_minutes", 60, "")
-	authModule.SetBoolean("mfa_enabled", false, "")
-	authModule.SetNumber("session_ttl_minutes", 30, "production")
-	authModule.SetBoolean("mfa_enabled", true, "production")
-	fatalIfErr("save auth_module", authModule.Save(ctx))
+func simulateAdminOverride(ctx context.Context, mgmt *smplkit.ManagementClient) {
+	billing, err := mgmt.Config().Get(ctx, "showcase-billing")
+	fatalIfErr("get billing", err)
+	billing.SetNumber("plan.max_seats", 25, "production")
+	fatalIfErr("save billing", billing.Save(ctx))
 }
 
 func cleanupConfigRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {

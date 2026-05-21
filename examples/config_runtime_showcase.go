@@ -7,7 +7,6 @@
 //   - A valid smplkit API key, provided via one of:
 //   - SMPLKIT_API_KEY environment variable
 //   - ~/.smplkit configuration file (see SDK docs)
-//   - The smplkit Config service running and reachable
 //
 // Usage:
 //
@@ -26,10 +25,10 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// create the client (runtime + management on the same client)
+	// create the client
 	client, err := smplkit.NewClient(smplkit.Config{
 		Environment: "production",
-		Service:     "showcase-service",
+		Service:     "showcase-billing",
 	})
 	fatalIfErr("create client", err)
 	defer client.Close()
@@ -38,72 +37,59 @@ func main() {
 
 	// Block until the live-updates WebSocket subscription is registered
 	// server-side. Without this, writes fired immediately afterward can
-	// race the broadcast of their own change events (the SDK isn't in
-	// the subscriber registry yet) and silently miss them. Mirrors
-	// `await client.wait_until_ready()` in the Python showcase.
+	// race the broadcast of their own change events.
 	fatalIfErr("wait until ready", client.WaitUntilReady(ctx, 0))
 
-	// get a config as a live proxy (rule 10 — every read goes through
-	// the resolved cache, WS updates land automatically)
-	userSvc, err := client.Config().Get(ctx, "showcase-user-service")
-	fatalIfErr("get user_service", err)
-	fmt.Printf("Total resolved keys: %d\n", userSvc.Len())
-	host, _ := userSvc.Get("database.host")
-	fmt.Printf("database.host = %v\n", host)
-	maxRetries, _ := userSvc.Get("max_retries")
-	fmt.Printf("max_retries = %v\n", maxRetries)
-	cacheTTL, _ := userSvc.Get("cache_ttl_seconds")
-	fmt.Printf("cache_ttl_seconds = %v\n", cacheTTL)
-	pageSize, _ := userSvc.Get("pagination_default_page_size")
-	fmt.Printf("pagination_default_page_size = %v\n", pageSize)
-	signup, _ := userSvc.Get("enable_signup")
-	fmt.Printf("enable_signup = %v\n", signup)
-	nope, _ := userSvc.Get("nonexistent_key")
-	fmt.Printf("nonexistent_key = %v\n", nope)
+	// declare a common/shared configuration
+	common, err := client.Config().GetOrCreate(ctx, "showcase-common",
+		smplkit.WithConfigDescription("Shared defaults for showcase services."),
+	)
+	fatalIfErr("get_or_create common", err)
 
-	// production overrides resolve through the inheritance chain
-	if host != "prod-users-rds.internal.acme.dev" {
-		fatalIfErr("database.host", fmt.Errorf("got %v", host))
-	}
+	// declare a configuration that inherits from some parent
+	billing, err := client.Config().GetOrCreate(ctx, "showcase-billing",
+		smplkit.WithConfigParent(common.ID()),
+		smplkit.WithConfigDescription("Plan-limit configuration discovered from code."),
+	)
+	fatalIfErr("get_or_create billing", err)
 
-	var anyChanges, retriesChanges int64
+	// get a configured value
+	appName := common.GetString("app.name", "Acme SaaS")
+	supportEmail := common.GetString("support.email", "support@acme.dev")
+	maxSeats := billing.GetInt("plan.max_seats", 5, smplkit.WithItemDescription("Maximum seats per organization."))
+	trialDays := billing.GetInt("plan.trial_days", 14)
+	tier := billing.GetString("plan.tier", "free")
 
-	// global listener — fires when ANY config item changes
-	client.Config().OnChange(func(event *smplkit.ConfigChangeEvent) {
-		atomic.AddInt64(&anyChanges, 1)
+	fmt.Printf("app.name = %s\n", appName)
+	fmt.Printf("support.email = %s\n", supportEmail)
+	fmt.Printf("plan.max_seats = %d\n", maxSeats)
+	fmt.Printf("plan.trial_days = %d\n", trialDays)
+	fmt.Printf("plan.tier = %s\n", tier)
+
+	// listen for changes
+	var changes int64
+	billing.OnChangeKey("plan.max_seats", func(event *smplkit.ConfigChangeEvent) {
+		atomic.AddInt64(&changes, 1)
 		fmt.Printf("    [CHANGE] %s.%s: %v -> %v\n",
 			event.ConfigID, event.ItemKey, event.OldValue, event.NewValue)
 	})
 
-	// item-scoped listener via the live-proxy handle
-	commonProxy, err := client.Config().Get(ctx, "showcase-common")
-	fatalIfErr("get common", err)
-	commonProxy.OnChangeKey("max_retries", func(event *smplkit.ConfigChangeEvent) {
-		atomic.AddInt64(&retriesChanges, 1)
-	})
+	// simulate someone overriding a value in the console
+	simulateAdminOverride(ctx, client.Manage())
 
-	// simulate someone making a change to trigger listeners
-	updateMaxRetries(ctx, client, 7)
+	// wait for the WebSocket push to deliver the change, then refetch
+	time.Sleep(1500 * time.Millisecond)
 
-	// wait a moment for the event to be delivered (typical WS round-trip
-	// is well under 200ms; 400ms is plenty of headroom and anything past
-	// that is a real signal, not noise to absorb).
-	time.Sleep(400 * time.Millisecond)
-
-	// userSvc always reflects the latest values — same proxy, same id,
-	// no re-fetch needed
-	updatedRetries, _ := commonProxy.Get("max_retries")
-	fmt.Printf("max_retries after update = %v\n", updatedRetries)
-	fmt.Printf("Global changes received: %d\n", atomic.LoadInt64(&anyChanges))
-	fmt.Printf("Retries-specific changes received: %d\n", atomic.LoadInt64(&retriesChanges))
+	// get the latest value
+	updatedSeats := billing.GetInt("plan.max_seats", 5)
+	fmt.Printf("plan.max_seats after override = %d\n", updatedSeats)
+	if updatedSeats != 25 {
+		fatalIfErr("plan.max_seats", fmt.Errorf("expected 25, got %d", updatedSeats))
+	}
+	if atomic.LoadInt64(&changes) < 1 {
+		fatalIfErr("changes", fmt.Errorf("expected at least one change event"))
+	}
 
 	cleanupConfigRuntimeShowcase(ctx, client.Manage())
 	fmt.Println("Done!")
-}
-
-func updateMaxRetries(ctx context.Context, client *smplkit.Client, maxRetries int) {
-	common, err := client.Manage().Config().Get(ctx, "showcase-common")
-	fatalIfErr("get common", err)
-	common.SetNumber("max_retries", float64(maxRetries), "production")
-	fatalIfErr("save common", common.Save(ctx))
 }
