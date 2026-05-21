@@ -145,30 +145,6 @@ func TestConfigBufferDrainEmptyReturnsNil(t *testing.T) {
 // ConfigManagement registration + flush
 // ---------------------------------------------------------------------------
 
-type stubBulkClient struct {
-	calls int
-	body  *string
-}
-
-func (s *stubBulkClient) ListConfigs(ctx context.Context, params interface{}) (*http.Response, error) {
-	return nil, nil
-}
-func (s *stubBulkClient) GetConfig(ctx context.Context, id string, _ ...interface{}) (*http.Response, error) {
-	return nil, nil
-}
-func (s *stubBulkClient) CreateConfig(ctx context.Context, body interface{}) (*http.Response, error) {
-	return nil, nil
-}
-func (s *stubBulkClient) UpdateConfig(ctx context.Context, id string, body interface{}) (*http.Response, error) {
-	return nil, nil
-}
-func (s *stubBulkClient) DeleteConfig(ctx context.Context, id string) (*http.Response, error) {
-	return nil, nil
-}
-func (s *stubBulkClient) BulkRegisterConfigs(ctx context.Context, body interface{}) (*http.Response, error) {
-	return nil, nil
-}
-
 func TestConfigManagementPendingCountWithNilBuffer(t *testing.T) {
 	mgr := &ConfigManagement{}
 	if got := mgr.PendingCount(); got != 0 {
