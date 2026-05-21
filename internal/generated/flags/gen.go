@@ -586,7 +586,7 @@ type RemoveReferencesResultResourceType string
 
 // UsageAttributes Usage counter for a single metered limit.
 type UsageAttributes struct {
-	// LimitKey Identifier of the metered limit, e.g. `flags.items`.
+	// LimitKey Identifier of the metered limit, e.g. `flags.managed_flags`.
 	LimitKey string `json:"limit_key"`
 
 	// Period Period the counter covers. `current` is the only supported value.
