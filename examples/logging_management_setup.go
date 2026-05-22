@@ -9,17 +9,13 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
-var (
-	loggingMgmtDemoEnvironments = []string{"staging", "production"}
-	loggingMgmtDemoLoggerIDs    = []string{
-		"showcase",
-		"showcase.db",
-		"showcase.payments",
-	}
-)
+var loggingMgmtDemoLoggerIDs = []string{
+	"showcase",
+	"showcase.db",
+	"showcase.payments",
+}
 
 func setupLoggingManagementShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	ensureEnvironments(ctx, mgmt, loggingMgmtDemoEnvironments...)
 	cleanupLoggingManagementShowcase(ctx, mgmt)
 }
 

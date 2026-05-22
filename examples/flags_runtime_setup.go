@@ -9,34 +9,28 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
-var (
-	flagsRuntimeDemoEnvironments = []string{"staging", "production"}
-	flagsRuntimeDemoFlagIDs      = []string{"checkout-v2", "banner-color", "max-retries"}
-)
+var flagsRuntimeDemoFlagIDs = []string{"checkout-v2", "banner-color", "max-retries"}
 
 func setupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	ensureEnvironments(ctx, mgmt, flagsRuntimeDemoEnvironments...)
 	cleanupFlagsRuntimeShowcase(ctx, mgmt)
 
 	checkout := mgmt.Flags().NewBooleanFlag("checkout-v2", false,
 		smplkit.WithFlagDescription("Controls rollout of the new checkout experience."),
 	)
-	checkout.EnableRules("staging")
+	checkout.EnableRules("production")
 	fatalIfErr("rule us+enterprise", checkout.AddRule(
 		smplkit.NewRule("Enable for enterprise users in US region").
-			Environment("staging").
+			Environment("production").
 			When("user.plan", "==", "enterprise").
 			When("account.region", "==", "us").
 			Serve(true).Build(),
 	))
 	fatalIfErr("rule beta", checkout.AddRule(
 		smplkit.NewRule("Enable for beta testers").
-			Environment("staging").
+			Environment("production").
 			When("user.beta_tester", "==", true).
 			Serve(true).Build(),
 	))
-	checkout.DisableRules("production")
-	checkout.SetDefault(false, "production")
 	fatalIfErr("save checkout-v2", checkout.Save(ctx))
 
 	banner := mgmt.Flags().NewStringFlag("banner-color", "red",
@@ -48,34 +42,31 @@ func setupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClie
 			{Name: "Blue", Value: "blue"},
 		}),
 	)
-	banner.EnableRules("staging")
+	banner.EnableRules("production")
 	fatalIfErr("rule banner enterprise", banner.AddRule(
 		smplkit.NewRule("Blue for enterprise users").
-			Environment("staging").
+			Environment("production").
 			When("user.plan", "==", "enterprise").
 			Serve("blue").Build(),
 	))
 	fatalIfErr("rule banner technology", banner.AddRule(
 		smplkit.NewRule("Green for technology companies").
-			Environment("staging").
+			Environment("production").
 			When("account.industry", "==", "technology").
 			Serve("green").Build(),
 	))
-	banner.EnableRules("production")
-	banner.SetDefault("blue", "production")
 	fatalIfErr("save banner-color", banner.Save(ctx))
 
 	retries := mgmt.Flags().NewNumberFlag("max-retries", 3,
 		smplkit.WithFlagDescription("Maximum number of API retries before failing."),
 	)
-	retries.EnableRules("staging")
+	retries.EnableRules("production")
 	fatalIfErr("rule retries large", retries.AddRule(
 		smplkit.NewRule("High retries for large accounts").
-			Environment("staging").
+			Environment("production").
 			When("account.employee_count", ">", 100).
 			Serve(5).Build(),
 	))
-	retries.EnableRules("production")
 	fatalIfErr("save max-retries", retries.Save(ctx))
 }
 
