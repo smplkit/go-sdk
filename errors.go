@@ -18,6 +18,11 @@ type ErrorSource struct {
 type ApiErrorDetail struct {
 	// Status is the HTTP status code as a string (e.g. "404").
 	Status string `json:"status,omitempty"`
+	// Code is an application-specific machine-readable error code (e.g.
+	// "environment_unmanaged"). Per JSON:API §7 and ADR-014, smplkit
+	// sets this on every error so callers can branch without
+	// string-matching the human Detail field.
+	Code string `json:"code,omitempty"`
 	// Title is a short, human-readable summary (e.g. "Not Found").
 	Title string `json:"title,omitempty"`
 	// Detail is a longer, human-readable explanation specific to this
@@ -25,6 +30,10 @@ type ApiErrorDetail struct {
 	Detail string `json:"detail,omitempty"`
 	// Source identifies the source of the error within the request.
 	Source ErrorSource `json:"source,omitempty"`
+	// Meta carries additional structured context (e.g.
+	// {"environment": "staging"}). The value types are JSON-decoded
+	// natively (string, float64, bool, []any, map[string]any, nil).
+	Meta map[string]any `json:"meta,omitempty"`
 }
 
 // ErrorDetail is an alias for ApiErrorDetail kept for backward

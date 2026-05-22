@@ -178,6 +178,37 @@ func TestCheckStatus_SingleError400(t *testing.T) {
 	assert.Contains(t, errStr, `"pointer":"/data/attributes/name"`)
 }
 
+func TestCheckStatus_ExtractsCodeAndMeta(t *testing.T) {
+	// Regression: parseJSONAPIErrors was dropping the JSON:API ``code``
+	// and ``meta`` fields, so customers couldn't branch on
+	// machine-readable codes like ``environment_unmanaged`` without
+	// string-matching the human Detail.
+	body := []byte(`{
+		"errors": [{
+			"status": "400",
+			"code": "environment_unmanaged",
+			"title": "Environment is unmanaged",
+			"detail": "Promote it first.",
+			"meta": {"environment": "staging", "count": 2, "is_default": false}
+		}]
+	}`)
+
+	err := smplkit.CheckStatusForTest(400, body)
+	require.Error(t, err)
+
+	var valErr *smplkit.ValidationError
+	require.True(t, errors.As(err, &valErr))
+	require.Len(t, valErr.Base.Errors, 1)
+	assert.Equal(t, "environment_unmanaged", valErr.Base.Errors[0].Code)
+	assert.Equal(t, "staging", valErr.Base.Errors[0].Meta["environment"])
+	// JSON numbers decode as float64 in Go by default.
+	assert.Equal(t, float64(2), valErr.Base.Errors[0].Meta["count"])
+	assert.Equal(t, false, valErr.Base.Errors[0].Meta["is_default"])
+
+	// Error() now includes the code in the JSON dump.
+	assert.Contains(t, err.Error(), `"code":"environment_unmanaged"`)
+}
+
 func TestCheckStatus_MultiError400(t *testing.T) {
 	body := []byte(`{
 		"errors": [
