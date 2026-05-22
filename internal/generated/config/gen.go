@@ -332,6 +332,9 @@ type ListConfigsParams struct {
 	// FilterSearch Case-insensitive substring match against the config `key` and `name`. A config is returned if either field contains the search term.
 	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
 
+	// FilterManaged Restrict the result to managed (`true`) or discovered (`false`) configs. Omit to return both. Configs created via the console or `POST /api/v1/configs` are managed; configs registered via `POST /api/v1/configs/bulk` start out discovered.
+	FilterManaged *bool `form:"filter[managed],omitempty" json:"filter[managed],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListConfigsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -636,6 +639,18 @@ func NewListConfigsRequest(server string, params *ListConfigsParams) (*http.Requ
 		if params.FilterSearch != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[search]", *params.FilterSearch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterManaged != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[managed]", *params.FilterManaged, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

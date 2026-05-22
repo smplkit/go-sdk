@@ -47,7 +47,7 @@
           "Configs"
         ],
         "summary": "List Configs",
-        "description": "List configs for this account.\n\nDefault sort is `key` ascending. Pass `filter[parent]=<parent_key>`\nto return only the direct children of a specific config, or\n`filter[search]=<term>` to filter by a case-insensitive substring\nagainst `key` or `name`.",
+        "description": "List configs for this account.\n\nDefault sort is `key` ascending. Pass `filter[parent]=<parent_key>`\nto return only the direct children of a specific config,\n`filter[search]=<term>` to filter by a case-insensitive substring\nagainst `key` or `name`, or `filter[managed]=true|false` to restrict\nto managed or discovered configs respectively.",
         "operationId": "list_configs",
         "security": [
           {
@@ -88,6 +88,24 @@
               "title": "Filter[Search]"
             },
             "description": "Case-insensitive substring match against the config `key` and `name`. A config is returned if either field contains the search term."
+          },
+          {
+            "name": "filter[managed]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict the result to managed (`true`) or discovered (`false`) configs. Omit to return both. Configs created via the console or `POST /api/v1/configs` are managed; configs registered via `POST /api/v1/configs/bulk` start out discovered.",
+              "title": "Filter[Managed]"
+            },
+            "description": "Restrict the result to managed (`true`) or discovered (`false`) configs. Omit to return both. Configs created via the console or `POST /api/v1/configs` are managed; configs registered via `POST /api/v1/configs/bulk` start out discovered."
           },
           {
             "name": "sort",
