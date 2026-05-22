@@ -1363,7 +1363,7 @@
           "Environments"
         ],
         "summary": "List Environments",
-        "description": "List all environments for the authenticated account. `filter[search]` does a case-insensitive substring match against the environment `key` and `name`. `filter[classification]` narrows the result to one classification (`STANDARD` or `AD_HOC`).",
+        "description": "List all environments for the authenticated account. `filter[search]` does a case-insensitive substring match against the environment `key` and `name`. `filter[classification]` narrows the result to one classification (`STANDARD` or `AD_HOC`). `filter[managed]` narrows by managed state (`true` or `false`).",
         "operationId": "list_environments",
         "security": [
           {
@@ -1394,6 +1394,18 @@
               "title": "Filter[Classification]"
             },
             "description": "Narrow the result to environments with the given classification. One of `STANDARD` or `AD_HOC`."
+          },
+          {
+            "name": "filter[managed]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "nullable": true,
+              "description": "Narrow the result to managed (`true`) or unmanaged (`false`) environments. Omit to return both.",
+              "title": "Filter[Managed]"
+            },
+            "description": "Narrow the result to managed (`true`) or unmanaged (`false`) environments. Omit to return both."
           },
           {
             "name": "sort",
@@ -8001,8 +8013,14 @@
               "AD_HOC"
             ],
             "title": "Classification",
-            "description": "`STANDARD` for environments the customer explicitly manages; `AD_HOC` for environments auto-created from SDK traffic. Case-insensitive on input.",
-            "default": "AD_HOC"
+            "description": "`STANDARD` for environments deliberately created (and shown by default in the environment grid); `AD_HOC` for auto-discovered environments seen in SDK traffic (hidden from the default view). Case-insensitive on input. Independent of the `managed` flag.",
+            "default": "STANDARD"
+          },
+          "managed": {
+            "type": "boolean",
+            "title": "Managed",
+            "description": "When `true`, per-environment resource values can be set against this environment and it counts toward the account's managed-environments quota. When `false`, the environment is view-only: existing values are displayed for comparison but no new values can be written. Promotion and demotion flip this boolean via `PUT /api/v1/environments/{id}`; promotion is subject to the quota.",
+            "default": false
           },
           "created_at": {
             "type": "string",
@@ -8031,6 +8049,7 @@
           "classification": "STANDARD",
           "color": "#2ecc71",
           "created_at": "2026-03-20T11:02:16.616Z",
+          "managed": true,
           "name": "Production",
           "updated_at": "2026-03-20T11:02:16.616Z"
         }
@@ -8099,6 +8118,7 @@
             "classification": "STANDARD",
             "color": "#2ecc71",
             "created_at": "2026-03-20T11:02:16.616Z",
+            "managed": true,
             "name": "Production",
             "updated_at": "2026-03-20T11:02:16.616Z"
           },

@@ -1470,7 +1470,7 @@ type EmailResponse struct {
 // `development`. Resources scoped to an environment (such as config items
 // and feature flags) are evaluated against environment-specific values.
 type Environment struct {
-	// Classification `STANDARD` for environments the customer explicitly manages; `AD_HOC` for environments auto-created from SDK traffic. Case-insensitive on input.
+	// Classification `STANDARD` for environments deliberately created (and shown by default in the environment grid); `AD_HOC` for auto-discovered environments seen in SDK traffic (hidden from the default view). Case-insensitive on input. Independent of the `managed` flag.
 	Classification *EnvironmentClassification `json:"classification,omitempty"`
 
 	// Color Display color used by the console to badge the environment. Accepts any CSS color string.
@@ -1479,6 +1479,9 @@ type Environment struct {
 	// CreatedAt When the environment was created.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
+	// Managed When `true`, per-environment resource values can be set against this environment and it counts toward the account's managed-environments quota. When `false`, the environment is view-only: existing values are displayed for comparison but no new values can be written. Promotion and demotion flip this boolean via `PUT /api/v1/environments/{id}`; promotion is subject to the quota.
+	Managed *bool `json:"managed,omitempty"`
+
 	// Name Human-readable name for the environment.
 	Name string `json:"name"`
 
@@ -1486,7 +1489,7 @@ type Environment struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// EnvironmentClassification `STANDARD` for environments the customer explicitly manages; `AD_HOC` for environments auto-created from SDK traffic. Case-insensitive on input.
+// EnvironmentClassification `STANDARD` for environments deliberately created (and shown by default in the environment grid); `AD_HOC` for auto-discovered environments seen in SDK traffic (hidden from the default view). Case-insensitive on input. Independent of the `managed` flag.
 type EnvironmentClassification string
 
 // EnvironmentListResponse JSON:API collection response for environments.
@@ -2582,6 +2585,9 @@ type ListEnvironmentsParams struct {
 
 	// FilterClassification Narrow the result to environments with the given classification. One of `STANDARD` or `AD_HOC`.
 	FilterClassification *string `form:"filter[classification],omitempty" json:"filter[classification],omitempty"`
+
+	// FilterManaged Narrow the result to managed (`true`) or unmanaged (`false`) environments. Omit to return both.
+	FilterManaged *bool `form:"filter[managed],omitempty" json:"filter[managed],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `key`, `-key`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListEnvironmentsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
@@ -6424,6 +6430,18 @@ func NewListEnvironmentsRequest(server string, params *ListEnvironmentsParams) (
 		if params.FilterClassification != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[classification]", *params.FilterClassification, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterManaged != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[managed]", *params.FilterManaged, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
