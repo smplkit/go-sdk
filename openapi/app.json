@@ -10179,7 +10179,7 @@
             "type": "string",
             "nullable": true,
             "title": "Status",
-            "description": "Lifecycle state of the subscription. `ACTIVE` while billing is current; `PAST_DUE` after a failed charge; `CANCELED` once the subscription has ended; `null` when the subscription has no billing object (fully comped at 100% discount)."
+            "description": "Lifecycle state of the subscription. `ACTIVE` while billing is current; `PAST_DUE` after a failed charge; `CANCELED` once the subscription has ended; `null` when the subscription is fully discounted (`discount_override_pct` of 100) and has no billing-provider object."
           },
           "current_period_start": {
             "type": "string",
@@ -10232,7 +10232,7 @@
             "format": "uuid",
             "nullable": true,
             "title": "Payment Method",
-            "description": "Identifier of the default payment method used to bill this subscription. `null` when the subscription has no associated payment method (e.g. fully comped)."
+            "description": "Identifier of the default payment method used to bill this subscription. `null` when the subscription has no associated payment method (e.g. fully discounted via `discount_override_pct` of 100)."
           },
           "items": {
             "items": {
