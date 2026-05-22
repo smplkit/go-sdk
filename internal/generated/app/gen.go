@@ -2358,10 +2358,10 @@ type SubscriptionResponseAttributes struct {
 	// NextTier Hint describing how the customer could unlock a better discount.
 	NextTier *NextTierResponse `json:"next_tier,omitempty"`
 
-	// PaymentMethod Identifier of the default payment method used to bill this subscription. `null` when the subscription has no associated payment method (e.g. fully comped).
+	// PaymentMethod Identifier of the default payment method used to bill this subscription. `null` when the subscription has no associated payment method (e.g. fully discounted via `discount_override_pct` of 100).
 	PaymentMethod *openapi_types.UUID `json:"payment_method,omitempty"`
 
-	// Status Lifecycle state of the subscription. `ACTIVE` while billing is current; `PAST_DUE` after a failed charge; `CANCELED` once the subscription has ended; `null` when the subscription has no billing object (fully comped at 100% discount).
+	// Status Lifecycle state of the subscription. `ACTIVE` while billing is current; `PAST_DUE` after a failed charge; `CANCELED` once the subscription has ended; `null` when the subscription is fully discounted (`discount_override_pct` of 100) and has no billing-provider object.
 	Status *string `json:"status,omitempty"`
 
 	// SubtotalCents Sum of all item list prices in cents, before discount.
