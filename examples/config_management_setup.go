@@ -9,13 +9,9 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
-var (
-	configMgmtDemoEnvironments = []string{"staging", "production"}
-	configMgmtDemoConfigIDs    = []string{"showcase-user-service", "showcase-common"}
-)
+var configMgmtDemoConfigIDs = []string{"showcase-user-service", "showcase-common"}
 
 func setupConfigManagementShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	ensureEnvironments(ctx, mgmt, configMgmtDemoEnvironments...)
 	cleanupConfigManagementShowcase(ctx, mgmt)
 }
 

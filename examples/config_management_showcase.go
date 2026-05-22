@@ -43,7 +43,7 @@ func main() {
 	shared.SetNumber("pagination_default_page_size", 25, "")
 	shared.SetNumber("max_retries", 5, "production")
 	shared.SetNumber("request_timeout_ms", 10000, "production")
-	shared.SetNumber("max_retries", 2, "staging")
+	shared.SetNumber("max_retries", 2, "production")
 	fatalIfErr("save shared", shared.Save(ctx))
 	fmt.Printf("Created config: %s\n", shared.ID)
 

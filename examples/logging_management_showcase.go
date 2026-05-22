@@ -47,16 +47,15 @@ func main() {
 	fatalIfErr("save payments", payments.Save(ctx))
 	fmt.Printf("Created: %s (level=%v)\n", payments.ID, *payments.Level)
 
-	// override log level for different environments
+	// override log level for the production environment
 	root.SetLevel(smplkit.LogLevelError, "production")
-	root.SetLevel(smplkit.LogLevelDebug, "staging")
 	fatalIfErr("save env overrides", root.Save(ctx))
 	fmt.Printf("Set environment overrides: %v\n", root.Environments)
 
 	// clear environment override (inherits from the default level again)
-	root.ClearLevel("staging")
+	root.ClearLevel("production")
 	fatalIfErr("save after clear", root.Save(ctx))
-	fmt.Printf("Cleared staging override: %v\n", root.Environments)
+	fmt.Printf("Cleared production override: %v\n", root.Environments)
 
 	// fetch a logger by id
 	fetched, err := mgmt.Loggers().Get(ctx, "showcase")

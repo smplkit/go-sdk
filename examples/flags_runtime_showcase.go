@@ -78,7 +78,7 @@ func main() {
 
 	// create the client
 	client, err := smplkit.NewClient(smplkit.Config{
-		Environment: "staging",
+		Environment: "production",
 		Service:     "showcase-service",
 	})
 	fatalIfErr("create client", err)
@@ -170,7 +170,7 @@ func updateRules(ctx context.Context, client *smplkit.Client) {
 	fatalIfErr("get banner-color", err)
 	fatalIfErr("add small rule", currentBanner.AddRule(
 		smplkit.NewRule("Red for small companies").
-			Environment("staging").
+			Environment("production").
 			When("account.employee_count", "<", 50).
 			Serve("red").Build(),
 	))

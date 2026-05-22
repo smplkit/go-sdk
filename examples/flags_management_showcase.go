@@ -72,29 +72,26 @@ func main() {
 	fatalIfErr("save ui-theme", themeFlag.Save(ctx))
 	fmt.Printf("Created flag: %s\n", themeFlag.ID)
 
-	// checkoutFlag (serve true in staging to enterprise US users)
-	checkoutFlag.EnableRules("staging")
+	// checkoutFlag (serve true in production to enterprise US users)
+	checkoutFlag.EnableRules("production")
 	fatalIfErr("add rule 1", checkoutFlag.AddRule(
 		smplkit.NewRule("Enable for enterprise users in US region").
-			Environment("staging").
+			Environment("production").
 			When("user.plan", "==", "enterprise").
 			When("account.region", "==", "us").
 			Serve(true).
 			Build(),
 	))
 
-	// checkoutFlag (serve true in staging for beta testers)
+	// checkoutFlag (serve true in production for beta testers)
 	fatalIfErr("add rule 2", checkoutFlag.AddRule(
 		smplkit.NewRule("Enable for beta testers").
-			Environment("staging").
+			Environment("production").
 			When("user.beta_tester", "==", true).
 			Serve(true).
 			Build(),
 	))
 
-	// checkoutFlag (disabled rules; serve false in production)
-	checkoutFlag.DisableRules("production")
-	checkoutFlag.SetDefault(false, "production")
 	fatalIfErr("save checkout updates", checkoutFlag.Save(ctx))
 	fmt.Printf("Updated flag: %s\n", checkoutFlag.ID)
 
@@ -114,10 +111,10 @@ func main() {
 	fetched, err := mgmt.Flags().Get(ctx, "checkout-v2")
 	fatalIfErr("get checkout-v2", err)
 	fmt.Printf("\nFetched by id: %s\n", fetched.ID)
-	stagingRules := 0
-	if envData, ok := fetched.Environments["staging"].(map[string]interface{}); ok {
+	prodRules := 0
+	if envData, ok := fetched.Environments["production"].(map[string]interface{}); ok {
 		if rules, ok := envData["rules"].([]interface{}); ok {
-			stagingRules = len(rules)
+			prodRules = len(rules)
 		}
 	}
 	prodEnabled := false
@@ -126,7 +123,7 @@ func main() {
 			prodEnabled = e
 		}
 	}
-	fmt.Printf("  staging rules: %d\n", stagingRules)
+	fmt.Printf("  production rules: %d\n", prodRules)
 	fmt.Printf("  production enabled: %v\n", prodEnabled)
 
 	// update a flag
@@ -145,7 +142,7 @@ func main() {
 	fmt.Printf("Updated flag: %s'\n", bannerFlag.ID)
 
 	// delete all the rules of a flag
-	checkoutFlag.ClearRules("staging")
+	checkoutFlag.ClearRules("production")
 	fatalIfErr("save cleared rules", checkoutFlag.Save(ctx))
 
 	// revert production's default value back to the flag default

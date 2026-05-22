@@ -9,18 +9,14 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
-var (
-	flagsMgmtDemoEnvironments = []string{"staging", "production"}
-	flagsMgmtDemoFlagIDs      = []string{
-		"checkout-v2",
-		"banner-color",
-		"max-retries",
-		"ui-theme",
-	}
-)
+var flagsMgmtDemoFlagIDs = []string{
+	"checkout-v2",
+	"banner-color",
+	"max-retries",
+	"ui-theme",
+}
 
 func setupFlagsManagementShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	ensureEnvironments(ctx, mgmt, flagsMgmtDemoEnvironments...)
 	cleanupFlagsManagementShowcase(ctx, mgmt)
 }
 
