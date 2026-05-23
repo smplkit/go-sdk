@@ -37,6 +37,21 @@ func (e ForwarderTransformType) Valid() bool {
 	}
 }
 
+// Defines values for ForwarderCreateResourceType.
+const (
+	ForwarderCreateResourceTypeForwarder ForwarderCreateResourceType = "forwarder"
+)
+
+// Valid indicates whether the value is a known member of the ForwarderCreateResourceType enum.
+func (e ForwarderCreateResourceType) Valid() bool {
+	switch e {
+	case ForwarderCreateResourceTypeForwarder:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ForwarderDeliveryStatus.
 const (
 	FAILED              ForwarderDeliveryStatus = "FAILED"
@@ -546,6 +561,33 @@ type Forwarder struct {
 // ForwarderTransformType Engine used to evaluate “transform“. Must be set whenever “transform“ is set. Today only `JSONATA` is supported.
 type ForwarderTransformType string
 
+// ForwarderCreateRequest JSON:API request envelope for creating a forwarder.
+//
+// Distinct from :class:`ForwarderRequest` because create requires
+// caller-supplied “data.id“ while update does not.
+type ForwarderCreateRequest struct {
+	// Data JSON:API resource envelope for creating a forwarder (id required).
+	Data ForwarderCreateResource `json:"data"`
+}
+
+// ForwarderCreateResource JSON:API resource envelope for creating a forwarder (id required).
+type ForwarderCreateResource struct {
+	// Attributes A destination that receives audit events recorded for the account.
+	//
+	// Each event recorded for the account is evaluated against every enabled
+	// forwarder. If the filter expression evaluates truthy — or is absent —
+	// the event is shaped by the configured transform and delivered to the
+	// destination defined by ``configuration``.
+	Attributes Forwarder `json:"attributes"`
+
+	// Id Client-supplied resource id.
+	Id   string                       `json:"id"`
+	Type *ForwarderCreateResourceType `json:"type,omitempty"`
+}
+
+// ForwarderCreateResourceType defines model for ForwarderCreateResource.Type.
+type ForwarderCreateResourceType string
+
 // ForwarderDelivery A log entry for one attempt to deliver an event to a forwarder.
 type ForwarderDelivery struct {
 	// AttemptNumber 1 for the initial delivery, incremented for each retry.
@@ -635,17 +677,17 @@ type ForwarderListResponse struct {
 	Meta ListMeta `json:"meta"`
 }
 
-// ForwarderRequest JSON:API request envelope for creating or updating a forwarder.
+// ForwarderRequest JSON:API request envelope for updating a forwarder.
 type ForwarderRequest struct {
 	// Data JSON:API resource envelope for a forwarder.
 	//
-	// `id` must not be specified for create requests (the server assigns it).
+	// The caller supplies `id` (the forwarder's key) on create.
 	Data ForwarderResource `json:"data"`
 }
 
 // ForwarderResource JSON:API resource envelope for a forwarder.
 //
-// `id` must not be specified for create requests (the server assigns it).
+// The caller supplies `id` (the forwarder's key) on create.
 type ForwarderResource struct {
 	// Attributes A destination that receives audit events recorded for the account.
 	//
@@ -662,7 +704,7 @@ type ForwarderResource struct {
 type ForwarderResponse struct {
 	// Data JSON:API resource envelope for a forwarder.
 	//
-	// `id` must not be specified for create requests (the server assigns it).
+	// The caller supplies `id` (the forwarder's key) on create.
 	Data ForwarderResource `json:"data"`
 }
 
@@ -1087,7 +1129,7 @@ type ListUsageParams struct {
 type RecordEventApplicationVndAPIPlusJSONRequestBody = EventRequest
 
 // CreateForwarderApplicationVndAPIPlusJSONRequestBody defines body for CreateForwarder for application/vnd.api+json ContentType.
-type CreateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderRequest
+type CreateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderCreateRequest
 
 // UpdateForwarderApplicationVndAPIPlusJSONRequestBody defines body for UpdateForwarder for application/vnd.api+json ContentType.
 type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderRequest
@@ -1200,24 +1242,24 @@ type ClientInterface interface {
 	CreateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteForwarder request
-	DeleteForwarder(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteForwarder(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetForwarder request
-	GetForwarder(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetForwarder(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateForwarderWithBody request with any body
-	UpdateForwarderWithBody(ctx context.Context, forwarderId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateForwarderWithBody(ctx context.Context, forwarderId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, forwarderId string, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RetryFailedForwarderDeliveries request
-	RetryFailedForwarderDeliveries(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RetryFailedForwarderDeliveries(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListForwarderDeliveries request
-	ListForwarderDeliveries(ctx context.Context, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListForwarderDeliveries(ctx context.Context, forwarderId string, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RetryForwarderDelivery request
-	RetryForwarderDelivery(ctx context.Context, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RetryForwarderDelivery(ctx context.Context, forwarderId string, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ExecuteTestForwarderWithBody request with any body
 	ExecuteTestForwarderWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1356,7 +1398,7 @@ func (c *Client) CreateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Co
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteForwarder(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) DeleteForwarder(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteForwarderRequest(c.Server, forwarderId)
 	if err != nil {
 		return nil, err
@@ -1368,7 +1410,7 @@ func (c *Client) DeleteForwarder(ctx context.Context, forwarderId openapi_types.
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetForwarder(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetForwarder(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetForwarderRequest(c.Server, forwarderId)
 	if err != nil {
 		return nil, err
@@ -1380,7 +1422,7 @@ func (c *Client) GetForwarder(ctx context.Context, forwarderId openapi_types.UUI
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateForwarderWithBody(ctx context.Context, forwarderId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateForwarderWithBody(ctx context.Context, forwarderId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateForwarderRequestWithBody(c.Server, forwarderId, contentType, body)
 	if err != nil {
 		return nil, err
@@ -1392,7 +1434,7 @@ func (c *Client) UpdateForwarderWithBody(ctx context.Context, forwarderId openap
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, forwarderId string, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateForwarderRequestWithApplicationVndAPIPlusJSONBody(c.Server, forwarderId, body)
 	if err != nil {
 		return nil, err
@@ -1404,7 +1446,7 @@ func (c *Client) UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Co
 	return c.Client.Do(req)
 }
 
-func (c *Client) RetryFailedForwarderDeliveries(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) RetryFailedForwarderDeliveries(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRetryFailedForwarderDeliveriesRequest(c.Server, forwarderId)
 	if err != nil {
 		return nil, err
@@ -1416,7 +1458,7 @@ func (c *Client) RetryFailedForwarderDeliveries(ctx context.Context, forwarderId
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListForwarderDeliveries(ctx context.Context, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) ListForwarderDeliveries(ctx context.Context, forwarderId string, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListForwarderDeliveriesRequest(c.Server, forwarderId, params)
 	if err != nil {
 		return nil, err
@@ -1428,7 +1470,7 @@ func (c *Client) ListForwarderDeliveries(ctx context.Context, forwarderId openap
 	return c.Client.Do(req)
 }
 
-func (c *Client) RetryForwarderDelivery(ctx context.Context, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) RetryForwarderDelivery(ctx context.Context, forwarderId string, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRetryForwarderDeliveryRequest(c.Server, forwarderId, deliveryId)
 	if err != nil {
 		return nil, err
@@ -2093,12 +2135,12 @@ func NewCreateForwarderRequestWithBody(server string, contentType string, body i
 }
 
 // NewDeleteForwarderRequest generates requests for DeleteForwarder
-func NewDeleteForwarderRequest(server string, forwarderId openapi_types.UUID) (*http.Request, error) {
+func NewDeleteForwarderRequest(server string, forwarderId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2127,12 +2169,12 @@ func NewDeleteForwarderRequest(server string, forwarderId openapi_types.UUID) (*
 }
 
 // NewGetForwarderRequest generates requests for GetForwarder
-func NewGetForwarderRequest(server string, forwarderId openapi_types.UUID) (*http.Request, error) {
+func NewGetForwarderRequest(server string, forwarderId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2161,7 +2203,7 @@ func NewGetForwarderRequest(server string, forwarderId openapi_types.UUID) (*htt
 }
 
 // NewUpdateForwarderRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateForwarder builder with application/vnd.api+json body
-func NewUpdateForwarderRequestWithApplicationVndAPIPlusJSONBody(server string, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+func NewUpdateForwarderRequestWithApplicationVndAPIPlusJSONBody(server string, forwarderId string, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -2172,12 +2214,12 @@ func NewUpdateForwarderRequestWithApplicationVndAPIPlusJSONBody(server string, f
 }
 
 // NewUpdateForwarderRequestWithBody generates requests for UpdateForwarder with any type of body
-func NewUpdateForwarderRequestWithBody(server string, forwarderId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateForwarderRequestWithBody(server string, forwarderId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2208,12 +2250,12 @@ func NewUpdateForwarderRequestWithBody(server string, forwarderId openapi_types.
 }
 
 // NewRetryFailedForwarderDeliveriesRequest generates requests for RetryFailedForwarderDeliveries
-func NewRetryFailedForwarderDeliveriesRequest(server string, forwarderId openapi_types.UUID) (*http.Request, error) {
+func NewRetryFailedForwarderDeliveriesRequest(server string, forwarderId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2242,12 +2284,12 @@ func NewRetryFailedForwarderDeliveriesRequest(server string, forwarderId openapi
 }
 
 // NewListForwarderDeliveriesRequest generates requests for ListForwarderDeliveries
-func NewListForwarderDeliveriesRequest(server string, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams) (*http.Request, error) {
+func NewListForwarderDeliveriesRequest(server string, forwarderId string, params *ListForwarderDeliveriesParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2363,12 +2405,12 @@ func NewListForwarderDeliveriesRequest(server string, forwarderId openapi_types.
 }
 
 // NewRetryForwarderDeliveryRequest generates requests for RetryForwarderDelivery
-func NewRetryForwarderDeliveryRequest(server string, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID) (*http.Request, error) {
+func NewRetryForwarderDeliveryRequest(server string, forwarderId string, deliveryId openapi_types.UUID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "forwarder_id", forwarderId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -2731,24 +2773,24 @@ type ClientWithResponsesInterface interface {
 	CreateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateForwarderResponse, error)
 
 	// DeleteForwarderWithResponse request
-	DeleteForwarderWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteForwarderResponse, error)
+	DeleteForwarderWithResponse(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*DeleteForwarderResponse, error)
 
 	// GetForwarderWithResponse request
-	GetForwarderWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetForwarderResponse, error)
+	GetForwarderWithResponse(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*GetForwarderResponse, error)
 
 	// UpdateForwarderWithBodyWithResponse request with any body
-	UpdateForwarderWithBodyWithResponse(ctx context.Context, forwarderId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error)
+	UpdateForwarderWithBodyWithResponse(ctx context.Context, forwarderId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error)
 
-	UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error)
+	UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, forwarderId string, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error)
 
 	// RetryFailedForwarderDeliveriesWithResponse request
-	RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error)
+	RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error)
 
 	// ListForwarderDeliveriesWithResponse request
-	ListForwarderDeliveriesWithResponse(ctx context.Context, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*ListForwarderDeliveriesResponse, error)
+	ListForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*ListForwarderDeliveriesResponse, error)
 
 	// RetryForwarderDeliveryWithResponse request
-	RetryForwarderDeliveryWithResponse(ctx context.Context, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryForwarderDeliveryResponse, error)
+	RetryForwarderDeliveryWithResponse(ctx context.Context, forwarderId string, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryForwarderDeliveryResponse, error)
 
 	// ExecuteTestForwarderWithBodyWithResponse request with any body
 	ExecuteTestForwarderWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExecuteTestForwarderResponse, error)
@@ -3396,7 +3438,7 @@ func (c *ClientWithResponses) CreateForwarderWithApplicationVndAPIPlusJSONBodyWi
 }
 
 // DeleteForwarderWithResponse request returning *DeleteForwarderResponse
-func (c *ClientWithResponses) DeleteForwarderWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteForwarderResponse, error) {
+func (c *ClientWithResponses) DeleteForwarderWithResponse(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*DeleteForwarderResponse, error) {
 	rsp, err := c.DeleteForwarder(ctx, forwarderId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -3405,7 +3447,7 @@ func (c *ClientWithResponses) DeleteForwarderWithResponse(ctx context.Context, f
 }
 
 // GetForwarderWithResponse request returning *GetForwarderResponse
-func (c *ClientWithResponses) GetForwarderWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetForwarderResponse, error) {
+func (c *ClientWithResponses) GetForwarderWithResponse(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*GetForwarderResponse, error) {
 	rsp, err := c.GetForwarder(ctx, forwarderId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -3414,7 +3456,7 @@ func (c *ClientWithResponses) GetForwarderWithResponse(ctx context.Context, forw
 }
 
 // UpdateForwarderWithBodyWithResponse request with arbitrary body returning *UpdateForwarderResponse
-func (c *ClientWithResponses) UpdateForwarderWithBodyWithResponse(ctx context.Context, forwarderId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error) {
+func (c *ClientWithResponses) UpdateForwarderWithBodyWithResponse(ctx context.Context, forwarderId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error) {
 	rsp, err := c.UpdateForwarderWithBody(ctx, forwarderId, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -3422,7 +3464,7 @@ func (c *ClientWithResponses) UpdateForwarderWithBodyWithResponse(ctx context.Co
 	return ParseUpdateForwarderResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, forwarderId openapi_types.UUID, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error) {
+func (c *ClientWithResponses) UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, forwarderId string, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error) {
 	rsp, err := c.UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx, forwarderId, body, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -3431,7 +3473,7 @@ func (c *ClientWithResponses) UpdateForwarderWithApplicationVndAPIPlusJSONBodyWi
 }
 
 // RetryFailedForwarderDeliveriesWithResponse request returning *RetryFailedForwarderDeliveriesResponse
-func (c *ClientWithResponses) RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error) {
+func (c *ClientWithResponses) RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error) {
 	rsp, err := c.RetryFailedForwarderDeliveries(ctx, forwarderId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -3440,7 +3482,7 @@ func (c *ClientWithResponses) RetryFailedForwarderDeliveriesWithResponse(ctx con
 }
 
 // ListForwarderDeliveriesWithResponse request returning *ListForwarderDeliveriesResponse
-func (c *ClientWithResponses) ListForwarderDeliveriesWithResponse(ctx context.Context, forwarderId openapi_types.UUID, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*ListForwarderDeliveriesResponse, error) {
+func (c *ClientWithResponses) ListForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*ListForwarderDeliveriesResponse, error) {
 	rsp, err := c.ListForwarderDeliveries(ctx, forwarderId, params, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -3449,7 +3491,7 @@ func (c *ClientWithResponses) ListForwarderDeliveriesWithResponse(ctx context.Co
 }
 
 // RetryForwarderDeliveryWithResponse request returning *RetryForwarderDeliveryResponse
-func (c *ClientWithResponses) RetryForwarderDeliveryWithResponse(ctx context.Context, forwarderId openapi_types.UUID, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryForwarderDeliveryResponse, error) {
+func (c *ClientWithResponses) RetryForwarderDeliveryWithResponse(ctx context.Context, forwarderId string, deliveryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RetryForwarderDeliveryResponse, error) {
 	rsp, err := c.RetryForwarderDelivery(ctx, forwarderId, deliveryId, reqEditors...)
 	if err != nil {
 		return nil, err
