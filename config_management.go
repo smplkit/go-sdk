@@ -63,7 +63,7 @@ func (m *ConfigManagement) New(id string, opts ...ConfigOption) *ConfigEntry {
 // createConfig creates the config on the server and updates the local
 // instance. Called from ConfigEntry.Save when CreatedAt is nil.
 func (m *ConfigManagement) createConfig(ctx context.Context, cfg *ConfigEntry) error {
-	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+	reqBody := buildConfigCreateRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
 
 	resp, err := m.gen.CreateConfigWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {

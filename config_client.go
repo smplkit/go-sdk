@@ -470,19 +470,38 @@ func resourceToConfig(r genconfig.ConfigResource, m *ConfigManagement) *ConfigEn
 	}
 }
 
-// buildConfigRequest constructs a ConfigRequest for create or update.
+// buildConfigAttributes constructs the Config attribute payload shared
+// by the create and update envelopes.
+func buildConfigAttributes(name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.Config {
+	return genconfig.Config{
+		Name:         name,
+		Description:  desc,
+		Parent:       parent,
+		Items:        refMap(wrapItemValues(items)),
+		Environments: refEnvs(wrapEnvOverrides(envs)),
+	}
+}
+
+// buildConfigRequest constructs a ConfigRequest envelope used for updates.
 func buildConfigRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigRequest {
 	return genconfig.ConfigRequest{
 		Data: genconfig.ConfigResource{
-			Id:   &id,
-			Type: genconfig.ConfigResourceTypeConfig,
-			Attributes: genconfig.Config{
-				Name:         name,
-				Description:  desc,
-				Parent:       parent,
-				Items:        refMap(wrapItemValues(items)),
-				Environments: refEnvs(wrapEnvOverrides(envs)),
-			},
+			Id:         &id,
+			Type:       genconfig.ConfigResourceTypeConfig,
+			Attributes: buildConfigAttributes(name, desc, parent, items, envs),
+		},
+	}
+}
+
+// buildConfigCreateRequest constructs a ConfigCreateRequest envelope.
+// The create envelope requires a non-nullable string id (vs the update
+// envelope, which optionally echoes the id).
+func buildConfigCreateRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigCreateRequest {
+	return genconfig.ConfigCreateRequest{
+		Data: genconfig.ConfigCreateResource{
+			Id:         id,
+			Type:       genconfig.ConfigCreateResourceTypeConfig,
+			Attributes: buildConfigAttributes(name, desc, parent, items, envs),
 		},
 	}
 }
