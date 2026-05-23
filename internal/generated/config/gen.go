@@ -21,6 +21,21 @@ const (
 	HTTPBearerScopes hTTPBearerContextKey = "HTTPBearer.Scopes"
 )
 
+// Defines values for ConfigCreateResourceType.
+const (
+	ConfigCreateResourceTypeConfig ConfigCreateResourceType = "config"
+)
+
+// Valid indicates whether the value is a known member of the ConfigCreateResourceType enum.
+func (e ConfigCreateResourceType) Valid() bool {
+	switch e {
+	case ConfigCreateResourceTypeConfig:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConfigItemDefinitionType.
 const (
 	BOOLEAN ConfigItemDefinitionType = "BOOLEAN"
@@ -184,6 +199,34 @@ type ConfigBulkResponse struct {
 	Registered int `json:"registered"`
 }
 
+// ConfigCreateRequest JSON:API request envelope for creating a config.
+//
+// Distinct from :class:`ConfigRequest` because create requires
+// caller-supplied “data.id“ while update does not.
+type ConfigCreateRequest struct {
+	// Data JSON:API resource envelope for creating a config (id required).
+	Data ConfigCreateResource `json:"data"`
+}
+
+// ConfigCreateResource JSON:API resource envelope for creating a config (id required).
+type ConfigCreateResource struct {
+	// Attributes A named bag of configuration items, optionally inheriting from another config.
+	//
+	// Items are typed key/value pairs (`STRING`, `NUMBER`, `BOOLEAN`,
+	// `JSON`). Configs may declare per-environment overrides for any item
+	// declared on the config itself or anywhere in its inheritance chain;
+	// resolving a config against an environment merges the chain top-down
+	// and then applies the matching overrides.
+	Attributes Config `json:"attributes"`
+
+	// Id Client-supplied resource id.
+	Id   string                   `json:"id"`
+	Type ConfigCreateResourceType `json:"type"`
+}
+
+// ConfigCreateResourceType defines model for ConfigCreateResource.Type.
+type ConfigCreateResourceType string
+
 // ConfigItemDefinition Type-declared item within a config.
 //
 // Each item carries a value plus a declared type that constrains the
@@ -216,7 +259,7 @@ type ConfigListResponse struct {
 	Meta ListMeta `json:"meta"`
 }
 
-// ConfigRequest JSON:API request envelope for creating or updating a config.
+// ConfigRequest JSON:API request envelope for updating a config.
 type ConfigRequest struct {
 	// Data JSON:API resource envelope for a config.
 	//
@@ -367,7 +410,7 @@ type ListConfigUsageParams struct {
 }
 
 // CreateConfigApplicationVndAPIPlusJSONRequestBody defines body for CreateConfig for application/vnd.api+json ContentType.
-type CreateConfigApplicationVndAPIPlusJSONRequestBody = ConfigRequest
+type CreateConfigApplicationVndAPIPlusJSONRequestBody = ConfigCreateRequest
 
 // BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterConfigs for application/vnd.api+json ContentType.
 type BulkRegisterConfigsApplicationVndAPIPlusJSONRequestBody = ConfigBulkRequest
