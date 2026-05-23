@@ -141,16 +141,6 @@ func (c *ConfigClient) cachedProxy(id string) *LiveConfig {
 	return proxy
 }
 
-// cachedValues exposes the resolved values map for typed getters on
-// LiveConfig. The second return is false if the id is not in the cache.
-func (c *ConfigClient) cachedValues(id string) (map[string]interface{}, bool) {
-	if c.configCache == nil {
-		return nil, false
-	}
-	resolved, ok := c.configCache[id]
-	return resolved, ok
-}
-
 // observeConfigDeclaration queues a config declaration with the
 // management buffer. Called by Bind and GetValueOr.
 func (c *ConfigClient) observeConfigDeclaration(configID, parent, name, description string) {
