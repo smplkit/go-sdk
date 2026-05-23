@@ -194,32 +194,6 @@ func TestContextEntity_SaveDelete_NoClientGuards(t *testing.T) {
 	require.Error(t, ce.Delete(context.Background()))
 }
 
-func TestConfigClient_Snapshot_MissingID(t *testing.T) {
-	cc := &ConfigClient{
-		client:      &Client{environment: "test"},
-		configCache: map[string]map[string]interface{}{},
-	}
-	cc.initOnce.Do(func() {})
-	v, err := cc.Snapshot(context.Background(), "missing")
-	require.NoError(t, err)
-	assert.Nil(t, v)
-}
-
-func TestConfigClient_Snapshot_RecordsMetricsWhenEnabled(t *testing.T) {
-	r := newMetricsReporter(&http.Client{}, "http://example.test", "test", "svc", 0)
-	defer r.Close()
-	cc := &ConfigClient{
-		client: &Client{environment: "test", metrics: r},
-		configCache: map[string]map[string]interface{}{
-			"app": {"host": "localhost"},
-		},
-	}
-	cc.initOnce.Do(func() {})
-	v, err := cc.Snapshot(context.Background(), "app")
-	require.NoError(t, err)
-	assert.Equal(t, "localhost", v["host"])
-}
-
 // Hits saveEntity's network-error path so the classifyError + ReadAll
 // branches both fire.
 func TestContextEntity_Save_NetworkError(t *testing.T) {

@@ -108,7 +108,7 @@ func TestConfigLazyInit_Error(t *testing.T) {
 	defer server.Close()
 
 	c := newTestFullClient(t, server, "test-service")
-	_, err := c.config.GetValue(context.Background(), "test-config")
+	_, err := c.config.GetValue(context.Background(), "test-config", "k")
 	require.Error(t, err)
 }
 
@@ -173,7 +173,7 @@ func TestConfigClient_EnsureInit_FetchChainError(t *testing.T) {
 	defer server.Close()
 
 	c := newTestFullClient(t, server, "test-service")
-	_, err := c.config.GetValue(context.Background(), "test")
+	_, err := c.config.GetValue(context.Background(), "test", "k")
 	require.Error(t, err)
 	assert.Greater(t, callCount, 0)
 }

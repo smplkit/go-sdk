@@ -1104,7 +1104,7 @@ func TestConfigClient_GetValue_NotConnected(t *testing.T) {
 	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
-	_, err = client.Config().GetValue(context.Background(), "my-config")
+	_, err = client.Config().GetValue(context.Background(), "my-config", "k")
 	require.Error(t, err)
 }
 
@@ -1163,26 +1163,23 @@ func TestClient_Connect_And_GetValue(t *testing.T) {
 
 	ctx := context.Background()
 
-	// GetValue with configID only — returns all resolved values
-	allVals, err := client.Config().GetValue(ctx, "db")
+	// Full-config view via Get (raises on missing).
+	allVals, err := client.Config().Get(ctx, "db")
 	require.NoError(t, err)
-	require.NotNil(t, allVals)
-	m := allVals.(map[string]interface{})
-	assert.Equal(t, "testdb", m["host"]) // environment override
-	assert.Equal(t, float64(5432), m["port"])
+	values := allVals.Value()
+	assert.Equal(t, "testdb", values["host"]) // environment override
+	assert.Equal(t, float64(5432), values["port"])
 
 	// GetValue with configID + itemKey
 	host, err := client.Config().GetValue(ctx, "db", "host")
 	require.NoError(t, err)
 	assert.Equal(t, "testdb", host)
 
-	// GetValue for missing config
-	missing, err := client.Config().GetValue(ctx, "nonexistent")
-	require.NoError(t, err)
-	assert.Nil(t, missing)
+	// GetValue for missing config — now an error.
+	_, err = client.Config().Get(ctx, "nonexistent")
+	require.Error(t, err)
 
-	// GetValue for missing item key
-	missingItem, err := client.Config().GetValue(ctx, "db", "nonexistent")
-	require.NoError(t, err)
-	assert.Nil(t, missingItem)
+	// GetValue for missing item key — now an error.
+	_, err = client.Config().GetValue(ctx, "db", "nonexistent")
+	require.Error(t, err)
 }

@@ -269,31 +269,6 @@ func TestDiffAndFire_NoListeners(t *testing.T) {
 
 // ---------- GetInt type coercion ----------
 
-func TestGetInt_NativeInt(t *testing.T) {
-	c := &ConfigClient{
-		configCache: map[string]map[string]interface{}{
-			"app": {"n": int(42)},
-		},
-	}
-	// Mark as already initialized by running initOnce with no-op.
-	c.initOnce.Do(func() {})
-	val, err := c.GetInt(context.Background(), "app", "n")
-	assert.NoError(t, err)
-	assert.Equal(t, 42, val)
-}
-
-func TestGetInt_Int64(t *testing.T) {
-	c := &ConfigClient{
-		configCache: map[string]map[string]interface{}{
-			"app": {"n": int64(99)},
-		},
-	}
-	c.initOnce.Do(func() {})
-	val, err := c.GetInt(context.Background(), "app", "n")
-	assert.NoError(t, err)
-	assert.Equal(t, 99, val)
-}
-
 // ---------- deepMerge ----------
 
 func TestDeepMerge_RecursiveMerge(t *testing.T) {
@@ -517,72 +492,17 @@ func TestGet_Basic(t *testing.T) {
 	assert.Equal(t, float64(3000), resolved.Value()["port"])
 }
 
-func TestGet_NilWhenKeyNotFound(t *testing.T) {
+func TestGet_ErrorWhenIDNotFound(t *testing.T) {
 	cc := &ConfigClient{
 		client:      &Client{environment: "test"},
 		configCache: map[string]map[string]interface{}{},
 	}
 	cc.initOnce.Do(func() {})
 
-	resolved, err := cc.Get(context.Background(), "nonexistent")
-	require.NoError(t, err)
-	require.NotNil(t, resolved)
-	// Live proxy on a non-existent config has zero len and a nil Value().
-	assert.Equal(t, 0, resolved.Len())
-	assert.Nil(t, resolved.Value())
-}
-
-// ---------- ResolveInto ----------
-
-func TestGetInto_Struct(t *testing.T) {
-	cc := &ConfigClient{
-		client: &Client{environment: "test"},
-		configCache: map[string]map[string]interface{}{
-			"db": {"host": "localhost", "port": float64(5432)},
-		},
-	}
-	cc.initOnce.Do(func() {})
-
-	var target struct {
-		Host string  `json:"host"`
-		Port float64 `json:"port"`
-	}
-	err := cc.GetInto(context.Background(), "db", &target)
-	require.NoError(t, err)
-	assert.Equal(t, "localhost", target.Host)
-	assert.Equal(t, float64(5432), target.Port)
-}
-
-func TestGetInto_NilResolved(t *testing.T) {
-	cc := &ConfigClient{
-		client:      &Client{environment: "test"},
-		configCache: map[string]map[string]interface{}{},
-	}
-	cc.initOnce.Do(func() {})
-
-	var target struct{ Host string }
-	err := cc.GetInto(context.Background(), "missing", &target)
-	require.NoError(t, err)
-	assert.Equal(t, "", target.Host)
-}
-
-// ---------- Subscribe ----------
-
-func TestSubscribe_ReturnsLiveConfig(t *testing.T) {
-	cc := &ConfigClient{
-		client: &Client{environment: "test"},
-		configCache: map[string]map[string]interface{}{
-			"app": {"key1": "val1"},
-		},
-	}
-	cc.initOnce.Do(func() {})
-
-	lc, err := cc.Subscribe(context.Background(), "app")
-	require.NoError(t, err)
-	require.NotNil(t, lc)
-
-	val := lc.Value()
-	assert.Equal(t, "val1", val["key1"])
+	_, err := cc.Get(context.Background(), "nonexistent")
+	require.Error(t, err)
+	var nf *NotFoundError
+	require.True(t, errors.As(err, &nf))
 }
 
 // ---------- fetchChain with parent walking ----------
@@ -634,62 +554,6 @@ func TestFetchChain_ParentWalking(t *testing.T) {
 	assert.Len(t, chain, 2)
 	assert.Equal(t, childID, chain[0].ID)
 	assert.Equal(t, parentID, chain[1].ID)
-}
-
-// ---------- unmarshalResolved ----------
-
-func TestUnmarshalResolved_WithStruct(t *testing.T) {
-	resolved := map[string]interface{}{
-		"database.host": "localhost",
-		"database.port": float64(5432),
-	}
-	var target struct {
-		Database struct {
-			Host string  `json:"database.host"`
-			Port float64 `json:"database.port"`
-		} `json:"database"`
-	}
-	// unmarshalResolved first unflattens, so use the unflattened structure
-	var target2 struct {
-		Database struct {
-			Host string  `json:"host"`
-			Port float64 `json:"port"`
-		} `json:"database"`
-	}
-	err := unmarshalResolved(resolved, &target2)
-	require.NoError(t, err)
-	assert.Equal(t, "localhost", target2.Database.Host)
-	assert.Equal(t, float64(5432), target2.Database.Port)
-
-	// nil resolved case
-	err = unmarshalResolved(nil, &target)
-	require.NoError(t, err)
-}
-
-// ---------- unflattenDotNotation conflict case ----------
-
-func TestUnflattenDotNotation_ConflictNonMapOverwritten(t *testing.T) {
-	// To exercise the conflict branch (non-map overwritten by map), we need
-	// map iteration to process the scalar key before the dotted key.
-	// Since Go map iteration is random, we retry with many different maps
-	// until the branch is hit. In practice this takes 1-2 iterations.
-	for i := 0; i < 100; i++ {
-		flat := map[string]interface{}{
-			"db":      "scalar-value",
-			"db.host": "localhost",
-		}
-		result := unflattenDotNotation(flat)
-		dbVal, ok := result["db"]
-		require.True(t, ok)
-		if dbMap, isMap := dbVal.(map[string]interface{}); isMap {
-			// The conflict branch was hit: "db" was a scalar, then overwritten
-			assert.Equal(t, "localhost", dbMap["host"])
-			return
-		}
-	}
-	// If we never hit the conflict branch in 100 iterations, the scalar
-	// key was always processed second. This is astronomically unlikely but
-	// we still exercise the function.
 }
 
 // ---------- refMap nil case ----------
@@ -839,39 +703,6 @@ func TestLiveConfig_DictLikeAccess_MissingID(t *testing.T) {
 	assert.Nil(t, lc.Keys())
 }
 
-// ---------- LiveConfig.ValueInto ----------
-
-func TestLiveConfig_ValueInto(t *testing.T) {
-	cc := &ConfigClient{
-		client: &Client{environment: "test"},
-		configCache: map[string]map[string]interface{}{
-			"db": {"host": "localhost", "port": float64(5432)},
-		},
-	}
-	lc := &LiveConfig{client: cc, id: "db"}
-
-	var target struct {
-		Host string  `json:"host"`
-		Port float64 `json:"port"`
-	}
-	err := lc.ValueInto(&target)
-	require.NoError(t, err)
-	assert.Equal(t, "localhost", target.Host)
-	assert.Equal(t, float64(5432), target.Port)
-}
-
-func TestLiveConfig_ValueInto_NilCache(t *testing.T) {
-	cc := &ConfigClient{
-		client: &Client{environment: "test"},
-	}
-	lc := &LiveConfig{client: cc, id: "app"}
-
-	var target struct{ Host string }
-	err := lc.ValueInto(&target)
-	require.NoError(t, err)
-	assert.Equal(t, "", target.Host)
-}
-
 // ---------- getByID with io.ReadAll failure (via broken body) ----------
 
 func TestGetByID_InvalidJSONResponse(t *testing.T) {
@@ -950,72 +781,6 @@ func TestGet_EnsureInitError(t *testing.T) {
 	_, err := cc.Get(context.Background(), "app")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "init failed")
-}
-
-// ---------- ResolveInto ensureInit error ----------
-
-func TestGetInto_EnsureInitError(t *testing.T) {
-	cc := &ConfigClient{
-		client: &Client{environment: "test"},
-	}
-	cc.initOnce.Do(func() {
-		cc.initErr = &Error{Message: "init failed"}
-	})
-
-	var target struct{ Host string }
-	err := cc.GetInto(context.Background(), "db", &target)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "init failed")
-}
-
-// ---------- Subscribe ensureInit error ----------
-
-func TestSubscribe_EnsureInitError(t *testing.T) {
-	cc := &ConfigClient{
-		client: &Client{environment: "test"},
-	}
-	cc.initOnce.Do(func() {
-		cc.initErr = &Error{Message: "init failed"}
-	})
-
-	_, err := cc.Subscribe(context.Background(), "app")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "init failed")
-}
-
-// ---------- unmarshalResolved with non-nil data ----------
-
-func TestUnmarshalResolved_NilInput(t *testing.T) {
-	var target struct{ Host string }
-	err := unmarshalResolved(nil, &target)
-	require.NoError(t, err)
-	assert.Equal(t, "", target.Host)
-}
-
-func TestUnmarshalResolved_SimpleMap(t *testing.T) {
-	resolved := map[string]interface{}{
-		"host": "localhost",
-		"port": float64(5432),
-	}
-	var target struct {
-		Host string  `json:"host"`
-		Port float64 `json:"port"`
-	}
-	err := unmarshalResolved(resolved, &target)
-	require.NoError(t, err)
-	assert.Equal(t, "localhost", target.Host)
-	assert.Equal(t, float64(5432), target.Port)
-}
-
-func TestUnmarshalResolved_MarshalError(t *testing.T) {
-	// json.Marshal fails on channels
-	resolved := map[string]interface{}{
-		"bad": make(chan int),
-	}
-	var target struct{}
-	err := unmarshalResolved(resolved, &target)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to marshal resolved config")
 }
 
 // ---------- getByID with broken body (uses custom transport) ----------

@@ -2,7 +2,7 @@ package smplkit
 
 // Tests for the SDK-side discovery pipeline: configRegistrationBuffer,
 // ConfigManagement.RegisterConfig / RegisterConfigItem / Flush, the
-// ConfigClient.GetOrCreate path, and the typed getters on LiveConfig.
+// ConfigClient.Bind path, and the new GetValue / GetValueOr forms.
 //
 // These live in the same package as the implementation (white-box) so
 // they can poke at the buffer's unexported fields and exercise the
@@ -182,217 +182,18 @@ func TestConfigManagementFlushEmptyIsNoop(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LiveConfig typed getters
+// Shared helpers
 // ---------------------------------------------------------------------------
 
+// newStubConfigClient builds a ConfigClient with a pre-populated cache,
+// a stub Client, and a no-op management surface — enough scaffolding for
+// the in-package tests below to exercise Bind / Get / observe paths
+// without requiring an HTTP server.
 func newStubConfigClient(id string, values map[string]interface{}) *ConfigClient {
 	cc := &ConfigClient{configCache: map[string]map[string]interface{}{id: values}}
 	cc.client = &Client{environment: "prod", service: "svc"}
-	// Set up a no-op management so observeItemDeclaration calls don't crash.
 	cc.management = &ConfigManagement{}
 	return cc
-}
-
-func TestLiveConfigGetBoolReturnsValue(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"enabled": true})
-	proxy := cc.cachedProxy("billing")
-	if !proxy.GetBool("enabled", false) {
-		t.Fatalf("expected true")
-	}
-}
-
-func TestLiveConfigGetBoolReturnsDefaultOnMissing(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{})
-	proxy := cc.cachedProxy("billing")
-	if !proxy.GetBool("missing", true) {
-		t.Fatalf("expected default true")
-	}
-}
-
-func TestLiveConfigGetBoolReturnsDefaultOnTypeMismatch(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"enabled": "yes"})
-	proxy := cc.cachedProxy("billing")
-	if proxy.GetBool("enabled", false) {
-		t.Fatalf("expected default false on string-not-bool")
-	}
-}
-
-func TestLiveConfigGetIntReturnsValue(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"max": 5})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetInt("max", 0); got != 5 {
-		t.Fatalf("expected 5, got %d", got)
-	}
-}
-
-func TestLiveConfigGetIntCoercesFloatWholeNumber(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"max": float64(5)})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetInt("max", 0); got != 5 {
-		t.Fatalf("expected 5 from float64, got %d", got)
-	}
-}
-
-func TestLiveConfigGetIntCoercesInt64(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"max": int64(5)})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetInt("max", 0); got != 5 {
-		t.Fatalf("expected 5 from int64, got %d", got)
-	}
-}
-
-func TestLiveConfigGetIntRejectsNonIntegerFloat(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"max": 1.5})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetInt("max", 99); got != 99 {
-		t.Fatalf("expected default 99 for 1.5, got %d", got)
-	}
-}
-
-func TestLiveConfigGetIntReturnsDefaultOnMissing(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetInt("missing", 99); got != 99 {
-		t.Fatalf("expected 99, got %d", got)
-	}
-}
-
-func TestLiveConfigGetIntReturnsDefaultOnTypeMismatch(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"max": "not a number"})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetInt("max", 99); got != 99 {
-		t.Fatalf("expected 99 on type mismatch, got %d", got)
-	}
-}
-
-func TestLiveConfigGetIntReturnsDefaultWhenCacheMissing(t *testing.T) {
-	cc := &ConfigClient{client: &Client{environment: "prod"}, management: &ConfigManagement{}}
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetInt("k", 99); got != 99 {
-		t.Fatalf("expected default when no cache, got %d", got)
-	}
-}
-
-func TestLiveConfigGetFloatReturnsValue(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"ratio": 0.75})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetFloat("ratio", 0); got != 0.75 {
-		t.Fatalf("expected 0.75, got %f", got)
-	}
-}
-
-func TestLiveConfigGetFloatCoercesInt(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"ratio": 5})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetFloat("ratio", 0); got != 5.0 {
-		t.Fatalf("expected 5.0, got %f", got)
-	}
-}
-
-func TestLiveConfigGetFloatCoercesInt64(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"ratio": int64(5)})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetFloat("ratio", 0); got != 5.0 {
-		t.Fatalf("expected 5.0 from int64, got %f", got)
-	}
-}
-
-func TestLiveConfigGetFloatReturnsDefaultOnMissing(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetFloat("missing", 0.5); got != 0.5 {
-		t.Fatalf("expected 0.5, got %f", got)
-	}
-}
-
-func TestLiveConfigGetFloatReturnsDefaultOnTypeMismatch(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"ratio": "x"})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetFloat("ratio", 0.5); got != 0.5 {
-		t.Fatalf("expected 0.5, got %f", got)
-	}
-}
-
-func TestLiveConfigGetFloatReturnsDefaultWhenCacheMissing(t *testing.T) {
-	cc := &ConfigClient{client: &Client{}, management: &ConfigManagement{}}
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetFloat("k", 0.5); got != 0.5 {
-		t.Fatalf("expected 0.5, got %f", got)
-	}
-}
-
-func TestLiveConfigGetStringReturnsValue(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"name": "billing"})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetString("name", ""); got != "billing" {
-		t.Fatalf("expected billing, got %s", got)
-	}
-}
-
-func TestLiveConfigGetStringReturnsDefaultOnMissing(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetString("name", "default"); got != "default" {
-		t.Fatalf("expected default, got %s", got)
-	}
-}
-
-func TestLiveConfigGetStringReturnsDefaultOnTypeMismatch(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"name": 42})
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetString("name", "default"); got != "default" {
-		t.Fatalf("expected default, got %s", got)
-	}
-}
-
-func TestLiveConfigGetStringReturnsDefaultWhenCacheMissing(t *testing.T) {
-	cc := &ConfigClient{client: &Client{}, management: &ConfigManagement{}}
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetString("k", "x"); got != "x" {
-		t.Fatalf("expected x, got %s", got)
-	}
-}
-
-func TestLiveConfigGetJSONReturnsArbitraryValue(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"payload": map[string]interface{}{"a": 1}})
-	proxy := cc.cachedProxy("billing")
-	got := proxy.GetJSON("payload", nil)
-	gotMap, ok := got.(map[string]interface{})
-	if !ok || gotMap["a"] != 1 {
-		t.Fatalf("expected {a:1}, got %v", got)
-	}
-}
-
-func TestLiveConfigGetJSONReturnsDefaultOnMissing(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{})
-	proxy := cc.cachedProxy("billing")
-	got := proxy.GetJSON("missing", map[string]interface{}{"fallback": true})
-	if m, ok := got.(map[string]interface{}); !ok || m["fallback"] != true {
-		t.Fatalf("expected fallback default, got %v", got)
-	}
-}
-
-func TestLiveConfigGetJSONReturnsDefaultWhenCacheMissing(t *testing.T) {
-	cc := &ConfigClient{client: &Client{}, management: &ConfigManagement{}}
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetJSON("k", "x"); got != "x" {
-		t.Fatalf("expected x, got %v", got)
-	}
-}
-
-func TestWithItemDescriptionPropagates(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{"max": 5})
-	// addItem requires a prior declare, so register the config first.
-	cc.management.RegisterConfig("billing", "svc", "prod", "", "", "")
-	proxy := cc.cachedProxy("billing")
-	proxy.GetInt("max", 5, WithItemDescription("hello"))
-	batch := cc.management.buffer.drain()
-	if len(batch) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(batch))
-	}
-	if got := batch[0].items["max"].description; got != "hello" {
-		t.Fatalf("expected description 'hello', got %q", got)
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -428,23 +229,291 @@ func TestCachedProxyReturnsSameInstance(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateDoesNotErrorOnMissingCache(t *testing.T) {
-	cc := newStubConfigClient("billing", map[string]interface{}{})
+// ---------------------------------------------------------------------------
+// ConfigClient.Bind (struct and map paths)
+// ---------------------------------------------------------------------------
+
+type stubPlan struct {
+	MaxSeats  int    `json:"max_seats"`
+	TrialDays int    `json:"trial_days"`
+	Tier      string `json:"tier"`
+}
+
+type stubBilling struct {
+	Plan stubPlan `json:"plan"`
+}
+
+func skipInit(cc *ConfigClient) {
 	cc.initOnce.Do(func() {}) // skip ensureInit network
 	cc.initErr = nil
-	if _, err := cc.GetOrCreate(context.Background(), "new-config",
-		WithConfigParent("billing"),
-		WithConfigName("New"),
-		WithConfigDescription("desc"),
-	); err != nil {
-		t.Fatalf("GetOrCreate error: %v", err)
+}
+
+func TestBindStructRegistersFieldsViaJSONTags(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	plan := &stubPlan{MaxSeats: 5, TrialDays: 14, Tier: "free"}
+	if err := cc.Bind(context.Background(), "billing", plan); err != nil {
+		t.Fatalf("Bind: %v", err)
 	}
 	batch := cc.management.buffer.drain()
-	if len(batch) != 1 || batch[0].id != "new-config" {
+	if len(batch) != 1 || batch[0].id != "billing" {
 		t.Fatalf("buffer not populated: %+v", batch)
 	}
-	if batch[0].parent != "billing" {
-		t.Fatalf("expected parent=billing, got %q", batch[0].parent)
+	if batch[0].name != "stubPlan" {
+		t.Fatalf("expected name=stubPlan, got %q", batch[0].name)
+	}
+	wantKeys := map[string]struct{}{"max_seats": {}, "trial_days": {}, "tier": {}}
+	for k := range wantKeys {
+		if _, ok := batch[0].items[k]; !ok {
+			t.Fatalf("missing item %q in batch: %+v", k, batch[0].items)
+		}
+	}
+}
+
+func TestBindStructFlattensNestedFields(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	billing := &stubBilling{Plan: stubPlan{MaxSeats: 5, TrialDays: 14, Tier: "free"}}
+	if err := cc.Bind(context.Background(), "billing", billing); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	batch := cc.management.buffer.drain()
+	want := []string{"plan.max_seats", "plan.trial_days", "plan.tier"}
+	for _, k := range want {
+		if _, ok := batch[0].items[k]; !ok {
+			t.Fatalf("missing item %q in batch: %+v", k, batch[0].items)
+		}
+	}
+}
+
+func TestBindStructIsIdempotent(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	first := &stubPlan{MaxSeats: 5}
+	second := &stubPlan{MaxSeats: 999}
+	if err := cc.Bind(context.Background(), "billing", first); err != nil {
+		t.Fatalf("first Bind: %v", err)
+	}
+	if err := cc.Bind(context.Background(), "billing", second); err != nil {
+		t.Fatalf("second Bind: %v", err)
+	}
+	cc.bindingsMu.Lock()
+	defer cc.bindingsMu.Unlock()
+	if got := cc.bindings["billing"]; got != interface{}(first) {
+		t.Fatalf("expected first instance to remain bound; got %v", got)
+	}
+}
+
+func TestBindMapRegistersAndFlattens(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{})
+	skipInit(cc)
+	target := map[string]interface{}{
+		"primary":              map[string]interface{}{"host": "h", "port": 5432},
+		"pool_size":            10,
+		"statement_timeout_ms": 30000,
+	}
+	if err := cc.Bind(context.Background(), "db", target); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	batch := cc.management.buffer.drain()
+	keys := make(map[string]struct{})
+	for k := range batch[0].items {
+		keys[k] = struct{}{}
+	}
+	for _, want := range []string{"primary.host", "primary.port", "pool_size", "statement_timeout_ms"} {
+		if _, ok := keys[want]; !ok {
+			t.Fatalf("missing key %q in registered items: %v", want, keys)
+		}
+	}
+	if batch[0].name != "" {
+		t.Fatalf("dict-bound name should be empty, got %q", batch[0].name)
+	}
+}
+
+func TestBindWithParentResolvesParentID(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	base := &stubPlan{}
+	if err := cc.Bind(context.Background(), "base", base); err != nil {
+		t.Fatalf("base Bind: %v", err)
+	}
+	// Drain the base's items so the child's entry is the only one left.
+	cc.management.buffer.drain()
+	child := &stubPlan{MaxSeats: 50}
+	if err := cc.Bind(context.Background(), "child", child, WithBindParent(base)); err != nil {
+		t.Fatalf("child Bind: %v", err)
+	}
+	batch := cc.management.buffer.drain()
+	if batch[0].parent != "base" {
+		t.Fatalf("expected parent=base, got %q", batch[0].parent)
+	}
+}
+
+func TestBindRejectsUnboundParent(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	stray := &stubPlan{}
+	err := cc.Bind(context.Background(), "child", &stubPlan{}, WithBindParent(stray))
+	if err == nil {
+		t.Fatalf("expected error for unbound parent")
+	}
+}
+
+func TestBindRejectsNonObject(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	if err := cc.Bind(context.Background(), "billing", nil); err == nil {
+		t.Fatalf("expected error for nil target")
+	}
+	if err := cc.Bind(context.Background(), "billing", "not an object"); err == nil {
+		t.Fatalf("expected error for string target")
+	}
+	var nilPtr *stubPlan
+	if err := cc.Bind(context.Background(), "billing", nilPtr); err == nil {
+		t.Fatalf("expected error for nil pointer target")
+	}
+}
+
+func TestBindSyncsTargetFromCacheStruct(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{
+		"max_seats":  999,
+		"trial_days": 30,
+		"tier":       "enterprise",
+	})
+	skipInit(cc)
+	plan := &stubPlan{MaxSeats: 5, TrialDays: 14, Tier: "free"}
+	if err := cc.Bind(context.Background(), "billing", plan); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	if plan.MaxSeats != 999 || plan.TrialDays != 30 || plan.Tier != "enterprise" {
+		t.Fatalf("cache values did not apply to bound struct: %+v", plan)
+	}
+}
+
+func TestBindSyncsTargetFromCacheMap(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{
+		"pool_size": 99,
+	})
+	skipInit(cc)
+	target := map[string]interface{}{"pool_size": 10}
+	if err := cc.Bind(context.Background(), "db", target); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	if target["pool_size"] != 99 {
+		t.Fatalf("cache value did not apply to bound map: %+v", target)
+	}
+}
+
+func TestDiffAndFireMutatesBoundStruct(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{"max_seats": 5})
+	skipInit(cc)
+	plan := &stubPlan{MaxSeats: 5}
+	if err := cc.Bind(context.Background(), "billing", plan); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	old := map[string]map[string]interface{}{"billing": {"max_seats": 5}}
+	new := map[string]map[string]interface{}{"billing": {"max_seats": 50}}
+	cc.diffAndFire(old, new, "websocket")
+	if plan.MaxSeats != 50 {
+		t.Fatalf("expected struct to mutate to 50, got %d", plan.MaxSeats)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ConfigClient.GetValue / GetValueOr
+// ---------------------------------------------------------------------------
+
+func TestGetValueReturnsCachedValue(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{"host": "localhost"})
+	skipInit(cc)
+	got, err := cc.GetValue(context.Background(), "db", "host")
+	if err != nil {
+		t.Fatalf("GetValue: %v", err)
+	}
+	if got != "localhost" {
+		t.Fatalf("expected localhost, got %v", got)
+	}
+}
+
+func TestGetValueReturnsErrorOnMissingConfig(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{})
+	skipInit(cc)
+	if _, err := cc.GetValue(context.Background(), "missing", "k"); err == nil {
+		t.Fatalf("expected error for missing config")
+	}
+}
+
+func TestGetValueReturnsErrorOnMissingKey(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{})
+	skipInit(cc)
+	if _, err := cc.GetValue(context.Background(), "db", "missing"); err == nil {
+		t.Fatalf("expected error for missing key")
+	}
+}
+
+func TestGetValueOrReturnsCachedValueWhenPresent(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{"host": "real"})
+	skipInit(cc)
+	got := cc.GetValueOr(context.Background(), "db", "host", "fallback")
+	if got != "real" {
+		t.Fatalf("expected real, got %v", got)
+	}
+}
+
+func TestGetValueOrReturnsDefaultWhenConfigMissing(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{})
+	skipInit(cc)
+	got := cc.GetValueOr(context.Background(), "missing", "k", "fallback")
+	if got != "fallback" {
+		t.Fatalf("expected fallback, got %v", got)
+	}
+}
+
+func TestGetValueOrReturnsDefaultWhenKeyMissing(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{})
+	skipInit(cc)
+	got := cc.GetValueOr(context.Background(), "db", "k", "fallback")
+	if got != "fallback" {
+		t.Fatalf("expected fallback, got %v", got)
+	}
+}
+
+func TestGetValueOrRegistersConfigAndKey(t *testing.T) {
+	cc := newStubConfigClient("db", map[string]interface{}{})
+	skipInit(cc)
+	cc.GetValueOr(context.Background(), "db", "host", "postgres://...")
+	batch := cc.management.buffer.drain()
+	if len(batch) != 1 || batch[0].id != "db" {
+		t.Fatalf("buffer not populated: %+v", batch)
+	}
+	item, ok := batch[0].items["host"]
+	if !ok {
+		t.Fatalf("missing item 'host' in batch: %+v", batch[0].items)
+	}
+	if item.itemType != "STRING" || item.value != "postgres://..." {
+		t.Fatalf("unexpected item: %+v", item)
+	}
+}
+
+func TestGetValueOrInfersTypeFromDefault(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	cc.GetValueOr(context.Background(), "billing", "max_seats", 5)
+	cc.GetValueOr(context.Background(), "billing", "active", true)
+	cc.GetValueOr(context.Background(), "billing", "name", "Acme")
+	cc.GetValueOr(context.Background(), "billing", "rate", 1.5)
+	batch := cc.management.buffer.drain()
+	types := map[string]string{}
+	for k, item := range batch[0].items {
+		types[k] = item.itemType
+	}
+	for k, want := range map[string]string{
+		"max_seats": "NUMBER", "active": "BOOLEAN",
+		"name": "STRING", "rate": "NUMBER",
+	} {
+		if got := types[k]; got != want {
+			t.Fatalf("%q: expected %s, got %s", k, want, got)
+		}
 	}
 }
 
@@ -489,14 +558,6 @@ func TestConfigManagementFlushPostsToBulkEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(lastBody, "billing") || !strings.Contains(lastBody, "max_seats") {
 		t.Fatalf("body missing expected fields: %s", lastBody)
-	}
-}
-
-func TestLiveConfigGetBoolReturnsDefaultWhenCacheMissing(t *testing.T) {
-	cc := &ConfigClient{client: &Client{}, management: &ConfigManagement{}}
-	proxy := cc.cachedProxy("billing")
-	if got := proxy.GetBool("k", true); !got {
-		t.Fatalf("expected default true, got %v", got)
 	}
 }
 
@@ -636,7 +697,7 @@ func TestRegisterConfigItemThresholdTriggersBackgroundFlush(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateReturnsEnsureInitError(t *testing.T) {
+func TestBindReturnsEnsureInitError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Always 500 — ensureInit's list will fail.
 		w.WriteHeader(http.StatusInternalServerError)
@@ -652,14 +713,10 @@ func TestGetOrCreateReturnsEnsureInitError(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	defer client.Close()
-	if _, err := client.Config().GetOrCreate(context.Background(), "new"); err == nil {
+	if err := client.Config().Bind(context.Background(), "new", &stubPlan{}); err == nil {
 		t.Fatalf("expected error from ensureInit failure")
 	}
 }
-
-// Compile-time guard that the showcase-imported types are still exported
-// under their expected names.
-var _ ItemOption = WithItemDescription("x")
 
 // Suppress unused-import false positives if any.
 var _ = strings.TrimSpace

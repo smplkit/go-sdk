@@ -2,7 +2,6 @@ package smplkit
 
 import (
 	"context"
-	"log"
 	"time"
 )
 
@@ -124,14 +123,6 @@ func (lc *LiveConfig) Value() map[string]interface{} {
 	return cp
 }
 
-// ValueInto unmarshals the latest resolved values into the target struct.
-// The target must be a pointer to a struct. Dot-notation keys (e.g. "database.host")
-// are expanded into nested structures before unmarshaling.
-func (lc *LiveConfig) ValueInto(target interface{}) error {
-	resolved := lc.Value()
-	return unmarshalResolved(resolved, target)
-}
-
 // Get returns a single resolved value by key. The second return is false
 // if the key is absent. Mirrors Python's `proxy[key]` / `proxy.get(key)`
 // dict-like access.
@@ -192,139 +183,4 @@ func (lc *LiveConfig) OnChange(cb func(*ConfigChangeEvent)) {
 // in this config changes. Mirrors `proxy.on_change(item_key=...)`.
 func (lc *LiveConfig) OnChangeKey(key string, cb func(*ConfigChangeEvent)) {
 	lc.client.OnChange(cb, WithConfigID(lc.id), WithItemKey(key))
-}
-
-// ItemOption configures an item declaration made through a typed getter.
-type ItemOption func(*itemOptions)
-
-type itemOptions struct {
-	description string
-}
-
-// WithItemDescription attaches a human-readable description to a
-// declared item. Mirrors Python's `description="..."` kwarg.
-func WithItemDescription(description string) ItemOption {
-	return func(o *itemOptions) { o.description = description }
-}
-
-func applyItemOptions(opts []ItemOption) itemOptions {
-	var o itemOptions
-	for _, opt := range opts {
-		opt(&o)
-	}
-	return o
-}
-
-// ID exposed for callers that need the proxy's config id (parent
-// resolution, logging). Already declared above on LiveConfig.
-
-// GetBool reads a BOOLEAN item, registering the declaration on first
-// call. Returns the resolved value, or the default when the item is
-// absent or the resolved value cannot be coerced to bool.
-func (lc *LiveConfig) GetBool(key string, defaultValue bool, opts ...ItemOption) bool {
-	o := applyItemOptions(opts)
-	lc.client.observeItemDeclaration(lc.id, key, "BOOLEAN", defaultValue, o.description)
-	resolved, ok := lc.client.cachedValues(lc.id)
-	if !ok {
-		return defaultValue
-	}
-	v, present := resolved[key]
-	if !present {
-		return defaultValue
-	}
-	if b, ok := v.(bool); ok {
-		return b
-	}
-	log.Printf("smplkit: item type mismatch: %s.%s expected BOOLEAN, returning default", lc.id, key)
-	return defaultValue
-}
-
-// GetInt reads a NUMBER item as int, registering the declaration on
-// first call. Returns the default on absence or type mismatch.
-func (lc *LiveConfig) GetInt(key string, defaultValue int, opts ...ItemOption) int {
-	o := applyItemOptions(opts)
-	lc.client.observeItemDeclaration(lc.id, key, "NUMBER", defaultValue, o.description)
-	resolved, ok := lc.client.cachedValues(lc.id)
-	if !ok {
-		return defaultValue
-	}
-	v, present := resolved[key]
-	if !present {
-		return defaultValue
-	}
-	switch n := v.(type) {
-	case int:
-		return n
-	case int64:
-		return int(n)
-	case float64:
-		if n == float64(int(n)) {
-			return int(n)
-		}
-	}
-	log.Printf("smplkit: item type mismatch: %s.%s expected NUMBER (int), returning default", lc.id, key)
-	return defaultValue
-}
-
-// GetFloat reads a NUMBER item as float64, registering the declaration
-// on first call. Returns the default on absence or type mismatch.
-func (lc *LiveConfig) GetFloat(key string, defaultValue float64, opts ...ItemOption) float64 {
-	o := applyItemOptions(opts)
-	lc.client.observeItemDeclaration(lc.id, key, "NUMBER", defaultValue, o.description)
-	resolved, ok := lc.client.cachedValues(lc.id)
-	if !ok {
-		return defaultValue
-	}
-	v, present := resolved[key]
-	if !present {
-		return defaultValue
-	}
-	switch n := v.(type) {
-	case float64:
-		return n
-	case int:
-		return float64(n)
-	case int64:
-		return float64(n)
-	}
-	log.Printf("smplkit: item type mismatch: %s.%s expected NUMBER (float), returning default", lc.id, key)
-	return defaultValue
-}
-
-// GetString reads a STRING item, registering the declaration on first
-// call. Returns the default on absence or type mismatch.
-func (lc *LiveConfig) GetString(key string, defaultValue string, opts ...ItemOption) string {
-	o := applyItemOptions(opts)
-	lc.client.observeItemDeclaration(lc.id, key, "STRING", defaultValue, o.description)
-	resolved, ok := lc.client.cachedValues(lc.id)
-	if !ok {
-		return defaultValue
-	}
-	v, present := resolved[key]
-	if !present {
-		return defaultValue
-	}
-	if s, ok := v.(string); ok {
-		return s
-	}
-	log.Printf("smplkit: item type mismatch: %s.%s expected STRING, returning default", lc.id, key)
-	return defaultValue
-}
-
-// GetJSON reads a JSON item, registering the declaration on first call.
-// Unlike the other typed getters this accepts any value type since JSON
-// is the escape hatch for structured payloads. Returns the default when
-// the item is absent.
-func (lc *LiveConfig) GetJSON(key string, defaultValue interface{}, opts ...ItemOption) interface{} {
-	o := applyItemOptions(opts)
-	lc.client.observeItemDeclaration(lc.id, key, "JSON", defaultValue, o.description)
-	resolved, ok := lc.client.cachedValues(lc.id)
-	if !ok {
-		return defaultValue
-	}
-	v, present := resolved[key]
-	if !present {
-		return defaultValue
-	}
-	return v
 }

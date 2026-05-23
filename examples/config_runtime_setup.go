@@ -1,13 +1,11 @@
 //go:build ignore
 
-// Setup, simulation, and cleanup helpers for config_runtime_showcase.go.
+// Setup and simulation helpers for config_runtime_showcase.go.
 //
-// The runtime showcase is intentionally runtime-only — declarations,
-// typed getters, change listeners. In a real deployment the configs
-// would either already exist (admin-curated) or be created by the
-// SDK's discovery on first run. Here we pre-create them through the
-// management API so the showcase can also demonstrate a live admin
-// override end-to-end in a single process.
+// The runtime showcase declares its own configs via
+// client.Config().Bind, so this helper only handles cleanup and the
+// live admin-override simulation that stands in for an operator
+// editing values in the smplkit console.
 package main
 
 import (
@@ -17,32 +15,21 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
-var configRuntimeDemoConfigIDs = []string{"showcase-billing", "showcase-common"}
-
-func setupConfigRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	cleanupConfigRuntimeShowcase(ctx, mgmt)
-
-	common := mgmt.Config().New("showcase-common",
-		smplkit.WithConfigDescription("Shared defaults for showcase services."),
-	)
-	common.SetString("app.name", "Acme SaaS", "")
-	common.SetString("support.email", "support@acme.dev", "")
-	fatalIfErr("save common", common.Save(ctx))
-
-	billing := mgmt.Config().New("showcase-billing",
-		smplkit.WithConfigDescription("Plan-limit configuration for billing."),
-		smplkit.WithConfigParent(common.ID),
-	)
-	billing.SetNumber("plan.max_seats", 5, "")
-	billing.SetNumber("plan.trial_days", 14, "")
-	billing.SetString("plan.tier", "free", "")
-	fatalIfErr("save billing", billing.Save(ctx))
+var configRuntimeDemoConfigIDs = []string{
+	"showcase-billing",
+	"showcase-common",
+	"showcase-database",
 }
 
 func simulateAdminOverride(ctx context.Context, mgmt *smplkit.ManagementClient) {
+	// Real customers never read back through the management API
+	// immediately after binding via the runtime client — this is a
+	// simulation-only step. Push pending runtime-side registrations
+	// through so the lookup below can find the freshly-declared config.
+	fatalIfErr("flush registrations", mgmt.Config().Flush(ctx))
 	billing, err := mgmt.Config().Get(ctx, "showcase-billing")
 	fatalIfErr("get billing", err)
-	billing.SetNumber("plan.max_seats", 25, "production")
+	billing.SetNumber("max_seats", 25, "production")
 	fatalIfErr("save billing", billing.Save(ctx))
 }
 

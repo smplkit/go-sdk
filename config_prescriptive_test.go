@@ -101,12 +101,12 @@ func connectClient(t *testing.T, server *httptest.Server) *smplkit.Client {
 	return client
 }
 
-// --- typed accessors ---
+// --- GetValue / GetValueOr (single-value lookup) ---
 
-func TestTypedAccessors_GetString(t *testing.T) {
+func TestGetValue_ReturnsCachedValue(t *testing.T) {
 	cfgs := []map[string]interface{}{
 		makeConfigResource("app", "app",
-			map[string]interface{}{"name": "Acme", "count": 42},
+			map[string]interface{}{"name": "Acme", "port": 8080},
 			map[string]interface{}{}, nil),
 	}
 	server := startTestServer(t, cfgs)
@@ -114,88 +114,45 @@ func TestTypedAccessors_GetString(t *testing.T) {
 
 	ctx := context.Background()
 
-	val, err := client.Config().GetString(ctx, "app", "name")
+	val, err := client.Config().GetValue(ctx, "app", "name")
 	assert.NoError(t, err)
 	assert.Equal(t, "Acme", val)
+}
 
-	// Wrong type returns default
-	val, err = client.Config().GetString(ctx, "app", "count", "fallback")
-	assert.NoError(t, err)
+func TestGetValue_ErrorsOnMissingKey(t *testing.T) {
+	cfgs := []map[string]interface{}{
+		makeConfigResource("app", "app",
+			map[string]interface{}{"name": "Acme"},
+			map[string]interface{}{}, nil),
+	}
+	server := startTestServer(t, cfgs)
+	client := connectClient(t, server)
+
+	ctx := context.Background()
+
+	_, err := client.Config().GetValue(ctx, "app", "missing")
+	assert.Error(t, err)
+}
+
+func TestGetValueOr_ReturnsValueOrDefault(t *testing.T) {
+	cfgs := []map[string]interface{}{
+		makeConfigResource("app", "app",
+			map[string]interface{}{"port": 8080},
+			map[string]interface{}{}, nil),
+	}
+	server := startTestServer(t, cfgs)
+	client := connectClient(t, server)
+
+	ctx := context.Background()
+
+	// Present — returns cached value. Numbers come back as float64 from
+	// the JSON decoder, even when registered with an int default.
+	val := client.Config().GetValueOr(ctx, "app", "port", 99)
+	assert.Equal(t, float64(8080), val)
+
+	// Missing — returns default.
+	val = client.Config().GetValueOr(ctx, "app", "missing", "fallback")
 	assert.Equal(t, "fallback", val)
-
-	// Missing key returns empty string
-	val, err = client.Config().GetString(ctx, "app", "missing")
-	assert.NoError(t, err)
-	assert.Equal(t, "", val)
-}
-
-func TestTypedAccessors_GetInt(t *testing.T) {
-	cfgs := []map[string]interface{}{
-		makeConfigResource("app", "app",
-			map[string]interface{}{"port": 8080, "name": "Acme"},
-			map[string]interface{}{}, nil),
-	}
-	server := startTestServer(t, cfgs)
-	client := connectClient(t, server)
-
-	ctx := context.Background()
-
-	val, err := client.Config().GetInt(ctx, "app", "port")
-	assert.NoError(t, err)
-	assert.Equal(t, 8080, val)
-
-	// Wrong type returns default
-	val, err = client.Config().GetInt(ctx, "app", "name", 99)
-	assert.NoError(t, err)
-	assert.Equal(t, 99, val)
-
-	// Missing key returns 0
-	val, err = client.Config().GetInt(ctx, "app", "missing")
-	assert.NoError(t, err)
-	assert.Equal(t, 0, val)
-}
-
-func TestTypedAccessors_GetBool(t *testing.T) {
-	cfgs := []map[string]interface{}{
-		makeConfigResource("app", "app",
-			map[string]interface{}{"enabled": true, "name": "Acme"},
-			map[string]interface{}{}, nil),
-	}
-	server := startTestServer(t, cfgs)
-	client := connectClient(t, server)
-
-	ctx := context.Background()
-
-	val, err := client.Config().GetBool(ctx, "app", "enabled")
-	assert.NoError(t, err)
-	assert.True(t, val)
-
-	// Wrong type returns default
-	val, err = client.Config().GetBool(ctx, "app", "name", false)
-	assert.NoError(t, err)
-	assert.False(t, val)
-
-	// Missing key returns false
-	val, err = client.Config().GetBool(ctx, "app", "missing")
-	assert.NoError(t, err)
-	assert.False(t, val)
-}
-
-func TestTypedAccessors_NotConnected(t *testing.T) {
-	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
-		smplkit.WithBaseURL("http://localhost:0"))
-	require.NoError(t, err)
-
-	ctx := context.Background()
-
-	_, err = client.Config().GetString(ctx, "app", "name")
-	assert.Error(t, err)
-
-	_, err = client.Config().GetInt(ctx, "app", "port")
-	assert.Error(t, err)
-
-	_, err = client.Config().GetBool(ctx, "app", "flag")
-	assert.Error(t, err)
 }
 
 // --- refresh ---
@@ -246,14 +203,14 @@ func TestRefresh_UpdatesCache(t *testing.T) {
 
 	ctx := context.Background()
 
-	val, _ := client.Config().GetInt(ctx, "app", "retries")
-	assert.Equal(t, 3, val)
+	val, _ := client.Config().GetValue(ctx, "app", "retries")
+	assert.Equal(t, float64(3), val)
 
 	refreshed = true
 	require.NoError(t, client.Config().Refresh(ctx))
 
-	val, _ = client.Config().GetInt(ctx, "app", "retries")
-	assert.Equal(t, 7, val)
+	val, _ = client.Config().GetValue(ctx, "app", "retries")
+	assert.Equal(t, float64(7), val)
 }
 
 func TestRefresh_ListError(t *testing.T) {
@@ -295,7 +252,7 @@ func TestRefresh_ListError(t *testing.T) {
 	ctx := context.Background()
 
 	// Trigger lazy init by reading a value
-	_, _ = client.Config().GetInt(ctx, "app", "a")
+	_, _ = client.Config().GetValue(ctx, "app", "a")
 
 	failList = true
 	err = client.Config().Refresh(ctx)
@@ -342,7 +299,7 @@ func TestRefresh_FetchChainError(t *testing.T) {
 	ctx := context.Background()
 
 	// Trigger lazy init by reading a value
-	_, _ = client.Config().GetInt(ctx, "app", "a")
+	_, _ = client.Config().GetValue(ctx, "app", "a")
 
 	err = client.Config().Refresh(ctx)
 	assert.Error(t, err)
@@ -406,7 +363,7 @@ func TestOnChange_FiresOnRefresh(t *testing.T) {
 	ctx := context.Background()
 
 	// Trigger lazy init
-	_, _ = client.Config().GetInt(ctx, "app", "retries")
+	_, _ = client.Config().GetValue(ctx, "app", "retries")
 
 	var events []*smplkit.ConfigChangeEvent
 	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {
@@ -473,7 +430,7 @@ func TestOnChange_FilteredByConfigAndItem(t *testing.T) {
 	ctx := context.Background()
 
 	// Trigger lazy init
-	_, _ = client.Config().GetInt(ctx, "app", "retries")
+	_, _ = client.Config().GetValue(ctx, "app", "retries")
 
 	var retriesEvents []*smplkit.ConfigChangeEvent
 	client.Config().OnChange(func(evt *smplkit.ConfigChangeEvent) {

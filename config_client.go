@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"strings"
 	"sync"
 
 	"github.com/smplkit/go-sdk/v3/internal/debug"
@@ -48,10 +47,16 @@ type ConfigClient struct {
 	listeners   []configChangeListener
 
 	// proxyCache returns the same *LiveConfig instance on repeat
-	// Get / GetOrCreate calls so callers can hold one as a parent
-	// reference. Mirrors Python's _proxies cache.
+	// Get calls so callers can hold one as a parent reference.
+	// Mirrors Python's _proxies cache.
 	proxyCacheMu sync.Mutex
 	proxyCache   map[string]*LiveConfig
+
+	// bindings holds targets (struct pointers or string-keyed maps)
+	// registered via Bind. WebSocket dispatch mutates these in place
+	// when values change. Mirrors Python's _bindings.
+	bindingsMu sync.Mutex
+	bindings   map[string]interface{}
 
 	wsManager *sharedWebSocket
 
@@ -103,57 +108,19 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*ConfigEntry, er
 // Get returns the resolved config values for the given ID.
 // Get returns a LiveConfig — a live, dict-like, read-only proxy whose
 // reads always reflect the latest resolved values for the given config
-// ID. WebSocket updates are picked up automatically; there is no
-// separate Subscribe step (rule 10 of the cross-SDK overhaul).
+// ID. WebSocket updates are picked up automatically.
 //
-// Mirrors Python's client.config.get(id) which returns a
-// LiveConfigProxy. Customer code that wants a one-shot snapshot map
-// should call .Value() (or use Snapshot for the verbatim snapshot
-// shape).
+// Returns a NotFoundError if the config is missing. For typed access
+// via an in-place-mutated struct or map, use Bind instead.
 func (c *ConfigClient) Get(ctx context.Context, id string) (*LiveConfig, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
 	}
+	if _, ok := c.configCache[id]; !ok {
+		return nil, &NotFoundError{Base: Error{Message: fmt.Sprintf("config with id %q not found", id)}}
+	}
 	if metrics := c.client.metrics; metrics != nil {
 		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config": id})
-	}
-	return c.cachedProxy(id), nil
-}
-
-// GetOrCreate declares a configuration from code; returns a live, dict-like view.
-//
-// Idempotent. Repeated calls with the same id return the same
-// *LiveConfig instance. The first call queues a discovery payload (the
-// config plus any items declared via typed getters on the returned
-// handle) for upload to POST /api/v1/configs/bulk on next flush. If
-// the config already exists server-side, managed=true configs are left
-// untouched; managed=false configs receive the SDK's items via
-// source-row upsert per ADR-024 §2.9.
-//
-// Unlike Get, this method does NOT error when the id is absent from
-// the cache — discovery handles that case.
-//
-// Mirrors Python's client.config.get_or_create(id, ...).
-func (c *ConfigClient) GetOrCreate(ctx context.Context, id string, opts ...ConfigOption) (*LiveConfig, error) {
-	cfg := &ConfigEntry{ID: id}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-	parent := ""
-	if cfg.Parent != nil {
-		parent = *cfg.Parent
-	}
-	name := ""
-	if cfg.Name != "" {
-		name = cfg.Name
-	}
-	description := ""
-	if cfg.Description != nil {
-		description = *cfg.Description
-	}
-	c.observeConfigDeclaration(id, parent, name, description)
-	if err := c.ensureInit(ctx); err != nil {
-		return nil, err
 	}
 	return c.cachedProxy(id), nil
 }
@@ -185,7 +152,7 @@ func (c *ConfigClient) cachedValues(id string) (map[string]interface{}, bool) {
 }
 
 // observeConfigDeclaration queues a config declaration with the
-// management buffer. Called by GetOrCreate.
+// management buffer. Called by Bind and GetValueOr.
 func (c *ConfigClient) observeConfigDeclaration(configID, parent, name, description string) {
 	mgmt := c.Management()
 	service := ""
@@ -198,56 +165,25 @@ func (c *ConfigClient) observeConfigDeclaration(configID, parent, name, descript
 }
 
 // observeItemDeclaration queues a config item declaration with the
-// management buffer. Called by LiveConfig's typed getters.
+// management buffer. Called by Bind and GetValueOr.
 func (c *ConfigClient) observeItemDeclaration(configID, itemKey, itemType string, defaultVal interface{}, description string) {
 	c.Management().RegisterConfigItem(configID, itemKey, itemType, defaultVal, description)
-}
-
-// Snapshot returns a one-shot copy of the resolved values for the given
-// config ID. Use Get to receive a live proxy that always reflects the
-// latest values without re-fetching.
-func (c *ConfigClient) Snapshot(ctx context.Context, id string) (map[string]interface{}, error) {
-	if err := c.ensureInit(ctx); err != nil {
-		return nil, err
-	}
-	if metrics := c.client.metrics; metrics != nil {
-		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config": id})
-	}
-	resolved, ok := c.configCache[id]
-	if !ok {
-		return nil, nil
-	}
-	cp := make(map[string]interface{}, len(resolved))
-	for k, v := range resolved {
-		cp[k] = v
-	}
-	return cp, nil
-}
-
-// GetInto resolves the config and unmarshals it into the target struct.
-// The target must be a pointer to a struct. Dot-notation keys (e.g. "database.host")
-// are expanded into nested structures before unmarshaling.
-func (c *ConfigClient) GetInto(ctx context.Context, id string, target interface{}) error {
-	resolved, err := c.Snapshot(ctx, id)
-	if err != nil {
-		return err
-	}
-	return unmarshalResolved(resolved, target)
-}
-
-// Subscribe is a deprecated alias for Get.
-//
-// Deprecated: Use Get — it now returns the same LiveConfig proxy that
-// Subscribe used to provide. The Python SDK collapsed the two methods
-// into one for the same reason (rule 10).
-func (c *ConfigClient) Subscribe(ctx context.Context, id string) (*LiveConfig, error) {
-	return c.Get(ctx, id)
 }
 
 // ensureInit performs initialization on first runtime access.
 func (c *ConfigClient) ensureInit(ctx context.Context) error {
 	c.initOnce.Do(func() {
 		environment := c.client.environment
+
+		// Flush any buffered discovery declarations BEFORE the initial
+		// fetch so newly-bound configs appear in the cache on first read.
+		// Mirrors python-sdk and typescript-sdk's pre-start flush hook.
+		if mgmt := c.Management(); mgmt != nil {
+			if err := mgmt.Flush(ctx); err != nil {
+				debug.Debug("config", "pre-start discovery flush failed: %s", err)
+			}
+		}
+
 		debug.Debug("api", "fetching config definitions")
 		configs, err := c.fetchAllConfigs(ctx)
 		if err != nil {
@@ -408,89 +344,13 @@ func WithItemKey(key string) ChangeListenerOption {
 	}
 }
 
-// GetValue reads a resolved config value.
-func (c *ConfigClient) GetValue(ctx context.Context, configID string, itemKey ...string) (interface{}, error) {
-	if err := c.ensureInit(ctx); err != nil {
-		return nil, err
-	}
-	resolved, ok := c.configCache[configID]
-	if !ok {
-		return nil, nil
-	}
-	if len(itemKey) == 0 {
-		cp := make(map[string]interface{}, len(resolved))
-		for k, v := range resolved {
-			cp[k] = v
-		}
-		return cp, nil
-	}
-	val, ok := resolved[itemKey[0]]
-	if !ok {
-		return nil, nil
-	}
-	return val, nil
-}
-
-// GetString returns the resolved string value for (configID, itemKey).
-func (c *ConfigClient) GetString(ctx context.Context, configID, itemKey string, defaultVal ...string) (string, error) {
-	val, err := c.GetValue(ctx, configID, itemKey)
-	if err != nil {
-		return "", err
-	}
-	if s, ok := val.(string); ok {
-		return s, nil
-	}
-	if len(defaultVal) > 0 {
-		return defaultVal[0], nil
-	}
-	return "", nil
-}
-
-// GetInt returns the resolved int value for (configID, itemKey).
-func (c *ConfigClient) GetInt(ctx context.Context, configID, itemKey string, defaultVal ...int) (int, error) {
-	val, err := c.GetValue(ctx, configID, itemKey)
-	if err != nil {
-		return 0, err
-	}
-	switch n := val.(type) {
-	case int:
-		return n, nil
-	case float64:
-		return int(n), nil
-	case int64:
-		return int(n), nil
-	}
-	if len(defaultVal) > 0 {
-		return defaultVal[0], nil
-	}
-	return 0, nil
-}
-
-// GetBool returns the resolved bool value for (configID, itemKey).
-func (c *ConfigClient) GetBool(ctx context.Context, configID, itemKey string, defaultVal ...bool) (bool, error) {
-	val, err := c.GetValue(ctx, configID, itemKey)
-	if err != nil {
-		return false, err
-	}
-	if b, ok := val.(bool); ok {
-		return b, nil
-	}
-	if len(defaultVal) > 0 {
-		return defaultVal[0], nil
-	}
-	return false, nil
-}
-
-// diffAndFire compares old and new values and fires change listeners.
+// diffAndFire compares old and new values, mutates any bound targets
+// in place, and fires change listeners.
 func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]interface{}, source string) { //nolint:unparam // "websocket" source will be used when real-time config push is wired up
 	c.listenersMu.Lock()
 	listeners := make([]configChangeListener, len(c.listeners))
 	copy(listeners, c.listeners)
 	c.listenersMu.Unlock()
-
-	if len(listeners) == 0 {
-		return
-	}
 
 	allConfigKeys := make(map[string]struct{})
 	for k := range oldCache {
@@ -522,10 +382,17 @@ func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]inte
 			oldVal := oldItems[iKey]
 			newVal := newItems[iKey]
 			if !reflect.DeepEqual(oldVal, newVal) {
+				// Mutate any bound target in place FIRST so listeners
+				// reading the bound object see the new value.
+				c.mutateBoundTargetsForChanges(cfgKey, iKey, newVal)
+
 				if c.client != nil {
 					if metrics := c.client.metrics; metrics != nil {
 						metrics.Record("config.changes", 1, "changes", map[string]string{"config": cfgKey})
 					}
+				}
+				if len(listeners) == 0 {
+					continue
 				}
 				evt := &ConfigChangeEvent{
 					ConfigID: cfgKey,
@@ -628,51 +495,6 @@ func buildConfigRequest(id, name string, desc, parent *string, items map[string]
 			},
 		},
 	}
-}
-
-// unmarshalResolved expands dot-notation keys and unmarshals into target.
-func unmarshalResolved(resolved map[string]interface{}, target interface{}) error {
-	if resolved == nil {
-		return nil
-	}
-	nested := unflattenDotNotation(resolved)
-	data, err := json.Marshal(nested)
-	if err != nil {
-		return fmt.Errorf("smplkit: failed to marshal resolved config: %w", err)
-	}
-	return json.Unmarshal(data, target)
-}
-
-// unflattenDotNotation converts flat dot-notation keys into nested maps.
-// e.g. {"database.host": "localhost", "database.port": 5432} →
-// {"database": {"host": "localhost", "port": 5432}}
-func unflattenDotNotation(flat map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-	for key, value := range flat {
-		parts := strings.Split(key, ".")
-		current := result
-		for i, part := range parts {
-			if i == len(parts)-1 {
-				current[part] = value
-			} else {
-				if next, ok := current[part]; ok {
-					if nextMap, ok := next.(map[string]interface{}); ok {
-						current = nextMap
-					} else {
-						// Conflict: overwrite non-map with map.
-						newMap := make(map[string]interface{})
-						current[part] = newMap
-						current = newMap
-					}
-				} else {
-					newMap := make(map[string]interface{})
-					current[part] = newMap
-					current = newMap
-				}
-			}
-		}
-	}
-	return result
 }
 
 func derefMap(m *map[string]genconfig.ConfigItemDefinition) map[string]interface{} {
@@ -795,7 +617,10 @@ func wrapItemValues(items map[string]interface{}) map[string]interface{} {
 	for k, v := range items {
 		result[k] = map[string]interface{}{
 			"value": v,
-			"type":  "JSON",
+			// Infer the wire type from the value so management updates
+			// against a config the runtime client already registered
+			// don't trip the server's "type changed" guard.
+			"type": valueToItemType(v),
 		}
 	}
 	return result
