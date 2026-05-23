@@ -2,16 +2,6 @@
 
 // Demonstrates the smplkit runtime SDK for Smpl Config.
 //
-// Headline pattern: declare configurations as Go structs (or maps),
-// Bind them to a config id, then use the same struct pointer (or map)
-// directly — its fields stay in sync with the server via the SDK's
-// in-memory cache and WebSocket push.
-//
-// Also demonstrates three lower-friction patterns:
-//   - Bind with a map[string]interface{} (no struct required)
-//   - Get(ctx, id) for dict-like lookup of an entire config
-//   - GetValueOr(ctx, id, key, default) for one-shot value reads with fallback
-//
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk/v3
 //   - A valid smplkit API key, provided via one of:
@@ -58,12 +48,10 @@ func main() {
 
 	cleanupConfigRuntimeShowcase(ctx, client.Manage())
 
-	// Block until the live-updates WebSocket subscription is registered
-	// server-side. Without this, writes fired immediately afterward can
-	// race the broadcast of their own change events.
+	// wait until ready
 	fatalIfErr("wait until ready", client.WaitUntilReady(ctx, 0))
 
-	// bind Go structs — Bind mutates them in place via WebSocket dispatch
+	// bind Go structs
 	common := &Common{AppName: "Acme SaaS", SupportEmail: "support@acme.dev"}
 	fatalIfErr("bind common", client.Config().Bind(ctx, "showcase-common", common))
 

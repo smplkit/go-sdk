@@ -1,11 +1,6 @@
 //go:build ignore
 
 // Setup and simulation helpers for config_runtime_showcase.go.
-//
-// The runtime showcase declares its own configs via
-// client.Config().Bind, so this helper only handles cleanup and the
-// live admin-override simulation that stands in for an operator
-// editing values in the smplkit console.
 package main
 
 import (
