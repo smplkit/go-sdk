@@ -179,10 +179,10 @@ func (m *LoggingManagement) updateLogger(ctx context.Context, l *Logger) error {
 // createGroup persists a new log group. Called from LogGroup.Save when
 // CreatedAt is nil.
 func (m *LoggingManagement) createGroup(ctx context.Context, g *LogGroup) error {
-	reqBody := genlogging.LogGroupRequest{
-		Data: genlogging.LogGroupResource{
-			Id:         &g.ID,
-			Type:       genlogging.LogGroupResourceTypeLogGroup,
+	reqBody := genlogging.LogGroupCreateRequest{
+		Data: genlogging.LogGroupCreateResource{
+			Id:         g.ID,
+			Type:       genlogging.LogGroupCreateResourceTypeLogGroup,
 			Attributes: buildLogGroupAttributes(g),
 		},
 	}
