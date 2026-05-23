@@ -314,9 +314,11 @@ type HttpConfiguration struct {
 // supply the real values before calling Save (the SDK does not cache
 // them client-side).
 type Forwarder struct {
-	// ID is the server-assigned UUID for this forwarder. Zero-valued
-	// until Save has run for the first time.
-	ID uuid.UUID
+	// ID is the caller-supplied key for this forwarder. Required at
+	// create time (the audit service does not auto-generate it). Empty
+	// string until Save has run for an unsaved instance constructed
+	// without an id.
+	ID string
 	// Name is the display name. Free-form.
 	Name string
 	// Description is an optional free-text description.
