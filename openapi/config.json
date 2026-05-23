@@ -24,7 +24,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ConfigRequest"
+                "$ref": "#/components/schemas/ConfigCreateRequest"
               }
             }
           }
@@ -720,6 +720,69 @@
           "registered": 3
         }
       },
+      "ConfigCreateRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ConfigCreateResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ConfigCreateRequest",
+        "description": "JSON:API request envelope for creating a config.\n\nDistinct from :class:`ConfigRequest` because create requires\ncaller-supplied ``data.id`` while update does not."
+      },
+      "ConfigCreateResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Client-supplied resource id."
+          },
+          "type": {
+            "type": "string",
+            "const": "config",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Config"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "attributes"
+        ],
+        "title": "ConfigCreateResource",
+        "description": "JSON:API resource envelope for creating a config (id required).",
+        "example": {
+          "attributes": {
+            "description": "Settings for the user service.",
+            "environments": {
+              "prod": {
+                "values": {
+                  "host": {
+                    "value": "db-prod.internal"
+                  }
+                }
+              }
+            },
+            "items": {
+              "host": {
+                "description": "Database host.",
+                "type": "STRING",
+                "value": "db.internal"
+              }
+            },
+            "name": "User Service",
+            "parent": "common"
+          },
+          "id": "user-service",
+          "type": "config"
+        }
+      },
       "ConfigItemDefinition": {
         "properties": {
           "value": {
@@ -805,7 +868,7 @@
           "data"
         ],
         "title": "ConfigRequest",
-        "description": "JSON:API request envelope for creating or updating a config."
+        "description": "JSON:API request envelope for updating a config."
       },
       "ConfigResource": {
         "properties": {
