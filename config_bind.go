@@ -167,10 +167,9 @@ func (c *ConfigClient) GetValueOr(ctx context.Context, configID, key string, def
 
 // isBindableTarget reports whether `rv` is a valid target for Bind:
 // either a non-nil pointer to a struct, or a non-nil map keyed by string.
+// An invalid reflect.Value (e.g. from a nil interface) falls through to
+// the default branch and reports false.
 func isBindableTarget(rv reflect.Value) bool {
-	if !rv.IsValid() {
-		return false
-	}
 	switch rv.Kind() {
 	case reflect.Ptr:
 		if rv.IsNil() {
@@ -324,21 +323,15 @@ func valueToItemType(value interface{}) string {
 }
 
 // configIDForBoundTarget returns the config id under which `target` was
-// previously bound, or ("", false) if it isn't currently bound.
+// previously bound, or ("", false) if it isn't currently bound. Compares
+// by underlying pointer identity rather than interface equality so that
+// map targets (uncomparable under `==`) work without panicking. Mirrors
+// python-sdk's `is`-based identity check and typescript-sdk's `===`.
 func (c *ConfigClient) configIDForBoundTarget(target interface{}) (string, bool) {
 	c.bindingsMu.Lock()
 	defer c.bindingsMu.Unlock()
-	if c.bindings == nil {
-		return "", false
-	}
 	wanted := reflect.ValueOf(target).Pointer()
 	for id, bound := range c.bindings {
-		if bound == target {
-			return id, true
-		}
-		// Different interface-pointer wrappers for the same underlying object
-		// will compare unequal via `==`; fall back to comparing the underlying
-		// pointer address.
 		if reflect.ValueOf(bound).Pointer() == wanted {
 			return id, true
 		}

@@ -90,10 +90,9 @@ func (c *ConfigEntry) apply(other *ConfigEntry) {
 }
 
 // LiveConfig is a live, dict-like, read-only proxy for a config's resolved
-// values. Returned by ConfigClient.Get and Subscribe. Every read goes
-// through the client's resolved-config cache, so WebSocket updates are
-// picked up automatically — no Subscribe step is required (rule 10 of
-// the cross-SDK overhaul).
+// values. Returned by ConfigClient.Get. Every read goes through the
+// client's resolved-config cache, so WebSocket updates are picked up
+// automatically.
 //
 // Customer mutation paths are absent: there is no Set / Put / Delete
 // method on LiveConfig. To mutate configs use the management surface:

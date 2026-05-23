@@ -217,7 +217,7 @@ func TestObserveConfigDeclarationPopulatesBuffer(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// cachedProxy + GetOrCreate
+// cachedProxy
 // ---------------------------------------------------------------------------
 
 func TestCachedProxyReturnsSameInstance(t *testing.T) {
@@ -1021,6 +1021,153 @@ func TestBindReturnsEnsureInitError(t *testing.T) {
 	defer client.Close()
 	if err := client.Config().Bind(context.Background(), "new", &stubPlan{}); err == nil {
 		t.Fatalf("expected error from ensureInit failure")
+	}
+}
+
+func TestGetValueOrReturnsDefaultOnEnsureInitError(t *testing.T) {
+	// When ensureInit fails (list endpoint 500s), GetValueOr must still
+	// queue the discovery registration up front and then fall back to
+	// the caller-provided default — never error.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(Config{
+		APIKey:      "sk_test",
+		Environment: "prod",
+		Service:     "svc",
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer client.Close()
+
+	got := client.Config().GetValueOr(context.Background(), "missing", "k", "fallback")
+	if got != "fallback" {
+		t.Fatalf("expected fallback when ensureInit fails, got %v", got)
+	}
+}
+
+func TestApplyChangeToTarget_DeeplyNestedInterfaceMap(t *testing.T) {
+	// Three levels of map[string]interface{} force walkInto to recurse
+	// through an interface-kind value — exercises the interface-unwrap
+	// loop inside walkInto (not the one inside setLeaf).
+	target := map[string]interface{}{
+		"a": map[string]interface{}{
+			"b": map[string]interface{}{
+				"c": "old",
+			},
+		},
+	}
+	applyChangeToTarget(target, "a.b.c", "new")
+	b := target["a"].(map[string]interface{})["b"].(map[string]interface{})
+	if b["c"] != "new" {
+		t.Fatalf("expected deep-map write to take effect, got %v", b["c"])
+	}
+}
+
+func TestApplyChangeToTarget_DeeplyNestedPointerStructs(t *testing.T) {
+	// Three levels of *struct fields exercise walkInto's pointer-unwrap
+	// loop (line ~408) — the intermediate step gets a Pointer-kind value
+	// from a struct field and must dereference before descending.
+	type leaf struct {
+		Field int `json:"field"`
+	}
+	type middle struct {
+		Inner *leaf `json:"inner"`
+	}
+	type outer struct {
+		Mid *middle `json:"mid"`
+	}
+	target := &outer{Mid: &middle{Inner: &leaf{Field: 0}}}
+	applyChangeToTarget(target, "mid.inner.field", 5)
+	if target.Mid.Inner.Field != 5 {
+		t.Fatalf("expected deep pointer-struct write, got %d", target.Mid.Inner.Field)
+	}
+}
+
+func TestApplyChangeToTarget_MissingLeafField(t *testing.T) {
+	// Single-segment path where the field name doesn't match any
+	// exported field — setLeaf's structFieldIndexByKey returns !ok
+	// and the assignment is silently dropped.
+	plan := &stubPlan{MaxSeats: 5}
+	applyChangeToTarget(plan, "no_such_field", 99)
+	if plan.MaxSeats != 5 {
+		t.Fatalf("missing leaf field should not mutate; got %d", plan.MaxSeats)
+	}
+}
+
+func TestApplyChangeToTarget_UnexportedFieldSkippedDuringSet(t *testing.T) {
+	// structFieldIndexByKey must skip unexported fields while iterating —
+	// hits the `continue` branch when the first field in declaration
+	// order is unexported.
+	type s struct {
+		secret  int //nolint:unused // intentional: forces the unexported-skip branch
+		Visible int `json:"visible"`
+	}
+	target := &s{Visible: 0}
+	applyChangeToTarget(target, "visible", 7)
+	if target.Visible != 7 {
+		t.Fatalf("expected exported field to be set past unexported sibling; got %d", target.Visible)
+	}
+}
+
+func TestApplyChangeToTarget_MapLeafNilValue(t *testing.T) {
+	// Assigning nil into a typed map exercises coerceForReflectType's
+	// zero-value branch.
+	target := map[string]int{"a": 1}
+	applyChangeToTarget(target, "a", nil)
+	if target["a"] != 0 {
+		t.Fatalf("nil into typed map should produce zero value, got %d", target["a"])
+	}
+}
+
+func TestBind_PointerIdentityWorksForMapParent(t *testing.T) {
+	// Two map bindings + parent chain. Pre-fix this panicked because the
+	// previous configIDForBoundTarget compared interface values with `==`,
+	// which panics for maps. The pointer-identity rewrite handles it.
+	cc := newStubConfigClient("primary", map[string]interface{}{})
+	skipInit(cc)
+	cc.configCache["replica"] = map[string]interface{}{}
+
+	primary := map[string]interface{}{"host": "db.primary"}
+	if err := cc.Bind(context.Background(), "primary", primary); err != nil {
+		t.Fatalf("Bind primary: %v", err)
+	}
+	replica := map[string]interface{}{"host": "db.replica"}
+	if err := cc.Bind(context.Background(), "replica", replica, WithBindParent(primary)); err != nil {
+		t.Fatalf("Bind replica with map parent: %v", err)
+	}
+}
+
+func TestBindKeyFromField_NoJSONTagFallsBackToFieldName(t *testing.T) {
+	// A struct field with no `json` tag at all should register under the
+	// Go field name verbatim — exercises bindKeyFromField's no-tag branch.
+	type tagless struct {
+		BareField string
+	}
+	cc := newStubConfigClient("c", map[string]interface{}{})
+	skipInit(cc)
+	target := &tagless{BareField: "x"}
+	if err := cc.Bind(context.Background(), "c", target); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	batch := cc.management.buffer.drain()
+	if _, ok := batch[0].items["BareField"]; !ok {
+		t.Fatalf("expected `BareField` key registered, got items: %+v", batch[0].items)
+	}
+}
+
+func TestRegisterConfigItem_AutoInitializesBuffer(t *testing.T) {
+	// Calling RegisterConfigItem on a fresh ConfigManagement (no prior
+	// RegisterConfig) must lazy-init the buffer. The item itself is
+	// dropped because the buffer has no meta entry for the configID,
+	// but the buffer struct must still exist so subsequent calls work.
+	m := &ConfigManagement{}
+	m.RegisterConfigItem("c", "k", "STRING", "v", "")
+	if m.buffer == nil {
+		t.Fatalf("expected buffer to be auto-initialized")
 	}
 }
 

@@ -27,8 +27,7 @@ type ConfigManagement struct {
 	client *ConfigClient
 
 	// buffer holds pending config / item declarations for bulk-discovery
-	// upload. Populated by ConfigClient.GetOrCreate and by the typed
-	// getters on LiveConfig.
+	// upload. Populated by ConfigClient.Bind and ConfigClient.GetValueOr.
 	buffer *configRegistrationBuffer
 }
 
@@ -180,7 +179,7 @@ func (m *ConfigManagement) List(ctx context.Context, opts ...ListOption) ([]*Con
 
 // Delete removes a config by its ID.
 // RegisterConfig queues a configuration declaration for bulk-discovery
-// upload. Internal — called by ConfigClient.GetOrCreate.
+// upload. Internal — called by ConfigClient.Bind and ConfigClient.GetValueOr.
 func (m *ConfigManagement) RegisterConfig(configID, service, environment, parent, name, description string) {
 	if m.buffer == nil {
 		m.buffer = newConfigRegistrationBuffer()
@@ -198,7 +197,7 @@ func (m *ConfigManagement) RegisterConfig(configID, service, environment, parent
 }
 
 // RegisterConfigItem queues a config item declaration for bulk-discovery
-// upload. Internal — called by LiveConfig typed getters.
+// upload. Internal — called by ConfigClient.Bind and ConfigClient.GetValueOr.
 func (m *ConfigManagement) RegisterConfigItem(configID, itemKey, itemType string, defaultVal interface{}, description string) {
 	if m.buffer == nil {
 		m.buffer = newConfigRegistrationBuffer()

@@ -168,10 +168,10 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 		// Flush any buffered discovery declarations BEFORE the initial
 		// fetch so newly-bound configs appear in the cache on first read.
 		// Mirrors python-sdk and typescript-sdk's pre-start flush hook.
+		// Per ADR-024 §2.9, Flush is fire-and-forget — failures never
+		// propagate to customer code, so we don't observe its return.
 		if mgmt := c.Management(); mgmt != nil {
-			if err := mgmt.Flush(ctx); err != nil {
-				debug.Debug("config", "pre-start discovery flush failed: %s", err)
-			}
+			_ = mgmt.Flush(ctx)
 		}
 
 		debug.Debug("api", "fetching config definitions")
