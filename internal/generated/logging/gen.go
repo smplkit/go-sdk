@@ -21,6 +21,21 @@ const (
 	HTTPBearerScopes hTTPBearerContextKey = "HTTPBearer.Scopes"
 )
 
+// Defines values for LogGroupCreateResourceType.
+const (
+	LogGroupCreateResourceTypeLogGroup LogGroupCreateResourceType = "log_group"
+)
+
+// Valid indicates whether the value is a known member of the LogGroupCreateResourceType enum.
+func (e LogGroupCreateResourceType) Valid() bool {
+	switch e {
+	case LogGroupCreateResourceTypeLogGroup:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogGroupResourceType.
 const (
 	LogGroupResourceTypeLogGroup LogGroupResourceType = "log_group"
@@ -342,6 +357,32 @@ type LogGroup struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
+// LogGroupCreateRequest JSON:API request envelope for creating a log group.
+//
+// Distinct from :class:`LogGroupRequest` because create requires
+// caller-supplied “data.id“ while update does not.
+type LogGroupCreateRequest struct {
+	// Data JSON:API resource envelope for creating a log group (id required).
+	Data LogGroupCreateResource `json:"data"`
+}
+
+// LogGroupCreateResource JSON:API resource envelope for creating a log group (id required).
+type LogGroupCreateResource struct {
+	// Attributes A named collection of loggers that share a level configuration.
+	//
+	// Assigning a logger to a group ties the logger's effective level to
+	// the group's level (and per-environment overrides). Loggers can move
+	// between groups or be detached from a group entirely.
+	Attributes LogGroup `json:"attributes"`
+
+	// Id Client-supplied resource id.
+	Id   string                     `json:"id"`
+	Type LogGroupCreateResourceType `json:"type"`
+}
+
+// LogGroupCreateResourceType defines model for LogGroupCreateResource.Type.
+type LogGroupCreateResourceType string
+
 // LogGroupListResponse JSON:API collection response for log groups.
 type LogGroupListResponse struct {
 	Data []LogGroupResource `json:"data"`
@@ -350,7 +391,7 @@ type LogGroupListResponse struct {
 	Meta ListMeta `json:"meta"`
 }
 
-// LogGroupRequest JSON:API request envelope for creating or updating a log group.
+// LogGroupRequest JSON:API request envelope for updating a log group.
 type LogGroupRequest struct {
 	// Data JSON:API resource envelope for a log group.
 	//
@@ -761,7 +802,7 @@ type ListLoggingUsageParams struct {
 }
 
 // CreateLogGroupApplicationVndAPIPlusJSONRequestBody defines body for CreateLogGroup for application/vnd.api+json ContentType.
-type CreateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupRequest
+type CreateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupCreateRequest
 
 // UpdateLogGroupApplicationVndAPIPlusJSONRequestBody defines body for UpdateLogGroup for application/vnd.api+json ContentType.
 type UpdateLogGroupApplicationVndAPIPlusJSONRequestBody = LogGroupRequest

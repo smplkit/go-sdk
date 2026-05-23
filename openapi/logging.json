@@ -515,7 +515,7 @@
           "Log Groups"
         ],
         "summary": "Create Log Group",
-        "description": "Create a log group.\n\nThe caller may supply a key in `data.id`; if omitted, the server\ngenerates one from `name`.",
+        "description": "Create a log group.\n\nThe caller supplies the log group's key as `data.id`. The id is\nrequired, must be unique within the account across loggers and\ngroups, and is immutable for the lifetime of the group.",
         "operationId": "create_log_group",
         "security": [
           {
@@ -527,7 +527,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/LogGroupRequest"
+                "$ref": "#/components/schemas/LogGroupCreateRequest"
               }
             }
           }
@@ -1647,6 +1647,57 @@
           "updated_at": "2026-04-01T10:00:00Z"
         }
       },
+      "LogGroupCreateRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LogGroupCreateResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "LogGroupCreateRequest",
+        "description": "JSON:API request envelope for creating a log group.\n\nDistinct from :class:`LogGroupRequest` because create requires\ncaller-supplied ``data.id`` while update does not."
+      },
+      "LogGroupCreateResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Client-supplied resource id."
+          },
+          "type": {
+            "type": "string",
+            "const": "log_group",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/LogGroup"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "attributes"
+        ],
+        "title": "LogGroupCreateResource",
+        "description": "JSON:API resource envelope for creating a log group (id required).",
+        "example": {
+          "attributes": {
+            "environments": {
+              "prod": {
+                "level": "ERROR"
+              }
+            },
+            "level": "WARN",
+            "name": "Payment pipeline"
+          },
+          "id": "payment-pipeline",
+          "type": "log_group"
+        }
+      },
       "LogGroupListResponse": {
         "properties": {
           "data": {
@@ -1679,7 +1730,7 @@
           "data"
         ],
         "title": "LogGroupRequest",
-        "description": "JSON:API request envelope for creating or updating a log group."
+        "description": "JSON:API request envelope for updating a log group."
       },
       "LogGroupResource": {
         "properties": {
