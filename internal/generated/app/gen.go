@@ -202,6 +202,21 @@ func (e EnvironmentClassification) Valid() bool {
 	}
 }
 
+// Defines values for EnvironmentCreateResourceType.
+const (
+	EnvironmentCreateResourceTypeEnvironment EnvironmentCreateResourceType = "environment"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentCreateResourceType enum.
+func (e EnvironmentCreateResourceType) Valid() bool {
+	switch e {
+	case EnvironmentCreateResourceTypeEnvironment:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EnvironmentResourceType.
 const (
 	EnvironmentResourceTypeEnvironment EnvironmentResourceType = "environment"
@@ -373,6 +388,21 @@ func (e RegisterRequestEntryPoint) Valid() bool {
 	case LOGIN:
 		return true
 	case UNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServiceCreateResourceType.
+const (
+	ServiceCreateResourceTypeService ServiceCreateResourceType = "service"
+)
+
+// Valid indicates whether the value is a known member of the ServiceCreateResourceType enum.
+func (e ServiceCreateResourceType) Valid() bool {
+	switch e {
+	case ServiceCreateResourceTypeService:
 		return true
 	default:
 		return false
@@ -1492,6 +1522,31 @@ type Environment struct {
 // EnvironmentClassification `STANDARD` for environments deliberately created (and shown by default in the environment grid); `AD_HOC` for auto-discovered environments seen in SDK traffic (hidden from the default view). Case-insensitive on input. Independent of the `managed` flag.
 type EnvironmentClassification string
 
+// EnvironmentCreateRequest JSON:API request envelope for creating an environment.
+//
+// Distinct from :class:`EnvironmentRequest` because create requires
+// caller-supplied “data.id“ while update does not (the id lives in
+// the URL path).
+type EnvironmentCreateRequest struct {
+	// Data JSON:API resource envelope for creating an environment (id required).
+	Data EnvironmentCreateResource `json:"data"`
+}
+
+// EnvironmentCreateResource JSON:API resource envelope for creating an environment (id required).
+type EnvironmentCreateResource struct {
+	// Attributes A named deployment context — for example, `production`, `staging`, or
+	// `development`. Resources scoped to an environment (such as config items
+	// and feature flags) are evaluated against environment-specific values.
+	Attributes Environment `json:"attributes"`
+
+	// Id Client-supplied resource id.
+	Id   string                        `json:"id"`
+	Type EnvironmentCreateResourceType `json:"type"`
+}
+
+// EnvironmentCreateResourceType defines model for EnvironmentCreateResource.Type.
+type EnvironmentCreateResourceType string
+
 // EnvironmentListResponse JSON:API collection response for environments.
 type EnvironmentListResponse struct {
 	Data []EnvironmentResource `json:"data"`
@@ -1500,7 +1555,7 @@ type EnvironmentListResponse struct {
 	Meta ListMeta `json:"meta"`
 }
 
-// EnvironmentRequest JSON:API request envelope for creating or updating an environment.
+// EnvironmentRequest JSON:API request envelope for updating an environment.
 type EnvironmentRequest struct {
 	// Data JSON:API resource envelope for an environment.
 	//
@@ -2107,6 +2162,29 @@ type Service struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
+// ServiceCreateRequest JSON:API request envelope for creating a service.
+//
+// Distinct from :class:`ServiceRequest` because create requires
+// caller-supplied “data.id“ while update does not.
+type ServiceCreateRequest struct {
+	// Data JSON:API resource envelope for creating a service (id required).
+	Data ServiceCreateResource `json:"data"`
+}
+
+// ServiceCreateResource JSON:API resource envelope for creating a service (id required).
+type ServiceCreateResource struct {
+	// Attributes A service that contexts can be evaluated against — for example, a
+	// backend application or microservice in the customer's stack.
+	Attributes Service `json:"attributes"`
+
+	// Id Client-supplied resource id.
+	Id   string                    `json:"id"`
+	Type ServiceCreateResourceType `json:"type"`
+}
+
+// ServiceCreateResourceType defines model for ServiceCreateResource.Type.
+type ServiceCreateResourceType string
+
 // ServiceListResponse JSON:API collection response for services.
 type ServiceListResponse struct {
 	Data []ServiceResource `json:"data"`
@@ -2115,17 +2193,17 @@ type ServiceListResponse struct {
 	Meta ListMeta `json:"meta"`
 }
 
-// ServiceRequest JSON:API request envelope for creating or updating a service.
+// ServiceRequest JSON:API request envelope for updating a service.
 type ServiceRequest struct {
 	// Data JSON:API resource envelope for a service.
 	//
-	// `id` must not be specified for create requests (the server assigns it).
+	// The caller supplies ``id`` (the service's key) on create.
 	Data ServiceResource `json:"data"`
 }
 
 // ServiceResource JSON:API resource envelope for a service.
 //
-// `id` must not be specified for create requests (the server assigns it).
+// The caller supplies “id“ (the service's key) on create.
 type ServiceResource struct {
 	// Attributes A service that contexts can be evaluated against — for example, a
 	// backend application or microservice in the customer's stack.
@@ -2141,7 +2219,7 @@ type ServiceResourceType string
 type ServiceResponse struct {
 	// Data JSON:API resource envelope for a service.
 	//
-	// `id` must not be specified for create requests (the server assigns it).
+	// The caller supplies ``id`` (the service's key) on create.
 	Data ServiceResource `json:"data"`
 }
 
@@ -2868,7 +2946,7 @@ type CreateEmailRegistrationApplicationVndAPIPlusJSONRequestBody CreateEmailRegi
 type SendContactEmailApplicationVndAPIPlusJSONRequestBody SendContactEmailApplicationVndAPIPlusJSONBody
 
 // CreateEnvironmentApplicationVndAPIPlusJSONRequestBody defines body for CreateEnvironment for application/vnd.api+json ContentType.
-type CreateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentRequest
+type CreateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentCreateRequest
 
 // UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody defines body for UpdateEnvironment for application/vnd.api+json ContentType.
 type UpdateEnvironmentApplicationVndAPIPlusJSONRequestBody = EnvironmentRequest
@@ -2889,7 +2967,7 @@ type CreatePaymentMethodApplicationVndAPIPlusJSONRequestBody = AddPaymentMethodB
 type UpdatePaymentMethodApplicationVndAPIPlusJSONRequestBody = PaymentMethodRequest
 
 // CreateServiceApplicationVndAPIPlusJSONRequestBody defines body for CreateService for application/vnd.api+json ContentType.
-type CreateServiceApplicationVndAPIPlusJSONRequestBody = ServiceRequest
+type CreateServiceApplicationVndAPIPlusJSONRequestBody = ServiceCreateRequest
 
 // UpdateServiceApplicationVndAPIPlusJSONRequestBody defines body for UpdateService for application/vnd.api+json ContentType.
 type UpdateServiceApplicationVndAPIPlusJSONRequestBody = ServiceRequest

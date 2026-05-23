@@ -1300,7 +1300,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/EnvironmentRequest"
+                "$ref": "#/components/schemas/EnvironmentCreateRequest"
               }
             }
           }
@@ -3439,7 +3439,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ServiceRequest"
+                "$ref": "#/components/schemas/ServiceCreateRequest"
               }
             }
           }
@@ -8054,6 +8054,53 @@
           "updated_at": "2026-03-20T11:02:16.616Z"
         }
       },
+      "EnvironmentCreateRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EnvironmentCreateResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "EnvironmentCreateRequest",
+        "description": "JSON:API request envelope for creating an environment.\n\nDistinct from :class:`EnvironmentRequest` because create requires\ncaller-supplied ``data.id`` while update does not (the id lives in\nthe URL path)."
+      },
+      "EnvironmentCreateResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Client-supplied resource id."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "environment"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Environment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "attributes"
+        ],
+        "title": "EnvironmentCreateResource",
+        "description": "JSON:API resource envelope for creating an environment (id required).",
+        "example": {
+          "attributes": {
+            "name": "Production"
+          },
+          "id": "production",
+          "type": "environment"
+        }
+      },
       "EnvironmentListResponse": {
         "properties": {
           "data": {
@@ -8086,7 +8133,7 @@
           "data"
         ],
         "title": "EnvironmentRequest",
-        "description": "JSON:API request envelope for creating or updating an environment."
+        "description": "JSON:API request envelope for updating an environment."
       },
       "EnvironmentResource": {
         "properties": {
@@ -9626,6 +9673,53 @@
           "updated_at": "2026-03-20T11:02:16.616Z"
         }
       },
+      "ServiceCreateRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ServiceCreateResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ServiceCreateRequest",
+        "description": "JSON:API request envelope for creating a service.\n\nDistinct from :class:`ServiceRequest` because create requires\ncaller-supplied ``data.id`` while update does not."
+      },
+      "ServiceCreateResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Client-supplied resource id."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "service"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Service"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "attributes"
+        ],
+        "title": "ServiceCreateResource",
+        "description": "JSON:API resource envelope for creating a service (id required).",
+        "example": {
+          "attributes": {
+            "name": "User Service"
+          },
+          "id": "user_service",
+          "type": "service"
+        }
+      },
       "ServiceListResponse": {
         "properties": {
           "data": {
@@ -9658,7 +9752,7 @@
           "data"
         ],
         "title": "ServiceRequest",
-        "description": "JSON:API request envelope for creating or updating a service."
+        "description": "JSON:API request envelope for updating a service."
       },
       "ServiceResource": {
         "properties": {
@@ -9684,7 +9778,7 @@
           "attributes"
         ],
         "title": "ServiceResource",
-        "description": "JSON:API resource envelope for a service.\n\n`id` must not be specified for create requests (the server assigns it).",
+        "description": "JSON:API resource envelope for a service.\n\nThe caller supplies ``id`` (the service's key) on create.",
         "example": {
           "attributes": {
             "created_at": "2026-03-20T11:02:16.616Z",
