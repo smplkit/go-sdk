@@ -109,7 +109,7 @@ func (m *FlagsManagement) NewJsonFlag(id string, defaultValue map[string]interfa
 // createFlag creates the flag on the server and updates the local
 // instance. Called from Flag.Save when CreatedAt is nil.
 func (m *FlagsManagement) createFlag(ctx context.Context, flag *Flag) error {
-	reqBody := buildFlagRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
+	reqBody := buildFlagCreateRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
 	resp, err := m.gen.CreateFlagWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)

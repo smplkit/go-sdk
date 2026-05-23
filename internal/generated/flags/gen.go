@@ -69,6 +69,21 @@ func (e FlagBulkItemType) Valid() bool {
 	}
 }
 
+// Defines values for FlagCreateResourceType.
+const (
+	FlagCreateResourceTypeFlag FlagCreateResourceType = "flag"
+)
+
+// Valid indicates whether the value is a known member of the FlagCreateResourceType enum.
+func (e FlagCreateResourceType) Valid() bool {
+	switch e {
+	case FlagCreateResourceTypeFlag:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FlagResourceType.
 const (
 	FlagResourceTypeFlag FlagResourceType = "flag"
@@ -344,6 +359,36 @@ type FlagBulkResponse struct {
 	Registered int `json:"registered"`
 }
 
+// FlagCreateRequest JSON:API request envelope for creating a flag.
+//
+// Distinct from :class:`FlagRequest` because create requires
+// caller-supplied “data.id“ while update does not.
+type FlagCreateRequest struct {
+	// Data JSON:API resource envelope for creating a flag (id required).
+	Data FlagCreateResource `json:"data"`
+}
+
+// FlagCreateResource JSON:API resource envelope for creating a flag (id required).
+type FlagCreateResource struct {
+	// Attributes A feature flag whose value is resolved at runtime from environment
+	// rules and a default.
+	//
+	// A flag has a value type (`BOOLEAN`, `STRING`, `NUMERIC`, or `JSON`)
+	// and either a fixed set of allowed values (constrained) or accepts
+	// any value matching the type (unconstrained). Each environment can
+	// enable or disable the flag, set its own default, and define
+	// targeting rules that override the default for specific evaluation
+	// contexts.
+	Attributes Flag `json:"attributes"`
+
+	// Id Client-supplied resource id.
+	Id   string                 `json:"id"`
+	Type FlagCreateResourceType `json:"type"`
+}
+
+// FlagCreateResourceType defines model for FlagCreateResource.Type.
+type FlagCreateResourceType string
+
 // FlagEnvironment Per-environment evaluation configuration for a flag.
 type FlagEnvironment struct {
 	// Default Environment-level default returned when no rule fires. If `null`, evaluation falls back to the flag's global `default`.
@@ -364,7 +409,7 @@ type FlagListResponse struct {
 	Meta ListMeta `json:"meta"`
 }
 
-// FlagRequest JSON:API request envelope for creating or updating a flag.
+// FlagRequest JSON:API request envelope for updating a flag.
 type FlagRequest struct {
 	// Data JSON:API resource envelope for a flag.
 	//
@@ -702,7 +747,7 @@ type ListFlagsUsageParams struct {
 }
 
 // CreateFlagApplicationVndAPIPlusJSONRequestBody defines body for CreateFlag for application/vnd.api+json ContentType.
-type CreateFlagApplicationVndAPIPlusJSONRequestBody = FlagRequest
+type CreateFlagApplicationVndAPIPlusJSONRequestBody = FlagCreateRequest
 
 // BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody defines body for BulkRegisterFlags for application/vnd.api+json ContentType.
 type BulkRegisterFlagsApplicationVndAPIPlusJSONRequestBody = FlagBulkRequest

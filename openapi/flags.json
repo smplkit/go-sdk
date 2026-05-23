@@ -23,7 +23,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/FlagRequest"
+                "$ref": "#/components/schemas/FlagCreateRequest"
               }
             }
           }
@@ -989,6 +989,54 @@
           "registered": 5
         }
       },
+      "FlagCreateRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/FlagCreateResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "FlagCreateRequest",
+        "description": "JSON:API request envelope for creating a flag.\n\nDistinct from :class:`FlagRequest` because create requires\ncaller-supplied ``data.id`` while update does not."
+      },
+      "FlagCreateResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Client-supplied resource id."
+          },
+          "type": {
+            "type": "string",
+            "const": "flag",
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Flag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "attributes"
+        ],
+        "title": "FlagCreateResource",
+        "description": "JSON:API resource envelope for creating a flag (id required).",
+        "example": {
+          "attributes": {
+            "default": false,
+            "description": "Enable the redesigned checkout flow.",
+            "name": "Checkout V2",
+            "type": "BOOLEAN"
+          },
+          "id": "checkout-v2",
+          "type": "flag"
+        }
+      },
       "FlagEnvironment": {
         "properties": {
           "enabled": {
@@ -1052,7 +1100,7 @@
           "data"
         ],
         "title": "FlagRequest",
-        "description": "JSON:API request envelope for creating or updating a flag."
+        "description": "JSON:API request envelope for updating a flag."
       },
       "FlagResource": {
         "properties": {

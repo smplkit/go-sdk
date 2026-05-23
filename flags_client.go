@@ -105,8 +105,9 @@ func extractFlagEnvironments(envs *map[string]genflags.FlagEnvironment) map[stri
 	return result
 }
 
-// buildFlagRequest constructs a FlagRequest for create or update.
-func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.FlagRequest {
+// buildFlagAttributes constructs the Flag attribute payload shared by
+// the create and update envelopes.
+func buildFlagAttributes(name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.Flag {
 	var genValues *[]genflags.FlagValue
 	if values != nil {
 		gv := make([]genflags.FlagValue, len(*values))
@@ -116,20 +117,36 @@ func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]Fla
 		genValues = &gv
 	}
 
-	genEnvs := buildGenFlagEnvironments(envs)
+	return genflags.Flag{
+		Name:         name,
+		Type:         genflags.FlagType(flagType),
+		Default:      dflt,
+		Values:       genValues,
+		Description:  desc,
+		Environments: buildGenFlagEnvironments(envs),
+	}
+}
 
+// buildFlagRequest constructs a FlagRequest envelope used for updates.
+func buildFlagRequest(id, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.FlagRequest {
 	return genflags.FlagRequest{
 		Data: genflags.FlagResource{
-			Id:   &id,
-			Type: genflags.FlagResourceTypeFlag,
-			Attributes: genflags.Flag{
-				Name:         name,
-				Type:         genflags.FlagType(flagType),
-				Default:      dflt,
-				Values:       genValues,
-				Description:  desc,
-				Environments: genEnvs,
-			},
+			Id:         &id,
+			Type:       genflags.FlagResourceTypeFlag,
+			Attributes: buildFlagAttributes(name, flagType, dflt, values, desc, envs),
+		},
+	}
+}
+
+// buildFlagCreateRequest constructs a FlagCreateRequest envelope. The
+// create envelope requires a non-nullable string id (vs the update
+// envelope, which optionally echoes the id).
+func buildFlagCreateRequest(id, name, flagType string, dflt interface{}, values *[]FlagValue, desc *string, envs map[string]interface{}) genflags.FlagCreateRequest {
+	return genflags.FlagCreateRequest{
+		Data: genflags.FlagCreateResource{
+			Id:         id,
+			Type:       genflags.FlagCreateResourceTypeFlag,
+			Attributes: buildFlagAttributes(name, flagType, dflt, values, desc, envs),
 		},
 	}
 }
