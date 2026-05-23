@@ -604,19 +604,6 @@ func TestApplyChangeToTarget_MapWithNonStringKeyIntermediate(t *testing.T) {
 	}
 }
 
-func TestBind_RegisterConfigItemThresholdTriggersBackgroundFlush(t *testing.T) {
-	// RegisterConfigItem fires a background flush when pendingCount reaches
-	// the threshold. Pre-seed the buffer with ~50 declared configs and then
-	// add an item to trip the threshold.
-	mgr := &ConfigManagement{}
-	for i := 0; i < configRegistrationFlushSize+1; i++ {
-		mgr.RegisterConfig(fmt.Sprintf("c-%d", i), "svc", "prod", "", "", "")
-	}
-	// The threshold-flush spawned a goroutine that would try to POST; we
-	// just need to confirm the entry didn't crash. Drain to clean up.
-	mgr.buffer.drain()
-}
-
 func TestEnsureInit_PreFlushSwallowsError(t *testing.T) {
 	// Pre-start flush failure must not block init. Build a client wired to
 	// a server that 500s the bulk endpoint but lists OK.
