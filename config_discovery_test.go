@@ -553,15 +553,15 @@ func TestValueToItemType_AllPrimitives(t *testing.T) {
 		v    interface{}
 		want string
 	}{
-		"bool":     {true, "BOOLEAN"},
-		"int":      {42, "NUMBER"},
-		"int64":    {int64(42), "NUMBER"},
-		"float":    {3.14, "NUMBER"},
-		"uint":     {uint(7), "NUMBER"},
-		"string":   {"hello", "STRING"},
-		"nil":      {nil, "STRING"},
-		"slice":    {[]int{1, 2, 3}, "STRING"},
-		"map":      {map[string]int{}, "STRING"},
+		"bool":   {true, "BOOLEAN"},
+		"int":    {42, "NUMBER"},
+		"int64":  {int64(42), "NUMBER"},
+		"float":  {3.14, "NUMBER"},
+		"uint":   {uint(7), "NUMBER"},
+		"string": {"hello", "STRING"},
+		"nil":    {nil, "STRING"},
+		"slice":  {[]int{1, 2, 3}, "STRING"},
+		"map":    {map[string]int{}, "STRING"},
 	}
 	for name, c := range cases {
 		if got := valueToItemType(c.v); got != c.want {
