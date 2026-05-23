@@ -53,6 +53,7 @@ func main() {
 	// create a new forwarder
 	forwarder := manage.Audit().Forwarders().New(
 		forwarderName,
+		forwarderName,
 		smplkit.ForwarderTypeHTTP,
 		smplkit.HttpConfiguration{
 			Method:  smplkit.HttpMethodPost,
