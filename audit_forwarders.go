@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
-
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
 
@@ -21,13 +19,20 @@ type AuditForwarders struct {
 
 // New returns an unsaved Forwarder bound to this client. Call
 // (*Forwarder).Save(ctx) to persist.
+//
+// id is the caller-supplied forwarder key — required at create time
+// (the audit service does not auto-generate it). Use a stable,
+// human-readable identifier (e.g. "splunk-prod"); the key is what
+// appears in every URL and audit-log line for this forwarder.
 func (f *AuditForwarders) New(
+	id string,
 	name string,
 	forwarderType ForwarderType,
 	configuration HttpConfiguration,
 	opts ...ForwarderOption,
 ) *Forwarder {
 	fwd := &Forwarder{
+		ID:            id,
 		Name:          name,
 		ForwarderType: forwarderType,
 		Configuration: configuration,
@@ -78,10 +83,9 @@ func WithForwarderTransform(transformType ForwarderTransformType, transform inte
 // Save creates or updates this forwarder on the server. Upsert
 // behavior keyed on CreatedAt: nil → create (POST), set → full-replace
 // update (PUT). After the call, every field is refreshed from the
-// server response (including newly-assigned ID, CreatedAt, UpdatedAt,
-// Version). Header values must be plaintext: reads return them
-// redacted, so a "<redacted>" round-tripped through Save would persist
-// that literal.
+// server response (including CreatedAt, UpdatedAt, Version). Header
+// values must be plaintext: reads return them redacted, so a
+// "<redacted>" round-tripped through Save would persist that literal.
 func (fwd *Forwarder) Save(ctx context.Context) error {
 	if fwd.client == nil {
 		return &Error{Message: "forwarder was constructed without a client; cannot save"}
@@ -133,7 +137,7 @@ func (fwd *Forwarder) validateTransform() error {
 
 // Delete soft-deletes this forwarder on the server.
 func (fwd *Forwarder) Delete(ctx context.Context) error {
-	if fwd.client == nil || fwd.ID == uuid.Nil {
+	if fwd.client == nil || fwd.ID == "" {
 		return &Error{Message: "forwarder was constructed without a client or id; cannot delete"}
 	}
 	return fwd.client.Delete(ctx, fwd.ID)
@@ -200,7 +204,7 @@ func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (
 
 // Get returns one forwarder by id; returned instance is bound to this
 // client so forwarder.Save(ctx) and forwarder.Delete(ctx) work.
-func (f *AuditForwarders) Get(ctx context.Context, forwarderID uuid.UUID) (*Forwarder, error) {
+func (f *AuditForwarders) Get(ctx context.Context, forwarderID string) (*Forwarder, error) {
 	resp, err := f.gen.GetForwarderWithResponse(ctx, forwarderID)
 	if err != nil {
 		return nil, fmt.Errorf("audit Forwarders.Get: %w", err)
@@ -213,7 +217,7 @@ func (f *AuditForwarders) Get(ctx context.Context, forwarderID uuid.UUID) (*Forw
 }
 
 // Delete soft-deletes a forwarder.
-func (f *AuditForwarders) Delete(ctx context.Context, forwarderID uuid.UUID) error {
+func (f *AuditForwarders) Delete(ctx context.Context, forwarderID string) error {
 	resp, err := f.gen.DeleteForwarderWithResponse(ctx, forwarderID)
 	if err != nil {
 		return fmt.Errorf("audit Forwarders.Delete: %w", err)
@@ -232,7 +236,7 @@ func (f *AuditForwarders) Delete(ctx context.Context, forwarderID uuid.UUID) err
 // response. Called by Forwarder.Save on unsaved instances.
 func (f *AuditForwarders) create(ctx context.Context, fwd *Forwarder) (*Forwarder, error) {
 	body := genaudit.CreateForwarderApplicationVndAPIPlusJSONRequestBody{
-		Data: forwarderResourceFromForwarder("", fwd),
+		Data: forwarderCreateResourceFromForwarder(fwd),
 	}
 	resp, err := f.gen.CreateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, body)
 	if err != nil {
@@ -252,7 +256,7 @@ func (f *AuditForwarders) create(ctx context.Context, fwd *Forwarder) (*Forwarde
 // response. Called by Forwarder.Save on saved instances.
 func (f *AuditForwarders) update(ctx context.Context, fwd *Forwarder) (*Forwarder, error) {
 	body := genaudit.UpdateForwarderApplicationVndAPIPlusJSONRequestBody{
-		Data: forwarderResourceFromForwarder(fwd.ID.String(), fwd),
+		Data: forwarderResourceFromForwarder(fwd.ID, fwd),
 	}
 	resp, err := f.gen.UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(
 		ctx, fwd.ID, body,
@@ -267,8 +271,8 @@ func (f *AuditForwarders) update(ctx context.Context, fwd *Forwarder) (*Forwarde
 	return &out, nil
 }
 
-func forwarderResourceFromForwarder(id string, fwd *Forwarder) genaudit.ForwarderResource {
-	rt := "forwarder"
+// forwarderAttributes builds the shared Forwarder attribute payload.
+func forwarderAttributes(fwd *Forwarder) genaudit.Forwarder {
 	enabled := fwd.Enabled
 	attrs := genaudit.Forwarder{
 		Name:          fwd.Name,
@@ -293,6 +297,11 @@ func forwarderResourceFromForwarder(id string, fwd *Forwarder) genaudit.Forwarde
 		tt := *fwd.TransformType
 		attrs.TransformType = &tt
 	}
+	return attrs
+}
+
+func forwarderResourceFromForwarder(id string, fwd *Forwarder) genaudit.ForwarderResource {
+	rt := "forwarder"
 	var idPtr *string
 	if id != "" {
 		idPtr = &id
@@ -300,7 +309,16 @@ func forwarderResourceFromForwarder(id string, fwd *Forwarder) genaudit.Forwarde
 	return genaudit.ForwarderResource{
 		Id:         idPtr,
 		Type:       &rt,
-		Attributes: attrs,
+		Attributes: forwarderAttributes(fwd),
+	}
+}
+
+func forwarderCreateResourceFromForwarder(fwd *Forwarder) genaudit.ForwarderCreateResource {
+	rt := genaudit.ForwarderCreateResourceTypeForwarder
+	return genaudit.ForwarderCreateResource{
+		Id:         fwd.ID,
+		Type:       &rt,
+		Attributes: forwarderAttributes(fwd),
 	}
 }
 
@@ -327,9 +345,9 @@ func httpConfigurationToWire(h HttpConfiguration) genaudit.HttpConfiguration {
 }
 
 func forwarderFromResource(r genaudit.ForwarderResource, client *AuditForwarders) Forwarder {
-	var id uuid.UUID
+	id := ""
 	if r.Id != nil {
-		id, _ = uuid.Parse(*r.Id)
+		id = *r.Id
 	}
 	a := r.Attributes
 	out := Forwarder{

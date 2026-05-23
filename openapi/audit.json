@@ -439,7 +439,7 @@
           "Forwarders"
         ],
         "summary": "Create Forwarder",
-        "description": "Create a forwarder for this account.",
+        "description": "Create a forwarder for this account.\n\nThe caller supplies the forwarder's key as `data.id`. Keys are\nunique within an account and immutable for the lifetime of the\nforwarder.",
         "operationId": "create_forwarder",
         "security": [
           {
@@ -451,7 +451,7 @@
           "content": {
             "application/vnd.api+json": {
               "schema": {
-                "$ref": "#/components/schemas/ForwarderRequest"
+                "$ref": "#/components/schemas/ForwarderCreateRequest"
               }
             }
           }
@@ -603,7 +603,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Forwarder Id"
             }
           }
@@ -640,7 +639,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Forwarder Id"
             }
           }
@@ -673,7 +671,7 @@
           "Forwarders"
         ],
         "summary": "Delete Forwarder",
-        "description": "Delete a forwarder.\n\nPast delivery log entries are retained. A new forwarder may be\ncreated later under the same name.",
+        "description": "Delete a forwarder.\n\nPast delivery log entries are retained. A new forwarder may be\ncreated later under the same id.",
         "operationId": "delete_forwarder",
         "security": [
           {
@@ -687,7 +685,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Forwarder Id"
             }
           }
@@ -719,7 +716,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Forwarder Id"
             }
           },
@@ -855,7 +851,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Forwarder Id"
             }
           },
@@ -904,7 +899,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "format": "uuid",
               "title": "Forwarder Id"
             }
           }
@@ -1912,6 +1906,79 @@
         "title": "Forwarder",
         "description": "A destination that receives audit events recorded for the account.\n\nEach event recorded for the account is evaluated against every enabled\nforwarder. If the filter expression evaluates truthy \u2014 or is absent \u2014\nthe event is shaped by the configured transform and delivered to the\ndestination defined by ``configuration``."
       },
+      "ForwarderCreateRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ForwarderCreateResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ForwarderCreateRequest",
+        "description": "JSON:API request envelope for creating a forwarder.\n\nDistinct from :class:`ForwarderRequest` because create requires\ncaller-supplied ``data.id`` while update does not."
+      },
+      "ForwarderCreateResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Client-supplied resource id."
+          },
+          "type": {
+            "type": "string",
+            "const": "forwarder",
+            "title": "Type",
+            "default": "forwarder"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Forwarder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "ForwarderCreateResource",
+        "description": "JSON:API resource envelope for creating a forwarder (id required).",
+        "example": {
+          "attributes": {
+            "configuration": {
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "name": "DD-API-KEY",
+                  "value": "dd-api-key-plaintext"
+                }
+              ],
+              "method": "POST",
+              "success_status": "2xx",
+              "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"
+            },
+            "description": "Forwards user.* events to the prod Datadog tenant.",
+            "enabled": true,
+            "filter": {
+              "==": [
+                {
+                  "var": "event_type"
+                },
+                "user.created"
+              ]
+            },
+            "forwarder_type": "datadog",
+            "name": "Datadog production",
+            "transform": "{ \"message\": event_type & ' on ' & resource_type }",
+            "transform_type": "JSONATA"
+          },
+          "id": "datadog-prod",
+          "type": "forwarder"
+        }
+      },
       "ForwarderDelivery": {
         "properties": {
           "forwarder_id": {
@@ -2182,7 +2249,7 @@
           "data"
         ],
         "title": "ForwarderRequest",
-        "description": "JSON:API request envelope for creating or updating a forwarder."
+        "description": "JSON:API request envelope for updating a forwarder."
       },
       "ForwarderResource": {
         "properties": {
@@ -2211,7 +2278,7 @@
           "attributes"
         ],
         "title": "ForwarderResource",
-        "description": "JSON:API resource envelope for a forwarder.\n\n`id` must not be specified for create requests (the server assigns it).",
+        "description": "JSON:API resource envelope for a forwarder.\n\nThe caller supplies `id` (the forwarder's key) on create.",
         "example": {
           "attributes": {
             "configuration": {
@@ -2247,7 +2314,7 @@
             "updated_at": "2026-05-07T12:00:00Z",
             "version": 1
           },
-          "id": "11111111-2222-3333-4444-555555555555",
+          "id": "datadog-prod",
           "type": "forwarder"
         }
       },

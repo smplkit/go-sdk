@@ -11,21 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
 
-const fwdIDStr = "11111111-2222-3333-4444-555555555555"
-
-func parseUUID(t *testing.T, s string) uuid.UUID {
-	t.Helper()
-	u, err := uuid.Parse(s)
-	if err != nil {
-		t.Fatalf("parse uuid %q: %v", s, err)
-	}
-	return u
-}
+const fwdIDStr = "showcase-forwarder"
 
 // newTestAuditForwarders wires an AuditForwarders wrapper against an httptest server.
 func newTestAuditForwarders(t *testing.T, handler http.HandlerFunc) (*AuditForwarders, func()) {
@@ -195,7 +184,7 @@ func TestAuditForwarders_Get_404Handled(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	defer cleanup()
-	_, err := fwds.Get(context.Background(), parseUUID(t, fwdIDStr))
+	_, err := fwds.Get(context.Background(), fwdIDStr)
 	var nfe *NotFoundError
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -210,7 +199,7 @@ func TestAuditForwarders_Get_Success(t *testing.T) {
 		writeForwarderResource(w, http.StatusOK, "x", "x")
 	})
 	defer cleanup()
-	fwd, err := fwds.Get(context.Background(), parseUUID(t, fwdIDStr))
+	fwd, err := fwds.Get(context.Background(), fwdIDStr)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -229,7 +218,7 @@ func TestAuditForwarders_Delete(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	defer cleanup()
-	if err := fwds.Delete(context.Background(), parseUUID(t, fwdIDStr)); err != nil {
+	if err := fwds.Delete(context.Background(), fwdIDStr); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if method != http.MethodDelete {
@@ -242,7 +231,7 @@ func TestAuditForwarders_Delete_NonSuccess(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	defer cleanup()
-	if err := fwds.Delete(context.Background(), parseUUID(t, fwdIDStr)); err == nil {
+	if err := fwds.Delete(context.Background(), fwdIDStr); err == nil {
 		t.Fatal("expected error on 404 delete")
 	}
 }
@@ -271,7 +260,7 @@ func TestAuditForwarders_List_TransportError(t *testing.T) {
 
 func TestAuditForwarders_Get_TransportError(t *testing.T) {
 	fwds := newClosedAuditForwarders(t)
-	if _, err := fwds.Get(context.Background(), parseUUID(t, fwdIDStr)); err == nil ||
+	if _, err := fwds.Get(context.Background(), fwdIDStr); err == nil ||
 		!strings.Contains(err.Error(), "Forwarders.Get") {
 		t.Fatalf("expected wrapped Get transport error, got %v", err)
 	}
@@ -279,7 +268,7 @@ func TestAuditForwarders_Get_TransportError(t *testing.T) {
 
 func TestAuditForwarders_Delete_TransportError(t *testing.T) {
 	fwds := newClosedAuditForwarders(t)
-	if err := fwds.Delete(context.Background(), parseUUID(t, fwdIDStr)); err == nil ||
+	if err := fwds.Delete(context.Background(), fwdIDStr); err == nil ||
 		!strings.Contains(err.Error(), "Forwarders.Delete") {
 		t.Fatalf("expected wrapped Delete transport error, got %v", err)
 	}
@@ -294,7 +283,7 @@ func TestAuditForwarders_Get_NonSuccessNon404(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	defer cleanup()
-	if _, err := fwds.Get(context.Background(), parseUUID(t, fwdIDStr)); err == nil ||
+	if _, err := fwds.Get(context.Background(), fwdIDStr); err == nil ||
 		!strings.Contains(err.Error(), "500") {
 		t.Fatalf("expected wrapped 500 error, got %v", err)
 	}
@@ -312,7 +301,7 @@ func TestForwarderFromResource_PopulatesOptionalFields(t *testing.T) {
 			`}}}`))
 	})
 	defer cleanup()
-	fwd, err := fwds.Get(context.Background(), parseUUID(t, fwdIDStr))
+	fwd, err := fwds.Get(context.Background(), fwdIDStr)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -686,6 +675,7 @@ func TestAuditForwarders_New_DefaultsAndOptions(t *testing.T) {
 	fwds := &AuditForwarders{}
 	fwd := fwds.New(
 		"my-forwarder",
+		"My Forwarder",
 		ForwarderTypeDatadog,
 		HttpConfiguration{URL: "https://x"},
 		WithForwarderDescription("a description"),
@@ -693,8 +683,11 @@ func TestAuditForwarders_New_DefaultsAndOptions(t *testing.T) {
 		WithForwarderFilter(map[string]interface{}{"==": []any{"x", "x"}}),
 		WithForwarderTransform(ForwarderTransformTypeJSONata, "$"),
 	)
-	if fwd.Name != "my-forwarder" {
-		t.Errorf("expected Name=my-forwarder, got %q", fwd.Name)
+	if fwd.ID != "my-forwarder" {
+		t.Errorf("expected ID=my-forwarder, got %q", fwd.ID)
+	}
+	if fwd.Name != "My Forwarder" {
+		t.Errorf("expected Name=My Forwarder, got %q", fwd.Name)
 	}
 	if fwd.ForwarderType != ForwarderTypeDatadog {
 		t.Errorf("expected ForwarderType=Datadog, got %v", fwd.ForwarderType)
@@ -724,7 +717,7 @@ func TestAuditForwarders_New_DefaultsAndOptions(t *testing.T) {
 
 func TestAuditForwarders_New_EnabledDefaultsTrue(t *testing.T) {
 	fwds := &AuditForwarders{}
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if !fwd.Enabled {
 		t.Errorf("expected Enabled=true by default")
 	}
@@ -753,7 +746,7 @@ func TestForwarder_Save_CreatePath(t *testing.T) {
 	})
 	defer cleanup()
 
-	fwd := fwds.New("my-forwarder", ForwarderTypeDatadog,
+	fwd := fwds.New("my-forwarder", "my-forwarder", ForwarderTypeDatadog,
 		HttpConfiguration{Method: HttpMethodPost, URL: "https://x"},
 		WithForwarderDescription("hi"),
 		WithForwarderFilter(map[string]interface{}{"==": []any{1, 1}}),
@@ -762,8 +755,8 @@ func TestForwarder_Save_CreatePath(t *testing.T) {
 	if err := fwd.Save(context.Background()); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	if fwd.ID == uuid.Nil {
-		t.Errorf("expected ID populated after save, got zero")
+	if fwd.ID == "" {
+		t.Errorf("expected ID populated after save, got empty")
 	}
 	if fwd.CreatedAt == nil {
 		t.Errorf("expected CreatedAt populated after save")
@@ -788,7 +781,7 @@ func TestForwarder_Save_UpdatePath(t *testing.T) {
 	})
 	defer cleanup()
 
-	fwd := fwds.New("my-forwarder", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("my-forwarder", "my-forwarder", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if err := fwd.Save(context.Background()); err != nil {
 		t.Fatalf("Save (create): %v", err)
 	}
@@ -806,7 +799,7 @@ func TestForwarder_Save_CreateError(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	defer cleanup()
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if err := fwd.Save(context.Background()); err == nil {
 		t.Fatal("expected error from Save (create), got nil")
 	}
@@ -823,7 +816,7 @@ func TestForwarder_Save_UpdateError(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	defer cleanup()
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if err := fwd.Save(context.Background()); err != nil {
 		t.Fatalf("Save (create): %v", err)
 	}
@@ -838,7 +831,7 @@ func TestForwarder_Save_CreateEmptyBody(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 	})
 	defer cleanup()
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if err := fwd.Save(context.Background()); err == nil || !strings.Contains(err.Error(), "empty 201 body") {
 		t.Fatalf("expected empty-201 error, got %v", err)
 	}
@@ -846,7 +839,7 @@ func TestForwarder_Save_CreateEmptyBody(t *testing.T) {
 
 func TestForwarder_Save_CreateTransportError(t *testing.T) {
 	fwds := newClosedAuditForwarders(t)
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if err := fwd.Save(context.Background()); err == nil {
 		t.Fatal("expected transport error from Save (create)")
 	}
@@ -863,7 +856,7 @@ func TestForwarder_Save_UpdateTransportError(t *testing.T) {
 	}))
 	gen, _ := genaudit.NewClient(srv.URL)
 	fwds := &AuditForwarders{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if err := fwd.Save(context.Background()); err != nil {
 		t.Fatalf("Save (create): %v", err)
 	}
@@ -874,7 +867,7 @@ func TestForwarder_Save_UpdateTransportError(t *testing.T) {
 }
 
 func TestForwarder_Delete_NoClient(t *testing.T) {
-	fwd := &Forwarder{Name: "x", ID: parseUUID(t, fwdIDStr)}
+	fwd := &Forwarder{Name: "x", ID: fwdIDStr}
 	err := fwd.Delete(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "without a client or id") {
 		t.Fatalf("expected no-client-or-id error, got %v", err)
@@ -883,8 +876,8 @@ func TestForwarder_Delete_NoClient(t *testing.T) {
 
 func TestForwarder_Delete_NoID(t *testing.T) {
 	fwds := &AuditForwarders{}
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
-	// ID is zero — the active-record's Delete refuses to call the server.
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd.ID = "" // simulate an unsaved instance — Delete must refuse.
 	err := fwd.Delete(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "without a client or id") {
 		t.Fatalf("expected no-client-or-id error, got %v", err)
@@ -900,7 +893,7 @@ func TestForwarder_Delete_Success(t *testing.T) {
 		writeForwarderResource(w, http.StatusCreated, "x", "")
 	})
 	defer cleanup()
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if err := fwd.Save(context.Background()); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -976,7 +969,7 @@ func TestForwarderResourceFromForwarder_AllBranches(t *testing.T) {
 // TransformType — both must be specified together.
 func TestForwarder_Save_TransformWithoutType(t *testing.T) {
 	fwds := &AuditForwarders{}
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	fwd.Transform = "$"
 	fwd.TransformType = nil
 
@@ -991,7 +984,7 @@ func TestForwarder_Save_TransformWithoutType(t *testing.T) {
 func TestForwarder_Save_TypeWithoutTransform(t *testing.T) {
 	fwds := &AuditForwarders{}
 	tt := ForwarderTransformTypeJSONata
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	fwd.Transform = nil
 	fwd.TransformType = &tt
 
@@ -1005,7 +998,7 @@ func TestForwarder_Save_TypeWithoutTransform(t *testing.T) {
 func TestForwarder_Save_JSONataTransformMustBeString(t *testing.T) {
 	fwds := &AuditForwarders{}
 	tt := ForwarderTransformTypeJSONata
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	fwd.Transform = map[string]interface{}{"event": "event_type"}
 	fwd.TransformType = &tt
 
@@ -1023,7 +1016,7 @@ func TestForwarder_Save_JSONataEmptyStringAllowed(t *testing.T) {
 	})
 	defer cleanup()
 	tt := ForwarderTransformTypeJSONata
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	fwd.Transform = ""
 	fwd.TransformType = &tt
 
@@ -1039,7 +1032,7 @@ func TestForwarder_Save_NoTransformBothNil(t *testing.T) {
 		writeForwarderResource(w, http.StatusCreated, "x", "")
 	})
 	defer cleanup()
-	fwd := fwds.New("x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
 	if err := fwd.Save(context.Background()); err != nil {
 		t.Fatalf("expected save to succeed with no transform, got %v", err)
 	}
