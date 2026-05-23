@@ -187,7 +187,7 @@ func (m *EnvironmentsManagement) Delete(ctx context.Context, id string) error {
 
 // create sends a POST to create the environment; updates e with the server response.
 func (m *EnvironmentsManagement) create(ctx context.Context, e *Environment) error {
-	reqBody := environmentToRequest(e)
+	reqBody := environmentToCreateRequest(e)
 	resp, err := m.client.appClient.CreateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
@@ -235,19 +235,36 @@ func (m *EnvironmentsManagement) update(ctx context.Context, e *Environment) err
 	return nil
 }
 
-func environmentToRequest(e *Environment) genapp.EnvironmentRequest {
+func environmentAttributes(e *Environment) genapp.Environment {
 	cls := genapp.EnvironmentClassification(e.Classification)
-	attrs := genapp.Environment{
+	return genapp.Environment{
 		Name:           e.Name,
 		Color:          e.Color,
 		Classification: &cls,
 	}
+}
+
+func environmentToRequest(e *Environment) genapp.EnvironmentRequest {
 	id := e.ID
 	return genapp.EnvironmentRequest{
 		Data: genapp.EnvironmentResource{
 			Type:       genapp.EnvironmentResourceTypeEnvironment,
 			Id:         &id,
-			Attributes: attrs,
+			Attributes: environmentAttributes(e),
+		},
+	}
+}
+
+// environmentToCreateRequest builds the EnvironmentCreateRequest envelope.
+// The create envelope requires a non-nullable string id (vs the update
+// envelope, which optionally echoes the id since the id lives in the
+// URL path).
+func environmentToCreateRequest(e *Environment) genapp.EnvironmentCreateRequest {
+	return genapp.EnvironmentCreateRequest{
+		Data: genapp.EnvironmentCreateResource{
+			Type:       genapp.EnvironmentCreateResourceTypeEnvironment,
+			Id:         e.ID,
+			Attributes: environmentAttributes(e),
 		},
 	}
 }
