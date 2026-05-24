@@ -30,6 +30,7 @@ func (a *AuditManagement) Forwarders() *AuditForwarders {
 //	mgmt.Contexts()         // context entity CRUD
 //	mgmt.ContextTypes()     // context-type schemas
 //	mgmt.Environments()     // environments
+//	mgmt.Services()         // services
 //	mgmt.AccountSettings()  // account-level settings
 //	mgmt.Config()           // config CRUD (was client.Config().Management())
 //	mgmt.Flags()            // flag CRUD (was client.Flags().Management())
@@ -43,6 +44,7 @@ type ManagementClient struct {
 	standalone bool
 
 	environments    *EnvironmentsManagement
+	services        *ServicesManagement
 	contextTypes    *ContextTypesManagement
 	contexts        *ContextsManagement
 	accountSettings *AccountSettingsManagement
@@ -63,6 +65,14 @@ func (m *ManagementClient) Environments() *EnvironmentsManagement {
 		m.environments = &EnvironmentsManagement{client: m}
 	}
 	return m.environments
+}
+
+// Services returns the sub-client for service CRUD operations.
+func (m *ManagementClient) Services() *ServicesManagement {
+	if m.services == nil {
+		m.services = &ServicesManagement{client: m}
+	}
+	return m.services
 }
 
 // ContextTypes returns the sub-client for context type CRUD operations.
@@ -287,6 +297,191 @@ func resourceToEnvironment(r genapp.EnvironmentResource, m *EnvironmentsManageme
 		}
 	}
 	return e
+}
+
+// ── Services ─────────────────────────────────────────────────────────────────
+
+// ServicesManagement provides CRUD operations for service resources.
+// Obtain one via ManagementClient.Services().
+type ServicesManagement struct {
+	client *ManagementClient
+}
+
+// New returns an unsaved Service. Call svc.Save(ctx) to persist.
+func (m *ServicesManagement) New(id string, name string) *Service {
+	return &Service{
+		ID:     id,
+		Name:   name,
+		client: m,
+	}
+}
+
+// List returns one page of services for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (m *ServicesManagement) List(ctx context.Context, opts ...ListOption) ([]*Service, error) {
+	o := resolveListOptions(opts)
+	params := &genapp.ListServicesParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := m.client.appClient.ListServices(ctx, params)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genapp.ServiceListResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse services: %w", err)
+	}
+
+	svcs := make([]*Service, len(result.Data))
+	for i, r := range result.Data {
+		svcs[i] = resourceToService(r, m)
+	}
+	return svcs, nil
+}
+
+// Get retrieves a single service by ID.
+func (m *ServicesManagement) Get(ctx context.Context, id string) (*Service, error) {
+	resp, err := m.client.appClient.GetService(ctx, id)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genapp.ServiceResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse service: %w", err)
+	}
+	return resourceToService(result.Data, m), nil
+}
+
+// Delete removes a service by ID.
+func (m *ServicesManagement) Delete(ctx context.Context, id string) error {
+	resp, err := m.client.appClient.DeleteService(ctx, id)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	return checkStatus(resp.StatusCode, body)
+}
+
+// create sends a POST to create the service; updates s with the server response.
+func (m *ServicesManagement) create(ctx context.Context, s *Service) error {
+	reqBody := serviceToCreateRequest(s)
+	resp, err := m.client.appClient.CreateServiceWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+
+	var result genapp.ServiceResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("smplkit: failed to parse service: %w", err)
+	}
+	s.apply(resourceToService(result.Data, m))
+	return nil
+}
+
+// update sends a PUT to update the service; updates s with the server response.
+func (m *ServicesManagement) update(ctx context.Context, s *Service) error {
+	reqBody := serviceToRequest(s)
+	resp, err := m.client.appClient.UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx, s.ID, reqBody)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+
+	var result genapp.ServiceResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("smplkit: failed to parse service: %w", err)
+	}
+	s.apply(resourceToService(result.Data, m))
+	return nil
+}
+
+func serviceAttributes(s *Service) genapp.Service {
+	return genapp.Service{
+		Name: s.Name,
+	}
+}
+
+func serviceToRequest(s *Service) genapp.ServiceRequest {
+	id := s.ID
+	return genapp.ServiceRequest{
+		Data: genapp.ServiceResource{
+			Type:       genapp.ServiceResourceTypeService,
+			Id:         &id,
+			Attributes: serviceAttributes(s),
+		},
+	}
+}
+
+// serviceToCreateRequest builds the ServiceCreateRequest envelope.
+// The create envelope requires a non-nullable string id (vs the update
+// envelope, which optionally echoes the id since the id lives in the
+// URL path).
+func serviceToCreateRequest(s *Service) genapp.ServiceCreateRequest {
+	return genapp.ServiceCreateRequest{
+		Data: genapp.ServiceCreateResource{
+			Type:       genapp.ServiceCreateResourceTypeService,
+			Id:         s.ID,
+			Attributes: serviceAttributes(s),
+		},
+	}
+}
+
+func resourceToService(r genapp.ServiceResource, m *ServicesManagement) *Service {
+	s := &Service{
+		Name:      r.Attributes.Name,
+		CreatedAt: r.Attributes.CreatedAt,
+		UpdatedAt: r.Attributes.UpdatedAt,
+		client:    m,
+	}
+	if r.Id != nil {
+		s.ID = *r.Id
+	}
+	return s
 }
 
 // ── ContextTypes ─────────────────────────────────────────────────────────────

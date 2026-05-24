@@ -181,6 +181,211 @@ func TestEnvironment_Save_NoClient(t *testing.T) {
 	require.Error(t, err)
 }
 
+// ── ServicesManagement ────────────────────────────────────────────────────────
+
+func TestServicesManagement_New(t *testing.T) {
+	client := newManagementTestClient(t, http.NotFoundHandler())
+	s := client.Management().Services().New("user_service", "User Service")
+	assert.Equal(t, "user_service", s.ID)
+	assert.Equal(t, "User Service", s.Name)
+	assert.Nil(t, s.CreatedAt)
+}
+
+func TestServicesManagement_List(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/services" {
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":[
+				{"id":"user_service","type":"service","attributes":{"name":"User Service"}},
+				{"id":"billing","type":"service","attributes":{"name":"Billing"}}
+			],"meta":{"pagination":{"page":1,"size":1000}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	svcs, err := client.Management().Services().List(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, svcs, 2)
+	assert.Equal(t, "user_service", svcs[0].ID)
+	assert.Equal(t, "User Service", svcs[0].Name)
+	assert.Equal(t, "billing", svcs[1].ID)
+}
+
+func TestServicesManagement_List_WithPagination(t *testing.T) {
+	var capturedQuery string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/services" {
+			capturedQuery = r.URL.RawQuery
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":2,"size":50}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	_, err := client.Management().Services().List(
+		context.Background(),
+		smplkit.WithPageNumber(2),
+		smplkit.WithPageSize(50),
+	)
+	require.NoError(t, err)
+	assert.Contains(t, capturedQuery, "page%5Bnumber%5D=2")
+	assert.Contains(t, capturedQuery, "page%5Bsize%5D=50")
+}
+
+func TestServicesManagement_Get(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/services/user_service" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":{"id":"user_service","type":"service","attributes":{"name":"User Service"}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	s, err := client.Management().Services().Get(context.Background(), "user_service")
+	require.NoError(t, err)
+	assert.Equal(t, "user_service", s.ID)
+	assert.Equal(t, "User Service", s.Name)
+}
+
+func TestServicesManagement_Get_NotFound(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	}))
+	_, err := client.Management().Services().Get(context.Background(), "nonexistent")
+	require.Error(t, err)
+	var nfe *smplkit.SmplNotFoundError
+	assert.ErrorAs(t, err, &nfe)
+}
+
+func TestServicesManagement_Delete(t *testing.T) {
+	called := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "DELETE" && r.URL.Path == "/api/v1/services/user_service" {
+			called = true
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	err := client.Management().Services().Delete(context.Background(), "user_service")
+	require.NoError(t, err)
+	assert.True(t, called)
+}
+
+func TestService_Save_Create(t *testing.T) {
+	var receivedBody map[string]interface{}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/services" {
+			if err := json.NewDecoder(r.Body).Decode(&receivedBody); err == nil {
+				w.WriteHeader(http.StatusCreated)
+				_, _ = w.Write([]byte(`{"data":{"id":"user_service","type":"service","attributes":{"name":"User Service","created_at":"2026-04-01T00:00:00Z"}}}`))
+			}
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	s := client.Management().Services().New("user_service", "User Service")
+	err := s.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "user_service", s.ID)
+	assert.NotNil(t, s.CreatedAt)
+
+	require.NotNil(t, receivedBody)
+	data, ok := receivedBody["data"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "service", data["type"])
+	assert.Equal(t, "user_service", data["id"])
+	attrs, ok := data["attributes"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "User Service", attrs["name"])
+}
+
+func TestService_Save_Update(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" && r.URL.Path == "/api/v1/services/user_service" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":{"id":"user_service","type":"service","attributes":{"name":"Renamed","created_at":"2026-04-01T00:00:00Z","updated_at":"2026-04-02T00:00:00Z"}}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	now := time.Now()
+	s := &smplkit.Service{ID: "user_service", Name: "Renamed", CreatedAt: &now}
+	// Inject the client via roundtrip helper.
+	saved := client.Management().Services().New("user_service", "Renamed")
+	saved.CreatedAt = &now
+	err := saved.Save(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Renamed", saved.Name)
+
+	// The raw struct without a client must still error.
+	err = s.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestService_Save_Conflict(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/services" {
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"errors":[{"status":"409","title":"Conflict","detail":"service exists"}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	s := client.Management().Services().New("user_service", "User Service")
+	err := s.Save(context.Background())
+	require.Error(t, err)
+	var ce *smplkit.SmplConflictError
+	assert.ErrorAs(t, err, &ce)
+}
+
+func TestService_Save_NoClient(t *testing.T) {
+	s := &smplkit.Service{ID: "user_service", Name: "User Service"}
+	err := s.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestService_Delete_NoClient(t *testing.T) {
+	s := &smplkit.Service{ID: "user_service", Name: "User Service"}
+	err := s.Delete(context.Background())
+	require.Error(t, err)
+}
+
+func TestService_Delete_ViaModel(t *testing.T) {
+	called := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "DELETE" && r.URL.Path == "/api/v1/services/user_service" {
+			called = true
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	client := newManagementTestClient(t, handler)
+
+	s := client.Management().Services().New("user_service", "User Service")
+	err := s.Delete(context.Background())
+	require.NoError(t, err)
+	assert.True(t, called)
+}
+
 // ── ContextTypesManagement ────────────────────────────────────────────────────
 
 func TestContextTypesManagement_New(t *testing.T) {
@@ -718,6 +923,69 @@ func TestEnvironmentsManagement_Update_BadJSON(t *testing.T) {
 	e := client.Management().Environments().New("production", "Production")
 	e.CreatedAt = &now
 	err := e.Save(context.Background())
+	require.Error(t, err)
+}
+
+// ── ServicesManagement bad-JSON paths ─────────────────────────────────────────
+
+func TestServicesManagement_List_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid json`))
+	}))
+	_, err := client.Management().Services().List(context.Background())
+	require.Error(t, err)
+}
+
+func TestServicesManagement_Get_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	_, err := client.Management().Services().Get(context.Background(), "user_service")
+	require.Error(t, err)
+}
+
+func TestServicesManagement_Create_BadJSON(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	s := client.Management().Services().New("user_service", "User Service")
+	err := s.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestServicesManagement_Update_BadJSON(t *testing.T) {
+	now := time.Now()
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{not json`))
+	}))
+	s := client.Management().Services().New("user_service", "User Service")
+	s.CreatedAt = &now
+	err := s.Save(context.Background())
+	require.Error(t, err)
+}
+
+func TestServicesManagement_List_ServerError(t *testing.T) {
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+	_, err := client.Management().Services().List(context.Background())
+	require.Error(t, err)
+}
+
+func TestServicesManagement_Update_ServerError(t *testing.T) {
+	now := time.Now()
+	client := newManagementTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+	s := client.Management().Services().New("user_service", "User Service")
+	s.CreatedAt = &now
+	err := s.Save(context.Background())
 	require.Error(t, err)
 }
 

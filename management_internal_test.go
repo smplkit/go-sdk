@@ -103,6 +103,40 @@ func TestEnvironmentsManagement_Update_ReadBodyError(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// ── ServicesManagement io.ReadAll error paths ─────────────────────────────────
+
+func TestServicesManagement_List_ReadBodyError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &brokenBodyTransport{})
+	_, err := mgmt.Services().List(context.Background())
+	assert.Error(t, err)
+}
+
+func TestServicesManagement_Get_ReadBodyError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &brokenBodyTransport{})
+	_, err := mgmt.Services().Get(context.Background(), "user_service")
+	assert.Error(t, err)
+}
+
+func TestServicesManagement_Delete_ReadBodyError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &brokenBodyTransport{})
+	err := mgmt.Services().Delete(context.Background(), "user_service")
+	assert.Error(t, err)
+}
+
+func TestServicesManagement_Create_ReadBodyError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &brokenBodyTransport{})
+	s := &Service{ID: "user_service", Name: "User Service", client: mgmt.Services()}
+	err := mgmt.Services().create(context.Background(), s)
+	assert.Error(t, err)
+}
+
+func TestServicesManagement_Update_ReadBodyError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &brokenBodyTransport{})
+	s := &Service{ID: "user_service", Name: "User Service", client: mgmt.Services()}
+	err := mgmt.Services().update(context.Background(), s)
+	assert.Error(t, err)
+}
+
 // ── ContextTypesManagement io.ReadAll error paths ─────────────────────────────
 
 func TestContextTypesManagement_List_ReadBodyError(t *testing.T) {
@@ -279,6 +313,40 @@ func TestEnvironmentsManagement_Update_TransportError(t *testing.T) {
 	mgmt := newManagementTestClientWithTransport(t, &errTransport{})
 	e := &Environment{ID: "test", Name: "Test", client: mgmt.Environments()}
 	err := mgmt.Environments().update(context.Background(), e)
+	assert.Error(t, err)
+}
+
+// ── ServicesManagement transport-error paths ─────────────────────────────────
+
+func TestServicesManagement_List_TransportError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &errTransport{})
+	_, err := mgmt.Services().List(context.Background())
+	assert.Error(t, err)
+}
+
+func TestServicesManagement_Get_TransportError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &errTransport{})
+	_, err := mgmt.Services().Get(context.Background(), "user_service")
+	assert.Error(t, err)
+}
+
+func TestServicesManagement_Delete_TransportError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &errTransport{})
+	err := mgmt.Services().Delete(context.Background(), "user_service")
+	assert.Error(t, err)
+}
+
+func TestServicesManagement_Create_TransportError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &errTransport{})
+	s := &Service{ID: "test", Name: "Test", client: mgmt.Services()}
+	err := mgmt.Services().create(context.Background(), s)
+	assert.Error(t, err)
+}
+
+func TestServicesManagement_Update_TransportError(t *testing.T) {
+	mgmt := newManagementTestClientWithTransport(t, &errTransport{})
+	s := &Service{ID: "test", Name: "Test", client: mgmt.Services()}
+	err := mgmt.Services().update(context.Background(), s)
 	assert.Error(t, err)
 }
 

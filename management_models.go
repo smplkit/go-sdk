@@ -90,6 +90,55 @@ func (e *Environment) apply(other *Environment) {
 	e.UpdatedAt = other.UpdatedAt
 }
 
+// ── Service ──────────────────────────────────────────────────────────────────
+
+// Service represents a smplkit service resource — a backend application
+// or microservice in the customer's stack that contexts can be evaluated
+// against.
+//
+// Mutate fields and call Save(ctx) to persist.
+type Service struct {
+	// ID is the service slug (e.g. "user_service").
+	ID string
+	// Name is the display name.
+	Name string
+	// CreatedAt is the server creation timestamp (nil for unsaved instances).
+	CreatedAt *time.Time
+	// UpdatedAt is the last-modified timestamp.
+	UpdatedAt *time.Time
+
+	client *ServicesManagement
+}
+
+// Save creates or updates the service on the server.
+// The instance is updated with server-returned fields on success.
+// PUT semantics: creates if CreatedAt is nil, otherwise updates.
+func (s *Service) Save(ctx context.Context) error {
+	if s.client == nil {
+		return &Error{Message: "service was constructed without a client; cannot save"}
+	}
+	if s.CreatedAt == nil {
+		return s.client.create(ctx, s)
+	}
+	return s.client.update(ctx, s)
+}
+
+// Delete removes this service from the server. Equivalent to
+// mgmt.Services().Delete(ctx, s.ID).
+func (s *Service) Delete(ctx context.Context) error {
+	if s.client == nil {
+		return &Error{Message: "service was constructed without a client; cannot delete"}
+	}
+	return s.client.Delete(ctx, s.ID)
+}
+
+func (s *Service) apply(other *Service) {
+	s.ID = other.ID
+	s.Name = other.Name
+	s.CreatedAt = other.CreatedAt
+	s.UpdatedAt = other.UpdatedAt
+}
+
 // ── ContextType ───────────────────────────────────────────────────────────────
 
 // ContextTypeOption configures an unsaved ContextType returned by ContextTypesManagement.New.
