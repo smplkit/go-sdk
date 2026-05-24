@@ -305,6 +305,17 @@ type HttpConfiguration struct {
 	// or a class ("2xx", "4xx"). Defaults to "2xx" server-side when
 	// zero-valued.
 	SuccessStatus string
+	// TlsVerify controls whether the destination's TLS certificate
+	// chain is verified. Pointer-valued so the zero-value HttpConfiguration
+	// is unambiguous: nil means "leave at the server default of true",
+	// &false means "skip verification" (the trial-Splunk escape hatch),
+	// &true means "verify explicitly". Prefer pinning the issuing CA via
+	// CaCert for long-lived self-signed setups.
+	TlsVerify *bool
+	// CaCert is an optional PEM-encoded certificate (or bundle) trusted
+	// in addition to the system CA store. Ignored when TlsVerify points
+	// to false. Empty/nil string (the default) means "use system CAs only".
+	CaCert *string
 }
 
 // Forwarder is a SIEM streaming destination configured on the
