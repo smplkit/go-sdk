@@ -32,7 +32,8 @@ const (
 
 // sampleConfigJSON returns a JSON:API single-resource response body.
 // Items use the typed format: {key: {"value": raw, "type": "STRING"}}.
-// Environment overrides use: {envName: {"values": {key: {"value": raw}}}}.
+// Environment overrides use the flat format per ADR-024 §2.4:
+// {envName: {key: rawValue}}.
 func sampleConfigJSON(id, name string) string {
 	return `{
 		"data": {
@@ -43,7 +44,7 @@ func sampleConfigJSON(id, name string) string {
 				"description": "A test config",
 				"parent": null,
 				"items": {"log_level": {"value": "info", "type": "STRING"}},
-				"environments": {"production": {"values": {"log_level": {"value": "warn"}}}},
+				"environments": {"production": {"log_level": "warn"}},
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": "2024-06-15T12:00:00Z"
 			}
@@ -247,7 +248,7 @@ func TestConfigClient_New_Save_WithEnvironments(t *testing.T) {
 
 	cfg := client.Config().Management().New("new-config", smplkit.WithConfigName("New Config"))
 	cfg.Environments = map[string]map[string]interface{}{
-		"production": {"values": map[string]interface{}{"debug": false}},
+		"production": {"debug": false},
 	}
 	err := cfg.Save(context.Background())
 	require.NoError(t, err)
@@ -368,9 +369,8 @@ func TestConfig_MutateEnvironment_Save(t *testing.T) {
 			attrs := body["data"].(map[string]interface{})["attributes"].(map[string]interface{})
 			envs := attrs["environments"].(map[string]interface{})
 			prodEnv := envs["production"].(map[string]interface{})
-			vals := prodEnv["values"].(map[string]interface{})
-			logOverride := vals["log_level"].(map[string]interface{})
-			assert.Equal(t, "warn", logOverride["value"])
+			// Flat per-env shape per ADR-024 §2.4.
+			assert.Equal(t, "warn", prodEnv["log_level"])
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "Svc")))
@@ -381,7 +381,7 @@ func TestConfig_MutateEnvironment_Save(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg.Environments["production"] = map[string]interface{}{
-		"values": map[string]interface{}{"log_level": "warn"},
+		"log_level": "warn",
 	}
 	err = cfg.Save(context.Background())
 	require.NoError(t, err)
@@ -616,7 +616,7 @@ func TestConfigClient_ParsesEnvironments(t *testing.T) {
 				"description": "A test config",
 				"parent": null,
 				"items": {"log_level": {"value": "info", "type": "STRING"}},
-				"environments": {"production": {"values": {"log_level": {"value": "warn"}}}},
+				"environments": {"production": {"log_level": "warn"}},
 				"created_at": "2024-01-01T00:00:00Z",
 				"updated_at": "2024-06-15T12:00:00Z"
 			}
@@ -626,10 +626,9 @@ func TestConfigClient_ParsesEnvironments(t *testing.T) {
 	cfg, err := client.Config().Management().Get(context.Background(), "env-test")
 	require.NoError(t, err)
 	require.Contains(t, cfg.Environments, "production")
+	// Flat per-env shape per ADR-024 §2.4 — no "values" indirection.
 	prodEnv := cfg.Environments["production"]
-	require.Contains(t, prodEnv, "values")
-	vals := prodEnv["values"].(map[string]interface{})
-	assert.Equal(t, "warn", vals["log_level"])
+	assert.Equal(t, "warn", prodEnv["log_level"])
 }
 
 func TestConfigClient_Get_MalformedJSON(t *testing.T) {
@@ -1010,7 +1009,7 @@ func TestConfig_MutateEnvItem_Save(t *testing.T) {
 				"attributes": {
 					"name": "Svc",
 					"items": {"log_level": {"value": "info", "type": "STRING"}},
-					"environments": {"production": {"values": {"log_level": {"value": "warn"}}}},
+					"environments": {"production": {"log_level": "warn"}},
 					"created_at": "2024-01-01T00:00:00Z",
 					"updated_at": "2024-06-15T12:00:00Z"
 				}
@@ -1022,13 +1021,9 @@ func TestConfig_MutateEnvItem_Save(t *testing.T) {
 			attrs := body["data"].(map[string]interface{})["attributes"].(map[string]interface{})
 			envs := attrs["environments"].(map[string]interface{})
 			prodEnv := envs["production"].(map[string]interface{})
-			vals := prodEnv["values"].(map[string]interface{})
-			// The existing log_level should be preserved.
-			logOverride := vals["log_level"].(map[string]interface{})
-			assert.Equal(t, "warn", logOverride["value"])
-			// And the new key should be present.
-			debugOverride := vals["debug"].(map[string]interface{})
-			assert.Equal(t, true, debugOverride["value"])
+			// Flat per-env shape per ADR-024 §2.4 — overrides sit directly under the env key.
+			assert.Equal(t, "warn", prodEnv["log_level"])
+			assert.Equal(t, true, prodEnv["debug"])
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "Svc")))
@@ -1038,10 +1033,8 @@ func TestConfig_MutateEnvItem_Save(t *testing.T) {
 	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
-	// Mutate environment values directly.
-	if vals, ok := cfg.Environments["production"]["values"].(map[string]interface{}); ok {
-		vals["debug"] = true
-	}
+	// Mutate environment values directly on the flat env map.
+	cfg.Environments["production"]["debug"] = true
 	err = cfg.Save(context.Background())
 	require.NoError(t, err)
 }
@@ -1057,16 +1050,16 @@ func TestConfig_MutateNewEnv_Save(t *testing.T) {
 			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{}}}}`))
 		} else {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"debug":{"value":true}}}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"debug":true}}}}}`))
 		}
 	})
 
 	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
-	// Add a new environment.
+	// Add a new environment — flat shape per ADR-024 §2.4.
 	cfg.Environments["staging"] = map[string]interface{}{
-		"values": map[string]interface{}{"debug": true},
+		"debug": true,
 	}
 	err = cfg.Save(context.Background())
 	require.NoError(t, err)
@@ -1080,20 +1073,18 @@ func TestConfig_MutateExistingEnvMerge_Save(t *testing.T) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"other":{"value":"data"}}}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"other":"data"}}}}}`))
 		} else {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"values":{"other":{"value":"data"},"debug":{"value":true}}}}}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"` + configID + `","type":"config","attributes":{"name":"Svc","items":{"log_level":{"value":"info","type":"STRING"}},"environments":{"staging":{"other":"data","debug":true}}}}}`))
 		}
 	})
 
 	cfg, err := client.Config().Management().Get(context.Background(), configID)
 	require.NoError(t, err)
 
-	// Add a new key to the existing environment values.
-	if vals, ok := cfg.Environments["staging"]["values"].(map[string]interface{}); ok {
-		vals["debug"] = true
-	}
+	// Add a new key to the existing environment overrides — flat shape per ADR-024 §2.4.
+	cfg.Environments["staging"]["debug"] = true
 	err = cfg.Save(context.Background())
 	require.NoError(t, err)
 }
@@ -1128,7 +1119,7 @@ func TestClient_Connect_And_GetValue(t *testing.T) {
 			"attributes": {
 				"name": "DB",
 				"items": {"host": {"value": "localhost", "type": "STRING"}, "port": {"value": 5432, "type": "NUMBER"}},
-				"environments": {"test": {"values": {"host": {"value": "testdb"}}}},
+				"environments": {"test": {"host": "testdb"}},
 				"parent": null
 			}
 		}]}`))
@@ -1144,7 +1135,7 @@ func TestClient_Connect_And_GetValue(t *testing.T) {
 			"attributes": {
 				"name": "DB",
 				"items": {"host": {"value": "localhost", "type": "STRING"}, "port": {"value": 5432, "type": "NUMBER"}},
-				"environments": {"test": {"values": {"host": {"value": "testdb"}}}},
+				"environments": {"test": {"host": "testdb"}},
 				"parent": null
 			}
 		}}`))

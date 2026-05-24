@@ -58,103 +58,6 @@ func TestExtractItemValues_MapWithValueKey(t *testing.T) {
 	assert.Equal(t, "info", result["log_level"])
 }
 
-// ---------- extractEnvOverrides ----------
-
-func TestExtractEnvOverrides_Nil(t *testing.T) {
-	assert.Nil(t, extractEnvOverrides(nil))
-}
-
-func TestExtractEnvOverrides_ValuesNotMap(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"staging": {"values": "not-a-map", "other": "keep"},
-	}
-	result := extractEnvOverrides(envs)
-	assert.Equal(t, "not-a-map", result["staging"]["values"])
-	assert.Equal(t, "keep", result["staging"]["other"])
-}
-
-func TestExtractEnvOverrides_NonValuesKey(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"prod": {"name": "production"},
-	}
-	result := extractEnvOverrides(envs)
-	assert.Equal(t, "production", result["prod"]["name"])
-}
-
-func TestExtractEnvOverrides_InnerNonMap(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"staging": {
-			"values": map[string]interface{}{
-				"raw_val": "plain-string",
-			},
-		},
-	}
-	result := extractEnvOverrides(envs)
-	assert.Equal(t, "plain-string", result["staging"]["values"].(map[string]interface{})["raw_val"])
-}
-
-func TestExtractEnvOverrides_InnerMapMissingValueKey(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"staging": {
-			"values": map[string]interface{}{
-				"no_val": map[string]interface{}{"type": "STRING"},
-			},
-		},
-	}
-	result := extractEnvOverrides(envs)
-	inner := result["staging"]["values"].(map[string]interface{})
-	assert.Equal(t, map[string]interface{}{"type": "STRING"}, inner["no_val"])
-}
-
-func TestExtractEnvOverrides_InnerMapWithValueKey(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"staging": {
-			"values": map[string]interface{}{
-				"debug": map[string]interface{}{"value": true},
-			},
-		},
-	}
-	result := extractEnvOverrides(envs)
-	inner := result["staging"]["values"].(map[string]interface{})
-	assert.Equal(t, true, inner["debug"])
-}
-
-// ---------- wrapEnvOverrides ----------
-
-func TestWrapEnvOverrides_Nil(t *testing.T) {
-	assert.Nil(t, wrapEnvOverrides(nil))
-}
-
-func TestWrapEnvOverrides_ValuesNotMap(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"staging": {"values": "not-a-map", "meta": "data"},
-	}
-	result := wrapEnvOverrides(envs)
-	assert.Equal(t, "not-a-map", result["staging"]["values"])
-	assert.Equal(t, "data", result["staging"]["meta"])
-}
-
-func TestWrapEnvOverrides_NonValuesKey(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"prod": {"name": "production"},
-	}
-	result := wrapEnvOverrides(envs)
-	assert.Equal(t, "production", result["prod"]["name"])
-}
-
-func TestWrapEnvOverrides_WrapsValues(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"staging": {
-			"values": map[string]interface{}{
-				"debug": true,
-			},
-		},
-	}
-	result := wrapEnvOverrides(envs)
-	inner := result["staging"]["values"].(map[string]interface{})
-	assert.Equal(t, map[string]interface{}{"value": true}, inner["debug"])
-}
-
 // ---------- diffAndFire ----------
 
 func TestDiffAndFire_RemovedKey(t *testing.T) {
@@ -563,23 +466,23 @@ func TestRefMap_Nil(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// ---------- refEnvs non-values key path ----------
-
-func TestRefEnvs_NonValuesKey(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"staging": {
-			"not_values": "some-data",
-		},
-	}
-	result := refEnvs(envs)
-	require.NotNil(t, result)
-	staging := (*result)["staging"]
-	assert.Nil(t, staging.Values)
-}
+// ---------- refEnvs ----------
 
 func TestRefEnvs_Nil(t *testing.T) {
 	result := refEnvs(nil)
 	assert.Nil(t, result)
+}
+
+func TestRefEnvs_PassThrough(t *testing.T) {
+	// Per ADR-024 §2.4 the wire shape is flat — refEnvs is a simple
+	// pointer-wrap of the in-memory map, no envelope translation.
+	envs := map[string]map[string]interface{}{
+		"production": {"log_level": "warn", "debug": true},
+	}
+	result := refEnvs(envs)
+	require.NotNil(t, result)
+	assert.Equal(t, "warn", (*result)["production"]["log_level"])
+	assert.Equal(t, true, (*result)["production"]["debug"])
 }
 
 // ---------- wrapItemValues nil case ----------
@@ -751,20 +654,6 @@ func TestDelete_Config_ConnectionError(t *testing.T) {
 
 	err := cc.Management().Delete(context.Background(), "test-config")
 	require.Error(t, err)
-}
-
-// ---------- refEnvs vals not map ----------
-
-func TestRefEnvs_ValsNotMap(t *testing.T) {
-	envs := map[string]map[string]interface{}{
-		"staging": {
-			"values": "not-a-map",
-		},
-	}
-	result := refEnvs(envs)
-	require.NotNil(t, result)
-	staging := (*result)["staging"]
-	assert.Nil(t, staging.Values)
 }
 
 // ---------- Resolve ensureInit error ----------

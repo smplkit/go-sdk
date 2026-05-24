@@ -212,17 +212,13 @@ func (c *ConfigEntry) Remove(name, environment string) {
 	if !ok {
 		return
 	}
-	vals, ok := env["values"].(map[string]interface{})
-	if !ok {
-		return
-	}
-	delete(vals, name)
+	delete(env, name)
 }
 
-// Per-env items live one level down under "values" so the in-memory
-// shape matches what the API serializer (refEnvs/wrapEnvOverrides) and
-// the runtime resolver (resolveChain) both read. Writing flat would
-// silently drop overrides on Save.
+// setItem writes a per-env item directly into the flat env map. The
+// wire shape (per ADR-024 §2.4) and the in-memory shape are both flat
+// — {env: {key: rawValue}} — so setItem writes the value at that
+// position without any "values" envelope.
 func (c *ConfigEntry) setItem(name string, value interface{}, environment string) {
 	if environment == "" {
 		if c.Items == nil {
@@ -239,10 +235,5 @@ func (c *ConfigEntry) setItem(name string, value interface{}, environment string
 		env = make(map[string]interface{})
 		c.Environments[environment] = env
 	}
-	vals, ok := env["values"].(map[string]interface{})
-	if !ok {
-		vals = make(map[string]interface{})
-		env["values"] = vals
-	}
-	vals[name] = value
+	env[name] = value
 }
