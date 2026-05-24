@@ -1037,3 +1037,90 @@ func TestForwarder_Save_NoTransformBothNil(t *testing.T) {
 		t.Fatalf("expected save to succeed with no transform, got %v", err)
 	}
 }
+
+// Save threads TlsVerify and CaCert through to the wire so customers
+// can opt out of certificate verification (or pin a private CA) on a
+// per-forwarder basis. The fields are pointer-valued; nil leaves them
+// off the wire entirely so the server's default applies.
+func TestForwarder_Save_SendsTlsVerifyAndCaCert(t *testing.T) {
+	var capturedBody []byte
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		writeForwarderResource(w, http.StatusCreated, "x", "")
+	})
+	defer cleanup()
+	tlsOff := false
+	caCert := "-----BEGIN CERTIFICATE-----\nfoo\n-----END CERTIFICATE-----"
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{
+		URL:       "https://x",
+		TlsVerify: &tlsOff,
+		CaCert:    &caCert,
+	})
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	body := string(capturedBody)
+	if !strings.Contains(body, `"tls_verify":false`) {
+		t.Errorf("expected tls_verify on wire, got: %s", body)
+	}
+	if !strings.Contains(body, `"ca_cert":"-----BEGIN CERTIFICATE-----`) {
+		t.Errorf("expected ca_cert on wire, got: %s", body)
+	}
+}
+
+// Get reads TlsVerify and CaCert back from the wire into the wrapper.
+func TestForwarder_Get_ReadsTlsVerifyAndCaCert(t *testing.T) {
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		body := map[string]any{
+			"data": map[string]any{
+				"id": fwdIDStr, "type": "forwarder",
+				"attributes": map[string]any{
+					"name": "n", "forwarder_type": "http", "enabled": true,
+					"configuration": map[string]any{
+						"method": "POST", "url": "https://x", "headers": []any{},
+						"success_status": "2xx",
+						"tls_verify":     false,
+						"ca_cert":        "-----BEGIN CERTIFICATE-----\nfoo\n-----END CERTIFICATE-----",
+					},
+					"created_at": "2026-05-07T12:00:00+00:00",
+					"updated_at": "2026-05-07T12:00:00+00:00",
+					"version":    1,
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(body)
+	})
+	defer cleanup()
+	fwd, err := fwds.Get(context.Background(), fwdIDStr)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if fwd.Configuration.TlsVerify == nil || *fwd.Configuration.TlsVerify != false {
+		t.Errorf("expected TlsVerify=false, got %v", fwd.Configuration.TlsVerify)
+	}
+	if fwd.Configuration.CaCert == nil || !strings.Contains(*fwd.Configuration.CaCert, "BEGIN CERTIFICATE") {
+		t.Errorf("expected CaCert with PEM body, got %v", fwd.Configuration.CaCert)
+	}
+}
+
+// Get leaves TlsVerify and CaCert nil when the wire omits them — the
+// wrapper treats absence as "leave the server default in place" rather
+// than synthesizing a value.
+func TestForwarder_Get_NilTlsFieldsWhenWireOmitsThem(t *testing.T) {
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeForwarderResource(w, http.StatusOK, "n", "")
+	})
+	defer cleanup()
+	fwd, err := fwds.Get(context.Background(), fwdIDStr)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if fwd.Configuration.TlsVerify != nil {
+		t.Errorf("expected TlsVerify nil, got %v", *fwd.Configuration.TlsVerify)
+	}
+	if fwd.Configuration.CaCert != nil {
+		t.Errorf("expected CaCert nil, got %q", *fwd.Configuration.CaCert)
+	}
+}

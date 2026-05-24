@@ -334,6 +334,14 @@ func httpConfigurationToWire(h HttpConfiguration) genaudit.HttpConfiguration {
 		s := h.SuccessStatus
 		out.SuccessStatus = &s
 	}
+	if h.TlsVerify != nil {
+		v := *h.TlsVerify
+		out.TlsVerify = &v
+	}
+	if h.CaCert != nil {
+		c := *h.CaCert
+		out.CaCert = &c
+	}
 	if len(h.Headers) > 0 {
 		hh := make([]genaudit.HttpHeader, 0, len(h.Headers))
 		for _, hdr := range h.Headers {
@@ -388,6 +396,14 @@ func httpConfigurationFromWire(h genaudit.HttpConfiguration) HttpConfiguration {
 	}
 	if h.SuccessStatus != nil {
 		out.SuccessStatus = *h.SuccessStatus
+	}
+	if h.TlsVerify != nil {
+		v := *h.TlsVerify
+		out.TlsVerify = &v
+	}
+	if h.CaCert != nil {
+		c := *h.CaCert
+		out.CaCert = &c
 	}
 	if h.Headers != nil {
 		out.Headers = make([]HttpHeader, 0, len(*h.Headers))
