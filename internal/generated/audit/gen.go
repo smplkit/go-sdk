@@ -828,6 +828,9 @@ type ForwarderTypeTransform struct {
 // will join this one as members of a discriminated union under the
 // “configuration“ field of “Forwarder“.
 type HttpConfiguration struct {
+	// CaCert Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`.
+	CaCert *string `json:"ca_cert,omitempty"`
+
 	// Headers HTTP headers attached to each delivery request.
 	Headers *[]HttpHeader `json:"headers,omitempty"`
 
@@ -836,6 +839,9 @@ type HttpConfiguration struct {
 
 	// SuccessStatus HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
 	SuccessStatus *string `json:"success_status,omitempty"`
+
+	// TlsVerify Whether to verify the destination server's TLS certificate against trusted certificate authorities. Defaults to `true` and should be left on for any production destination. Set to `false` only for development or short-lived testing against a destination that presents an untrusted certificate (e.g. a Splunk Cloud trial stack on `:8088` serving its default self-signed certificate). When `false`, deliveries proceed without certificate verification — they are vulnerable to man-in-the-middle attacks. For long-lived self-signed setups, pin the issuing CA via `ca_cert` instead of disabling verification entirely.
+	TlsVerify *bool `json:"tls_verify,omitempty"`
 
 	// Url Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`).
 	Url string `json:"url"`
@@ -936,6 +942,9 @@ type TestForwarderRequest struct {
 	// Body Request body sent to the destination. When omitted, an empty body is sent (suitable for connectivity probes). When set, the body is sent verbatim — pair with an appropriate `Content-Type` entry in `headers` so the destination interprets it correctly. Limit 1 MiB.
 	Body *string `json:"body,omitempty"`
 
+	// CaCert Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate. Mirrors the parent forwarder field. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks.
+	CaCert *string `json:"ca_cert,omitempty"`
+
 	// Headers HTTP headers attached to the test request.
 	Headers *[]HttpHeader `json:"headers,omitempty"`
 
@@ -947,6 +956,9 @@ type TestForwarderRequest struct {
 
 	// TimeoutMs Per-request timeout in milliseconds. Capped at 30 seconds.
 	TimeoutMs *int `json:"timeout_ms,omitempty"`
+
+	// TlsVerify Whether to verify the destination server's TLS certificate. Mirrors the parent forwarder field of the same name — see its description for security guidance. Defaults to `true`.
+	TlsVerify *bool `json:"tls_verify,omitempty"`
 
 	// Url Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`).
 	Url string `json:"url"`
