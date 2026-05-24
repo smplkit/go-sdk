@@ -140,8 +140,8 @@ type Config struct {
 	// Description Optional human-readable description of what this config holds.
 	Description *string `json:"description,omitempty"`
 
-	// Environments Map of environment keys to per-environment override sets. An environment override applies when this config is resolved against that environment.
-	Environments *map[string]EnvironmentOverride `json:"environments,omitempty"`
+	// Environments Map of environment keys to per-environment overrides. Each environment maps to a flat object of item key to override value (e.g. `{"production": {"database.host": "db-prod.internal"}}`). Only the keys being overridden need to be present. Override values must conform to the item's declared `type`; `type` and `description` are always resolved from the defining configuration and are never redeclared on an override.
+	Environments *map[string]map[string]interface{} `json:"environments,omitempty"`
 
 	// Items Map of item keys to item definitions declared on this config. Keys must be unique within the config; declared types are immutable once set and must match any type declared for the same key on an ancestor.
 	Items *map[string]ConfigItemDefinition `json:"items,omitempty"`
@@ -245,12 +245,6 @@ type ConfigItemDefinition struct {
 // ConfigItemDefinitionType Declared value type. Constrains the JSON shape of `value` and of every override of this key in the `environments` map.
 type ConfigItemDefinitionType string
 
-// ConfigItemOverride Per-environment override of a single item value.
-type ConfigItemOverride struct {
-	// Value Override value for this environment. Must conform to the type declared for the item in the inheritance chain.
-	Value interface{} `json:"value,omitempty"`
-}
-
 // ConfigListResponse JSON:API collection response for configs.
 type ConfigListResponse struct {
 	Data []ConfigResource `json:"data"`
@@ -295,12 +289,6 @@ type ConfigResponse struct {
 	// `id` is the human-readable key for the config and must be supplied
 	// by the caller on create. It is unique within the account.
 	Data ConfigResource `json:"data"`
-}
-
-// EnvironmentOverride Per-environment override set for a config.
-type EnvironmentOverride struct {
-	// Values Map of item keys to override values that apply when this environment is resolved. Each key must already be declared (with a type) on this config or one of its ancestors.
-	Values *map[string]ConfigItemOverride `json:"values,omitempty"`
 }
 
 // ListMeta Top-level “meta“ block included on every JSON:API list response.
