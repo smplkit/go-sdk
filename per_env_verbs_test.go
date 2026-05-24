@@ -189,8 +189,9 @@ func TestConfigEntry_SetX_BaseAndEnv(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{"x": 1}, c.Items["flags"])
 
 	c.SetString("name", "service-b", "production")
-	prodVals, ok := c.Environments["production"]["values"].(map[string]interface{})
-	require.True(t, ok, "per-env values must live under 'values' so the serializer picks them up")
+	// Per ADR-024 §2.4 per-env overrides are flat — no "values" envelope.
+	prodVals := c.Environments["production"]
+	require.NotNil(t, prodVals, "per-env override map must exist after setItem")
 	assert.Equal(t, "service-b", prodVals["name"])
 }
 
@@ -200,8 +201,8 @@ func TestConfigEntry_Remove_BaseAndEnv(t *testing.T) {
 	c.SetString("name", "y", "production")
 
 	c.Remove("name", "production")
-	prodVals, _ := c.Environments["production"]["values"].(map[string]interface{})
-	_, hasName := prodVals["name"]
+	// Per ADR-024 §2.4 per-env overrides are flat — no "values" envelope.
+	_, hasName := c.Environments["production"]["name"]
 	assert.False(t, hasName)
 	assert.Equal(t, "x", c.Items["name"]) // base preserved
 
@@ -214,18 +215,18 @@ func TestConfigEntry_Remove_BaseAndEnv(t *testing.T) {
 	empty.Remove("name", "")
 	empty.Remove("name", "production")
 
-	// removing a per-env item when the env exists but has no values map is a no-op
-	noValues := &smplkit.ConfigEntry{
+	// removing a per-env item when the env exists but has no entries is a no-op
+	noEntries := &smplkit.ConfigEntry{
 		Environments: map[string]map[string]interface{}{
 			"production": {},
 		},
 	}
-	noValues.Remove("name", "production")
+	noEntries.Remove("name", "production")
 
 	// removing from an env that isn't present in a non-nil Environments map is a no-op
 	noEnv := &smplkit.ConfigEntry{
 		Environments: map[string]map[string]interface{}{
-			"production": {"values": map[string]interface{}{"name": "x"}},
+			"production": {"name": "x"},
 		},
 	}
 	noEnv.Remove("name", "staging")

@@ -463,7 +463,7 @@ func resourceToConfig(r genconfig.ConfigResource, m *ConfigManagement) *ConfigEn
 		Description:  attrs.Description,
 		Parent:       attrs.Parent,
 		Items:        extractItemValues(derefMap(attrs.Items)),
-		Environments: extractEnvOverrides(derefEnvs(attrs.Environments)),
+		Environments: derefEnvs(attrs.Environments),
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
 		client:       m,
@@ -478,7 +478,7 @@ func buildConfigAttributes(name string, desc, parent *string, items map[string]i
 		Description:  desc,
 		Parent:       parent,
 		Items:        refMap(wrapItemValues(items)),
-		Environments: refEnvs(wrapEnvOverrides(envs)),
+		Environments: refEnvs(envs),
 	}
 }
 
@@ -530,44 +530,25 @@ func refMap(m map[string]interface{}) *map[string]genconfig.ConfigItemDefinition
 	return &result
 }
 
-func derefEnvs(envs *map[string]genconfig.EnvironmentOverride) map[string]map[string]interface{} {
+// derefEnvs unwraps the pointer to the per-env override map from the
+// generated client. The wire shape is now flat ({env: {key: rawValue}})
+// per ADR-024 §2.4, so it matches the in-memory shape used by the SDK
+// directly — no per-env envelope translation needed.
+func derefEnvs(envs *map[string]map[string]interface{}) map[string]map[string]interface{} {
 	if envs == nil {
 		return nil
 	}
-	result := make(map[string]map[string]interface{}, len(*envs))
-	for k, v := range *envs {
-		entry := make(map[string]interface{})
-		if v.Values != nil {
-			vals := make(map[string]interface{}, len(*v.Values))
-			for vk, vv := range *v.Values {
-				vals[vk] = map[string]interface{}{"value": vv.Value}
-			}
-			entry["values"] = vals
-		}
-		result[k] = entry
-	}
-	return result
+	return *envs
 }
 
-func refEnvs(envs map[string]map[string]interface{}) *map[string]genconfig.EnvironmentOverride {
+// refEnvs pointer-wraps the in-memory per-env override map for the
+// generated request envelope. Since the wire and in-memory shapes are
+// both flat ({env: {key: rawValue}}), this is now a simple address-of.
+func refEnvs(envs map[string]map[string]interface{}) *map[string]map[string]interface{} {
 	if envs == nil {
 		return nil
 	}
-	result := make(map[string]genconfig.EnvironmentOverride, len(envs))
-	for envName, envEntry := range envs {
-		var override genconfig.EnvironmentOverride
-		if vals, ok := envEntry["values"]; ok {
-			if valsMap, ok := vals.(map[string]interface{}); ok {
-				wrapped := make(map[string]genconfig.ConfigItemOverride, len(valsMap))
-				for vk, vv := range valsMap {
-					wrapped[vk] = genconfig.ConfigItemOverride{Value: vv.(map[string]interface{})["value"]}
-				}
-				override.Values = &wrapped
-			}
-		}
-		result[envName] = override
-	}
-	return &result
+	return &envs
 }
 
 func extractItemValues(items map[string]interface{}) map[string]interface{} {
@@ -587,37 +568,6 @@ func extractItemValues(items map[string]interface{}) map[string]interface{} {
 	return result
 }
 
-func extractEnvOverrides(envs map[string]map[string]interface{}) map[string]map[string]interface{} {
-	if envs == nil {
-		return nil
-	}
-	result := make(map[string]map[string]interface{}, len(envs))
-	for envName, envEntry := range envs {
-		extracted := make(map[string]interface{}, len(envEntry))
-		for k, v := range envEntry {
-			if k == "values" {
-				if valsMap, ok := v.(map[string]interface{}); ok {
-					unwrapped := make(map[string]interface{}, len(valsMap))
-					for vk, vv := range valsMap {
-						if m, ok := vv.(map[string]interface{}); ok {
-							if val, exists := m["value"]; exists {
-								unwrapped[vk] = val
-								continue
-							}
-						}
-						unwrapped[vk] = vv
-					}
-					extracted[k] = unwrapped
-					continue
-				}
-			}
-			extracted[k] = v
-		}
-		result[envName] = extracted
-	}
-	return result
-}
-
 func wrapItemValues(items map[string]interface{}) map[string]interface{} {
 	if items == nil {
 		return nil
@@ -631,33 +581,6 @@ func wrapItemValues(items map[string]interface{}) map[string]interface{} {
 			// don't trip the server's "type changed" guard.
 			"type": valueToItemType(v),
 		}
-	}
-	return result
-}
-
-func wrapEnvOverrides(envs map[string]map[string]interface{}) map[string]map[string]interface{} {
-	if envs == nil {
-		return nil
-	}
-	result := make(map[string]map[string]interface{}, len(envs))
-	for envName, envEntry := range envs {
-		wrapped := make(map[string]interface{}, len(envEntry))
-		for k, v := range envEntry {
-			if k == "values" {
-				if valsMap, ok := v.(map[string]interface{}); ok {
-					wrappedVals := make(map[string]interface{}, len(valsMap))
-					for vk, vv := range valsMap {
-						wrappedVals[vk] = map[string]interface{}{
-							"value": vv,
-						}
-					}
-					wrapped[k] = wrappedVals
-					continue
-				}
-			}
-			wrapped[k] = v
-		}
-		result[envName] = wrapped
 	}
 	return result
 }

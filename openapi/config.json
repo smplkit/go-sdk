@@ -471,7 +471,8 @@
             "anyOf": [
               {
                 "additionalProperties": {
-                  "$ref": "#/components/schemas/EnvironmentOverride"
+                  "additionalProperties": true,
+                  "type": "object"
                 },
                 "type": "object"
               },
@@ -480,7 +481,7 @@
               }
             ],
             "title": "Environments",
-            "description": "Map of environment keys to per-environment override sets. An environment override applies when this config is resolved against that environment."
+            "description": "Map of environment keys to per-environment overrides. Each environment maps to a flat object of item key to override value (e.g. `{\"production\": {\"database.host\": \"db-prod.internal\"}}`). Only the keys being overridden need to be present. Override values must conform to the item's declared `type`; `type` and `description` are always resolved from the defining configuration and are never redeclared on an override."
           },
           "managed": {
             "anyOf": [
@@ -534,14 +535,8 @@
           "description": "Database connection settings.",
           "environments": {
             "prod": {
-              "values": {
-                "host": {
-                  "value": "db-prod.internal"
-                },
-                "pool_size": {
-                  "value": 20
-                }
-              }
+              "host": "db-prod.internal",
+              "pool_size": 20
             }
           },
           "items": {
@@ -762,11 +757,7 @@
             "description": "Settings for the user service.",
             "environments": {
               "prod": {
-                "values": {
-                  "host": {
-                    "value": "db-prod.internal"
-                  }
-                }
+                "host": "db-prod.internal"
               }
             },
             "items": {
@@ -824,17 +815,6 @@
         "type": "object",
         "title": "ConfigItemDefinition",
         "description": "Type-declared item within a config.\n\nEach item carries a value plus a declared type that constrains the\nvalue and any per-environment overrides for the same key."
-      },
-      "ConfigItemOverride": {
-        "properties": {
-          "value": {
-            "title": "Value",
-            "description": "Override value for this environment. Must conform to the type declared for the item in the inheritance chain."
-          }
-        },
-        "type": "object",
-        "title": "ConfigItemOverride",
-        "description": "Per-environment override of a single item value."
       },
       "ConfigListResponse": {
         "properties": {
@@ -905,11 +885,7 @@
             "description": "Database connection settings.",
             "environments": {
               "prod": {
-                "values": {
-                  "host": {
-                    "value": "db-prod.internal"
-                  }
-                }
+                "host": "db-prod.internal"
               }
             },
             "items": {
@@ -939,28 +915,6 @@
         ],
         "title": "ConfigResponse",
         "description": "JSON:API single-resource response envelope for a config."
-      },
-      "EnvironmentOverride": {
-        "properties": {
-          "values": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "$ref": "#/components/schemas/ConfigItemOverride"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Values",
-            "description": "Map of item keys to override values that apply when this environment is resolved. Each key must already be declared (with a type) on this config or one of its ancestors."
-          }
-        },
-        "type": "object",
-        "title": "EnvironmentOverride",
-        "description": "Per-environment override set for a config."
       },
       "ListMeta": {
         "properties": {

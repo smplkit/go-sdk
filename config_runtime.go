@@ -41,14 +41,12 @@ func resolveChain(chain []chainEntry, environment string) map[string]interface{}
 			nodeVals[k] = v
 		}
 
-		// Overlay environment-specific values if present.
+		// Overlay environment-specific values if present. The wire and
+		// in-memory shapes are flat per ADR-024 §2.4, so envEntry is
+		// the override map directly — no "values" indirection.
 		if environment != "" {
 			if envEntry, ok := entry.Environments[environment]; ok {
-				if vals, ok := envEntry["values"]; ok {
-					if valsMap, ok := vals.(map[string]interface{}); ok {
-						nodeVals = deepMerge(nodeVals, valsMap)
-					}
-				}
+				nodeVals = deepMerge(nodeVals, envEntry)
 			}
 		}
 
