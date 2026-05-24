@@ -2695,6 +2695,25 @@
             "title": "Success Status",
             "description": "HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
             "default": "2xx"
+          },
+          "tls_verify": {
+            "type": "boolean",
+            "title": "Tls Verify",
+            "description": "Whether to verify the destination server's TLS certificate against trusted certificate authorities. Defaults to `true` and should be left on for any production destination. Set to `false` only for development or short-lived testing against a destination that presents an untrusted certificate (e.g. a Splunk Cloud trial stack on `:8088` serving its default self-signed certificate). When `false`, deliveries proceed without certificate verification \u2014 they are vulnerable to man-in-the-middle attacks. For long-lived self-signed setups, pin the issuing CA via `ca_cert` instead of disabling verification entirely.",
+            "default": true
+          },
+          "ca_cert": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 65536
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ca Cert",
+            "description": "Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`."
           }
         },
         "additionalProperties": false,
@@ -2936,6 +2955,25 @@
             ],
             "title": "Timeout Ms",
             "description": "Per-request timeout in milliseconds. Capped at 30 seconds."
+          },
+          "tls_verify": {
+            "type": "boolean",
+            "title": "Tls Verify",
+            "description": "Whether to verify the destination server's TLS certificate. Mirrors the parent forwarder field of the same name \u2014 see its description for security guidance. Defaults to `true`.",
+            "default": true
+          },
+          "ca_cert": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 65536
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ca Cert",
+            "description": "Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate. Mirrors the parent forwarder field. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks."
           },
           "body": {
             "anyOf": [
