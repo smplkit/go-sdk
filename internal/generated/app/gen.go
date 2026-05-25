@@ -2249,7 +2249,7 @@ type SubscriptionChangeProjection struct {
 	// Effect `IMMEDIATE` when the change takes effect at confirmation time (and a prorated charge may apply today). `NEXT_PERIOD` when the change takes effect at the end of the current billing period.
 	Effect SubscriptionChangeProjectionEffect `json:"effect"`
 
-	// FromPlan Current plan for this product, or `FREE` if it is being added.
+	// FromPlan Current plan for this product, or `free` if it is being added.
 	FromPlan string `json:"from_plan"`
 
 	// MonthlyCents Monthly cost in cents of this enrollment after the change. `0` when the enrollment will be dropped.
@@ -2264,7 +2264,7 @@ type SubscriptionChangeProjection struct {
 	// StartsAt When `effect` is `NEXT_PERIOD`, the ISO-8601 timestamp at which the change takes effect. `null` when `effect` is `IMMEDIATE` (the change applies on confirmation).
 	StartsAt *string `json:"starts_at,omitempty"`
 
-	// ToPlan Plan the product will be on after the change. `FREE` indicates the enrollment will be dropped.
+	// ToPlan Plan the product will be on after the change. `free` indicates the enrollment will be dropped.
 	ToPlan string `json:"to_plan"`
 }
 
@@ -2277,7 +2277,7 @@ type SubscriptionChangeProjectionEffect string
 // they want enrolled. Products absent from the request are interpreted as
 // scheduled-for-drop at the end of the current billing period.
 type SubscriptionItemRequest struct {
-	// Plan Target plan for this product. Must be a paid plan such as `STANDARD` or `PRO`; the free plan is implicit when a product is not listed.
+	// Plan Target plan for this product. Must be a paid plan such as `standard` or `pro`; the free plan is implicit when a product is not listed.
 	Plan string `json:"plan"`
 
 	// Product Product key (e.g. `audit`, `config`, `flags`, `logging`).
@@ -2289,10 +2289,10 @@ type SubscriptionItemResponse struct {
 	// Id Unique identifier for this enrollment.
 	Id openapi_types.UUID `json:"id"`
 
-	// PendingPlanChange When a plan change is scheduled for the end of the current billing period, this is the plan that will take effect. Otherwise `null`. The value `FREE` indicates the enrollment will be dropped.
+	// PendingPlanChange When a plan change is scheduled for the end of the current billing period, this is the plan that will take effect. Otherwise `null`. The value `free` indicates the enrollment will be dropped.
 	PendingPlanChange *string `json:"pending_plan_change,omitempty"`
 
-	// Plan Current plan for this product (e.g. `STANDARD`, `PRO`).
+	// Plan Current plan for this product (e.g. `standard`, `pro`).
 	Plan string `json:"plan"`
 
 	// PriceMonthlyCents Monthly list price for this enrollment, in cents. This value is locked at the time the enrollment was created or last had its plan changed; subsequent changes to the public price list do not affect this enrollment until the customer themselves changes their plan.
