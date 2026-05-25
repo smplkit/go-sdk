@@ -7196,7 +7196,7 @@
             "discount_override_pct": 100,
             "items": [
               {
-                "plan": "PRO",
+                "plan": "pro",
                 "product": "audit"
               }
             ]
@@ -9866,12 +9866,12 @@
           "from_plan": {
             "type": "string",
             "title": "From Plan",
-            "description": "Current plan for this product, or `FREE` if it is being added."
+            "description": "Current plan for this product, or `free` if it is being added."
           },
           "to_plan": {
             "type": "string",
             "title": "To Plan",
-            "description": "Plan the product will be on after the change. `FREE` indicates the enrollment will be dropped."
+            "description": "Plan the product will be on after the change. `free` indicates the enrollment will be dropped."
           },
           "monthly_cents": {
             "type": "integer",
@@ -9921,7 +9921,7 @@
           "plan": {
             "type": "string",
             "title": "Plan",
-            "description": "Target plan for this product. Must be a paid plan such as `STANDARD` or `PRO`; the free plan is implicit when a product is not listed."
+            "description": "Target plan for this product. Must be a paid plan such as `standard` or `pro`; the free plan is implicit when a product is not listed."
           }
         },
         "additionalProperties": false,
@@ -9949,7 +9949,7 @@
           "plan": {
             "type": "string",
             "title": "Plan",
-            "description": "Current plan for this product (e.g. `STANDARD`, `PRO`)."
+            "description": "Current plan for this product (e.g. `standard`, `pro`)."
           },
           "price_monthly_cents": {
             "type": "integer",
@@ -9960,7 +9960,7 @@
             "type": "string",
             "nullable": true,
             "title": "Pending Plan Change",
-            "description": "When a plan change is scheduled for the end of the current billing period, this is the plan that will take effect. Otherwise `null`. The value `FREE` indicates the enrollment will be dropped."
+            "description": "When a plan change is scheduled for the end of the current billing period, this is the plan that will take effect. Otherwise `null`. The value `free` indicates the enrollment will be dropped."
           },
           "scheduled_change_effective_at": {
             "type": "string",
@@ -10084,11 +10084,11 @@
             "changes": [
               {
                 "effect": "IMMEDIATE",
-                "from_plan": "FREE",
+                "from_plan": "free",
                 "monthly_cents": 9900,
                 "product": "audit",
                 "prorated_charge_today_cents": 4521,
-                "to_plan": "PRO"
+                "to_plan": "pro"
               }
             ],
             "next_invoice_total_cents": 12580,
@@ -10185,11 +10185,11 @@
           "attributes": {
             "items": [
               {
-                "plan": "PRO",
+                "plan": "pro",
                 "product": "audit"
               },
               {
-                "plan": "PRO",
+                "plan": "pro",
                 "product": "config"
               }
             ],
@@ -10235,7 +10235,7 @@
             "items": [
               {
                 "id": "i1j2k3l4-5678-90ab-cdef-1234567890ab",
-                "plan": "PRO",
+                "plan": "pro",
                 "price_monthly_cents": 9900,
                 "product": "audit"
               }
