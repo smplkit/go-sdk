@@ -394,6 +394,120 @@ func (e RegisterRequestEntryPoint) Valid() bool {
 	}
 }
 
+// Defines values for SSOConnectionDefaultRole.
+const (
+	SSOConnectionDefaultRoleADMIN  SSOConnectionDefaultRole = "ADMIN"
+	SSOConnectionDefaultRoleMEMBER SSOConnectionDefaultRole = "MEMBER"
+	SSOConnectionDefaultRoleOWNER  SSOConnectionDefaultRole = "OWNER"
+	SSOConnectionDefaultRoleVIEWER SSOConnectionDefaultRole = "VIEWER"
+)
+
+// Valid indicates whether the value is a known member of the SSOConnectionDefaultRole enum.
+func (e SSOConnectionDefaultRole) Valid() bool {
+	switch e {
+	case SSOConnectionDefaultRoleADMIN:
+		return true
+	case SSOConnectionDefaultRoleMEMBER:
+		return true
+	case SSOConnectionDefaultRoleOWNER:
+		return true
+	case SSOConnectionDefaultRoleVIEWER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSOConnectionGroupRoleMappings.
+const (
+	SSOConnectionGroupRoleMappingsADMIN  SSOConnectionGroupRoleMappings = "ADMIN"
+	SSOConnectionGroupRoleMappingsMEMBER SSOConnectionGroupRoleMappings = "MEMBER"
+	SSOConnectionGroupRoleMappingsOWNER  SSOConnectionGroupRoleMappings = "OWNER"
+	SSOConnectionGroupRoleMappingsVIEWER SSOConnectionGroupRoleMappings = "VIEWER"
+)
+
+// Valid indicates whether the value is a known member of the SSOConnectionGroupRoleMappings enum.
+func (e SSOConnectionGroupRoleMappings) Valid() bool {
+	switch e {
+	case SSOConnectionGroupRoleMappingsADMIN:
+		return true
+	case SSOConnectionGroupRoleMappingsMEMBER:
+		return true
+	case SSOConnectionGroupRoleMappingsOWNER:
+		return true
+	case SSOConnectionGroupRoleMappingsVIEWER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSOConnectionProtocol.
+const (
+	Oidc SSOConnectionProtocol = "oidc"
+	Saml SSOConnectionProtocol = "saml"
+)
+
+// Valid indicates whether the value is a known member of the SSOConnectionProtocol enum.
+func (e SSOConnectionProtocol) Valid() bool {
+	switch e {
+	case Oidc:
+		return true
+	case Saml:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSOConnectionResourceType.
+const (
+	SsoConnection SSOConnectionResourceType = "sso_connection"
+)
+
+// Valid indicates whether the value is a known member of the SSOConnectionResourceType enum.
+func (e SSOConnectionResourceType) Valid() bool {
+	switch e {
+	case SsoConnection:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSODomainStatus.
+const (
+	Pending  SSODomainStatus = "pending"
+	Verified SSODomainStatus = "verified"
+)
+
+// Valid indicates whether the value is a known member of the SSODomainStatus enum.
+func (e SSODomainStatus) Valid() bool {
+	switch e {
+	case Pending:
+		return true
+	case Verified:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSODomainResourceType.
+const (
+	SsoDomain SSODomainResourceType = "sso_domain"
+)
+
+// Valid indicates whether the value is a known member of the SSODomainResourceType enum.
+func (e SSODomainResourceType) Valid() bool {
+	switch e {
+	case SsoDomain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ServiceCreateResourceType.
 const (
 	ServiceCreateResourceTypeService ServiceCreateResourceType = "service"
@@ -2149,6 +2263,195 @@ type RegisterRequest struct {
 // RegisterRequestEntryPoint How the customer arrived at the registration page. Allowed values: `LOGIN`, `GET_STARTED`, `LIVE_DEMO`, `UNKNOWN`. Defaults to `UNKNOWN` when omitted. Case-insensitive on input.
 type RegisterRequestEntryPoint string
 
+// SSOConnection An account's Single Sign-On connection to a customer-controlled
+// identity provider. Configuring a connection lets the account federate
+// authentication to its own SAML or OIDC IdP; with `enforced` enabled,
+// password and social sign-in are disabled for users on the account's
+// verified domains.
+//
+// Each account has at most one SSO connection. The Service Provider
+// metadata fields (`sp_entity_id`, `acs_url`, `slo_url`) are computed
+// on every read from the connection identifier and never stored.
+type SSOConnection struct {
+	// AcsUrl Assertion Consumer Service URL (SAML) or redirect URI (OIDC) to register with the IdP. Computed.
+	AcsUrl *string `json:"acs_url,omitempty"`
+
+	// CreatedAt When the connection was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// DefaultRole Role granted to a user provisioned just-in-time on their first SSO login when no group mapping applies. `OWNER` values are downgraded to `ADMIN` for JIT — owner promotion remains an explicit account action.
+	DefaultRole *SSOConnectionDefaultRole `json:"default_role,omitempty"`
+
+	// Enforced When `true`, password and social sign-in are rejected for users whose email domain matches one of the account's verified domains. The account owner is exempt (break-glass).
+	Enforced *bool `json:"enforced,omitempty"`
+
+	// GroupRoleMappings Mapping of IdP group claim values to smplkit roles. The first key matching the user's group claims (in declaration order) decides the JIT role; if none match, `default_role` applies. Example: `{"smplkit-admins": "ADMIN"}`.
+	GroupRoleMappings *map[string]SSOConnectionGroupRoleMappings `json:"group_role_mappings,omitempty"`
+
+	// OidcClientId OIDC client identifier issued by the IdP for smplkit. Required when `protocol` is `oidc`; ignored otherwise.
+	OidcClientId *string `json:"oidc_client_id,omitempty"`
+
+	// OidcClientSecret OIDC client secret. Write-only — supplied on PUT, never returned by the API. Stored envelope-encrypted at rest. Required on first creation of an OIDC connection; on subsequent PUTs, omit to retain the existing value.
+	OidcClientSecret *string `json:"oidc_client_secret,omitempty"`
+
+	// OidcIssuer OIDC issuer URL — the base from which `.well-known/openid-configuration` is discovered. Required when `protocol` is `oidc`; ignored when `protocol` is `saml`.
+	OidcIssuer *string `json:"oidc_issuer,omitempty"`
+
+	// Protocol Federation protocol. `oidc` for OpenID Connect; `saml` for SAML 2.0. Determines which set of IdP fields below are required.
+	Protocol SSOConnectionProtocol `json:"protocol"`
+
+	// SamlIdpEntityId SAML IdP EntityID (typically a URI). Required when `protocol` is `saml`; ignored otherwise.
+	SamlIdpEntityId *string `json:"saml_idp_entity_id,omitempty"`
+
+	// SamlIdpSloUrl SAML IdP single logout URL. Optional — when present, smplkit will issue LogoutRequests on user sign-out.
+	SamlIdpSloUrl *string `json:"saml_idp_slo_url,omitempty"`
+
+	// SamlIdpSsoUrl SAML IdP single sign-on URL (HTTP-Redirect or HTTP-POST endpoint). Required when `protocol` is `saml`.
+	SamlIdpSsoUrl *string `json:"saml_idp_sso_url,omitempty"`
+
+	// SamlIdpX509Cert SAML IdP X.509 signing certificate (PEM-encoded). Required when `protocol` is `saml`.
+	SamlIdpX509Cert *string `json:"saml_idp_x509_cert,omitempty"`
+
+	// SloUrl Single Logout URL to register with the IdP. Computed; smplkit accepts logout requests here for the SAML case.
+	SloUrl *string `json:"slo_url,omitempty"`
+
+	// SpEntityId Service Provider EntityID to register with the IdP. Computed from the connection — paste this value into the IdP's smplkit configuration.
+	SpEntityId *string `json:"sp_entity_id,omitempty"`
+
+	// UpdatedAt When the connection was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+// SSOConnectionDefaultRole Role granted to a user provisioned just-in-time on their first SSO login when no group mapping applies. `OWNER` values are downgraded to `ADMIN` for JIT — owner promotion remains an explicit account action.
+type SSOConnectionDefaultRole string
+
+// SSOConnectionGroupRoleMappings defines model for SSOConnection.GroupRoleMappings.
+type SSOConnectionGroupRoleMappings string
+
+// SSOConnectionProtocol Federation protocol. `oidc` for OpenID Connect; `saml` for SAML 2.0. Determines which set of IdP fields below are required.
+type SSOConnectionProtocol string
+
+// SSOConnectionRequest JSON:API request envelope for creating or replacing the SSO connection.
+type SSOConnectionRequest struct {
+	// Data JSON:API resource envelope for an SSO connection.
+	//
+	// `id` is the server-assigned UUID of the singleton connection row on
+	// the account; clients never specify it (the URL is
+	// `/accounts/current/sso_connection` with no id segment).
+	Data SSOConnectionResource `json:"data"`
+}
+
+// SSOConnectionResource JSON:API resource envelope for an SSO connection.
+//
+// `id` is the server-assigned UUID of the singleton connection row on
+// the account; clients never specify it (the URL is
+// `/accounts/current/sso_connection` with no id segment).
+type SSOConnectionResource struct {
+	// Attributes An account's Single Sign-On connection to a customer-controlled
+	// identity provider. Configuring a connection lets the account federate
+	// authentication to its own SAML or OIDC IdP; with `enforced` enabled,
+	// password and social sign-in are disabled for users on the account's
+	// verified domains.
+	//
+	// Each account has at most one SSO connection. The Service Provider
+	// metadata fields (`sp_entity_id`, `acs_url`, `slo_url`) are computed
+	// on every read from the connection identifier and never stored.
+	Attributes SSOConnection             `json:"attributes"`
+	Id         *string                   `json:"id,omitempty"`
+	Type       SSOConnectionResourceType `json:"type"`
+}
+
+// SSOConnectionResourceType defines model for SSOConnectionResource.Type.
+type SSOConnectionResourceType string
+
+// SSOConnectionResponse JSON:API single-resource response envelope for the SSO connection.
+type SSOConnectionResponse struct {
+	// Data JSON:API resource envelope for an SSO connection.
+	//
+	// `id` is the server-assigned UUID of the singleton connection row on
+	// the account; clients never specify it (the URL is
+	// `/accounts/current/sso_connection` with no id segment).
+	Data SSOConnectionResource `json:"data"`
+}
+
+// SSODomain An email domain claimed by an account for SSO routing. A domain is
+// not active until it has been verified by publishing a DNS TXT record
+// containing the `dns_txt_token`. Once verified, sign-in attempts on
+// that domain route to this account's SSO connection.
+//
+// Verified-domain ownership is global across accounts — two accounts
+// cannot both hold the same verified domain.
+type SSODomain struct {
+	// CreatedAt When the claim was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// DnsTxtToken Token to publish on the domain's DNS as a TXT record to prove ownership. The full record value is `smplkit-domain-verification=<token>`.
+	DnsTxtToken *string `json:"dns_txt_token,omitempty"`
+
+	// Status Verification status. `pending` means a claim has been registered but DNS TXT verification has not yet succeeded. `verified` means the domain is in use for SSO routing.
+	Status *SSODomainStatus `json:"status,omitempty"`
+
+	// UpdatedAt When the claim was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+
+	// VerifiedAt When the domain was verified. Null until verification succeeds.
+	VerifiedAt *time.Time `json:"verified_at,omitempty"`
+}
+
+// SSODomainStatus Verification status. `pending` means a claim has been registered but DNS TXT verification has not yet succeeded. `verified` means the domain is in use for SSO routing.
+type SSODomainStatus string
+
+// SSODomainListResponse JSON:API collection response for SSO domains on an account.
+type SSODomainListResponse struct {
+	Data []SSODomainResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
+}
+
+// SSODomainRequest JSON:API request envelope for claiming a domain.
+//
+// The attributes block is intentionally optional/empty — all writeable
+// data on a domain is the domain string itself (in the URL) and the
+// server-generated verification token. Claim is idempotent: re-claim
+// of a domain the account already holds is a no-op success.
+type SSODomainRequest struct {
+	// Data JSON:API resource envelope for an SSO domain.
+	//
+	// The resource `id` is the domain string itself per ADR-035 (e.g.
+	// `"acme.com"`). The domain is normalised to lower-case on write.
+	Data SSODomainResource `json:"data"`
+}
+
+// SSODomainResource JSON:API resource envelope for an SSO domain.
+//
+// The resource `id` is the domain string itself per ADR-035 (e.g.
+// `"acme.com"`). The domain is normalised to lower-case on write.
+type SSODomainResource struct {
+	// Attributes An email domain claimed by an account for SSO routing. A domain is
+	// not active until it has been verified by publishing a DNS TXT record
+	// containing the `dns_txt_token`. Once verified, sign-in attempts on
+	// that domain route to this account's SSO connection.
+	//
+	// Verified-domain ownership is global across accounts — two accounts
+	// cannot both hold the same verified domain.
+	Attributes SSODomain             `json:"attributes"`
+	Id         *string               `json:"id,omitempty"`
+	Type       SSODomainResourceType `json:"type"`
+}
+
+// SSODomainResourceType defines model for SSODomainResource.Type.
+type SSODomainResourceType string
+
+// SSODomainResponse JSON:API single-resource response envelope for an SSO domain.
+type SSODomainResponse struct {
+	// Data JSON:API resource envelope for an SSO domain.
+	//
+	// The resource `id` is the domain string itself per ADR-035 (e.g.
+	// `"acme.com"`). The domain is normalised to lower-case on write.
+	Data SSODomainResource `json:"data"`
+}
+
 // Service A service that contexts can be evaluated against — for example, a
 // backend application or microservice in the customer's stack.
 type Service struct {
@@ -2903,6 +3206,12 @@ type WipeAccountDataApplicationVndAPIPlusJSONRequestBody = AccountWipeRequest
 // PutAccountSettingsApplicationVndAPIPlusJSONRequestBody defines body for PutAccountSettings for application/vnd.api+json ContentType.
 type PutAccountSettingsApplicationVndAPIPlusJSONRequestBody PutAccountSettingsApplicationVndAPIPlusJSONBody
 
+// PutSsoConnectionApplicationVndAPIPlusJSONRequestBody defines body for PutSsoConnection for application/vnd.api+json ContentType.
+type PutSsoConnectionApplicationVndAPIPlusJSONRequestBody = SSOConnectionRequest
+
+// ClaimSsoDomainApplicationVndAPIPlusJSONRequestBody defines body for ClaimSsoDomain for application/vnd.api+json ContentType.
+type ClaimSsoDomainApplicationVndAPIPlusJSONRequestBody = SSODomainRequest
+
 // PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody defines body for PutCurrentSubscription for application/vnd.api+json ContentType.
 type PutCurrentSubscriptionApplicationVndAPIPlusJSONRequestBody = SubscriptionRequest
 
@@ -3142,6 +3451,31 @@ type ClientInterface interface {
 	PutAccountSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteSsoConnection request
+	DeleteSsoConnection(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSsoConnection request
+	GetSsoConnection(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutSsoConnectionWithBody request with any body
+	PutSsoConnectionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutSsoConnectionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutSsoConnectionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSsoDomains request
+	ListSsoDomains(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReleaseSsoDomain request
+	ReleaseSsoDomain(ctx context.Context, domain string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ClaimSsoDomainWithBody request with any body
+	ClaimSsoDomainWithBody(ctx context.Context, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ClaimSsoDomainWithApplicationVndAPIPlusJSONBody(ctx context.Context, domain string, body ClaimSsoDomainApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// VerifySsoDomain request
+	VerifySsoDomain(ctx context.Context, domain string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCurrentSubscription request
 	GetCurrentSubscription(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3506,6 +3840,114 @@ func (c *Client) PutAccountSettingsWithBody(ctx context.Context, contentType str
 
 func (c *Client) PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutAccountSettingsRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteSsoConnection(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSsoConnectionRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSsoConnection(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSsoConnectionRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutSsoConnectionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutSsoConnectionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutSsoConnectionWithApplicationVndAPIPlusJSONBody(ctx context.Context, body PutSsoConnectionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutSsoConnectionRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListSsoDomains(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSsoDomainsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReleaseSsoDomain(ctx context.Context, domain string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReleaseSsoDomainRequest(c.Server, domain)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ClaimSsoDomainWithBody(ctx context.Context, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewClaimSsoDomainRequestWithBody(c.Server, domain, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ClaimSsoDomainWithApplicationVndAPIPlusJSONBody(ctx context.Context, domain string, body ClaimSsoDomainApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewClaimSsoDomainRequestWithApplicationVndAPIPlusJSONBody(c.Server, domain, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) VerifySsoDomain(ctx context.Context, domain string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewVerifySsoDomainRequest(c.Server, domain)
 	if err != nil {
 		return nil, err
 	}
@@ -4877,6 +5319,242 @@ func NewPutAccountSettingsRequestWithBody(server string, contentType string, bod
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteSsoConnectionRequest generates requests for DeleteSsoConnection
+func NewDeleteSsoConnectionRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/sso_connection")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSsoConnectionRequest generates requests for GetSsoConnection
+func NewGetSsoConnectionRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/sso_connection")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutSsoConnectionRequestWithApplicationVndAPIPlusJSONBody calls the generic PutSsoConnection builder with application/vnd.api+json body
+func NewPutSsoConnectionRequestWithApplicationVndAPIPlusJSONBody(server string, body PutSsoConnectionApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutSsoConnectionRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewPutSsoConnectionRequestWithBody generates requests for PutSsoConnection with any type of body
+func NewPutSsoConnectionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/sso_connection")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListSsoDomainsRequest generates requests for ListSsoDomains
+func NewListSsoDomainsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/sso_domains")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReleaseSsoDomainRequest generates requests for ReleaseSsoDomain
+func NewReleaseSsoDomainRequest(server string, domain string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/sso_domains/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewClaimSsoDomainRequestWithApplicationVndAPIPlusJSONBody calls the generic ClaimSsoDomain builder with application/vnd.api+json body
+func NewClaimSsoDomainRequestWithApplicationVndAPIPlusJSONBody(server string, domain string, body ClaimSsoDomainApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewClaimSsoDomainRequestWithBody(server, domain, "application/vnd.api+json", bodyReader)
+}
+
+// NewClaimSsoDomainRequestWithBody generates requests for ClaimSsoDomain with any type of body
+func NewClaimSsoDomainRequestWithBody(server string, domain string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/sso_domains/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewVerifySsoDomainRequest generates requests for VerifySsoDomain
+func NewVerifySsoDomainRequest(server string, domain string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/accounts/current/sso_domains/%s/actions/verify", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -8783,6 +9461,31 @@ type ClientWithResponsesInterface interface {
 
 	PutAccountSettingsWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutAccountSettingsApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountSettingsResponse, error)
 
+	// DeleteSsoConnectionWithResponse request
+	DeleteSsoConnectionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteSsoConnectionResponse, error)
+
+	// GetSsoConnectionWithResponse request
+	GetSsoConnectionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSsoConnectionResponse, error)
+
+	// PutSsoConnectionWithBodyWithResponse request with any body
+	PutSsoConnectionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
+
+	PutSsoConnectionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutSsoConnectionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
+
+	// ListSsoDomainsWithResponse request
+	ListSsoDomainsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSsoDomainsResponse, error)
+
+	// ReleaseSsoDomainWithResponse request
+	ReleaseSsoDomainWithResponse(ctx context.Context, domain string, reqEditors ...RequestEditorFn) (*ReleaseSsoDomainResponse, error)
+
+	// ClaimSsoDomainWithBodyWithResponse request with any body
+	ClaimSsoDomainWithBodyWithResponse(ctx context.Context, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ClaimSsoDomainResponse, error)
+
+	ClaimSsoDomainWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, domain string, body ClaimSsoDomainApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*ClaimSsoDomainResponse, error)
+
+	// VerifySsoDomainWithResponse request
+	VerifySsoDomainWithResponse(ctx context.Context, domain string, reqEditors ...RequestEditorFn) (*VerifySsoDomainResponse, error)
+
 	// GetCurrentSubscriptionWithResponse request
 	GetCurrentSubscriptionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentSubscriptionResponse, error)
 
@@ -9244,6 +9947,242 @@ func (r PutAccountSettingsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PutAccountSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteSsoConnectionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteSsoConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteSsoConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteSsoConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetSsoConnectionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SSOConnectionResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSsoConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSsoConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetSsoConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutSsoConnectionResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SSOConnectionResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r PutSsoConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutSsoConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutSsoConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListSsoDomainsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SSODomainListResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSsoDomainsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSsoDomainsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListSsoDomainsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ReleaseSsoDomainResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ReleaseSsoDomainResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReleaseSsoDomainResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReleaseSsoDomainResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ClaimSsoDomainResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SSODomainResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ClaimSsoDomainResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ClaimSsoDomainResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ClaimSsoDomainResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type VerifySsoDomainResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *SSODomainResponse
+	ApplicationvndApiJSON400 *ErrorResponse
+	ApplicationvndApiJSON401 *ErrorResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON429 *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r VerifySsoDomainResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r VerifySsoDomainResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r VerifySsoDomainResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -11701,6 +12640,85 @@ func (c *ClientWithResponses) PutAccountSettingsWithApplicationVndAPIPlusJSONBod
 	return ParsePutAccountSettingsResponse(rsp)
 }
 
+// DeleteSsoConnectionWithResponse request returning *DeleteSsoConnectionResponse
+func (c *ClientWithResponses) DeleteSsoConnectionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteSsoConnectionResponse, error) {
+	rsp, err := c.DeleteSsoConnection(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteSsoConnectionResponse(rsp)
+}
+
+// GetSsoConnectionWithResponse request returning *GetSsoConnectionResponse
+func (c *ClientWithResponses) GetSsoConnectionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSsoConnectionResponse, error) {
+	rsp, err := c.GetSsoConnection(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSsoConnectionResponse(rsp)
+}
+
+// PutSsoConnectionWithBodyWithResponse request with arbitrary body returning *PutSsoConnectionResponse
+func (c *ClientWithResponses) PutSsoConnectionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error) {
+	rsp, err := c.PutSsoConnectionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutSsoConnectionResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutSsoConnectionWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body PutSsoConnectionApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error) {
+	rsp, err := c.PutSsoConnectionWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutSsoConnectionResponse(rsp)
+}
+
+// ListSsoDomainsWithResponse request returning *ListSsoDomainsResponse
+func (c *ClientWithResponses) ListSsoDomainsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSsoDomainsResponse, error) {
+	rsp, err := c.ListSsoDomains(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSsoDomainsResponse(rsp)
+}
+
+// ReleaseSsoDomainWithResponse request returning *ReleaseSsoDomainResponse
+func (c *ClientWithResponses) ReleaseSsoDomainWithResponse(ctx context.Context, domain string, reqEditors ...RequestEditorFn) (*ReleaseSsoDomainResponse, error) {
+	rsp, err := c.ReleaseSsoDomain(ctx, domain, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReleaseSsoDomainResponse(rsp)
+}
+
+// ClaimSsoDomainWithBodyWithResponse request with arbitrary body returning *ClaimSsoDomainResponse
+func (c *ClientWithResponses) ClaimSsoDomainWithBodyWithResponse(ctx context.Context, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ClaimSsoDomainResponse, error) {
+	rsp, err := c.ClaimSsoDomainWithBody(ctx, domain, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseClaimSsoDomainResponse(rsp)
+}
+
+func (c *ClientWithResponses) ClaimSsoDomainWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, domain string, body ClaimSsoDomainApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*ClaimSsoDomainResponse, error) {
+	rsp, err := c.ClaimSsoDomainWithApplicationVndAPIPlusJSONBody(ctx, domain, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseClaimSsoDomainResponse(rsp)
+}
+
+// VerifySsoDomainWithResponse request returning *VerifySsoDomainResponse
+func (c *ClientWithResponses) VerifySsoDomainWithResponse(ctx context.Context, domain string, reqEditors ...RequestEditorFn) (*VerifySsoDomainResponse, error) {
+	rsp, err := c.VerifySsoDomain(ctx, domain, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseVerifySsoDomainResponse(rsp)
+}
+
 // GetCurrentSubscriptionWithResponse request returning *GetCurrentSubscriptionResponse
 func (c *ClientWithResponses) GetCurrentSubscriptionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetCurrentSubscriptionResponse, error) {
 	rsp, err := c.GetCurrentSubscription(ctx, reqEditors...)
@@ -12819,6 +13837,370 @@ func ParsePutAccountSettingsResponse(rsp *http.Response) (*PutAccountSettingsRes
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteSsoConnectionResponse parses an HTTP response from a DeleteSsoConnectionWithResponse call
+func ParseDeleteSsoConnectionResponse(rsp *http.Response) (*DeleteSsoConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteSsoConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSsoConnectionResponse parses an HTTP response from a GetSsoConnectionWithResponse call
+func ParseGetSsoConnectionResponse(rsp *http.Response) (*GetSsoConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSsoConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SSOConnectionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutSsoConnectionResponse parses an HTTP response from a PutSsoConnectionWithResponse call
+func ParsePutSsoConnectionResponse(rsp *http.Response) (*PutSsoConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutSsoConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SSOConnectionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSsoDomainsResponse parses an HTTP response from a ListSsoDomainsWithResponse call
+func ParseListSsoDomainsResponse(rsp *http.Response) (*ListSsoDomainsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSsoDomainsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SSODomainListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReleaseSsoDomainResponse parses an HTTP response from a ReleaseSsoDomainWithResponse call
+func ParseReleaseSsoDomainResponse(rsp *http.Response) (*ReleaseSsoDomainResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReleaseSsoDomainResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseClaimSsoDomainResponse parses an HTTP response from a ClaimSsoDomainWithResponse call
+func ParseClaimSsoDomainResponse(rsp *http.Response) (*ClaimSsoDomainResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ClaimSsoDomainResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SSODomainResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseVerifySsoDomainResponse parses an HTTP response from a VerifySsoDomainWithResponse call
+func ParseVerifySsoDomainResponse(rsp *http.Response) (*VerifySsoDomainResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &VerifySsoDomainResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SSODomainResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

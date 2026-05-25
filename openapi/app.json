@@ -6872,6 +6872,508 @@
           }
         ]
       }
+    },
+    "/api/v1/accounts/current/sso_connection": {
+      "get": {
+        "tags": [
+          "SSO"
+        ],
+        "summary": "Get SSO Connection",
+        "description": "Return the SSO connection for the current account, including computed Service Provider metadata. Returns `404` when no connection has been configured.",
+        "operationId": "get_sso_connection",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSOConnectionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "SSO"
+        ],
+        "summary": "Create or Replace SSO Connection",
+        "description": "Create-or-replace the account's SSO connection. The OIDC `client_secret` is write-only; supply it on first creation, omit on subsequent updates to retain the stored value.",
+        "operationId": "put_sso_connection",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSOConnectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSOConnectionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "SSO"
+        ],
+        "summary": "Delete SSO Connection",
+        "description": "Soft-delete the account's SSO connection. Domains are preserved.",
+        "operationId": "delete_sso_connection",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounts/current/sso_domains": {
+      "get": {
+        "tags": [
+          "SSO"
+        ],
+        "summary": "List SSO Domains",
+        "description": "List the domains claimed by the current account, including each row's verification status.",
+        "operationId": "list_sso_domains",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSODomainListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounts/current/sso_domains/{domain}": {
+      "put": {
+        "tags": [
+          "SSO"
+        ],
+        "summary": "Claim SSO Domain",
+        "description": "Claim a domain for SSO routing. Idempotent \u2014 re-claiming a domain already held by the account is a no-op success. The response includes the DNS TXT token to publish.",
+        "operationId": "claim_sso_domain",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSODomainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSODomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "SSO"
+        ],
+        "summary": "Release SSO Domain",
+        "description": "Release a previously-claimed SSO domain.",
+        "operationId": "release_sso_domain",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/current/sso_domains/{domain}/actions/verify": {
+      "post": {
+        "tags": [
+          "SSO"
+        ],
+        "summary": "Verify SSO Domain",
+        "description": "Run the DNS TXT check for a claimed domain. Returns the updated resource on success. Returns `409` if a different account has already verified this domain. Returns `422` when the DNS TXT record has not yet been published or does not match the expected token.",
+        "operationId": "verify_sso_domain",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSODomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed request",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9636,6 +10138,367 @@
           "password": "correct-horse-battery-staple"
         }
       },
+      "SSOConnection": {
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "saml",
+              "oidc"
+            ],
+            "title": "Protocol",
+            "description": "Federation protocol. `oidc` for OpenID Connect; `saml` for SAML 2.0. Determines which set of IdP fields below are required."
+          },
+          "oidc_issuer": {
+            "type": "string",
+            "maxLength": 2048,
+            "nullable": true,
+            "title": "Oidc Issuer",
+            "description": "OIDC issuer URL \u2014 the base from which `.well-known/openid-configuration` is discovered. Required when `protocol` is `oidc`; ignored when `protocol` is `saml`."
+          },
+          "oidc_client_id": {
+            "type": "string",
+            "maxLength": 512,
+            "nullable": true,
+            "title": "Oidc Client Id",
+            "description": "OIDC client identifier issued by the IdP for smplkit. Required when `protocol` is `oidc`; ignored otherwise."
+          },
+          "oidc_client_secret": {
+            "type": "string",
+            "nullable": true,
+            "title": "Oidc Client Secret",
+            "description": "OIDC client secret. Write-only \u2014 supplied on PUT, never returned by the API. Stored envelope-encrypted at rest. Required on first creation of an OIDC connection; on subsequent PUTs, omit to retain the existing value."
+          },
+          "saml_idp_entity_id": {
+            "type": "string",
+            "maxLength": 2048,
+            "nullable": true,
+            "title": "Saml Idp Entity Id",
+            "description": "SAML IdP EntityID (typically a URI). Required when `protocol` is `saml`; ignored otherwise."
+          },
+          "saml_idp_sso_url": {
+            "type": "string",
+            "maxLength": 2048,
+            "nullable": true,
+            "title": "Saml Idp Sso Url",
+            "description": "SAML IdP single sign-on URL (HTTP-Redirect or HTTP-POST endpoint). Required when `protocol` is `saml`."
+          },
+          "saml_idp_slo_url": {
+            "type": "string",
+            "maxLength": 2048,
+            "nullable": true,
+            "title": "Saml Idp Slo Url",
+            "description": "SAML IdP single logout URL. Optional \u2014 when present, smplkit will issue LogoutRequests on user sign-out."
+          },
+          "saml_idp_x509_cert": {
+            "type": "string",
+            "nullable": true,
+            "title": "Saml Idp X509 Cert",
+            "description": "SAML IdP X.509 signing certificate (PEM-encoded). Required when `protocol` is `saml`."
+          },
+          "default_role": {
+            "type": "string",
+            "enum": [
+              "OWNER",
+              "ADMIN",
+              "MEMBER",
+              "VIEWER"
+            ],
+            "title": "Default Role",
+            "description": "Role granted to a user provisioned just-in-time on their first SSO login when no group mapping applies. `OWNER` values are downgraded to `ADMIN` for JIT \u2014 owner promotion remains an explicit account action.",
+            "default": "MEMBER"
+          },
+          "group_role_mappings": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "OWNER",
+                "ADMIN",
+                "MEMBER",
+                "VIEWER"
+              ]
+            },
+            "type": "object",
+            "title": "Group Role Mappings",
+            "description": "Mapping of IdP group claim values to smplkit roles. The first key matching the user's group claims (in declaration order) decides the JIT role; if none match, `default_role` applies. Example: `{\"smplkit-admins\": \"ADMIN\"}`."
+          },
+          "enforced": {
+            "type": "boolean",
+            "title": "Enforced",
+            "description": "When `true`, password and social sign-in are rejected for users whose email domain matches one of the account's verified domains. The account owner is exempt (break-glass).",
+            "default": false
+          },
+          "sp_entity_id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Sp Entity Id",
+            "description": "Service Provider EntityID to register with the IdP. Computed from the connection \u2014 paste this value into the IdP's smplkit configuration.",
+            "readOnly": true
+          },
+          "acs_url": {
+            "type": "string",
+            "nullable": true,
+            "title": "Acs Url",
+            "description": "Assertion Consumer Service URL (SAML) or redirect URI (OIDC) to register with the IdP. Computed.",
+            "readOnly": true
+          },
+          "slo_url": {
+            "type": "string",
+            "nullable": true,
+            "title": "Slo Url",
+            "description": "Single Logout URL to register with the IdP. Computed; smplkit accepts logout requests here for the SAML case.",
+            "readOnly": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Created At",
+            "description": "When the connection was created.",
+            "readOnly": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Updated At",
+            "description": "When the connection was last modified.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "protocol"
+        ],
+        "title": "SSOConnection",
+        "description": "An account's Single Sign-On connection to a customer-controlled\nidentity provider. Configuring a connection lets the account federate\nauthentication to its own SAML or OIDC IdP; with `enforced` enabled,\npassword and social sign-in are disabled for users on the account's\nverified domains.\n\nEach account has at most one SSO connection. The Service Provider\nmetadata fields (`sp_entity_id`, `acs_url`, `slo_url`) are computed\non every read from the connection identifier and never stored.",
+        "example": {
+          "acs_url": "https://app.smplkit.com/api/v1/auth/sso/acs",
+          "created_at": "2026-05-25T11:02:16.616Z",
+          "default_role": "MEMBER",
+          "enforced": true,
+          "group_role_mappings": {
+            "smplkit-admins": "ADMIN"
+          },
+          "oidc_client_id": "smplkit-acme",
+          "oidc_issuer": "https://login.acme.com",
+          "protocol": "oidc",
+          "slo_url": "https://app.smplkit.com/api/v1/auth/sso/slo",
+          "sp_entity_id": "https://app.smplkit.com/sso/sp",
+          "updated_at": "2026-05-25T11:02:16.616Z"
+        }
+      },
+      "SSOConnectionRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SSOConnectionResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SSOConnectionRequest",
+        "description": "JSON:API request envelope for creating or replacing the SSO connection."
+      },
+      "SSOConnectionResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sso_connection"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/SSOConnection"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "SSOConnectionResource",
+        "description": "JSON:API resource envelope for an SSO connection.\n\n`id` is the server-assigned UUID of the singleton connection row on\nthe account; clients never specify it (the URL is\n`/accounts/current/sso_connection` with no id segment).",
+        "example": {
+          "attributes": {
+            "acs_url": "https://app.smplkit.com/api/v1/auth/sso/acs",
+            "created_at": "2026-05-25T11:02:16.616Z",
+            "default_role": "MEMBER",
+            "enforced": true,
+            "group_role_mappings": {
+              "smplkit-admins": "ADMIN"
+            },
+            "oidc_client_id": "smplkit-acme",
+            "oidc_issuer": "https://login.acme.com",
+            "protocol": "oidc",
+            "slo_url": "https://app.smplkit.com/api/v1/auth/sso/slo",
+            "sp_entity_id": "https://app.smplkit.com/sso/sp",
+            "updated_at": "2026-05-25T11:02:16.616Z"
+          },
+          "id": "c0ffee01-1234-5678-9abc-def012345678",
+          "type": "sso_connection"
+        }
+      },
+      "SSOConnectionResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SSOConnectionResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SSOConnectionResponse",
+        "description": "JSON:API single-resource response envelope for the SSO connection."
+      },
+      "SSODomain": {
+        "properties": {
+          "dns_txt_token": {
+            "type": "string",
+            "nullable": true,
+            "title": "Dns Txt Token",
+            "description": "Token to publish on the domain's DNS as a TXT record to prove ownership. The full record value is `smplkit-domain-verification=<token>`.",
+            "readOnly": true
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Verified At",
+            "description": "When the domain was verified. Null until verification succeeds.",
+            "readOnly": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "verified"
+            ],
+            "nullable": true,
+            "title": "Status",
+            "description": "Verification status. `pending` means a claim has been registered but DNS TXT verification has not yet succeeded. `verified` means the domain is in use for SSO routing.",
+            "readOnly": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Created At",
+            "description": "When the claim was created.",
+            "readOnly": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "title": "Updated At",
+            "description": "When the claim was last modified.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "title": "SSODomain",
+        "description": "An email domain claimed by an account for SSO routing. A domain is\nnot active until it has been verified by publishing a DNS TXT record\ncontaining the `dns_txt_token`. Once verified, sign-in attempts on\nthat domain route to this account's SSO connection.\n\nVerified-domain ownership is global across accounts \u2014 two accounts\ncannot both hold the same verified domain.",
+        "example": {
+          "created_at": "2026-05-25T11:00:00.000Z",
+          "dns_txt_token": "smplkit-domain-verification=8c91e7d2a3b4f6e0",
+          "status": "verified",
+          "updated_at": "2026-05-25T11:02:16.616Z",
+          "verified_at": "2026-05-25T11:02:16.616Z"
+        }
+      },
+      "SSODomainListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SSODomainResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SSODomainListResponse",
+        "description": "JSON:API collection response for SSO domains on an account."
+      },
+      "SSODomainRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SSODomainResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SSODomainRequest",
+        "description": "JSON:API request envelope for claiming a domain.\n\nThe attributes block is intentionally optional/empty \u2014 all writeable\ndata on a domain is the domain string itself (in the URL) and the\nserver-generated verification token. Claim is idempotent: re-claim\nof a domain the account already holds is a no-op success."
+      },
+      "SSODomainResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sso_domain"
+            ],
+            "title": "Type"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/SSODomain"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "attributes"
+        ],
+        "title": "SSODomainResource",
+        "description": "JSON:API resource envelope for an SSO domain.\n\nThe resource `id` is the domain string itself per ADR-035 (e.g.\n`\"acme.com\"`). The domain is normalised to lower-case on write.",
+        "example": {
+          "attributes": {
+            "created_at": "2026-05-25T11:00:00.000Z",
+            "dns_txt_token": "smplkit-domain-verification=8c91e7d2a3b4f6e0",
+            "status": "verified",
+            "updated_at": "2026-05-25T11:02:16.616Z",
+            "verified_at": "2026-05-25T11:02:16.616Z"
+          },
+          "id": "acme.com",
+          "type": "sso_domain"
+        }
+      },
+      "SSODomainResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SSODomainResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SSODomainResponse",
+        "description": "JSON:API single-resource response envelope for an SSO domain."
+      },
       "Service": {
         "properties": {
           "name": {
@@ -10588,6 +11451,9 @@
     },
     {
       "name": "Products"
+    },
+    {
+      "name": "SSO"
     },
     {
       "name": "Services"
