@@ -181,6 +181,24 @@ func (e ListEventTypesParamsSort) Valid() bool {
 	}
 }
 
+// Defines values for ListEventsParamsFormat.
+const (
+	CSV   ListEventsParamsFormat = "CSV"
+	JSONL ListEventsParamsFormat = "JSONL"
+)
+
+// Valid indicates whether the value is a known member of the ListEventsParamsFormat enum.
+func (e ListEventsParamsFormat) Valid() bool {
+	switch e {
+	case CSV:
+		return true
+	case JSONL:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListEventsParamsSort.
 const (
 	ListEventsParamsSortCreatedAt       ListEventsParamsSort = "created_at"
@@ -392,7 +410,7 @@ type EventSearchListMeta struct {
 	Scan EventSearchScanMeta `json:"scan"`
 }
 
-// EventSearchRequest Request body for “POST /api/v1/search/events“.
+// EventSearchRequest Request body for “POST /api/v1/events/search“.
 //
 // Mirrors every column filter accepted by “GET /api/v1/events“ with
 // identical semantics, and adds a top-level “filter“ field carrying
@@ -1056,9 +1074,15 @@ type ListEventsParams struct {
 	PageSize           *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter          *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 
+	// Format When set, stream a download of the full filtered result set in the chosen format instead of returning a paginated JSON:API response. `page[size]` and `page[after]` are ignored in this mode; every event matching the supplied filters is emitted. `CSV` writes one row per event with the event payload (`data`) serialized as a single JSON-encoded cell. `JSONL` writes one JSON object per line with the event payload nested as a JSON object. Omit this parameter to receive the paginated JSON:API response.
+	Format *ListEventsParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-occurred_at`. Allowed values: `created_at`, `-created_at`, `occurred_at`, `-occurred_at`.
 	Sort *ListEventsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListEventsParamsFormat defines parameters for ListEvents.
+type ListEventsParamsFormat string
 
 // ListEventsParamsSort defines parameters for ListEvents.
 type ListEventsParamsSort string
@@ -1140,6 +1164,9 @@ type ListUsageParams struct {
 // RecordEventApplicationVndAPIPlusJSONRequestBody defines body for RecordEvent for application/vnd.api+json ContentType.
 type RecordEventApplicationVndAPIPlusJSONRequestBody = EventRequest
 
+// SearchEventsJSONRequestBody defines body for SearchEvents for application/json ContentType.
+type SearchEventsJSONRequestBody = EventSearchRequest
+
 // CreateForwarderApplicationVndAPIPlusJSONRequestBody defines body for CreateForwarder for application/vnd.api+json ContentType.
 type CreateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderCreateRequest
 
@@ -1148,9 +1175,6 @@ type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderRequest
 
 // ExecuteTestForwarderJSONRequestBody defines body for ExecuteTestForwarder for application/json ContentType.
 type ExecuteTestForwarderJSONRequestBody = TestForwarderRequest
-
-// SearchEventsJSONRequestBody defines body for SearchEvents for application/json ContentType.
-type SearchEventsJSONRequestBody = EventSearchRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -1236,6 +1260,11 @@ type ClientInterface interface {
 
 	RecordEventWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *RecordEventParams, body RecordEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SearchEventsWithBody request with any body
+	SearchEventsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SearchEvents(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetEvent request
 	GetEvent(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1281,11 +1310,6 @@ type ClientInterface interface {
 	// ListResourceTypes request
 	ListResourceTypes(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SearchEventsWithBody request with any body
-	SearchEventsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	SearchEvents(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListUsage request
 	ListUsage(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
@@ -1328,6 +1352,30 @@ func (c *Client) RecordEventWithBody(ctx context.Context, params *RecordEventPar
 
 func (c *Client) RecordEventWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *RecordEventParams, body RecordEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRecordEventRequestWithApplicationVndAPIPlusJSONBody(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchEventsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchEventsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchEvents(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchEventsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1520,30 +1568,6 @@ func (c *Client) ExecuteTestForwarder(ctx context.Context, body ExecuteTestForwa
 
 func (c *Client) ListResourceTypes(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListResourceTypesRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) SearchEventsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSearchEventsRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) SearchEvents(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSearchEventsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1816,6 +1840,18 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 
 		}
 
+		if params.Format != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "format", *params.Format, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -1893,6 +1929,46 @@ func NewRecordEventRequestWithBody(server string, params *RecordEventParams, con
 		}
 
 	}
+
+	return req, nil
+}
+
+// NewSearchEventsRequest calls the generic SearchEvents builder with application/json body
+func NewSearchEventsRequest(server string, body SearchEventsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSearchEventsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSearchEventsRequestWithBody generates requests for SearchEvents with any type of body
+func NewSearchEventsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/events/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -2587,46 +2663,6 @@ func NewListResourceTypesRequest(server string, params *ListResourceTypesParams)
 	return req, nil
 }
 
-// NewSearchEventsRequest calls the generic SearchEvents builder with application/json body
-func NewSearchEventsRequest(server string, body SearchEventsJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewSearchEventsRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewSearchEventsRequestWithBody generates requests for SearchEvents with any type of body
-func NewSearchEventsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/search/events")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewListUsageRequest generates requests for ListUsage
 func NewListUsageRequest(server string, params *ListUsageParams) (*http.Request, error) {
 	var err error
@@ -2767,6 +2803,11 @@ type ClientWithResponsesInterface interface {
 
 	RecordEventWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *RecordEventParams, body RecordEventApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordEventResponse, error)
 
+	// SearchEventsWithBodyWithResponse request with any body
+	SearchEventsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error)
+
+	SearchEventsWithResponse(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error)
+
 	// GetEventWithResponse request
 	GetEventWithResponse(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetEventResponse, error)
 
@@ -2811,11 +2852,6 @@ type ClientWithResponsesInterface interface {
 
 	// ListResourceTypesWithResponse request
 	ListResourceTypesWithResponse(ctx context.Context, params *ListResourceTypesParams, reqEditors ...RequestEditorFn) (*ListResourceTypesResponse, error)
-
-	// SearchEventsWithBodyWithResponse request with any body
-	SearchEventsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error)
-
-	SearchEventsWithResponse(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error)
 
 	// ListUsageWithResponse request
 	ListUsageWithResponse(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*ListUsageResponse, error)
@@ -2906,6 +2942,36 @@ func (r RecordEventResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RecordEventResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SearchEventsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EventSearchResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchEventsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchEventsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SearchEventsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3301,36 +3367,6 @@ func (r ListResourceTypesResponse) ContentType() string {
 	return ""
 }
 
-type SearchEventsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *EventSearchResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r SearchEventsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SearchEventsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SearchEventsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type ListUsageResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -3394,6 +3430,23 @@ func (c *ClientWithResponses) RecordEventWithApplicationVndAPIPlusJSONBodyWithRe
 		return nil, err
 	}
 	return ParseRecordEventResponse(rsp)
+}
+
+// SearchEventsWithBodyWithResponse request with arbitrary body returning *SearchEventsResponse
+func (c *ClientWithResponses) SearchEventsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error) {
+	rsp, err := c.SearchEventsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchEventsResponse(rsp)
+}
+
+func (c *ClientWithResponses) SearchEventsWithResponse(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error) {
+	rsp, err := c.SearchEvents(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchEventsResponse(rsp)
 }
 
 // GetEventWithResponse request returning *GetEventResponse
@@ -3537,23 +3590,6 @@ func (c *ClientWithResponses) ListResourceTypesWithResponse(ctx context.Context,
 	return ParseListResourceTypesResponse(rsp)
 }
 
-// SearchEventsWithBodyWithResponse request with arbitrary body returning *SearchEventsResponse
-func (c *ClientWithResponses) SearchEventsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error) {
-	rsp, err := c.SearchEventsWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSearchEventsResponse(rsp)
-}
-
-func (c *ClientWithResponses) SearchEventsWithResponse(ctx context.Context, body SearchEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchEventsResponse, error) {
-	rsp, err := c.SearchEvents(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSearchEventsResponse(rsp)
-}
-
 // ListUsageWithResponse request returning *ListUsageResponse
 func (c *ClientWithResponses) ListUsageWithResponse(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*ListUsageResponse, error) {
 	rsp, err := c.ListUsage(ctx, params, reqEditors...)
@@ -3642,6 +3678,32 @@ func ParseRecordEventResponse(rsp *http.Response) (*RecordEventResponse, error) 
 			return nil, err
 		}
 		response.ApplicationvndApiJSON201 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchEventsResponse parses an HTTP response from a SearchEventsWithResponse call
+func ParseSearchEventsResponse(rsp *http.Response) (*SearchEventsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchEventsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EventSearchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 
@@ -3970,32 +4032,6 @@ func ParseListResourceTypesResponse(rsp *http.Response) (*ListResourceTypesRespo
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseSearchEventsResponse parses an HTTP response from a SearchEventsWithResponse call
-func ParseSearchEventsResponse(rsp *http.Response) (*SearchEventsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SearchEventsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest EventSearchResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
 
 	}
 
