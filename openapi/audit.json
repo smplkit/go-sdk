@@ -75,7 +75,7 @@
           "Events"
         ],
         "summary": "List Events",
-        "description": "List audit events for this account.\n\nDefault sort is `-occurred_at` (newest occurrence first). Sort by\n`occurred_at` or `created_at`, ascending or descending \u2014 keep the same\n`sort` value across paginated requests so the cursor stays consistent.\nFilters are exact-match except `filter[occurred_at]`, which uses\ninterval notation (e.g.\n`[2026-01-01T00:00:00Z,2026-01-31T00:00:00Z)`), and `filter[search]`,\nwhich is a case-insensitive substring match against `resource_id` or\n`description`.\n\nTwo filter-combination rules:\n\n- `filter[resource_id]` must be accompanied by `filter[resource_type]`\n  (the index is keyed on the pair).\n- `filter[search]` must be accompanied by either `filter[occurred_at]`\n  or `filter[resource_type]` + `filter[resource_id]` (substring\n  matching has no index, so an unbounded substring scan is rejected).\n\nNo other filter combinations are required \u2014 calling the endpoint with\nno query parameters returns the latest events for the account,\npaginated.\n\n`page[size]` defaults to 1000 and must not exceed 1000.",
+        "description": "List audit events for this account.\n\nDefault sort is `-occurred_at` (newest occurrence first). Sort by\n`occurred_at` or `created_at`, ascending or descending \u2014 keep the same\n`sort` value across paginated requests so the cursor stays consistent.\nFilters are exact-match except `filter[occurred_at]`, which uses\ninterval notation (e.g.\n`[2026-01-01T00:00:00Z,2026-01-31T00:00:00Z)`), and `filter[search]`,\nwhich is a case-insensitive substring match against `resource_id` or\n`description`.\n\nTwo filter-combination rules:\n\n- `filter[resource_id]` must be accompanied by `filter[resource_type]`\n  (the index is keyed on the pair).\n- `filter[search]` must be accompanied by either `filter[occurred_at]`\n  or `filter[resource_type]` + `filter[resource_id]` (substring\n  matching has no index, so an unbounded substring scan is rejected).\n\nNo other filter combinations are required \u2014 calling the endpoint with\nno query parameters returns the latest events for the account,\npaginated.\n\n`page[size]` defaults to 1000 and must not exceed 1000.\n\nPass `format=CSV` or `format=JSONL` to stream a download of the full\nfiltered result set instead of a paginated JSON:API response. The\ndownload honors every supplied filter and ignores `page[size]` and\n`page[after]`.",
         "operationId": "list_events",
         "security": [
           {
@@ -249,6 +249,28 @@
             }
           },
           {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "CSV",
+                    "JSONL"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "When set, stream a download of the full filtered result set in the chosen format instead of returning a paginated JSON:API response. `page[size]` and `page[after]` are ignored in this mode; every event matching the supplied filters is emitted. `CSV` writes one row per event with the event payload (`data`) serialized as a single JSON-encoded cell. `JSONL` writes one JSON object per line with the event payload nested as a JSON object. Omit this parameter to receive the paginated JSON:API response.",
+              "title": "Format"
+            },
+            "description": "When set, stream a download of the full filtered result set in the chosen format instead of returning a paginated JSON:API response. `page[size]` and `page[after]` are ignored in this mode; every event matching the supplied filters is emitted. `CSV` writes one row per event with the event payload (`data`) serialized as a single JSON-encoded cell. `JSONL` writes one JSON object per line with the event payload nested as a JSON object. Omit this parameter to receive the paginated JSON:API response."
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -320,10 +342,10 @@
         }
       }
     },
-    "/api/v1/search/events": {
+    "/api/v1/events/search": {
       "post": {
         "tags": [
-          "Search"
+          "Events"
         ],
         "summary": "Search Events",
         "description": "Search audit events with column filters and an optional JSON Logic expression.\n\nWithout a JSON Logic `filter`: behaves like `GET /api/v1/events`\nwith the same column filters.\n\nWith a JSON Logic `filter`: the search is silently capped to the\nlast 30 days by `occurred_at` (intersected with any explicit\n`filter[occurred_at]` the caller supplied), the column filters\nnarrow the candidate set in SQL, and the JSON Logic expression\nruns in memory against each candidate row using the same\n`json-logic-qubit` evaluator the forwarder pipeline uses. Up to\n50,000 rows are scanned per request; the response's `meta.scan`\nblock reports the scan stats so a selective filter doesn't look\nlike \"0 matches\" when the truth is \"ceiling reached.\"",
@@ -1637,7 +1659,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "EventSearchRequest",
-        "description": "Request body for ``POST /api/v1/search/events``.\n\nMirrors every column filter accepted by ``GET /api/v1/events`` with\nidentical semantics, and adds a top-level ``filter`` field carrying\na JSON Logic expression. When ``filter`` is present the search is\nsilently capped to the last 30 days by ``occurred_at``; the\nexpression is then evaluated in memory against each row that passes\nthe column filters using the same ``json-logic-qubit`` evaluator\nthat runs in the forwarder pipeline (so search results match what\nwould be forwarded).\n\nFilter-combination rules match ``GET /api/v1/events`` exactly:\n\n- ``filter[resource_id]`` must be accompanied by\n  ``filter[resource_type]`` \u2014 the index is keyed on the pair.\n- ``filter[search]`` must be accompanied by either\n  ``filter[occurred_at]`` or ``filter[resource_type]`` +\n  ``filter[resource_id]`` \u2014 substring matching has no index, so an\n  unbounded substring scan is rejected."
+        "description": "Request body for ``POST /api/v1/events/search``.\n\nMirrors every column filter accepted by ``GET /api/v1/events`` with\nidentical semantics, and adds a top-level ``filter`` field carrying\na JSON Logic expression. When ``filter`` is present the search is\nsilently capped to the last 30 days by ``occurred_at``; the\nexpression is then evaluated in memory against each row that passes\nthe column filters using the same ``json-logic-qubit`` evaluator\nthat runs in the forwarder pipeline (so search results match what\nwould be forwarded).\n\nFilter-combination rules match ``GET /api/v1/events`` exactly:\n\n- ``filter[resource_id]`` must be accompanied by\n  ``filter[resource_type]`` \u2014 the index is keyed on the pair.\n- ``filter[search]`` must be accompanied by either\n  ``filter[occurred_at]`` or ``filter[resource_type]`` +\n  ``filter[resource_id]`` \u2014 substring matching has no index, so an\n  unbounded substring scan is rejected."
       },
       "EventSearchResponse": {
         "properties": {
@@ -3171,9 +3193,6 @@
     },
     {
       "name": "Resource Types"
-    },
-    {
-      "name": "Search"
     },
     {
       "name": "Usage"
