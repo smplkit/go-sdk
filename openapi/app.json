@@ -12594,6 +12594,9 @@
       "name": "Context Types"
     },
     {
+      "name": "Context Values"
+    },
+    {
       "name": "Contexts"
     },
     {
@@ -12609,6 +12612,12 @@
       "name": "Environments"
     },
     {
+      "name": "Group Memberships"
+    },
+    {
+      "name": "Groups"
+    },
+    {
       "name": "Invitations"
     },
     {
@@ -12621,10 +12630,13 @@
       "name": "Products"
     },
     {
+      "name": "Services"
+    },
+    {
       "name": "SSO"
     },
     {
-      "name": "Services"
+      "name": "Subscription"
     },
     {
       "name": "Users"
