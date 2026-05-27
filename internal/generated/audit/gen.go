@@ -22,6 +22,24 @@ const (
 	HTTPBearerScopes hTTPBearerContextKey = "HTTPBearer.Scopes"
 )
 
+// Defines values for ExportFormat.
+const (
+	ExportFormatCSV   ExportFormat = "CSV"
+	ExportFormatJSONL ExportFormat = "JSONL"
+)
+
+// Valid indicates whether the value is a known member of the ExportFormat enum.
+func (e ExportFormat) Valid() bool {
+	switch e {
+	case ExportFormatCSV:
+		return true
+	case ExportFormatJSONL:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ForwarderTransformType.
 const (
 	JSONATA ForwarderTransformType = "JSONATA"
@@ -231,16 +249,16 @@ func (e ListEventTypesParamsSort) Valid() bool {
 
 // Defines values for ListEventsParamsFormat.
 const (
-	CSV   ListEventsParamsFormat = "CSV"
-	JSONL ListEventsParamsFormat = "JSONL"
+	ListEventsParamsFormatCSV   ListEventsParamsFormat = "CSV"
+	ListEventsParamsFormatJSONL ListEventsParamsFormat = "JSONL"
 )
 
 // Valid indicates whether the value is a known member of the ListEventsParamsFormat enum.
 func (e ListEventsParamsFormat) Valid() bool {
 	switch e {
-	case CSV:
+	case ListEventsParamsFormatCSV:
 		return true
-	case JSONL:
+	case ListEventsParamsFormatJSONL:
 		return true
 	default:
 		return false
@@ -609,6 +627,112 @@ type EventTypeResource struct {
 	// Id The event_type slug.
 	Id   string  `json:"id"`
 	Type *string `json:"type,omitempty"`
+}
+
+// Export A request for a short-lived signed download URL.
+//
+// The customer chooses a `format` and supplies the same filter set
+// the events list endpoint accepts. The server mints an HMAC-signed
+// URL (valid for 30 seconds) that the browser navigates to for a
+// native streaming download — no `Authorization` header required at
+// download time.
+//
+// The download honors the **same filter-combination rules** as
+// `GET /api/v1/events`:
+//
+//   - `filter[resource_id]` must be accompanied by `filter[resource_type]`.
+//   - `filter[search]` must be accompanied by either `filter[occurred_at]`
+//     or `filter[resource_type]` + `filter[resource_id]`.
+//
+// A request that violates these rules is rejected at mint time with
+// `400 Bad Request`.
+type Export struct {
+	// ExpiresAt When the signed URL stops being valid (ISO-8601 UTC). Open the URL well before this time — the signed token is stateless, so a single mint cannot be 'refreshed'; mint a new export if the URL has expired.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// FilterActorId Exact match on the event's `actor_id` field.
+	FilterActorId *string `json:"filter[actor_id],omitempty"`
+
+	// FilterActorType Exact match on the event's `actor_type` field.
+	FilterActorType *string `json:"filter[actor_type],omitempty"`
+
+	// FilterDoNotForward When set, restrict to events whose `do_not_forward` flag matches the given boolean.
+	FilterDoNotForward *bool `json:"filter[do_not_forward],omitempty"`
+
+	// FilterEventType Exact match on the event's `event_type` field.
+	FilterEventType *string `json:"filter[event_type],omitempty"`
+
+	// FilterOccurredAt Date range using interval notation, e.g. `[2026-04-01T00:00:00Z,2026-04-15T00:00:00Z)`.
+	FilterOccurredAt *string `json:"filter[occurred_at],omitempty"`
+
+	// FilterResourceId Exact match on the event's `resource_id` field. Must be accompanied by `filter[resource_type]`.
+	FilterResourceId *string `json:"filter[resource_id],omitempty"`
+
+	// FilterResourceType Exact match on the event's `resource_type` field.
+	FilterResourceType *string `json:"filter[resource_type],omitempty"`
+
+	// FilterSearch Case-insensitive substring match against `resource_id` or `description`. Must be accompanied by either `filter[occurred_at]` or `filter[resource_type]` + `filter[resource_id]`.
+	FilterSearch *string `json:"filter[search],omitempty"`
+
+	// Format Output format for the download. `CSV` writes one row per event with the event payload (`data`) serialized as a JSON-encoded cell. `JSONL` writes one JSON object per line with `data` preserved as a nested object.
+	Format ExportFormat `json:"format"`
+
+	// Url Absolute, signed download URL. Open in a browser to stream the export to disk. Expires shortly after mint — see `expires_at`.
+	Url *string `json:"url,omitempty"`
+}
+
+// ExportFormat Output format for the download. `CSV` writes one row per event with the event payload (`data`) serialized as a JSON-encoded cell. `JSONL` writes one JSON object per line with `data` preserved as a nested object.
+type ExportFormat string
+
+// ExportRequest JSON:API request envelope for minting a signed download URL.
+type ExportRequest struct {
+	// Data JSON:API resource envelope for an export ticket.
+	//
+	// `id` must not be specified on create requests — the server assigns
+	// a fresh UUID per mint response. The UUID identifies this particular
+	// response envelope only; nothing is persisted behind it (the signed
+	// token inside `attributes.url` is the actual artifact).
+	Data ExportResource `json:"data"`
+}
+
+// ExportResource JSON:API resource envelope for an export ticket.
+//
+// `id` must not be specified on create requests — the server assigns
+// a fresh UUID per mint response. The UUID identifies this particular
+// response envelope only; nothing is persisted behind it (the signed
+// token inside `attributes.url` is the actual artifact).
+type ExportResource struct {
+	// Attributes A request for a short-lived signed download URL.
+	//
+	// The customer chooses a `format` and supplies the same filter set
+	// the events list endpoint accepts. The server mints an HMAC-signed
+	// URL (valid for 30 seconds) that the browser navigates to for a
+	// native streaming download — no `Authorization` header required at
+	// download time.
+	//
+	// The download honors the **same filter-combination rules** as
+	// `GET /api/v1/events`:
+	//
+	// - `filter[resource_id]` must be accompanied by `filter[resource_type]`.
+	// - `filter[search]` must be accompanied by either `filter[occurred_at]`
+	//   or `filter[resource_type]` + `filter[resource_id]`.
+	//
+	// A request that violates these rules is rejected at mint time with
+	// `400 Bad Request`.
+	Attributes Export  `json:"attributes"`
+	Id         *string `json:"id,omitempty"`
+	Type       *string `json:"type,omitempty"`
+}
+
+// ExportResponse JSON:API single-resource response carrying the signed URL.
+type ExportResponse struct {
+	// Data JSON:API resource envelope for an export ticket.
+	//
+	// `id` must not be specified on create requests — the server assigns
+	// a fresh UUID per mint response. The UUID identifies this particular
+	// response envelope only; nothing is persisted behind it (the signed
+	// token inside `attributes.url` is the actual artifact).
+	Data ExportResource `json:"data"`
 }
 
 // Forwarder A destination that receives audit events recorded for the account.
@@ -1280,6 +1404,9 @@ type RecordEventApplicationVndAPIPlusJSONRequestBody = EventRequest
 // SearchEventsJSONRequestBody defines body for SearchEvents for application/json ContentType.
 type SearchEventsJSONRequestBody = EventSearchRequest
 
+// CreateExportApplicationVndAPIPlusJSONRequestBody defines body for CreateExport for application/vnd.api+json ContentType.
+type CreateExportApplicationVndAPIPlusJSONRequestBody = ExportRequest
+
 // CreateForwarderApplicationVndAPIPlusJSONRequestBody defines body for CreateForwarder for application/vnd.api+json ContentType.
 type CreateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderCreateRequest
 
@@ -1383,6 +1510,14 @@ type ClientInterface interface {
 
 	// GetEvent request
 	GetEvent(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateExportWithBody request with any body
+	CreateExportWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateExportWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateExportApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DownloadExport request
+	DownloadExport(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListForwarderTypesApiV1ForwarderTypesGet request
 	ListForwarderTypesApiV1ForwarderTypesGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1516,6 +1651,42 @@ func (c *Client) SearchEvents(ctx context.Context, body SearchEventsJSONRequestB
 
 func (c *Client) GetEvent(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetEventRequest(c.Server, eventId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateExportWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateExportRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateExportWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateExportApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateExportRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DownloadExport(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadExportRequest(c.Server, token)
 	if err != nil {
 		return nil, err
 	}
@@ -2232,6 +2403,80 @@ func NewGetEventRequest(server string, eventId openapi_types.UUID) (*http.Reques
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/events/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateExportRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateExport builder with application/vnd.api+json body
+func NewCreateExportRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateExportApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateExportRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateExportRequestWithBody generates requests for CreateExport with any type of body
+func NewCreateExportRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/exports")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDownloadExportRequest generates requests for DownloadExport
+func NewDownloadExportRequest(server string, token string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "token", token, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/exports/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3056,6 +3301,14 @@ type ClientWithResponsesInterface interface {
 	// GetEventWithResponse request
 	GetEventWithResponse(ctx context.Context, eventId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetEventResponse, error)
 
+	// CreateExportWithBodyWithResponse request with any body
+	CreateExportWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateExportResponse, error)
+
+	CreateExportWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateExportApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateExportResponse, error)
+
+	// DownloadExportWithResponse request
+	DownloadExportWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*DownloadExportResponse, error)
+
 	// ListForwarderTypesApiV1ForwarderTypesGetWithResponse request
 	ListForwarderTypesApiV1ForwarderTypesGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListForwarderTypesApiV1ForwarderTypesGetResponse, error)
 
@@ -3277,6 +3530,65 @@ func (r GetEventResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetEventResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateExportResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *ExportResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateExportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateExportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateExportResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DownloadExportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadExportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadExportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DownloadExportResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3742,6 +4054,32 @@ func (c *ClientWithResponses) GetEventWithResponse(ctx context.Context, eventId 
 	return ParseGetEventResponse(rsp)
 }
 
+// CreateExportWithBodyWithResponse request with arbitrary body returning *CreateExportResponse
+func (c *ClientWithResponses) CreateExportWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateExportResponse, error) {
+	rsp, err := c.CreateExportWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateExportResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateExportWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateExportApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateExportResponse, error) {
+	rsp, err := c.CreateExportWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateExportResponse(rsp)
+}
+
+// DownloadExportWithResponse request returning *DownloadExportResponse
+func (c *ClientWithResponses) DownloadExportWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*DownloadExportResponse, error) {
+	rsp, err := c.DownloadExport(ctx, token, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadExportResponse(rsp)
+}
+
 // ListForwarderTypesApiV1ForwarderTypesGetWithResponse request returning *ListForwarderTypesApiV1ForwarderTypesGetResponse
 func (c *ClientWithResponses) ListForwarderTypesApiV1ForwarderTypesGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListForwarderTypesApiV1ForwarderTypesGetResponse, error) {
 	rsp, err := c.ListForwarderTypesApiV1ForwarderTypesGet(ctx, reqEditors...)
@@ -4041,6 +4379,48 @@ func ParseGetEventResponse(rsp *http.Response) (*GetEventResponse, error) {
 		}
 		response.ApplicationvndApiJSON200 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseCreateExportResponse parses an HTTP response from a CreateExportWithResponse call
+func ParseCreateExportResponse(rsp *http.Response) (*CreateExportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateExportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ExportResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDownloadExportResponse parses an HTTP response from a DownloadExportWithResponse call
+func ParseDownloadExportResponse(rsp *http.Response) (*DownloadExportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadExportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil
