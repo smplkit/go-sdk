@@ -415,6 +415,71 @@
         ]
       }
     },
+    "/api/v1/exports": {
+      "post": {
+        "tags": [
+          "Exports"
+        ],
+        "summary": "Create Export",
+        "description": "Mint a short-lived signed URL to stream an events download.\n\nThe request body specifies `format` (`CSV` or `JSONL`) and any\nsubset of the event filters accepted by `GET /api/v1/events`. The\nresponse returns the signed URL plus its expiry (30 seconds from\nmint). Open the URL in a browser to stream the file to disk; no\n`Authorization` header is required at download time.\n\nFilter rules match `GET /api/v1/events`: `filter[resource_id]`\nrequires `filter[resource_type]`; `filter[search]` requires either\n`filter[occurred_at]` or `filter[resource_type]` +\n`filter[resource_id]`. Violations are rejected here at mint time.\n\nReads are allowed on lapsed subscriptions per the smplcore\nconvention \u2014 same gate as the events list.",
+        "operationId": "create_export",
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/exports/{token}": {
+      "get": {
+        "tags": [
+          "Exports"
+        ],
+        "summary": "Download Export",
+        "description": "Stream a signed audit-events download \u2014 no `Authorization` header required.\n\nAuthorization is the token itself: it carries the account, the\nchosen format, and the filters, all integrity-protected by HMAC.\nThe endpoint verifies the signature and expiry, scopes the events\nquery to the token's account, and streams the response.\n\nAny failure (bad signature, wrong audience, expired, malformed\npayload) returns `404 Not Found` \u2014 the response shape never leaks\nwhich check failed.\n\nThe token is stateless and replayable until it expires (\u226430s).\nConcurrent or duplicate GETs (browser retries, AV scanners,\nprefetchers) all succeed; there is no single-use behavior.",
+        "operationId": "download_export",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Opaque signed download token from `POST /api/v1/exports`. Treat as a single short-lived URL \u2014 do not parse or store long-term.",
+              "title": "Token"
+            },
+            "description": "Opaque signed download token from `POST /api/v1/exports`. Treat as a single short-lived URL \u2014 do not parse or store long-term."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
     "/api/v1/usage": {
       "get": {
         "tags": [
@@ -2029,6 +2094,214 @@
           "type": "event_type"
         }
       },
+      "Export": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "CSV",
+              "JSONL"
+            ],
+            "title": "Format",
+            "description": "Output format for the download. `CSV` writes one row per event with the event payload (`data`) serialized as a JSON-encoded cell. `JSONL` writes one JSON object per line with `data` preserved as a nested object."
+          },
+          "filter[occurred_at]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Occurred At]",
+            "description": "Date range using interval notation, e.g. `[2026-04-01T00:00:00Z,2026-04-15T00:00:00Z)`."
+          },
+          "filter[actor_type]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Actor Type]",
+            "description": "Exact match on the event's `actor_type` field."
+          },
+          "filter[actor_id]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Actor Id]",
+            "description": "Exact match on the event's `actor_id` field."
+          },
+          "filter[event_type]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Event Type]",
+            "description": "Exact match on the event's `event_type` field."
+          },
+          "filter[resource_type]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Resource Type]",
+            "description": "Exact match on the event's `resource_type` field."
+          },
+          "filter[resource_id]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Resource Id]",
+            "description": "Exact match on the event's `resource_id` field. Must be accompanied by `filter[resource_type]`."
+          },
+          "filter[search]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Search]",
+            "description": "Case-insensitive substring match against `resource_id` or `description`. Must be accompanied by either `filter[occurred_at]` or `filter[resource_type]` + `filter[resource_id]`."
+          },
+          "filter[do_not_forward]": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Do Not Forward]",
+            "description": "When set, restrict to events whose `do_not_forward` flag matches the given boolean."
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "Absolute, signed download URL. Open in a browser to stream the export to disk. Expires shortly after mint \u2014 see `expires_at`.",
+            "readOnly": true
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "When the signed URL stops being valid (ISO-8601 UTC). Open the URL well before this time \u2014 the signed token is stateless, so a single mint cannot be 'refreshed'; mint a new export if the URL has expired.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "format"
+        ],
+        "title": "Export",
+        "description": "A request for a short-lived signed download URL.\n\nThe customer chooses a `format` and supplies the same filter set\nthe events list endpoint accepts. The server mints an HMAC-signed\nURL (valid for 30 seconds) that the browser navigates to for a\nnative streaming download \u2014 no `Authorization` header required at\ndownload time.\n\nThe download honors the **same filter-combination rules** as\n`GET /api/v1/events`:\n\n- `filter[resource_id]` must be accompanied by `filter[resource_type]`.\n- `filter[search]` must be accompanied by either `filter[occurred_at]`\n  or `filter[resource_type]` + `filter[resource_id]`.\n\nA request that violates these rules is rejected at mint time with\n`400 Bad Request`."
+      },
+      "ExportRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ExportResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ExportRequest",
+        "description": "JSON:API request envelope for minting a signed download URL."
+      },
+      "ExportResource": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "export"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Export"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attributes"
+        ],
+        "title": "ExportResource",
+        "description": "JSON:API resource envelope for an export ticket.\n\n`id` must not be specified on create requests \u2014 the server assigns\na fresh UUID per mint response. The UUID identifies this particular\nresponse envelope only; nothing is persisted behind it (the signed\ntoken inside `attributes.url` is the actual artifact).",
+        "example": {
+          "attributes": {
+            "expires_at": "2026-05-27T12:00:30Z",
+            "filter[occurred_at]": "[2026-05-01T00:00:00Z,2026-06-01T00:00:00Z)",
+            "filter[resource_type]": "order",
+            "format": "CSV",
+            "url": "https://audit.smplkit.com/api/v1/exports/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.\u2026"
+          },
+          "id": "11111111-2222-3333-4444-555555555555",
+          "type": "export"
+        }
+      },
+      "ExportResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ExportResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ExportResponse",
+        "description": "JSON:API single-resource response carrying the signed URL."
+      },
       "Forwarder": {
         "properties": {
           "name": {
@@ -3438,6 +3711,9 @@
     },
     {
       "name": "Events"
+    },
+    {
+      "name": "Exports"
     },
     {
       "name": "Forwarder Types"
