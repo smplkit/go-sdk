@@ -136,6 +136,36 @@ func (e HttpConfigurationMethod) Valid() bool {
 	}
 }
 
+// Defines values for Severity.
+const (
+	DEBUG Severity = "DEBUG"
+	ERROR Severity = "ERROR"
+	FATAL Severity = "FATAL"
+	INFO  Severity = "INFO"
+	TRACE Severity = "TRACE"
+	WARN  Severity = "WARN"
+)
+
+// Valid indicates whether the value is a known member of the Severity enum.
+func (e Severity) Valid() bool {
+	switch e {
+	case DEBUG:
+		return true
+	case ERROR:
+		return true
+	case FATAL:
+		return true
+	case INFO:
+		return true
+	case TRACE:
+		return true
+	case WARN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TestForwarderRequestMethod.
 const (
 	TestForwarderRequestMethodDELETE TestForwarderRequestMethod = "DELETE"
@@ -157,6 +187,24 @@ func (e TestForwarderRequestMethod) Valid() bool {
 	case TestForwarderRequestMethodPOST:
 		return true
 	case TestForwarderRequestMethodPUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListCategoriesParamsSort.
+const (
+	ListCategoriesParamsSortKey      ListCategoriesParamsSort = "key"
+	ListCategoriesParamsSortMinusKey ListCategoriesParamsSort = "-key"
+)
+
+// Valid indicates whether the value is a known member of the ListCategoriesParamsSort enum.
+func (e ListCategoriesParamsSort) Valid() bool {
+	switch e {
+	case ListCategoriesParamsSortKey:
+		return true
+	case ListCategoriesParamsSortMinusKey:
 		return true
 	default:
 		return false
@@ -267,20 +315,46 @@ func (e ListForwarderDeliveriesParamsSort) Valid() bool {
 
 // Defines values for ListResourceTypesParamsSort.
 const (
-	ListResourceTypesParamsSortKey      ListResourceTypesParamsSort = "key"
-	ListResourceTypesParamsSortMinusKey ListResourceTypesParamsSort = "-key"
+	Key      ListResourceTypesParamsSort = "key"
+	MinusKey ListResourceTypesParamsSort = "-key"
 )
 
 // Valid indicates whether the value is a known member of the ListResourceTypesParamsSort enum.
 func (e ListResourceTypesParamsSort) Valid() bool {
 	switch e {
-	case ListResourceTypesParamsSortKey:
+	case Key:
 		return true
-	case ListResourceTypesParamsSortMinusKey:
+	case MinusKey:
 		return true
 	default:
 		return false
 	}
+}
+
+// CategoryAttributes defines model for CategoryAttributes.
+type CategoryAttributes struct {
+	// Category The category value. Same as the JSON:API ``id``.
+	Category string `json:"category"`
+
+	// CreatedAt First sighting of this category for the account.
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// CategoryListResponse defines model for CategoryListResponse.
+type CategoryListResponse struct {
+	Data []CategoryResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
+}
+
+// CategoryResource defines model for CategoryResource.
+type CategoryResource struct {
+	Attributes CategoryAttributes `json:"attributes"`
+
+	// Id The category value.
+	Id   string  `json:"id"`
+	Type *string `json:"type,omitempty"`
 }
 
 // Event An audit event — a record that something happened, attributed to
@@ -298,6 +372,9 @@ type Event struct {
 
 	// ActorType Kind of actor that caused the event, e.g. `USER`, `API_KEY`, `SYSTEM`, or any other label you choose. Free-form string; the API does not constrain or interpret it.
 	ActorType *string `json:"actor_type,omitempty"`
+
+	// Category Free-form bucket label, e.g. `auth`, `billing`, `config-change`. Stored exactly as supplied. Drives the `filter[category]` filter and the `GET /api/v1/categories` discovery endpoint.
+	Category *string `json:"category,omitempty"`
 
 	// CreatedAt When the event was received and recorded.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
@@ -325,6 +402,9 @@ type Event struct {
 
 	// ResourceType Kind of resource the event is about, e.g. `user`. Any non-empty string.
 	ResourceType string `json:"resource_type"`
+
+	// Severity One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+	Severity *Severity `json:"severity,omitempty"`
 }
 
 // EventListLinks defines model for EventListLinks.
@@ -439,6 +519,9 @@ type EventSearchRequest struct {
 	// FilterActorType Exact match on the event's `actor_type` field.
 	FilterActorType *string `json:"filter[actor_type],omitempty"`
 
+	// FilterCategory Exact match on the event's `category` field.
+	FilterCategory *string `json:"filter[category],omitempty"`
+
 	// FilterDoNotForward When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline).
 	FilterDoNotForward *bool `json:"filter[do_not_forward],omitempty"`
 
@@ -456,6 +539,9 @@ type EventSearchRequest struct {
 
 	// FilterSearch Case-insensitive substring match on `resource_id` or `description`. Must be accompanied by either `filter[occurred_at]` or `filter[resource_type]` + `filter[resource_id]`.
 	FilterSearch *string `json:"filter[search],omitempty"`
+
+	// FilterSeverity Exact match on the event's `severity` field. One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+	FilterSeverity *string `json:"filter[severity],omitempty"`
 
 	// PageAfter Opaque cursor — pass the previous response's `links.next` cursor verbatim to fetch the next page. Keep the same `sort` value across paginated requests.
 	PageAfter *string `json:"page[after],omitempty"`
@@ -952,6 +1038,9 @@ type RetryFailedDeliveriesSummary struct {
 	Succeeded int `json:"succeeded"`
 }
 
+// Severity One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+type Severity string
+
 // TestForwarderRequest Inputs to the test-forwarder action.
 //
 // Mirrors a forwarder's HTTP destination configuration with one
@@ -1037,6 +1126,24 @@ type UsageResponse struct {
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
 type hTTPBearerContextKey string
 
+// ListCategoriesParams defines parameters for ListCategories.
+type ListCategoriesParams struct {
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
+	Sort *ListCategoriesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
+}
+
+// ListCategoriesParamsSort defines parameters for ListCategories.
+type ListCategoriesParamsSort string
+
 // ListEventTypesParams defines parameters for ListEventTypes.
 type ListEventTypesParams struct {
 	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
@@ -1065,6 +1172,12 @@ type ListEventsParams struct {
 	FilterEventType    *string `form:"filter[event_type],omitempty" json:"filter[event_type],omitempty"`
 	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 	FilterResourceId   *string `form:"filter[resource_id],omitempty" json:"filter[resource_id],omitempty"`
+
+	// FilterSeverity Exact match on the event's `severity` field. One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.
+	FilterSeverity *string `form:"filter[severity],omitempty" json:"filter[severity],omitempty"`
+
+	// FilterCategory Exact match on the event's `category` field.
+	FilterCategory *string `form:"filter[category],omitempty" json:"filter[category],omitempty"`
 
 	// FilterSearch Case-insensitive substring match against `resource_id` or `description`. Use `filter[resource_id]` for an exact match on `resource_id`.
 	FilterSearch *string `form:"filter[search],omitempty" json:"filter[search],omitempty"`
@@ -1249,6 +1362,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// ListCategories request
+	ListCategories(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEventTypes request
 	ListEventTypes(ctx context.Context, params *ListEventTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1312,6 +1428,18 @@ type ClientInterface interface {
 
 	// ListUsage request
 	ListUsage(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ListCategories(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListCategoriesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListEventTypes(ctx context.Context, params *ListEventTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1590,6 +1718,96 @@ func (c *Client) ListUsage(ctx context.Context, params *ListUsageParams, reqEdit
 	return c.Client.Do(req)
 }
 
+// NewListCategoriesRequest generates requests for ListCategories
+func NewListCategoriesRequest(server string, params *ListCategoriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/categories")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListEventTypesRequest generates requests for ListEventTypes
 func NewListEventTypesRequest(server string, params *ListEventTypesParams) (*http.Request, error) {
 	var err error
@@ -1783,6 +2001,30 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 		if params.FilterResourceId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[resource_id]", *params.FilterResourceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterSeverity != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[severity]", *params.FilterSeverity, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterCategory != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[category]", *params.FilterCategory, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2792,6 +3034,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// ListCategoriesWithResponse request
+	ListCategoriesWithResponse(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*ListCategoriesResponse, error)
+
 	// ListEventTypesWithResponse request
 	ListEventTypesWithResponse(ctx context.Context, params *ListEventTypesParams, reqEditors ...RequestEditorFn) (*ListEventTypesResponse, error)
 
@@ -2855,6 +3100,36 @@ type ClientWithResponsesInterface interface {
 
 	// ListUsageWithResponse request
 	ListUsageWithResponse(ctx context.Context, params *ListUsageParams, reqEditors ...RequestEditorFn) (*ListUsageResponse, error)
+}
+
+type ListCategoriesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *CategoryListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListCategoriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListCategoriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListCategoriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type ListEventTypesResponse struct {
@@ -3397,6 +3672,15 @@ func (r ListUsageResponse) ContentType() string {
 	return ""
 }
 
+// ListCategoriesWithResponse request returning *ListCategoriesResponse
+func (c *ClientWithResponses) ListCategoriesWithResponse(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*ListCategoriesResponse, error) {
+	rsp, err := c.ListCategories(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListCategoriesResponse(rsp)
+}
+
 // ListEventTypesWithResponse request returning *ListEventTypesResponse
 func (c *ClientWithResponses) ListEventTypesWithResponse(ctx context.Context, params *ListEventTypesParams, reqEditors ...RequestEditorFn) (*ListEventTypesResponse, error) {
 	rsp, err := c.ListEventTypes(ctx, params, reqEditors...)
@@ -3597,6 +3881,32 @@ func (c *ClientWithResponses) ListUsageWithResponse(ctx context.Context, params 
 		return nil, err
 	}
 	return ParseListUsageResponse(rsp)
+}
+
+// ParseListCategoriesResponse parses an HTTP response from a ListCategoriesWithResponse call
+func ParseListCategoriesResponse(rsp *http.Response) (*ListCategoriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListCategoriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CategoryListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListEventTypesResponse parses an HTTP response from a ListEventTypesWithResponse call

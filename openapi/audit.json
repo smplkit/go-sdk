@@ -180,6 +180,42 @@
             }
           },
           {
+            "name": "filter[severity]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match on the event's `severity` field. One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`.",
+              "title": "Filter[Severity]"
+            },
+            "description": "Exact match on the event's `severity` field. One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`."
+          },
+          {
+            "name": "filter[category]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match on the event's `category` field.",
+              "title": "Filter[Category]"
+            },
+            "description": "Exact match on the event's `category` field."
+          },
+          {
             "name": "filter[search]",
             "in": "query",
             "required": false,
@@ -1208,10 +1244,163 @@
           }
         }
       }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "List Categories",
+        "description": "List the distinct `category` values recorded for this account.\n\nThe resource `id` is the category value itself. Default sort is\n`key` ascending; pass `sort=-key` for descending. Useful for\npopulating filter dropdowns in a UI.",
+        "operationId": "list_categories",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.",
+              "enum": [
+                "key",
+                "-key"
+              ],
+              "default": "key",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`."
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error.",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
+              "default": 1000,
+              "title": "Page[Size]"
+            },
+            "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
+          },
+          {
+            "name": "meta[total]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.",
+              "default": false,
+              "title": "Meta[Total]"
+            },
+            "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "CategoryAttributes": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "The category value. Same as the JSON:API ``id``."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "First sighting of this category for the account."
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "created_at"
+        ],
+        "title": "CategoryAttributes"
+      },
+      "CategoryListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "CategoryListResponse"
+      },
+      "CategoryResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "The category value."
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "category"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/CategoryAttributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "CategoryResource",
+        "example": {
+          "attributes": {
+            "category": "auth",
+            "created_at": "2026-04-12T15:23:01Z"
+          },
+          "id": "auth",
+          "type": "category"
+        }
+      },
       "Event": {
         "properties": {
           "event_type": {
@@ -1243,6 +1432,29 @@
             ],
             "title": "Description",
             "description": "Free-text description of the event. Included alongside `resource_id` in the `filter[search]` substring target."
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`. Omit to record the event at `INFO`. Always present on read."
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category",
+            "description": "Free-form bucket label, e.g. `auth`, `billing`, `config-change`. Stored exactly as supplied. Drives the `filter[category]` filter and the `GET /api/v1/categories` discovery endpoint."
           },
           "occurred_at": {
             "anyOf": [
@@ -1450,6 +1662,7 @@
             "actor_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
             "actor_label": "alice@example.com",
             "actor_type": "USER",
+            "category": "auth",
             "created_at": "2026-05-06T20:00:00.123Z",
             "data": {
               "request_id": "req-abc",
@@ -1463,7 +1676,8 @@
             "idempotency_key": "auto-1234abcd",
             "occurred_at": "2026-05-06T20:00:00Z",
             "resource_id": "u-1",
-            "resource_type": "user"
+            "resource_type": "user",
+            "severity": "INFO"
           },
           "id": "11111111-2222-3333-4444-555555555555",
           "type": "event"
@@ -1568,6 +1782,30 @@
             ],
             "title": "Filter[Resource Id]",
             "description": "Exact match on the event's `resource_id` field. Must be accompanied by `filter[resource_type]`."
+          },
+          "filter[severity]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Severity]",
+            "description": "Exact match on the event's `severity` field. One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`."
+          },
+          "filter[category]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Category]",
+            "description": "Exact match on the event's `category` field."
           },
           "filter[actor_type]": {
             "anyOf": [
@@ -2927,6 +3165,19 @@
         "title": "RetryFailedDeliveriesSummary",
         "description": "Counts returned by the retry-failed-deliveries action."
       },
+      "Severity": {
+        "type": "string",
+        "enum": [
+          "TRACE",
+          "DEBUG",
+          "INFO",
+          "WARN",
+          "ERROR",
+          "FATAL"
+        ],
+        "title": "Severity",
+        "description": "One of `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`."
+      },
       "TestForwarderRequest": {
         "properties": {
           "method": {
@@ -3179,6 +3430,9 @@
     }
   },
   "tags": [
+    {
+      "name": "Categories"
+    },
     {
       "name": "Event Types"
     },
