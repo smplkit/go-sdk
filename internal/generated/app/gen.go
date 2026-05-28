@@ -3850,6 +3850,9 @@ type ClientInterface interface {
 	// BeginOidcLogin request
 	BeginOidcLogin(ctx context.Context, provider OidcProvider, params *BeginOidcLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// RefreshAuthToken request
+	RefreshAuthToken(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RegisterWithBody request with any body
 	RegisterWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4531,6 +4534,18 @@ func (c *Client) Login(ctx context.Context, body LoginJSONRequestBody, reqEditor
 
 func (c *Client) BeginOidcLogin(ctx context.Context, provider OidcProvider, params *BeginOidcLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewBeginOidcLoginRequest(c.Server, provider, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RefreshAuthToken(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRefreshAuthTokenRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -6730,6 +6745,33 @@ func NewBeginOidcLoginRequest(server string, provider OidcProvider, params *Begi
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRefreshAuthTokenRequest generates requests for RefreshAuthToken
+func NewRefreshAuthTokenRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/refresh")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -10515,6 +10557,9 @@ type ClientWithResponsesInterface interface {
 	// BeginOidcLoginWithResponse request
 	BeginOidcLoginWithResponse(ctx context.Context, provider OidcProvider, params *BeginOidcLoginParams, reqEditors ...RequestEditorFn) (*BeginOidcLoginResponse, error)
 
+	// RefreshAuthTokenWithResponse request
+	RefreshAuthTokenWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RefreshAuthTokenResponse, error)
+
 	// RegisterWithBodyWithResponse request with any body
 	RegisterWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterResponse, error)
 
@@ -11633,6 +11678,40 @@ func (r BeginOidcLoginResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r BeginOidcLoginResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RefreshAuthTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AuthTokenResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON429      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r RefreshAuthTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RefreshAuthTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RefreshAuthTokenResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14199,6 +14278,15 @@ func (c *ClientWithResponses) BeginOidcLoginWithResponse(ctx context.Context, pr
 	return ParseBeginOidcLoginResponse(rsp)
 }
 
+// RefreshAuthTokenWithResponse request returning *RefreshAuthTokenResponse
+func (c *ClientWithResponses) RefreshAuthTokenWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RefreshAuthTokenResponse, error) {
+	rsp, err := c.RefreshAuthToken(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRefreshAuthTokenResponse(rsp)
+}
+
 // RegisterWithBodyWithResponse request with arbitrary body returning *RegisterResponse
 func (c *ClientWithResponses) RegisterWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterResponse, error) {
 	rsp, err := c.RegisterWithBody(ctx, contentType, body, reqEditors...)
@@ -16307,6 +16395,60 @@ func ParseBeginOidcLoginResponse(rsp *http.Response) (*BeginOidcLoginResponse, e
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRefreshAuthTokenResponse parses an HTTP response from a RefreshAuthTokenWithResponse call
+func ParseRefreshAuthTokenResponse(rsp *http.Response) (*RefreshAuthTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RefreshAuthTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AuthTokenResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
