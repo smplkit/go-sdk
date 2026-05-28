@@ -1189,11 +1189,11 @@ func TestAccountSettings_Get_Error(t *testing.T) {
 
 func TestAccountSettings_Save_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET":
+		switch r.Method {
+		case "GET":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"environment_order":["production"]}`))
-		case r.Method == "PUT":
+		case "PUT":
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
 		default:
@@ -1210,11 +1210,11 @@ func TestAccountSettings_Save_Error(t *testing.T) {
 
 func TestAccountSettings_Save_BadJSON(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == "GET":
+		switch r.Method {
+		case "GET":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"environment_order":["production"]}`))
-		case r.Method == "PUT":
+		case "PUT":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{not json`))
 		default:

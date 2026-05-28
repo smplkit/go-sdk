@@ -171,7 +171,7 @@ func (c *ConfigClient) GetValueOr(ctx context.Context, configID, key string, def
 // the default branch and reports false.
 func isBindableTarget(rv reflect.Value) bool {
 	switch rv.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if rv.IsNil() {
 			return false
 		}
@@ -190,7 +190,7 @@ func isBindableTarget(rv reflect.Value) bool {
 // the target's runtime type. For struct pointers, this is the struct's
 // type name; for maps, the empty string (no class metadata to expose).
 func bindNameForTarget(rv reflect.Value) string {
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		return rv.Elem().Type().Name()
 	}
 	return ""
@@ -211,7 +211,7 @@ type bindItem struct {
 func iterBindItems(rv reflect.Value) []bindItem {
 	out := make([]bindItem, 0)
 	switch rv.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		out = append(out, iterStructBindItems(rv.Elem(), "")...)
 	case reflect.Map:
 		out = append(out, iterMapBindItems(rv, "")...)
@@ -268,7 +268,7 @@ func walkBindLeaf(v reflect.Value, flatKey string) []bindItem {
 		if v.Type().Key().Kind() == reflect.String && !v.IsNil() {
 			return iterMapBindItems(v, flatKey+".")
 		}
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if !v.IsNil() && v.Elem().Kind() == reflect.Struct {
 			return iterStructBindItems(v.Elem(), flatKey+".")
 		}
@@ -365,7 +365,7 @@ func applyChangeToTarget(target interface{}, dottedKey string, value interface{}
 	}
 	rv := reflect.ValueOf(target)
 	// Dereference one level of pointer to land on the struct or map.
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
 			return
 		}
@@ -394,7 +394,7 @@ func walkInto(current reflect.Value, name string) (reflect.Value, bool) {
 		}
 		current = current.Elem()
 	}
-	for current.Kind() == reflect.Ptr {
+	for current.Kind() == reflect.Pointer {
 		if current.IsNil() {
 			return reflect.Value{}, false
 		}
@@ -424,7 +424,7 @@ func setLeaf(current reflect.Value, name string, value interface{}) {
 	for current.Kind() == reflect.Interface && !current.IsNil() {
 		current = current.Elem()
 	}
-	for current.Kind() == reflect.Ptr && !current.IsNil() {
+	for current.Kind() == reflect.Pointer && !current.IsNil() {
 		current = current.Elem()
 	}
 	switch current.Kind() {
