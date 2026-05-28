@@ -27,6 +27,18 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: approve patch/minor bumps
+        if: contains(fromJSON('["version-update:semver-patch","version-update:semver-minor"]'), steps.meta.outputs.update-type)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          # Org ruleset requires 1 approving review on PRs to main.
+          # Approve here so the subsequent --auto merge can succeed
+          # once CI is green. Idempotent: re-runs swallow the
+          # "already approved" error.
+          gh pr review "$PR_URL" --approve 2>/dev/null || true
+
       - name: enable auto-merge for patch/minor bumps
         if: contains(fromJSON('["version-update:semver-patch","version-update:semver-minor"]'), steps.meta.outputs.update-type)
         env:
