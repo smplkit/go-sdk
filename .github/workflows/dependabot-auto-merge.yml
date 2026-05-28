@@ -1,0 +1,40 @@
+name: dependabot-auto-merge
+
+# Auto-merges Dependabot PRs that bump any dependency by a patch or
+# minor version. Majors are left as PRs for review.
+#
+# CI is the gate: if lint, format, or tests fail on the bumped
+# dependency, the PR sits open until a human investigates. Same
+# model as terraform-provider-smplkit's auto-merge workflow.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: auto-merge patch/minor bumps
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: enable auto-merge for patch/minor bumps
+        if: contains(fromJSON('["version-update:semver-patch","version-update:semver-minor"]'), steps.meta.outputs.update-type)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          # --auto waits for required status checks before merging.
+          # Falls through to immediate merge if the repo doesn't have
+          # auto-merge enabled in Settings → General → Pull Requests.
+          gh pr merge "$PR_URL" --auto --squash ||
+            gh pr merge "$PR_URL" --squash

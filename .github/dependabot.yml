@@ -1,0 +1,43 @@
+# Dependabot for go-sdk.
+#
+# Every dependency bump is a `fix:` — a version change is a real
+# change to the release inputs and warrants a new patch publish via
+# semantic-release. Per the SDK commit-message lockdown in
+# ~/.claude/CLAUDE.md, `fix:` is the maximum bump permitted.
+#
+# All gomod deps go in one weekly group (Go modules don't split
+# production / development the way npm or pyproject do). Major
+# bumps land as individual PRs.
+#
+# Patch + minor bumps auto-merge on green CI via the sibling
+# .github/workflows/dependabot-auto-merge.yml workflow.
+
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "fix"
+      include: "scope"
+    open-pull-requests-limit: 10
+    groups:
+      gomod:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "fix"
+      include: "scope"
+    open-pull-requests-limit: 10
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch
