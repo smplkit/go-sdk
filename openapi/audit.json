@@ -1138,7 +1138,7 @@
           "Resource Types"
         ],
         "summary": "List Resource Types",
-        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Default sort is `key`\nascending; pass `sort=-key` for descending. Useful for populating\nfilter dropdowns in a UI.",
+        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Default sort is `key`\nascending; pass `sort=-key` for descending. Useful for populating\nfilter dropdowns in a UI. Results are scoped to the resource types\nvisible under the account's current plan.",
         "operationId": "list_resource_types",
         "security": [
           {
