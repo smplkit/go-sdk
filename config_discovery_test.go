@@ -535,7 +535,7 @@ func TestBind_StructWithUnexportedAndJSONDashFieldsSkipsThem(t *testing.T) {
 func TestBind_StructWithEmptyJSONTag(t *testing.T) {
 	type item struct {
 		// `json:","` — empty name component; should fall back to field name.
-		Field string `json:","`
+		Field string `json:","` //nolint:staticcheck // deliberately malformed for the test
 	}
 	cc := newStubConfigClient("s", map[string]interface{}{})
 	skipInit(cc)

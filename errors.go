@@ -72,7 +72,7 @@ func (e *Error) Error() string {
 			b.WriteString("\nErrors:")
 			for i, ed := range e.Errors {
 				data, _ := json.Marshal(ed)
-				b.WriteString(fmt.Sprintf("\n  [%d] %s", i, string(data)))
+				fmt.Fprintf(&b, "\n  [%d] %s", i, string(data))
 			}
 		}
 		return b.String()

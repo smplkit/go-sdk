@@ -954,11 +954,12 @@ func TestConfigClient_Save_MalformedResponse(t *testing.T) {
 	configID := testID0
 
 	updateServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+		switch r.Method {
+		case "GET":
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(sampleConfigJSON(configID, "Svc")))
-		} else if r.Method == "PUT" {
+		case "PUT":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{invalid`))
 		}
