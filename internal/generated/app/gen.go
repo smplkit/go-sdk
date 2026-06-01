@@ -2829,7 +2829,7 @@ type SubscriptionChangeProjection struct {
 	// Product Product key affected by this change.
 	Product string `json:"product"`
 
-	// ProratedChargeTodayCents When `effect` is `IMMEDIATE`, the estimated prorated charge for the remainder of the current billing period in cents. Always `0` when `effect` is `NEXT_PERIOD`.
+	// ProratedChargeTodayCents Amount in cents that confirming this change would charge at confirmation time for this product. Reflects the discounted, prorated charge for the remainder of the current billing period. May be `0` even when `effect` is `IMMEDIATE` — when the product is being added to an already-active subscription the prorated amount is carried onto the next invoice rather than charged immediately. Always `0` when `effect` is `NEXT_PERIOD`.
 	ProratedChargeTodayCents *int `json:"prorated_charge_today_cents,omitempty"`
 
 	// StartsAt When `effect` is `NEXT_PERIOD`, the ISO-8601 timestamp at which the change takes effect. `null` when `effect` is `IMMEDIATE` (the change applies on confirmation).
@@ -2902,7 +2902,7 @@ type SubscriptionPreviewAttributes struct {
 	// ProjectedTotalCents Projected final monthly total in cents after the change.
 	ProjectedTotalCents int `json:"projected_total_cents"`
 
-	// TotalChargeTodayCents Total amount that would be charged at confirmation time, in cents. The sum of `prorated_charge_today_cents` across `IMMEDIATE` changes.
+	// TotalChargeTodayCents Total amount in cents that would be charged at confirmation time — the sum of `prorated_charge_today_cents` across all changes. `0` when there is no immediate charge (for example when changes apply to an already-active subscription and the prorated amounts are carried onto the next invoice instead).
 	TotalChargeTodayCents int `json:"total_charge_today_cents"`
 }
 
