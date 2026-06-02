@@ -72,17 +72,14 @@ func (e ForwarderCreateResourceType) Valid() bool {
 
 // Defines values for ForwarderDeliveryStatus.
 const (
-	FAILED      ForwarderDeliveryStatus = "FAILED"
-	FILTEREDOUT ForwarderDeliveryStatus = "FILTERED_OUT"
-	SUCCEEDED   ForwarderDeliveryStatus = "SUCCEEDED"
+	FAILED    ForwarderDeliveryStatus = "FAILED"
+	SUCCEEDED ForwarderDeliveryStatus = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the ForwarderDeliveryStatus enum.
 func (e ForwarderDeliveryStatus) Valid() bool {
 	switch e {
 	case FAILED:
-		return true
-	case FILTEREDOUT:
 		return true
 	case SUCCEEDED:
 		return true
@@ -842,11 +839,11 @@ type ForwarderDelivery struct {
 	// ResponseStatus HTTP status code returned by the destination.
 	ResponseStatus *int `json:"response_status,omitempty"`
 
-	// Status Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event.
+	// Status Delivery outcome. `SUCCEEDED` when the destination accepted the event, `FAILED` when the delivery attempt did not succeed. Events that a forwarder's filter rejected are not recorded as deliveries.
 	Status ForwarderDeliveryStatus `json:"status"`
 }
 
-// ForwarderDeliveryStatus Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event.
+// ForwarderDeliveryStatus Delivery outcome. `SUCCEEDED` when the destination accepted the event, `FAILED` when the delivery attempt did not succeed. Events that a forwarder's filter rejected are not recorded as deliveries.
 type ForwarderDeliveryStatus string
 
 // ForwarderDeliveryListLinks defines model for ForwarderDeliveryListLinks.
