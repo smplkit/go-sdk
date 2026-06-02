@@ -825,7 +825,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarder Deliveries",
-        "description": "List delivery log entries for a forwarder.\n\nDefault sort is `-created_at` (newest first). Filter by `status` (one of\n`SUCCEEDED`, `FAILED`, `FILTERED_OUT` \u2014 case-insensitive), by `event_id`,\nor by a `created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
+        "description": "List delivery log entries for a forwarder.\n\nDefault sort is `-created_at` (newest first). Filter by `status`\n(`SUCCEEDED` or `FAILED`, case-insensitive), by `event_id`, or by a\n`created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
         "operationId": "list_forwarder_deliveries",
         "security": [
           {
@@ -2535,11 +2535,10 @@
             "type": "string",
             "enum": [
               "SUCCEEDED",
-              "FAILED",
-              "FILTERED_OUT"
+              "FAILED"
             ],
             "title": "Status",
-            "description": "Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event."
+            "description": "Delivery outcome. `SUCCEEDED` when the destination accepted the event, `FAILED` when the delivery attempt did not succeed. Events that a forwarder's filter rejected are not recorded as deliveries."
           },
           "request": {
             "anyOf": [
