@@ -72,10 +72,9 @@ func (e ForwarderCreateResourceType) Valid() bool {
 
 // Defines values for ForwarderDeliveryStatus.
 const (
-	FAILED              ForwarderDeliveryStatus = "FAILED"
-	FILTEREDOUT         ForwarderDeliveryStatus = "FILTERED_OUT"
-	SKIPPEDDONOTFORWARD ForwarderDeliveryStatus = "SKIPPED_DO_NOT_FORWARD"
-	SUCCEEDED           ForwarderDeliveryStatus = "SUCCEEDED"
+	FAILED      ForwarderDeliveryStatus = "FAILED"
+	FILTEREDOUT ForwarderDeliveryStatus = "FILTERED_OUT"
+	SUCCEEDED   ForwarderDeliveryStatus = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the ForwarderDeliveryStatus enum.
@@ -84,8 +83,6 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 	case FAILED:
 		return true
 	case FILTEREDOUT:
-		return true
-	case SKIPPEDDONOTFORWARD:
 		return true
 	case SUCCEEDED:
 		return true
@@ -403,7 +400,7 @@ type Event struct {
 	// Description Free-text description of the event. Included alongside `resource_id` in the `filter[search]` substring target.
 	Description *string `json:"description,omitempty"`
 
-	// DoNotForward When `true`, the event is recorded but not delivered to any forwarder. A delivery log entry with status `SKIPPED_DO_NOT_FORWARD` is written for each enabled forwarder so the skip is visible in the delivery log.
+	// DoNotForward When `true`, the event is recorded but not delivered to any forwarder, and no delivery log entries are created for it.
 	DoNotForward *bool `json:"do_not_forward,omitempty"`
 
 	// EventType What happened, e.g. `user.created`. Any non-empty string.
@@ -845,11 +842,11 @@ type ForwarderDelivery struct {
 	// ResponseStatus HTTP status code returned by the destination.
 	ResponseStatus *int `json:"response_status,omitempty"`
 
-	// Status Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event; `SKIPPED_DO_NOT_FORWARD` is recorded when the event was emitted with `do_not_forward=true`.
+	// Status Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event.
 	Status ForwarderDeliveryStatus `json:"status"`
 }
 
-// ForwarderDeliveryStatus Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event; `SKIPPED_DO_NOT_FORWARD` is recorded when the event was emitted with `do_not_forward=true`.
+// ForwarderDeliveryStatus Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event.
 type ForwarderDeliveryStatus string
 
 // ForwarderDeliveryListLinks defines model for ForwarderDeliveryListLinks.
