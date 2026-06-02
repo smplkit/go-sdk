@@ -825,7 +825,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarder Deliveries",
-        "description": "List delivery log entries for a forwarder.\n\nDefault sort is `-created_at` (newest first). Filter by `status` (one of\n`SUCCEEDED`, `FAILED`, `FILTERED_OUT`, `SKIPPED_DO_NOT_FORWARD` \u2014\ncase-insensitive), by `event_id`, or by a `created_at` range using\ninterval notation (e.g. `[2026-01-01T00:00:00Z,*)`).",
+        "description": "List delivery log entries for a forwarder.\n\nDefault sort is `-created_at` (newest first). Filter by `status` (one of\n`SUCCEEDED`, `FAILED`, `FILTERED_OUT` \u2014 case-insensitive), by `event_id`,\nor by a `created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
         "operationId": "list_forwarder_deliveries",
         "security": [
           {
@@ -1579,7 +1579,7 @@
           "do_not_forward": {
             "type": "boolean",
             "title": "Do Not Forward",
-            "description": "When `true`, the event is recorded but not delivered to any forwarder. A delivery log entry with status `SKIPPED_DO_NOT_FORWARD` is written for each enabled forwarder so the skip is visible in the delivery log.",
+            "description": "When `true`, the event is recorded but not delivered to any forwarder, and no delivery log entries are created for it.",
             "default": false
           },
           "created_at": {
@@ -2536,11 +2536,10 @@
             "enum": [
               "SUCCEEDED",
               "FAILED",
-              "FILTERED_OUT",
-              "SKIPPED_DO_NOT_FORWARD"
+              "FILTERED_OUT"
             ],
             "title": "Status",
-            "description": "Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event; `SKIPPED_DO_NOT_FORWARD` is recorded when the event was emitted with `do_not_forward=true`."
+            "description": "Delivery outcome. `SUCCEEDED` and `FAILED` are the live-delivery outcomes; `FILTERED_OUT` is recorded when the forwarder's filter rejected the event."
           },
           "request": {
             "anyOf": [
