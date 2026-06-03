@@ -821,11 +821,11 @@ type ForwarderDelivery struct {
 	// Error Error message if the delivery did not complete.
 	Error *string `json:"error,omitempty"`
 
-	// EventId Event that was being delivered.
-	EventId openapi_types.UUID `json:"event_id"`
+	// Event Event that was being delivered.
+	Event openapi_types.UUID `json:"event"`
 
-	// ForwarderId Forwarder the delivery belongs to.
-	ForwarderId openapi_types.UUID `json:"forwarder_id"`
+	// Forwarder Forwarder the delivery belongs to.
+	Forwarder openapi_types.UUID `json:"forwarder"`
 
 	// LatencyMs Elapsed time of the delivery attempt in milliseconds.
 	LatencyMs *int `json:"latency_ms,omitempty"`
@@ -1348,7 +1348,7 @@ type ListForwardersParamsSort string
 type ListForwarderDeliveriesParams struct {
 	FilterStatus    *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
 	FilterCreatedAt *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
-	FilterEventId   *string `form:"filter[event_id],omitempty" json:"filter[event_id],omitempty"`
+	FilterEvent     *string `form:"filter[event],omitempty" json:"filter[event],omitempty"`
 	PageSize        *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter       *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 
@@ -2911,9 +2911,9 @@ func NewListForwarderDeliveriesRequest(server string, forwarderId string, params
 
 		}
 
-		if params.FilterEventId != nil {
+		if params.FilterEvent != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[event_id]", *params.FilterEventId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[event]", *params.FilterEvent, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

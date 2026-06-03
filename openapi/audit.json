@@ -825,7 +825,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarder Deliveries",
-        "description": "List delivery log entries for a forwarder.\n\nDefault sort is `-created_at` (newest first). Filter by `status`\n(`SUCCEEDED` or `FAILED`, case-insensitive), by `event_id`, or by a\n`created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
+        "description": "List delivery log entries for a forwarder.\n\nDefault sort is `-created_at` (newest first). Filter by `status`\n(`SUCCEEDED` or `FAILED`, case-insensitive), by `event`, or by a\n`created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
         "operationId": "list_forwarder_deliveries",
         "security": [
           {
@@ -875,7 +875,7 @@
             }
           },
           {
-            "name": "filter[event_id]",
+            "name": "filter[event]",
             "in": "query",
             "required": false,
             "schema": {
@@ -887,7 +887,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Filter[Event Id]"
+              "title": "Filter[Event]"
             }
           },
           {
@@ -2514,16 +2514,16 @@
       },
       "ForwarderDelivery": {
         "properties": {
-          "forwarder_id": {
+          "forwarder": {
             "type": "string",
             "format": "uuid",
-            "title": "Forwarder Id",
+            "title": "Forwarder",
             "description": "Forwarder the delivery belongs to."
           },
-          "event_id": {
+          "event": {
             "type": "string",
             "format": "uuid",
-            "title": "Event Id",
+            "title": "Event",
             "description": "Event that was being delivered."
           },
           "attempt_number": {
@@ -2617,8 +2617,8 @@
         },
         "type": "object",
         "required": [
-          "forwarder_id",
-          "event_id",
+          "forwarder",
+          "event",
           "attempt_number",
           "status"
         ],
@@ -2713,8 +2713,8 @@
           "attributes": {
             "attempt_number": 1,
             "created_at": "2026-05-07T12:00:01.234Z",
-            "event_id": "33333333-4444-5555-6666-777777777777",
-            "forwarder_id": "11111111-2222-3333-4444-555555555555",
+            "event": "33333333-4444-5555-6666-777777777777",
+            "forwarder": "11111111-2222-3333-4444-555555555555",
             "latency_ms": 187,
             "request": {
               "body": "{\"event_type\":\"user.created\",\"resource_id\":\"u-1\"}",
