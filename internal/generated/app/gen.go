@@ -3099,6 +3099,12 @@ type VerifyEmailRequest struct {
 // hTTPBearerContextKey is the context key for HTTPBearer security scheme
 type hTTPBearerContextKey string
 
+// DeleteAccountParams defines parameters for DeleteAccount.
+type DeleteAccountParams struct {
+	// Purge When true, permanently and irreversibly erase the account and all of its data with no possibility of recovery. When false (the default), the account is soft-deleted and may be restored.
+	Purge *bool `form:"purge,omitempty" json:"purge,omitempty"`
+}
+
 // PutAccountSettingsApplicationVndAPIPlusJSONBody defines parameters for PutAccountSettings.
 type PutAccountSettingsApplicationVndAPIPlusJSONBody map[string]interface{}
 
@@ -3751,7 +3757,7 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 	// DeleteAccount request
-	DeleteAccount(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteAccount(ctx context.Context, params *DeleteAccountParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAccount request
 	GetAccount(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4100,8 +4106,8 @@ type ClientInterface interface {
 	UpdateUserRoleWithApplicationVndAPIPlusJSONBody(ctx context.Context, id openapi_types.UUID, body UpdateUserRoleApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) DeleteAccount(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteAccountRequest(c.Server)
+func (c *Client) DeleteAccount(ctx context.Context, params *DeleteAccountParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAccountRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5637,7 +5643,7 @@ func (c *Client) UpdateUserRoleWithApplicationVndAPIPlusJSONBody(ctx context.Con
 }
 
 // NewDeleteAccountRequest generates requests for DeleteAccount
-func NewDeleteAccountRequest(server string) (*http.Request, error) {
+func NewDeleteAccountRequest(server string, params *DeleteAccountParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5653,6 +5659,33 @@ func NewDeleteAccountRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Purge != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "purge", *params.Purge, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -10458,7 +10491,7 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 	// DeleteAccountWithResponse request
-	DeleteAccountWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error)
+	DeleteAccountWithResponse(ctx context.Context, params *DeleteAccountParams, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error)
 
 	// GetAccountWithResponse request
 	GetAccountWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAccountResponse, error)
@@ -13957,8 +13990,8 @@ func (r UpdateUserRoleResponse) ContentType() string {
 }
 
 // DeleteAccountWithResponse request returning *DeleteAccountResponse
-func (c *ClientWithResponses) DeleteAccountWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error) {
-	rsp, err := c.DeleteAccount(ctx, reqEditors...)
+func (c *ClientWithResponses) DeleteAccountWithResponse(ctx context.Context, params *DeleteAccountParams, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error) {
+	rsp, err := c.DeleteAccount(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

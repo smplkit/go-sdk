@@ -699,6 +699,11 @@
         "summary": "Get Current Account",
         "description": "Return the account for the currently authenticated user.",
         "operationId": "get_account",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -750,12 +755,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "put": {
         "tags": [
@@ -764,15 +764,20 @@
         "summary": "Update Current Account",
         "description": "Update the current account's settings.",
         "operationId": "update_account",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/vnd.api+json": {
               "schema": {
                 "$ref": "#/components/schemas/AccountRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -825,20 +830,34 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "delete": {
         "tags": [
           "Account"
         ],
         "summary": "Delete Current Account",
-        "description": "Permanently delete the current account and all associated data.",
+        "description": "Delete the current account and all associated data. By default the account is soft-deleted and may be restored by contacting support. Set `purge=true` to permanently and irreversibly erase the account and all of its data across every service, with no possibility of recovery.",
         "operationId": "delete_account",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When true, permanently and irreversibly erase the account and all of its data with no possibility of recovery. When false (the default), the account is soft-deleted and may be restored.",
+              "default": false,
+              "title": "Purge"
+            },
+            "description": "When true, permanently and irreversibly erase the account and all of its data with no possibility of recovery. When false (the default), the account is soft-deleted and may be restored."
+          }
+        ],
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -883,12 +902,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/accounts/current/actions/wipe": {
