@@ -1,0 +1,1428 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "smplkit Jobs API",
+    "description": "Scheduled HTTP job execution API for smplkit.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/jobs": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Create Job",
+        "description": "Create a job for this account.\n\nThe caller supplies the job's id (a slug) as `data.id`. Slugs are unique\nwithin an account and immutable. An enabled job begins scheduling\nimmediately.",
+        "operationId": "create_job",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "List Jobs",
+        "description": "List this account's jobs, newest first.",
+        "operationId": "list_jobs",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[enabled]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Enabled]"
+            }
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error.",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
+              "default": 1000,
+              "title": "Page[Size]"
+            },
+            "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
+          },
+          {
+            "name": "meta[total]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.",
+              "default": false,
+              "title": "Meta[Total]"
+            },
+            "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get Job",
+        "description": "Retrieve a single job by its id (slug).",
+        "operationId": "get_job",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Update Job",
+        "description": "Replace an existing job. Every writable field is overwritten.\n\nEnabling a paused job is a `PUT` with `enabled: true`; pausing is\n`enabled: false`. Editing the schedule recomputes the next fire time.",
+        "operationId": "update_job",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Delete Job",
+        "description": "Delete a job. Its run history is retained; the slug may be reused later.",
+        "operationId": "delete_job",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/actions/run": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Run Job Now",
+        "description": "Trigger one immediate run of the job (a `MANUAL` run).\n\nThe job's schedule and enabled state are untouched. The run is enqueued and\nexecuted by the worker; if the account is over its run allotment the run\nwill fail with reason `QUOTA_EXCEEDED` rather than being rejected here.",
+        "operationId": "run_job_now",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "tags": [
+          "Runs"
+        ],
+        "summary": "List Runs",
+        "description": "List runs for this account, newest first (cursor paginated).\n\nUse `filter[job]={slug}` for a single job's run history.",
+        "operationId": "list_runs",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[job]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Job]"
+            }
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[Size]"
+            }
+          },
+          {
+            "name": "page[after]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page[After]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Runs"
+        ],
+        "summary": "Get Run",
+        "description": "Retrieve a single run by its id.",
+        "operationId": "get_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/actions/cancel": {
+      "post": {
+        "tags": [
+          "Runs"
+        ],
+        "summary": "Cancel Run",
+        "description": "Cancel a pending or running run.\n\nReturns `409` if the run is already in a terminal state. Canceling a\nrunning run stops us tracking it, but the HTTP request may already be in\nflight \u2014 cancel means \"stop tracking,\" not \"guaranteed it didn't happen.\"",
+        "operationId": "cancel_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}/actions/rerun": {
+      "post": {
+        "tags": [
+          "Runs"
+        ],
+        "summary": "Rerun Run",
+        "description": "Spawn a new run from a prior run, using the job's current configuration.\n\nReturns `409` if the run's parent job has been deleted.",
+        "operationId": "rerun_run",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "tags": [
+          "Usage"
+        ],
+        "summary": "Get Usage",
+        "description": "Report this account's current-period usage against its plan allotments.\n\n`runs_used` is the number of runs metered so far this calendar month;\n`active_jobs` is the number of currently-enabled jobs.",
+        "operationId": "get_usage",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[period]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "current",
+              "title": "Filter[Period]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HttpHeader": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Header name."
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 8192,
+            "title": "Value",
+            "description": "Header value. Stored encrypted at rest; returned as plaintext on `GET`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "HttpHeader",
+        "description": "A single HTTP header attached to an outbound request.\n\nHeader values are encrypted at the application layer before\npersistence regardless of header name; the wire representation here\nis always plaintext on both the request and the response, so a\n`GET \u2192 mutate \u2192 PUT` round-trip preserves header values without\nrequiring the customer to re-enter secrets."
+      },
+      "Job": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Human-readable name for the job."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Free-text description for the job."
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether the job is scheduling runs. Set to `false` to pause without deleting.",
+            "default": true
+          },
+          "type": {
+            "type": "string",
+            "const": "http",
+            "title": "Type",
+            "description": "Job type. Only `http` is supported today.",
+            "default": "http"
+          },
+          "schedule": {
+            "type": "string",
+            "title": "Schedule",
+            "description": "When the job runs. One of: an ISO-8601 datetime (a one-off run at that instant), a 5-field cron expression evaluated in **UTC** (recurring), or the literal `now` (run once, as soon as possible). A datetime or `now` job disables itself after it fires."
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/JobHttpConfiguration",
+            "description": "The HTTP request to perform, including method, url, headers, body, and timeout."
+          },
+          "concurrency_policy": {
+            "type": "string",
+            "const": "ALLOW",
+            "title": "Concurrency Policy",
+            "description": "How overlapping runs are handled. `ALLOW` (the only value today) permits them.",
+            "default": "ALLOW"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At",
+            "description": "The next scheduled fire time. `null` once a one-off job has fired.",
+            "readOnly": true
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "When the job was created.",
+            "readOnly": true
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "When the job was last modified.",
+            "readOnly": true
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At",
+            "description": "When the job was deleted. `null` for active jobs.",
+            "readOnly": true
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version",
+            "description": "Monotonic counter incremented on every update, starting at 1.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "schedule",
+          "configuration"
+        ],
+        "title": "Job",
+        "description": "A scheduled unit of work: an HTTP request run on a schedule.\n\nThe job is the definition; each time it fires the service records a run\ncapturing the request, response, timing, and outcome."
+      },
+      "JobCreateRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JobCreateResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "JobCreateRequest",
+        "description": "JSON:API request envelope for creating a job (caller-supplied `data.id`)."
+      },
+      "JobCreateResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Client-supplied resource id."
+          },
+          "type": {
+            "type": "string",
+            "const": "job",
+            "title": "Type",
+            "default": "job"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Job"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "JobCreateResource",
+        "description": "JSON:API resource envelope for creating a job (id required).",
+        "example": {
+          "attributes": {
+            "concurrency_policy": "ALLOW",
+            "configuration": {
+              "body": "{\"scope\":\"all\"}",
+              "headers": [
+                {
+                  "name": "Authorization",
+                  "value": "Bearer s3cr3t"
+                }
+              ],
+              "method": "POST",
+              "success_status": "2xx",
+              "timeout": 30,
+              "tls_verify": true,
+              "url": "https://api.example.com/cache/warm"
+            },
+            "description": "Warms the product cache every night at 02:00 UTC.",
+            "enabled": true,
+            "name": "Nightly cache warm",
+            "schedule": "0 2 * * *",
+            "type": "http"
+          },
+          "id": "nightly-cache-warm",
+          "type": "job"
+        }
+      },
+      "JobHttpConfiguration": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "title": "Method",
+            "description": "HTTP method used when delivering the request.",
+            "default": "POST"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "description": "Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`)."
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/HttpHeader"
+            },
+            "type": "array",
+            "title": "Headers",
+            "description": "HTTP headers attached to each request."
+          },
+          "success_status": {
+            "type": "string",
+            "maxLength": 3,
+            "title": "Success Status",
+            "description": "HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
+            "default": "2xx"
+          },
+          "tls_verify": {
+            "type": "boolean",
+            "title": "Tls Verify",
+            "description": "Whether to verify the destination server's TLS certificate against trusted certificate authorities. Defaults to `true` and should be left on for any production destination. Set to `false` only for development or short-lived testing against a destination that presents an untrusted certificate (e.g. a Splunk Cloud trial stack on `:8088` serving its default self-signed certificate). When `false`, deliveries proceed without certificate verification \u2014 they are vulnerable to man-in-the-middle attacks. For long-lived self-signed setups, pin the issuing CA via `ca_cert` instead of disabling verification entirely.",
+            "default": true
+          },
+          "ca_cert": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 65536
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ca Cert",
+            "description": "Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`."
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1048576
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body",
+            "description": "Request body sent on each run. When omitted, an empty body is sent (suitable for a connectivity ping). Sent verbatim \u2014 pair with a matching `Content-Type` header. Limit 1 MiB."
+          },
+          "timeout": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Timeout",
+            "description": "Per-run timeout in **seconds**. A run that does not complete within this many seconds fails with reason `TIMEOUT`. Bounded by your plan's maximum timeout.",
+            "default": 30
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "JobHttpConfiguration",
+        "description": "HTTP request a job performs when it fires.\n\nExtends the shared forwarder configuration with the two fields a scheduled\njob needs beyond a forwarder."
+      },
+      "JobListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/JobResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "JobListResponse",
+        "description": "JSON:API collection response for jobs."
+      },
+      "JobRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JobResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "JobRequest",
+        "description": "JSON:API request envelope for updating a job."
+      },
+      "JobResource": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "job"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Job"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attributes"
+        ],
+        "title": "JobResource",
+        "description": "JSON:API resource envelope for a job. The caller supplies `id` (the slug) on create.",
+        "example": {
+          "attributes": {
+            "concurrency_policy": "ALLOW",
+            "configuration": {
+              "body": "{\"scope\":\"all\"}",
+              "headers": [
+                {
+                  "name": "Authorization",
+                  "value": "Bearer s3cr3t"
+                }
+              ],
+              "method": "POST",
+              "success_status": "2xx",
+              "timeout": 30,
+              "tls_verify": true,
+              "url": "https://api.example.com/cache/warm"
+            },
+            "description": "Warms the product cache every night at 02:00 UTC.",
+            "enabled": true,
+            "name": "Nightly cache warm",
+            "schedule": "0 2 * * *",
+            "type": "http"
+          },
+          "id": "nightly-cache-warm",
+          "type": "job"
+        }
+      },
+      "JobResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JobResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "JobResponse",
+        "description": "JSON:API single-resource response for a job."
+      },
+      "ListMeta": {
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pagination"
+        ],
+        "title": "ListMeta",
+        "description": "Top-level ``meta`` block included on every JSON:API list response."
+      },
+      "PaginationMeta": {
+        "properties": {
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "description": "1-based page number returned."
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "description": "Number of items per page."
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total",
+            "description": "Total number of matching items across all pages. Present only when the request included `meta[total]=true`."
+          },
+          "total_pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Pages",
+            "description": "Total number of pages at the requested page size. Present only when the request included `meta[total]=true`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "page",
+          "size"
+        ],
+        "title": "PaginationMeta",
+        "description": "Pagination block returned inside ``meta`` on every list response.\n\n``page`` and ``size`` are always present and echo the parameters that\nserved the response (their defaults when the client omitted them).\n``total`` and ``total_pages`` are present only when the request included\n``meta[total]=true``."
+      },
+      "Run": {
+        "properties": {
+          "job": {
+            "type": "string",
+            "title": "Job",
+            "description": "The slug of the job this run belongs to."
+          },
+          "job_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Version",
+            "description": "The job's version at the time the run executed."
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "SCHEDULE",
+              "MANUAL",
+              "RERUN"
+            ],
+            "title": "Trigger",
+            "description": "Why the run exists: `SCHEDULE`, `MANUAL` (Run now), or `RERUN`."
+          },
+          "rerun_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerun Of",
+            "description": "The source run's id; set only when `trigger` is `RERUN`."
+          },
+          "scheduled_for": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled For",
+            "description": "The intended fire time for a scheduled run; `null` for manual / rerun runs."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED",
+              "CANCELED"
+            ],
+            "title": "Status",
+            "description": "Lifecycle state of the run."
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At",
+            "description": "When execution started."
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At",
+            "description": "When execution finished."
+          },
+          "pending_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Duration Ms",
+            "description": "Milliseconds the run waited as `PENDING` before starting."
+          },
+          "run_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Duration Ms",
+            "description": "Milliseconds the run spent executing."
+          },
+          "total_duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Duration Ms",
+            "description": "Milliseconds from enqueue to finish."
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "TIMEOUT",
+                  "CONNECTION_ERROR",
+                  "NON_SUCCESS_STATUS",
+                  "SSRF_BLOCKED",
+                  "QUOTA_EXCEEDED",
+                  "WORKER_LOST"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason",
+            "description": "Why a `FAILED` run failed; `null` otherwise."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Free-text failure detail, if any."
+          },
+          "request": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request",
+            "description": "Snapshot of the request that was sent (header values redacted). Forensics only."
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "Outcome of the call. For `http`: `status`, `headers`, `body` (capped at 64 KiB), `body_truncated`, and the original `body_bytes`."
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "When the run was enqueued (became `PENDING`)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "trigger",
+          "status"
+        ],
+        "title": "Run",
+        "description": "One occurrence of a job executing."
+      },
+      "RunListLinks": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next",
+            "description": "URL of the next page, or `null`."
+          }
+        },
+        "type": "object",
+        "title": "RunListLinks"
+      },
+      "RunListMeta": {
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size",
+            "description": "Number of runs returned per page."
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_size"
+        ],
+        "title": "RunListMeta",
+        "description": "Cursor-pagination meta for the runs list (ADR-014 high-cardinality exception)."
+      },
+      "RunListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RunResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/RunListMeta"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunListLinks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "RunListResponse",
+        "description": "JSON:API collection response for runs (cursor paginated)."
+      },
+      "RunResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "run"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Run"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "RunResource",
+        "description": "JSON:API resource envelope for a run (server-assigned UUID id).",
+        "example": {
+          "attributes": {
+            "created_at": "2026-06-05T02:00:00Z",
+            "finished_at": "2026-06-05T02:00:00.430Z",
+            "job": "nightly-cache-warm",
+            "job_version": 3,
+            "pending_duration_ms": 120,
+            "request": {
+              "body": "{\"scope\":\"all\"}",
+              "headers": [
+                {
+                  "name": "Authorization",
+                  "value": "<redacted>"
+                }
+              ],
+              "method": "POST",
+              "url": "https://api.example.com/cache/warm"
+            },
+            "result": {
+              "body": "{\"ok\":true}",
+              "body_bytes": 11,
+              "body_truncated": false,
+              "headers": {
+                "content-type": "application/json"
+              },
+              "status": 200
+            },
+            "run_duration_ms": 310,
+            "scheduled_for": "2026-06-05T02:00:00Z",
+            "started_at": "2026-06-05T02:00:00.120Z",
+            "status": "SUCCEEDED",
+            "total_duration_ms": 430,
+            "trigger": "SCHEDULE"
+          },
+          "id": "8f2b1c4a-0000-4a1b-9c3d-1e2f3a4b5c6d",
+          "type": "run"
+        }
+      },
+      "RunResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RunResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "RunResponse",
+        "description": "JSON:API single-resource response for a run."
+      },
+      "Usage": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "The usage period this report covers, as `YYYY-MM` (UTC)."
+          },
+          "runs_used": {
+            "type": "integer",
+            "title": "Runs Used",
+            "description": "Runs metered so far this period."
+          },
+          "runs_included": {
+            "type": "integer",
+            "title": "Runs Included",
+            "description": "Runs included in the plan this period (`-1` means unlimited)."
+          },
+          "active_jobs": {
+            "type": "integer",
+            "title": "Active Jobs",
+            "description": "Number of currently-enabled jobs."
+          },
+          "active_jobs_limit": {
+            "type": "integer",
+            "title": "Active Jobs Limit",
+            "description": "Maximum enabled jobs the plan allows (`-1` means unlimited)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "period",
+          "runs_used",
+          "runs_included",
+          "active_jobs",
+          "active_jobs_limit"
+        ],
+        "title": "Usage",
+        "description": "Current-period usage against the account's plan allotments."
+      },
+      "UsageResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "default": "current"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "usage"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/Usage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attributes"
+        ],
+        "title": "UsageResource",
+        "description": "JSON:API resource envelope for the usage report.",
+        "example": {
+          "attributes": {
+            "active_jobs": 2,
+            "active_jobs_limit": 10,
+            "period": "2026-06",
+            "runs_included": 3000,
+            "runs_used": 412
+          },
+          "id": "current",
+          "type": "usage"
+        }
+      },
+      "UsageResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/UsageResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "UsageResponse",
+        "description": "JSON:API single-resource response for usage."
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Jobs"
+    },
+    {
+      "name": "Runs"
+    },
+    {
+      "name": "Usage"
+    }
+  ]
+}
