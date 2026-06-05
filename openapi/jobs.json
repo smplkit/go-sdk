@@ -12,7 +12,7 @@
           "Jobs"
         ],
         "summary": "Create Job",
-        "description": "Create a job for this account.\n\nThe caller supplies the job's id (a slug) as `data.id`. Slugs are unique\nwithin an account and immutable. An enabled job begins scheduling\nimmediately.",
+        "description": "Create a job for this account.\n\nThe caller supplies the job's id as `data.id`. Ids are unique\nwithin an account and immutable. An enabled job begins scheduling\nimmediately.",
         "operationId": "create_job",
         "security": [
           {
@@ -128,7 +128,7 @@
           "Jobs"
         ],
         "summary": "Get Job",
-        "description": "Retrieve a single job by its id (slug).",
+        "description": "Retrieve a single job by its id.",
         "operationId": "get_job",
         "security": [
           {
@@ -210,7 +210,7 @@
           "Jobs"
         ],
         "summary": "Delete Job",
-        "description": "Delete a job. Its run history is retained; the slug may be reused later.",
+        "description": "Delete a job. Its run history is retained; the id may be reused later.",
         "operationId": "delete_job",
         "security": [
           {
@@ -279,7 +279,7 @@
           "Runs"
         ],
         "summary": "List Runs",
-        "description": "List runs for this account, newest first (cursor paginated).\n\nUse `filter[job]={slug}` for a single job's run history.",
+        "description": "List runs for this account, newest first (cursor paginated).\n\nUse `filter[job]={id}` for a single job's run history.",
         "operationId": "list_runs",
         "security": [
           {
@@ -874,7 +874,7 @@
           "attributes"
         ],
         "title": "JobResource",
-        "description": "JSON:API resource envelope for a job. The caller supplies `id` (the slug) on create.",
+        "description": "JSON:API resource envelope for a job. The caller supplies `id` on create.",
         "example": {
           "attributes": {
             "concurrency_policy": "ALLOW",
@@ -978,7 +978,7 @@
           "job": {
             "type": "string",
             "title": "Job",
-            "description": "The slug of the job this run belongs to."
+            "description": "The id of the job this run belongs to."
           },
           "job_version": {
             "anyOf": [
