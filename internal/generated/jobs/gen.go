@@ -303,11 +303,11 @@ type JobListResponse struct {
 
 // JobRequest JSON:API request envelope for updating a job.
 type JobRequest struct {
-	// Data JSON:API resource envelope for a job. The caller supplies `id` (the slug) on create.
+	// Data JSON:API resource envelope for a job. The caller supplies `id` on create.
 	Data JobResource `json:"data"`
 }
 
-// JobResource JSON:API resource envelope for a job. The caller supplies `id` (the slug) on create.
+// JobResource JSON:API resource envelope for a job. The caller supplies `id` on create.
 type JobResource struct {
 	// Attributes A scheduled unit of work: an HTTP request run on a schedule.
 	//
@@ -320,7 +320,7 @@ type JobResource struct {
 
 // JobResponse JSON:API single-resource response for a job.
 type JobResponse struct {
-	// Data JSON:API resource envelope for a job. The caller supplies `id` (the slug) on create.
+	// Data JSON:API resource envelope for a job. The caller supplies `id` on create.
 	Data JobResource `json:"data"`
 }
 
@@ -369,7 +369,7 @@ type Run struct {
 	// FinishedAt When execution finished.
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 
-	// Job The slug of the job this run belongs to.
+	// Job The id of the job this run belongs to.
 	Job string `json:"job"`
 
 	// JobVersion The job's version at the time the run executed.
