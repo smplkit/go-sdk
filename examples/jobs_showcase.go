@@ -10,7 +10,7 @@
 //
 // Usage:
 //
-//	make jobs_management_showcase
+//	make jobs_showcase
 package main
 
 import (
