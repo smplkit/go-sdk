@@ -13,6 +13,7 @@ import (
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
 	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
+	genjobs "github.com/smplkit/go-sdk/v3/internal/generated/jobs"
 	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
 )
 
@@ -104,6 +105,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	appURL := serviceURL(optCfg, "app", rc)
 	logURL := serviceURL(optCfg, "logging", rc)
 	auditURL := serviceURL(optCfg, "audit", rc)
+	jobsURL := serviceURL(optCfg, "jobs", rc)
 
 	// Capture extra headers once; the closures below close over this value.
 	extraHeaders := rc.extraHeaders
@@ -201,6 +203,25 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	)
 	genAuditClient := &genaudit.ClientWithResponses{ClientInterface: genAuditRaw}
 
+	// Build the generated jobs client.
+	jobsExtraEditor := genjobs.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	})
+	jobsHeaderEditor := genjobs.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genJobsRaw, _ := genjobs.NewClient(jobsURL,
+		genjobs.WithHTTPClient(httpClient),
+		jobsExtraEditor,
+		jobsHeaderEditor,
+	)
+	genJobsClient := &genjobs.ClientWithResponses{ClientInterface: genJobsRaw}
+
 	ctxBuf := newContextRegistrationBuffer()
 
 	c := &Client{
@@ -235,7 +256,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	// sub-clients (rule 1 — no skeleton inversion). The runtime
 	// sub-clients then attach themselves to the same management
 	// instances so .Management() returns the same object.
-	c.management = assembleManagementClient(false, optCfg, rc, httpClient, genAppClient, genConfigClient, genFlagsClient, genLoggingClient, genAuditClient)
+	c.management = assembleManagementClient(false, optCfg, rc, httpClient, genAppClient, genConfigClient, genFlagsClient, genLoggingClient, genAuditClient, genJobsClient)
 	c.management.client = c
 	c.management.contextBuf = ctxBuf // share the runtime's buffer so context registration coalesces
 	c.config.management = c.management.configMgmt

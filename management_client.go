@@ -20,6 +20,11 @@ func (a *AuditManagement) Forwarders() *AuditForwarders {
 	return a.forwarders
 }
 
+// Jobs returns the Smpl Jobs management sub-client (mgmt.Jobs()).
+func (m *ManagementClient) Jobs() *JobsManagement {
+	return m.jobsMgmt
+}
+
 // ManagementClient is the management-plane sub-client. Obtain one via
 // Client.Manage() (or via NewManagementClient for a standalone management
 // client with zero construction side effects — no service registration,
@@ -37,6 +42,7 @@ func (a *AuditManagement) Forwarders() *AuditForwarders {
 //	mgmt.Loggers()          // logger CRUD (split from the old logging mgmt)
 //	mgmt.LogGroups()        // log-group CRUD (split from the old logging mgmt)
 //	mgmt.Audit()            // audit forwarder CRUD
+//	mgmt.Jobs()             // scheduled-job CRUD + runs
 type ManagementClient struct {
 	client     *Client
 	appClient  genapp.ClientInterface
@@ -57,6 +63,7 @@ type ManagementClient struct {
 	loggersMgmt   *LoggersManagement
 	logGroupsMgmt *LogGroupsManagement
 	auditMgmt     *AuditManagement
+	jobsMgmt      *JobsManagement
 }
 
 // Environments returns the sub-client for environment CRUD operations.

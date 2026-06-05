@@ -10,6 +10,7 @@ import (
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
 	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
+	genjobs "github.com/smplkit/go-sdk/v3/internal/generated/jobs"
 	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
 )
 
@@ -59,7 +60,8 @@ func NewManagementClient(cfg ManagementConfig, opts ...ClientOption) (*Managemen
 
 	httpClient, genApp, genCfg, genFlags, genLogging := buildGenClients(optCfg, rc)
 	genAudit := buildAuditGenClient(optCfg, rc, httpClient)
-	return assembleManagementClient(true, optCfg, rc, httpClient, genApp, genCfg, genFlags, genLogging, genAudit), nil
+	genJobs := buildJobsGenClient(optCfg, rc, httpClient)
+	return assembleManagementClient(true, optCfg, rc, httpClient, genApp, genCfg, genFlags, genLogging, genAudit, genJobs), nil
 }
 
 // buildGenClients constructs the four generated API clients and wires
@@ -126,6 +128,21 @@ func buildAuditGenClient(optCfg clientConfig, rc *resolvedConfig, httpClient *ht
 	return &genaudit.ClientWithResponses{ClientInterface: raw}
 }
 
+// buildJobsGenClient constructs the generated jobs API client for the
+// management plane. Like the audit path, no extra environment/service
+// headers are injected — management callers authenticate via the API key
+// only (set by authTransport on httpClient).
+func buildJobsGenClient(optCfg clientConfig, rc *resolvedConfig, httpClient *http.Client) *genjobs.ClientWithResponses {
+	jobsURL := serviceURL(optCfg, "jobs", rc)
+	headerEditor := genjobs.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	raw, _ := genjobs.NewClient(jobsURL, genjobs.WithHTTPClient(httpClient), headerEditor)
+	return &genjobs.ClientWithResponses{ClientInterface: raw}
+}
+
 // assembleManagementClient wires the management surfaces directly against
 // the generated API clients — no runtime skeleton.
 func assembleManagementClient(
@@ -138,6 +155,7 @@ func assembleManagementClient(
 	genFlags genflags.ClientInterface,
 	genLogging genlogging.ClientInterface,
 	genAudit *genaudit.ClientWithResponses,
+	genJobs *genjobs.ClientWithResponses,
 ) *ManagementClient {
 	mgmt := &ManagementClient{
 		appClient:  genApp,
@@ -157,6 +175,10 @@ func assembleManagementClient(
 	mgmt.auditMgmt = &AuditManagement{
 		forwarders: &AuditForwarders{gen: genAudit},
 	}
+	mgmt.jobsMgmt = &JobsManagement{
+		gen:  genJobs,
+		runs: &RunsClient{gen: genJobs},
+	}
 
 	return mgmt
 }
@@ -174,6 +196,7 @@ func assembleManagementClient(
 //	client.Manage().Flags()
 //	client.Manage().Loggers()
 //	client.Manage().LogGroups()
+//	client.Manage().Jobs()
 //
 // The same *ManagementClient is shared by the runtime sub-clients —
 // client.Config().Management() returns the same instance as
