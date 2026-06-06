@@ -50,7 +50,13 @@ func main() {
 
 	forwarderName := "showcase-" + randomHexMgmt(3)
 
-	// create a new forwarder
+	// create a new forwarder, enabled in the production environment.
+	//
+	// Enablement is per-environment (ADR-055): a forwarder delivers in an
+	// environment only when that environment has an entry in the
+	// Environments map with Enabled=true. The base `enabled` field is
+	// read-only and always false. Every referenced environment must exist
+	// and be managed for the account.
 	forwarder := manage.Audit().Forwarders().New(
 		forwarderName,
 		forwarderName,
@@ -60,6 +66,9 @@ func main() {
 			URL:     "https://httpbin.org/post",
 			Headers: []smplkit.HttpHeader{{Name: "X-Showcase", Value: "ok"}},
 		},
+		smplkit.WithForwarderEnvironments(map[string]smplkit.ForwarderEnvironment{
+			"production": {Enabled: true},
+		}),
 		smplkit.WithForwarderFilter(invoiceFilter),
 		smplkit.WithForwarderTransform(smplkit.ForwarderTransformTypeJSONata, siemTransform),
 	)
@@ -84,18 +93,24 @@ func main() {
 	// get a forwarder
 	fetched, err := manage.Audit().Forwarders().Get(ctx, forwarder.ID)
 	fatalIfErr("audit.Forwarders.Get", err)
-	if fetched.ID != forwarder.ID || !fetched.Enabled {
+	prod, prodEnabled := fetched.Environments["production"]
+	if fetched.ID != forwarder.ID || !prodEnabled || !prod.Enabled {
 		fatalIfErr("assertion", fmt.Errorf("fetched forwarder fields mismatch: %+v", fetched))
 	}
-	fmt.Printf("Fetched forwarder: %s\n", fetched.Name)
+	fmt.Printf("Fetched forwarder: %s (production enabled=%t)\n", fetched.Name, prod.Enabled)
 
-	// update a forwarder
-	fetched.Enabled = false
+	// update a forwarder — disable delivery in production.
+	//
+	// Header values are returned redacted on reads, so re-supply the real
+	// values before saving; this showcase clears the override (none set
+	// here) and toggles the production entry off.
+	fetched.Configuration.Headers = []smplkit.HttpHeader{{Name: "X-Showcase", Value: "ok"}}
+	fetched.Environments["production"] = smplkit.ForwarderEnvironment{Enabled: false}
 	fatalIfErr("audit.Forwarders.Save", fetched.Save(ctx))
-	if fetched.Enabled {
+	if fetched.Environments["production"].Enabled {
 		fatalIfErr("assertion", fmt.Errorf("updated forwarder fields mismatch: %+v", fetched))
 	}
-	fmt.Printf("Disabled forwarder: %s (enabled=%t)\n", fetched.Name, fetched.Enabled)
+	fmt.Printf("Disabled forwarder in production: %s\n", fetched.Name)
 
 	// delete a forwarder
 	fatalIfErr("audit.Forwarders.Delete", fetched.Delete(ctx))

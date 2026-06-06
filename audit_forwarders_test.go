@@ -143,10 +143,9 @@ func TestAuditForwarders_List_PaginatesWithOffset(t *testing.T) {
 	})
 	defer cleanup()
 
-	enabled := true
 	first, err := fwds.List(context.Background(), ListForwardersInput{
-		ForwarderType: ForwarderTypeDatadog, Enabled: &enabled,
-		PageNumber: 1, PageSize: 1, MetaTotal: true,
+		ForwarderType: ForwarderTypeDatadog,
+		PageNumber:    1, PageSize: 1, MetaTotal: true,
 	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -673,13 +672,17 @@ func TestBuildAuditGenClient_HeaderEditorFires(t *testing.T) {
 
 func TestAuditForwarders_New_DefaultsAndOptions(t *testing.T) {
 	fwds := &AuditForwarders{}
+	prodCfg := HttpConfiguration{URL: "https://prod.example.com/in"}
 	fwd := fwds.New(
 		"my-forwarder",
 		"My Forwarder",
 		ForwarderTypeDatadog,
 		HttpConfiguration{URL: "https://x"},
 		WithForwarderDescription("a description"),
-		WithForwarderEnabled(false),
+		WithForwarderEnvironments(map[string]ForwarderEnvironment{
+			"production": {Enabled: true, Configuration: &prodCfg},
+			"staging":    {Enabled: false},
+		}),
 		WithForwarderFilter(map[string]interface{}{"==": []any{"x", "x"}}),
 		WithForwarderTransform(ForwarderTransformTypeJSONata, "$"),
 	)
@@ -698,8 +701,15 @@ func TestAuditForwarders_New_DefaultsAndOptions(t *testing.T) {
 	if fwd.Description == nil || *fwd.Description != "a description" {
 		t.Errorf("expected Description set, got %v", fwd.Description)
 	}
-	if fwd.Enabled {
-		t.Errorf("expected Enabled=false (override), got true")
+	prod, ok := fwd.Environments["production"]
+	if !ok || !prod.Enabled {
+		t.Errorf("expected production enabled=true, got %+v", fwd.Environments["production"])
+	}
+	if prod.Configuration == nil || prod.Configuration.URL != "https://prod.example.com/in" {
+		t.Errorf("expected production config override, got %+v", prod.Configuration)
+	}
+	if stg, ok := fwd.Environments["staging"]; !ok || stg.Enabled {
+		t.Errorf("expected staging enabled=false, got %+v", fwd.Environments["staging"])
 	}
 	if fwd.Filter == nil {
 		t.Errorf("expected Filter set, got nil")
@@ -715,11 +725,17 @@ func TestAuditForwarders_New_DefaultsAndOptions(t *testing.T) {
 	}
 }
 
-func TestAuditForwarders_New_EnabledDefaultsTrue(t *testing.T) {
+func TestAuditForwarders_New_EnvironmentsDefaultEmpty(t *testing.T) {
 	fwds := &AuditForwarders{}
 	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
-	if !fwd.Enabled {
-		t.Errorf("expected Enabled=true by default")
+	// Base enablement is server-pinned false (ADR-055) and the wrapper
+	// does not synthesize one; a forwarder created without environments
+	// delivers nowhere until enabled per environment.
+	if fwd.Enabled {
+		t.Errorf("expected Enabled=false by default (read-only, server-pinned)")
+	}
+	if len(fwd.Environments) != 0 {
+		t.Errorf("expected empty Environments by default, got %+v", fwd.Environments)
 	}
 	if fwd.Description != nil {
 		t.Errorf("expected Description=nil by default")
@@ -958,6 +974,112 @@ func TestForwarderResourceFromForwarder_AllBranches(t *testing.T) {
 				t.Errorf("name not propagated")
 			}
 		})
+	}
+}
+
+// Save sends the per-environment override map on the wire, with the base
+// `enabled` omitted (server-pinned false per ADR-055). A per-environment
+// configuration override is serialized as a full HttpConfiguration.
+func TestForwarder_Save_SendsEnvironments(t *testing.T) {
+	var capturedBody []byte
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		writeForwarderResource(w, http.StatusCreated, "x", "")
+	})
+	defer cleanup()
+	prodCfg := HttpConfiguration{
+		Method:  HttpMethodPost,
+		URL:     "https://prod.example.com/in",
+		Headers: []HttpHeader{{Name: "DD-API-KEY", Value: "secret"}},
+	}
+	fwd := fwds.New("x", "x", ForwarderTypeDatadog, HttpConfiguration{URL: "https://base"},
+		WithForwarderEnvironments(map[string]ForwarderEnvironment{
+			"production": {Enabled: true, Configuration: &prodCfg},
+			"staging":    {Enabled: false},
+		}),
+	)
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	body := string(capturedBody)
+	if !strings.Contains(body, `"environments"`) {
+		t.Fatalf("expected environments in request body, got: %s", body)
+	}
+	if !strings.Contains(body, `"production"`) || !strings.Contains(body, `"enabled":true`) {
+		t.Fatalf("expected production enabled in body, got: %s", body)
+	}
+	if !strings.Contains(body, `"https://prod.example.com/in"`) {
+		t.Fatalf("expected per-env configuration override on wire, got: %s", body)
+	}
+	// The base `enabled` is server-pinned false (ADR-055) and must never
+	// be sent on the wire — enablement travels only via `environments`.
+	var parsed struct {
+		Data struct {
+			Attributes map[string]json.RawMessage `json:"attributes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(capturedBody, &parsed); err != nil {
+		t.Fatalf("parse request body: %v", err)
+	}
+	if _, present := parsed.Data.Attributes["enabled"]; present {
+		t.Fatalf("did not expect base `enabled` on wire, got: %s", body)
+	}
+}
+
+// Get reads the per-environment override map back into the wrapper,
+// including a per-environment configuration override.
+func TestForwarder_Get_ReadsEnvironments(t *testing.T) {
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		body := map[string]any{
+			"data": map[string]any{
+				"id": fwdIDStr, "type": "forwarder",
+				"attributes": map[string]any{
+					"name": "n", "forwarder_type": "datadog", "enabled": false,
+					"configuration": map[string]any{"url": "https://base", "headers": []any{}},
+					"environments": map[string]any{
+						"production": map[string]any{
+							"enabled": true,
+							"configuration": map[string]any{
+								"url":     "https://prod.example.com/in",
+								"method":  "POST",
+								"headers": []map[string]string{{"name": "DD-API-KEY", "value": "<redacted>"}},
+							},
+						},
+						"staging": map[string]any{"enabled": false},
+					},
+					"created_at": "2026-05-07T12:00:00+00:00",
+					"updated_at": "2026-05-07T12:00:00+00:00",
+					"version":    1,
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(body)
+	})
+	defer cleanup()
+	fwd, err := fwds.Get(context.Background(), fwdIDStr)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if fwd.Enabled {
+		t.Errorf("expected base Enabled=false (read-only), got true")
+	}
+	if len(fwd.Environments) != 2 {
+		t.Fatalf("expected 2 environments, got %d (%+v)", len(fwd.Environments), fwd.Environments)
+	}
+	prod, ok := fwd.Environments["production"]
+	if !ok || !prod.Enabled {
+		t.Fatalf("expected production enabled=true, got %+v", fwd.Environments["production"])
+	}
+	if prod.Configuration == nil || prod.Configuration.URL != "https://prod.example.com/in" {
+		t.Fatalf("expected production config override read back, got %+v", prod.Configuration)
+	}
+	if prod.Configuration.Headers[0].Value != "<redacted>" {
+		t.Fatalf("expected redacted per-env header, got %+v", prod.Configuration.Headers)
+	}
+	if stg := fwd.Environments["staging"]; stg.Enabled || stg.Configuration != nil {
+		t.Fatalf("expected staging enabled=false, no config, got %+v", stg)
 	}
 }
 

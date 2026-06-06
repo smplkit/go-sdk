@@ -70,12 +70,20 @@ func main() {
 	fmt.Printf("Listed %d event(s) for invoice %s\n", len(page.Events), someResourceID)
 
 	// fetch an event
+	//
+	// Audit events are environment-scoped (ADR-055): the runtime SDK
+	// stamps the configured environment ("production" above) on every
+	// recording and read call, and the audit service surfaces it on the
+	// read-only Environment field.
 	event, err := client.Audit().Events().Get(ctx, recordedEventID)
 	fatalIfErr("audit.Events.Get", err)
 	if event.ID != recordedEventID || event.ResourceID != someResourceID || event.EventType != "invoice.created" {
 		fatalIfErr("assertion", fmt.Errorf("event fields mismatch: %+v", event))
 	}
-	fmt.Printf("Fetched event %s: %s\n", event.ID, event.EventType)
+	if event.Environment != "production" {
+		fatalIfErr("assertion", fmt.Errorf("expected event.Environment=production, got %q", event.Environment))
+	}
+	fmt.Printf("Fetched event %s: %s (environment=%s)\n", event.ID, event.EventType, event.Environment)
 
 	// list resource types observed
 	resourceTypes, err := client.Audit().ResourceTypes().List(ctx, smplkit.ListResourceTypesInput{})

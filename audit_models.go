@@ -107,6 +107,12 @@ type AuditEvent struct {
 	// DoNotForward, when true, skips this event from SIEM forwarder
 	// delivery regardless of any matching forwarder filter.
 	DoNotForward bool
+	// Environment is the environment the event was recorded in. Read-only
+	// and always present on reads — the audit service resolves it when the
+	// event is recorded (from a single-environment credential, or from the
+	// runtime SDK's configured environment, which the SDK sends on every
+	// recording call). Never set on the recording request body.
+	Environment string
 }
 
 // CreateEventInput is the input for AuditEvents.Record.
@@ -318,6 +324,24 @@ type HttpConfiguration struct {
 	CaCert *string
 }
 
+// ForwarderEnvironment is a per-environment override for a forwarder's
+// enablement and optional configuration. A forwarder delivers events in
+// a given environment only when that environment has an entry in
+// Forwarder.Environments with Enabled=true; an environment with no entry
+// (or Enabled=false) receives no deliveries.
+type ForwarderEnvironment struct {
+	// Enabled controls whether the forwarder delivers events in this
+	// environment. Defaults to false.
+	Enabled bool
+	// Configuration is an optional per-environment destination
+	// configuration that fully replaces the forwarder's base
+	// Configuration for this environment. Nil (the default) inherits the
+	// base configuration. As with the base configuration, header values
+	// are plaintext on writes and returned redacted on reads — re-supply
+	// real values before Save.
+	Configuration *HttpConfiguration
+}
+
 // Forwarder is a SIEM streaming destination configured on the
 // customer's account. Active-record style: mutate fields directly and
 // call Save(ctx) to persist, or Delete(ctx) to remove. Headers in
@@ -336,9 +360,20 @@ type Forwarder struct {
 	Description *string
 	// ForwarderType is the destination type — see ForwarderType.
 	ForwarderType ForwarderType
-	// Enabled controls delivery. When false the audit service skips
-	// this forwarder but still records filtered_out deliveries.
+	// Enabled is read-only and always false. The base enablement is
+	// pinned off (ADR-055); whether a forwarder actually delivers is
+	// decided per environment via Environments. Mutating this field has
+	// no effect on the server — the wrapper does not send it. It is kept
+	// so reads round-trip the server value.
 	Enabled bool
+	// Environments holds per-environment overrides keyed by environment
+	// key (e.g. "production", "staging"). A forwarder delivers in an
+	// environment only when Environments[env].Enabled is true. Each entry
+	// may carry an optional HttpConfiguration override; leave it nil to
+	// inherit the base Configuration. Every referenced environment must
+	// exist and be managed for the account. Nil/empty means the forwarder
+	// delivers nowhere until enabled per environment.
+	Environments map[string]ForwarderEnvironment
 	// Filter is an optional JSON Logic expression evaluated per event.
 	// When set, events that don't match are recorded as filtered_out
 	// deliveries instead of being POSTed to the destination.
@@ -374,8 +409,6 @@ type ListForwardersInput struct {
 	// ForwarderType filters to a single destination type. Zero-valued
 	// returns every type.
 	ForwarderType ForwarderType
-	// Enabled filters by enabled/disabled state. Nil returns both.
-	Enabled *bool
 	// PageNumber is the 1-based page index. Zero defers to the server
 	// default (page 1).
 	PageNumber int

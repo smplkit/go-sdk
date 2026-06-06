@@ -12,7 +12,7 @@
           "Events"
         ],
         "summary": "Record Event",
-        "description": "Record an audit event for this account.\n\nReturns `201 Created` on first write, `200 OK` if the request was a\nduplicate (matched by `Idempotency-Key` or a key derived from the\nevent's content).\n\n`resource_type` values beginning with `smpl.` are reserved for events\nthat smplkit emits about its own resources and cannot be used here.",
+        "description": "Record an audit event for this account.\n\nThe event is stamped with the environment it occurred in: a\nsingle-environment credential implies it; a multi-environment or\nunrestricted credential must send the `X-Smplkit-Environment` header.\nThe resolved environment must exist and be managed for the account.\n\nReturns `201 Created` on first write, `200 OK` if the request was a\nduplicate (matched by `Idempotency-Key` or a key derived from the\nevent's content). The same content recorded in two environments\nproduces two distinct events.\n\n`resource_type` values beginning with `smpl.` are reserved for events\nthat smplkit emits about its own resources and cannot be used here.",
         "operationId": "record_event",
         "security": [
           {
@@ -345,7 +345,7 @@
           "Events"
         ],
         "summary": "Get Event",
-        "description": "Retrieve a single audit event by id.",
+        "description": "Retrieve a single audit event by id.\n\nAuthorized against the caller's permitted environment set: the event\nis returned only if its environment is one the caller may access,\notherwise `404` (the same response as a non-existent id, so existence\nnever leaks across environments). The `X-Smplkit-Environment` header is\nignored here \u2014 a single-object lookup names the object by id, it does\nnot resolve an ambient environment.",
         "operationId": "get_event",
         "security": [
           {
@@ -384,7 +384,7 @@
           "Events"
         ],
         "summary": "Search Events",
-        "description": "Search audit events with column filters and an optional JSON Logic expression.\n\nWithout a JSON Logic `filter`: behaves like `GET /api/v1/events`\nwith the same column filters.\n\nWith a JSON Logic `filter`: the search is silently capped to the\nlast 30 days by `occurred_at` (intersected with any explicit\n`filter[occurred_at]` the caller supplied), the column filters\nnarrow the candidate set in SQL, and the JSON Logic expression\nruns in memory against each candidate row using the same\n`json-logic-qubit` evaluator the forwarder pipeline uses. Up to\n50,000 rows are scanned per request; the response's `meta.scan`\nblock reports the scan stats so a selective filter doesn't look\nlike \"0 matches\" when the truth is \"ceiling reached.\"",
+        "description": "Search audit events with column filters and an optional JSON Logic expression.\n\nScoped to the resolved environment (a single-environment credential\nimplies it; otherwise send the `X-Smplkit-Environment` header).\n\nWithout a JSON Logic `filter`: behaves like `GET /api/v1/events`\nwith the same column filters.\n\nWith a JSON Logic `filter`: the search is silently capped to the\nlast 30 days by `occurred_at` (intersected with any explicit\n`filter[occurred_at]` the caller supplied), the column filters\nnarrow the candidate set in SQL, and the JSON Logic expression\nruns in memory against each candidate row using the same\n`json-logic-qubit` evaluator the forwarder pipeline uses. Up to\n50,000 rows are scanned per request; the response's `meta.scan`\nblock reports the scan stats so a selective filter doesn't look\nlike \"0 matches\" when the truth is \"ceiling reached.\"",
         "operationId": "search_events",
         "requestBody": {
           "content": {
@@ -562,7 +562,7 @@
           "Forwarders"
         ],
         "summary": "Create Forwarder",
-        "description": "Create a forwarder for this account.\n\nThe caller supplies the forwarder's key as `data.id`. Keys are\nunique within an account and immutable for the lifetime of the\nforwarder.",
+        "description": "Create a forwarder for this account.\n\nThe caller supplies the forwarder's key as `data.id`. Keys are\nunique within an account and immutable for the lifetime of the\nforwarder.\n\nEnablement is per-environment: a forwarder is enabled in an\nenvironment only via `environments[<env>].enabled`; the base `enabled`\nis always false. Every environment referenced in `environments` must\nexist and be managed for the account.",
         "operationId": "create_forwarder",
         "security": [
           {
@@ -597,7 +597,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarders",
-        "description": "List forwarders for this account.\n\nDefault sort is `-created_at` (newest first).",
+        "description": "List forwarders for this account.\n\nDefault sort is `-created_at` (newest first). Each forwarder's\n`environments` override map is scoped to the caller's environment\ngroups.",
         "operationId": "list_forwarders",
         "security": [
           {
@@ -619,22 +619,6 @@
                 }
               ],
               "title": "Filter[Forwarder Type]"
-            }
-          },
-          {
-            "name": "filter[enabled]",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Filter[Enabled]"
             }
           },
           {
@@ -712,7 +696,7 @@
           "Forwarders"
         ],
         "summary": "Get Forwarder",
-        "description": "Retrieve a single forwarder by id.\n\nHeader values are returned in plaintext so the resource can be\nround-tripped with `GET`, mutate, `PUT` without re-entering secrets.",
+        "description": "Retrieve a single forwarder by id.\n\nHeader values are returned in plaintext so the resource can be\nround-tripped with `GET`, mutate, `PUT` without re-entering secrets.\nThe `environments` override map is scoped to the caller's environment\ngroups.",
         "operationId": "get_forwarder",
         "security": [
           {
@@ -748,7 +732,7 @@
           "Forwarders"
         ],
         "summary": "Update Forwarder",
-        "description": "Replace an existing forwarder. Every writable field is overwritten.",
+        "description": "Replace an existing forwarder. Every writable field is overwritten.\n\nThe `environments` override map is a full replace for the environments\nyou can manage; overrides for environments outside your access (which\nwere hidden from your read) are preserved. Every environment referenced\nin `environments` must exist and be managed.",
         "operationId": "update_forwarder",
         "security": [
           {
@@ -825,7 +809,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarder Deliveries",
-        "description": "List delivery log entries for a forwarder.\n\nDefault sort is `-created_at` (newest first). Filter by `status`\n(`SUCCEEDED` or `FAILED`, case-insensitive), by `event`, or by a\n`created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
+        "description": "List delivery log entries for a forwarder.\n\nScoped to the resolved environment \u2014 only that environment's deliveries\nfor the forwarder are shown. Default sort is `-created_at` (newest\nfirst). Filter by `status` (`SUCCEEDED` or `FAILED`, case-insensitive),\nby `event`, or by a `created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
         "operationId": "list_forwarder_deliveries",
         "security": [
           {
@@ -960,7 +944,7 @@
           "Forwarders"
         ],
         "summary": "Retry Forwarder Delivery",
-        "description": "Retry a single failed delivery.\n\nReturns the new delivery log entry. The prior entry is left in place.",
+        "description": "Retry a single failed delivery.\n\nThe delivery is named by id, so it is authorized against the caller's\npermitted environment set: a delivery in an environment the caller\ncan't access returns `404` (existence never leaks). Returns the new\ndelivery log entry. The prior entry is left in place.",
         "operationId": "retry_forwarder_delivery",
         "security": [
           {
@@ -1008,7 +992,7 @@
           "Forwarders"
         ],
         "summary": "Retry Failed Forwarder Deliveries",
-        "description": "Retry every failed delivery for this forwarder.\n\nEach failed delivery is re-attempted using the forwarder's current\nconfiguration and the original event. Returns the counts.",
+        "description": "Retry every failed delivery for this forwarder in the resolved environment.\n\nScoped to the resolved environment (a single-environment credential\nimplies it; otherwise send the `X-Smplkit-Environment` header): only\nthat environment's failed deliveries are re-attempted, each using the\nforwarder's effective configuration for that environment and the\noriginal event. Returns the counts.",
         "operationId": "retry_failed_forwarder_deliveries",
         "security": [
           {
@@ -1138,7 +1122,7 @@
           "Resource Types"
         ],
         "summary": "List Resource Types",
-        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Default sort is `key`\nascending; pass `sort=-key` for descending. Useful for populating\nfilter dropdowns in a UI. Results are scoped to the resource types\nvisible under the account's current plan.",
+        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Default sort is `key`\nascending; pass `sort=-key` for descending. Useful for populating\nfilter dropdowns in a UI. Results are scoped to the resolved\nenvironment and to the resource types visible under the account's\ncurrent plan.",
         "operationId": "list_resource_types",
         "security": [
           {
@@ -1219,7 +1203,7 @@
           "Event Types"
         ],
         "summary": "List Event Types",
-        "description": "List the distinct `event_type` slugs recorded for this account.\n\nDefault sort is `key` ascending; pass `sort=-key` for descending.\nWithout `filter[resource_type]`, returns one row per distinct\nevent_type. With `filter[resource_type]`, returns the event_types\nrecorded for that specific resource type.",
+        "description": "List the distinct `event_type` slugs recorded for this account.\n\nDefault sort is `key` ascending; pass `sort=-key` for descending.\nScoped to the resolved environment. Without `filter[resource_type]`,\nreturns one row per distinct event_type. With `filter[resource_type]`,\nreturns the event_types recorded for that specific resource type.",
         "operationId": "list_event_types",
         "security": [
           {
@@ -1316,7 +1300,7 @@
           "Categories"
         ],
         "summary": "List Categories",
-        "description": "List the distinct `category` values recorded for this account.\n\nThe resource `id` is the category value itself. Default sort is\n`key` ascending; pass `sort=-key` for descending. Useful for\npopulating filter dropdowns in a UI.",
+        "description": "List the distinct `category` values recorded for this account.\n\nThe resource `id` is the category value itself. Default sort is\n`key` ascending; pass `sort=-key` for descending. Scoped to the\nresolved environment. Useful for populating filter dropdowns in a UI.",
         "operationId": "list_categories",
         "security": [
           {
@@ -1582,6 +1566,19 @@
             "description": "When `true`, the event is recorded but not delivered to any forwarder, and no delivery log entries are created for it.",
             "default": false
           },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "The environment the event occurred in. Always present on read. Resolved when the event is recorded \u2014 from a single-environment credential, or the `X-Smplkit-Environment` header for multi-environment credentials \u2014 and never set on the request body. The same content recorded in two environments produces two distinct events.",
+            "readOnly": true
+          },
           "created_at": {
             "anyOf": [
               {
@@ -1737,6 +1734,7 @@
             },
             "description": "Alice signed up via the marketing site.",
             "do_not_forward": false,
+            "environment": "production",
             "event_type": "user.created",
             "idempotency_key": "auto-1234abcd",
             "occurred_at": "2026-05-06T20:00:00Z",
@@ -2331,8 +2329,9 @@
           "enabled": {
             "type": "boolean",
             "title": "Enabled",
-            "description": "Whether the forwarder is currently delivering events. Set to `false` to pause deliveries without deleting the forwarder.",
-            "default": true
+            "description": "Always false. Enablement is per-environment: a forwarder delivers in an environment only when `environments[<env>].enabled` is true. The base value is pinned false and cannot be set.",
+            "default": false,
+            "readOnly": true
           },
           "filter": {
             "anyOf": [
@@ -2372,7 +2371,15 @@
           },
           "configuration": {
             "$ref": "#/components/schemas/HttpConfiguration",
-            "description": "Transport-specific delivery configuration. Shape is discriminated by ``forwarder_type``; today all destination types use ``HttpConfiguration``. Branded vendor types (everything except `http`) constrain the configuration against a per-vendor template \u2014 see `GET /api/v1/forwarder_types` for the URL pattern, fixed headers, and customer-supplied placeholders for each type."
+            "description": "Base delivery configuration template. Shape is discriminated by ``forwarder_type``; today all destination types use ``HttpConfiguration``. Branded vendor types (everything except `http`) constrain the configuration against a per-vendor template \u2014 see `GET /api/v1/forwarder_types` for the URL pattern, fixed headers, and customer-supplied placeholders for each type. A per-environment override in `environments` replaces this template for that environment."
+          },
+          "environments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ForwarderEnvironment"
+            },
+            "type": "object",
+            "title": "Environments",
+            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the forwarder delivers in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account."
           },
           "created_at": {
             "anyOf": [
@@ -2494,7 +2501,11 @@
               "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"
             },
             "description": "Forwards user.* events to the prod Datadog tenant.",
-            "enabled": true,
+            "environments": {
+              "production": {
+                "enabled": true
+              }
+            },
             "filter": {
               "==": [
                 {
@@ -2514,6 +2525,11 @@
       },
       "ForwarderDelivery": {
         "properties": {
+          "environment": {
+            "type": "string",
+            "title": "Environment",
+            "description": "Environment the delivered event occurred in. Deliveries are scoped to one environment."
+          },
           "forwarder": {
             "type": "string",
             "format": "uuid",
@@ -2617,6 +2633,7 @@
         },
         "type": "object",
         "required": [
+          "environment",
           "forwarder",
           "event",
           "attempt_number",
@@ -2713,6 +2730,7 @@
           "attributes": {
             "attempt_number": 1,
             "created_at": "2026-05-07T12:00:01.234Z",
+            "environment": "production",
             "event": "33333333-4444-5555-6666-777777777777",
             "forwarder": "11111111-2222-3333-4444-555555555555",
             "latency_ms": 187,
@@ -2747,6 +2765,30 @@
         ],
         "title": "ForwarderDeliveryResponse",
         "description": "JSON:API single-resource response for a forwarder delivery."
+      },
+      "ForwarderEnvironment": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether the forwarder delivers events in this environment. A forwarder is enabled in an environment only via this field \u2014 the base `enabled` is always false.",
+            "default": false
+          },
+          "configuration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HttpConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-environment delivery configuration override. Omit to inherit the forwarder's base `configuration`. When present, it fully replaces the base configuration for this environment and is validated against the same per-vendor template."
+          }
+        },
+        "type": "object",
+        "title": "ForwarderEnvironment",
+        "description": "Per-environment override for a forwarder's enablement and configuration."
       },
       "ForwarderListResponse": {
         "properties": {
@@ -2829,7 +2871,12 @@
             },
             "created_at": "2026-05-07T12:00:00Z",
             "description": "Forwards user.* events to the prod Datadog tenant.",
-            "enabled": true,
+            "enabled": false,
+            "environments": {
+              "production": {
+                "enabled": true
+              }
+            },
             "filter": {
               "==": [
                 {
