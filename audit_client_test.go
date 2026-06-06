@@ -241,6 +241,142 @@ func TestClient_AuditAccessors(t *testing.T) {
 	}
 }
 
+// The runtime audit client stamps X-Smplkit-Environment from the SDK's
+// configured environment on every call (ADR-055), while the shared
+// management forwarder-CRUD client does not.
+func TestClient_RuntimeAudit_InjectsEnvironmentHeader(t *testing.T) {
+	gotEnv := make(chan string, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case gotEnv <- r.Header.Get("X-Smplkit-Environment"):
+		default:
+		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(Config{
+		APIKey:      "sk_api_test",
+		Environment: "production",
+		Service:     "test",
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer c.Close()
+
+	if _, err := c.Audit().Events().List(context.Background(), ListEventsInput{}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	select {
+	case env := <-gotEnv:
+		if env != "production" {
+			t.Fatalf("expected X-Smplkit-Environment=production on runtime call, got %q", env)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server never received the runtime audit request")
+	}
+}
+
+// The management forwarder-CRUD surface must NOT carry the environment
+// header — enablement is per-forwarder via the environments map, and the
+// management plane operates account-wide.
+func TestClient_ManagementAudit_OmitsEnvironmentHeader(t *testing.T) {
+	gotEnv := make(chan string, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case gotEnv <- r.Header.Get("X-Smplkit-Environment"):
+		default:
+		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":1,"size":1000}}}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(Config{
+		APIKey:      "sk_api_test",
+		Environment: "production",
+		Service:     "test",
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer c.Close()
+
+	if _, err := c.Manage().Audit().Forwarders().List(context.Background(), ListForwardersInput{}); err != nil {
+		t.Fatalf("Forwarders.List: %v", err)
+	}
+	select {
+	case env := <-gotEnv:
+		if env != "" {
+			t.Fatalf("expected no X-Smplkit-Environment on management call, got %q", env)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server never received the management audit request")
+	}
+}
+
+// A caller-supplied X-Smplkit-Environment extra header wins over the
+// SDK-configured environment on runtime audit calls (explicit override).
+func TestClient_RuntimeAudit_ExtraHeaderEnvironmentWins(t *testing.T) {
+	gotEnv := make(chan string, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case gotEnv <- r.Header.Get("X-Smplkit-Environment"):
+		default:
+		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(Config{
+		APIKey:       "sk_api_test",
+		Environment:  "production",
+		Service:      "test",
+		ExtraHeaders: map[string]string{"X-Smplkit-Environment": "staging"},
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer c.Close()
+
+	if _, err := c.Audit().Events().List(context.Background(), ListEventsInput{}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	select {
+	case env := <-gotEnv:
+		if env != "staging" {
+			t.Fatalf("expected explicit extra-header env=staging to win, got %q", env)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server never received the runtime audit request")
+	}
+}
+
+// Event.Environment is read-only and surfaced from the read path.
+func TestEventFromResource_PopulatesEnvironment(t *testing.T) {
+	env := "production"
+	idStr := "11111111-2222-3333-4444-555555555555"
+	res := genaudit.EventResource{
+		Id: &idStr,
+		Attributes: genaudit.Event{
+			EventType:    "user.created",
+			ResourceType: "user",
+			ResourceId:   "u-1",
+			Environment:  &env,
+		},
+	}
+	got := eventFromResource(res)
+	if got.Environment != "production" {
+		t.Fatalf("expected Environment=production, got %q", got.Environment)
+	}
+}
+
 func TestAuditEvents_List_TransportError(t *testing.T) {
 	// A closed server triggers a transport-level error from the gen client,
 	// covering the wrapper's "audit List: %w" branch.

@@ -36,7 +36,6 @@ func (f *AuditForwarders) New(
 		Name:          name,
 		ForwarderType: forwarderType,
 		Configuration: configuration,
-		Enabled:       true,
 		client:        f,
 	}
 	for _, opt := range opts {
@@ -49,9 +48,15 @@ func (f *AuditForwarders) New(
 // AuditForwarders.New.
 type ForwarderOption func(*Forwarder)
 
-// WithForwarderEnabled overrides the default Enabled=true.
-func WithForwarderEnabled(enabled bool) ForwarderOption {
-	return func(fwd *Forwarder) { fwd.Enabled = enabled }
+// WithForwarderEnvironments sets the per-environment override map that
+// drives enablement (ADR-055). A forwarder delivers in an environment
+// only when that environment's entry has Enabled=true; each entry may
+// carry an optional HttpConfiguration override (nil inherits the base
+// configuration). Every referenced environment must exist and be managed
+// for the account. Without this option the forwarder is created enabled
+// nowhere.
+func WithForwarderEnvironments(environments map[string]ForwarderEnvironment) ForwarderOption {
+	return func(fwd *Forwarder) { fwd.Environments = environments }
 }
 
 // WithForwarderDescription sets the optional free-text description.
@@ -149,6 +154,7 @@ func (fwd *Forwarder) apply(other *Forwarder) {
 	fwd.Description = other.Description
 	fwd.ForwarderType = other.ForwarderType
 	fwd.Enabled = other.Enabled
+	fwd.Environments = other.Environments
 	fwd.Filter = other.Filter
 	fwd.Transform = other.Transform
 	fwd.TransformType = other.TransformType
@@ -170,9 +176,6 @@ func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (
 	if input.ForwarderType != "" {
 		ft := string(input.ForwarderType)
 		params.FilterForwarderType = &ft
-	}
-	if input.Enabled != nil {
-		params.FilterEnabled = input.Enabled
 	}
 	if input.PageNumber > 0 {
 		params.PageNumber = &input.PageNumber
@@ -272,13 +275,18 @@ func (f *AuditForwarders) update(ctx context.Context, fwd *Forwarder) (*Forwarde
 }
 
 // forwarderAttributes builds the shared Forwarder attribute payload.
+//
+// The base `enabled` is server-pinned false (ADR-055) — the wrapper never
+// sends it. Enablement travels entirely through the `environments` map.
 func forwarderAttributes(fwd *Forwarder) genaudit.Forwarder {
-	enabled := fwd.Enabled
 	attrs := genaudit.Forwarder{
 		Name:          fwd.Name,
 		ForwarderType: fwd.ForwarderType,
-		Enabled:       &enabled,
 		Configuration: httpConfigurationToWire(fwd.Configuration),
+	}
+	if len(fwd.Environments) > 0 {
+		envs := environmentsToWire(fwd.Environments)
+		attrs.Environments = &envs
 	}
 	if fwd.Description != nil {
 		attrs.Description = fwd.Description
@@ -320,6 +328,42 @@ func forwarderCreateResourceFromForwarder(fwd *Forwarder) genaudit.ForwarderCrea
 		Type:       &rt,
 		Attributes: forwarderAttributes(fwd),
 	}
+}
+
+// environmentsToWire converts the wrapper per-environment override map to
+// the generated model. Per-environment configuration overrides are sent
+// as full HttpConfiguration payloads (plaintext headers in), mirroring the
+// base configuration's round-trip semantics.
+func environmentsToWire(envs map[string]ForwarderEnvironment) map[string]genaudit.ForwarderEnvironment {
+	out := make(map[string]genaudit.ForwarderEnvironment, len(envs))
+	for key, env := range envs {
+		enabled := env.Enabled
+		ge := genaudit.ForwarderEnvironment{Enabled: &enabled}
+		if env.Configuration != nil {
+			cfg := httpConfigurationToWire(*env.Configuration)
+			ge.Configuration = &cfg
+		}
+		out[key] = ge
+	}
+	return out
+}
+
+// environmentsFromWire converts the generated per-environment override map
+// back into the wrapper shape.
+func environmentsFromWire(envs map[string]genaudit.ForwarderEnvironment) map[string]ForwarderEnvironment {
+	out := make(map[string]ForwarderEnvironment, len(envs))
+	for key, ge := range envs {
+		env := ForwarderEnvironment{}
+		if ge.Enabled != nil {
+			env.Enabled = *ge.Enabled
+		}
+		if ge.Configuration != nil {
+			cfg := httpConfigurationFromWire(*ge.Configuration)
+			env.Configuration = &cfg
+		}
+		out[key] = env
+	}
+	return out
 }
 
 func httpConfigurationToWire(h HttpConfiguration) genaudit.HttpConfiguration {
@@ -371,8 +415,13 @@ func forwarderFromResource(r genaudit.ForwarderResource, client *AuditForwarders
 		Version:       a.Version,
 		client:        client,
 	}
+	// The base `enabled` is server-pinned false; round-trip whatever the
+	// server returned (always false) without assuming a default of true.
 	if a.Enabled != nil {
 		out.Enabled = *a.Enabled
+	}
+	if a.Environments != nil {
+		out.Environments = environmentsFromWire(*a.Environments)
 	}
 	if a.Filter != nil {
 		out.Filter = *a.Filter

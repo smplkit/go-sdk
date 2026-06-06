@@ -184,7 +184,27 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 		loggingHeaderEditor,
 	)
 
-	// Build the generated audit client.
+	// Build the generated audit clients. The runtime audit surface
+	// (events record / list / get, resource-type / event-type discovery)
+	// is environment-scoped (ADR-055): the audit service resolves the
+	// environment from the X-Smplkit-Environment request header. We stamp
+	// it once at the client level from the SDK's configured runtime
+	// environment so every runtime call carries it; a caller-supplied
+	// extra-header of the same name still wins because extraHeaders is
+	// applied after this editor.
+	//
+	// The management forwarder-CRUD surface is NOT environment-scoped — it
+	// operates account-wide and per-forwarder enablement lives in the
+	// forwarder's `environments` map — so it gets its own gen client
+	// (genAuditClient below) with no environment header, passed to
+	// assembleManagementClient.
+	auditEnvironment := rc.environment
+	auditEnvEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		if auditEnvironment != "" {
+			req.Header.Set("X-Smplkit-Environment", auditEnvironment)
+		}
+		return nil
+	})
 	auditExtraEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		for k, v := range extraHeaders {
 			req.Header.Set(k, v)
@@ -196,10 +216,23 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
+	// Editor order matters: env header first, then SDK headers, then
+	// caller extra headers (which therefore win on any collision).
+	genAuditRuntimeRaw, _ := genaudit.NewClient(auditURL,
+		genaudit.WithHTTPClient(httpClient),
+		auditEnvEditor,
+		auditHeaderEditor,
+		auditExtraEditor,
+	)
+	genAuditRuntimeClient := &genaudit.ClientWithResponses{ClientInterface: genAuditRuntimeRaw}
+
+	// Management audit client — same SDK + extra-header editors, but no
+	// environment header (forwarder CRUD is account-wide; per-environment
+	// enablement lives in the forwarder's `environments` map).
 	genAuditRaw, _ := genaudit.NewClient(auditURL,
 		genaudit.WithHTTPClient(httpClient),
-		auditExtraEditor,
 		auditHeaderEditor,
+		auditExtraEditor,
 	)
 	genAuditClient := &genaudit.ClientWithResponses{ClientInterface: genAuditRaw}
 
@@ -242,13 +275,13 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
 	c.flags.runtime = newFlagsRuntime(c.flags, ctxBuf)
 	c.logging = newLoggingClient(c, genLoggingClient)
-	auditEvents := &AuditEvents{gen: genAuditClient, buffer: newAuditEventBuffer(genAuditClient)}
+	auditEvents := &AuditEvents{gen: genAuditRuntimeClient, buffer: newAuditEventBuffer(genAuditRuntimeClient)}
 	c.audit = &AuditClient{
 		client:        c,
-		gen:           genAuditClient,
+		gen:           genAuditRuntimeClient,
 		events:        auditEvents,
-		resourceTypes: &AuditResourceTypes{gen: genAuditClient},
-		eventTypes:    &AuditEventTypes{gen: genAuditClient},
+		resourceTypes: &AuditResourceTypes{gen: genAuditRuntimeClient},
+		eventTypes:    &AuditEventTypes{gen: genAuditRuntimeClient},
 	}
 
 	// Build the management surface directly against the generated API

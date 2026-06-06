@@ -329,6 +329,9 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 	if attrs.DoNotForward != nil {
 		out.DoNotForward = *attrs.DoNotForward
 	}
+	if attrs.Environment != nil {
+		out.Environment = *attrs.Environment
+	}
 	return out
 }
 
