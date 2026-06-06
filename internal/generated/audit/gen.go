@@ -736,14 +736,13 @@ type ExportResponse struct {
 // the event is shaped by the configured transform and delivered to the
 // destination defined by “configuration“.
 type Forwarder struct {
-	// Configuration HTTP request configuration used to deliver an event to the destination.
+	// Configuration HTTP request configuration for delivering a payload to a destination.
 	//
-	// Used when the parent forwarder's ``forwarder_type`` is one of the
-	// HTTP-family destinations (``HTTP``, ``DATADOG``, ``SPLUNK_HEC``,
-	// ``SUMO_LOGIC``, ``NEW_RELIC``, ``HONEYCOMB``, ``ELASTIC``). When other
-	// transports land (``FTP``, ``SQS``, …) their own configuration schemas
-	// will join this one as members of a discriminated union under the
-	// ``configuration`` field of ``Forwarder``.
+	// The shared base shape for any product that posts to a customer-supplied
+	// HTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs
+	// extends it (adding ``body`` and ``timeout``). When other transports land
+	// (``FTP``, ``SQS``, …) their own configuration schemas will join this one
+	// as members of a discriminated union under a ``configuration`` field.
 	Configuration HttpConfiguration `json:"configuration"`
 
 	// CreatedAt When the forwarder was created.
@@ -1041,25 +1040,24 @@ type ForwarderTypeTransform struct {
 	Type string `json:"type"`
 }
 
-// HttpConfiguration HTTP request configuration used to deliver an event to the destination.
+// HttpConfiguration HTTP request configuration for delivering a payload to a destination.
 //
-// Used when the parent forwarder's “forwarder_type“ is one of the
-// HTTP-family destinations (“HTTP“, “DATADOG“, “SPLUNK_HEC“,
-// “SUMO_LOGIC“, “NEW_RELIC“, “HONEYCOMB“, “ELASTIC“). When other
-// transports land (“FTP“, “SQS“, …) their own configuration schemas
-// will join this one as members of a discriminated union under the
-// “configuration“ field of “Forwarder“.
+// The shared base shape for any product that posts to a customer-supplied
+// HTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs
+// extends it (adding “body“ and “timeout“). When other transports land
+// (“FTP“, “SQS“, …) their own configuration schemas will join this one
+// as members of a discriminated union under a “configuration“ field.
 type HttpConfiguration struct {
 	// CaCert Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`.
 	CaCert *string `json:"ca_cert,omitempty"`
 
-	// Headers HTTP headers attached to each delivery request.
+	// Headers HTTP headers attached to each request.
 	Headers *[]HttpHeader `json:"headers,omitempty"`
 
-	// Method HTTP method used when delivering an event.
+	// Method HTTP method used when delivering the request.
 	Method *HttpConfigurationMethod `json:"method,omitempty"`
 
-	// SuccessStatus HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
+	// SuccessStatus HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
 	SuccessStatus *string `json:"success_status,omitempty"`
 
 	// TlsVerify Whether to verify the destination server's TLS certificate against trusted certificate authorities. Defaults to `true` and should be left on for any production destination. Set to `false` only for development or short-lived testing against a destination that presents an untrusted certificate (e.g. a Splunk Cloud trial stack on `:8088` serving its default self-signed certificate). When `false`, deliveries proceed without certificate verification — they are vulnerable to man-in-the-middle attacks. For long-lived self-signed setups, pin the issuing CA via `ca_cert` instead of disabling verification entirely.
@@ -1069,10 +1067,10 @@ type HttpConfiguration struct {
 	Url string `json:"url"`
 }
 
-// HttpConfigurationMethod HTTP method used when delivering an event.
+// HttpConfigurationMethod HTTP method used when delivering the request.
 type HttpConfigurationMethod string
 
-// HttpHeader A single HTTP header attached to a forwarder delivery request.
+// HttpHeader A single HTTP header attached to an outbound request.
 //
 // Header values are encrypted at the application layer before
 // persistence regardless of header name; the wire representation here
