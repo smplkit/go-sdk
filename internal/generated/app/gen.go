@@ -1399,7 +1399,7 @@ type ApiKey struct {
 	// Name Human-readable name for the key.
 	Name string `json:"name"`
 
-	// Scopes Scope restrictions applied to the key. Empty object grants full account access; populated forms are reserved for future scope syntax.
+	// Scopes Scope restrictions applied to the key, as a JSON object mapping dimension names to arrays of allowed values. An empty object (the default) grants unrestricted access. The `environments` dimension lists the environment keys the key may operate in (for example `{"environments": ["production"]}`); a request's environment must be one of them. A dimension that is absent or set to an empty array is unrestricted in that dimension.
 	Scopes *map[string]interface{} `json:"scopes,omitempty"`
 
 	// Status Lifecycle state of the key. `ACTIVE` keys may be used to authenticate; `REVOKED` keys are rejected.
