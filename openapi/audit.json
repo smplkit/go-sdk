@@ -3202,7 +3202,7 @@
               "DELETE"
             ],
             "title": "Method",
-            "description": "HTTP method used when delivering an event.",
+            "description": "HTTP method used when delivering the request.",
             "default": "POST"
           },
           "url": {
@@ -3218,13 +3218,13 @@
             },
             "type": "array",
             "title": "Headers",
-            "description": "HTTP headers attached to each delivery request."
+            "description": "HTTP headers attached to each request."
           },
           "success_status": {
             "type": "string",
             "maxLength": 3,
             "title": "Success Status",
-            "description": "HTTP response status that indicates a successful delivery. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
+            "description": "HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
             "default": "2xx"
           },
           "tls_verify": {
@@ -3253,7 +3253,7 @@
           "url"
         ],
         "title": "HttpConfiguration",
-        "description": "HTTP request configuration used to deliver an event to the destination.\n\nUsed when the parent forwarder's ``forwarder_type`` is one of the\nHTTP-family destinations (``HTTP``, ``DATADOG``, ``SPLUNK_HEC``,\n``SUMO_LOGIC``, ``NEW_RELIC``, ``HONEYCOMB``, ``ELASTIC``). When other\ntransports land (``FTP``, ``SQS``, \u2026) their own configuration schemas\nwill join this one as members of a discriminated union under the\n``configuration`` field of ``Forwarder``."
+        "description": "HTTP request configuration for delivering a payload to a destination.\n\nThe shared base shape for any product that posts to a customer-supplied\nHTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs\nextends it (adding ``body`` and ``timeout``). When other transports land\n(``FTP``, ``SQS``, \u2026) their own configuration schemas will join this one\nas members of a discriminated union under a ``configuration`` field."
       },
       "HttpHeader": {
         "properties": {
@@ -3277,7 +3277,7 @@
           "value"
         ],
         "title": "HttpHeader",
-        "description": "A single HTTP header attached to a forwarder delivery request.\n\nHeader values are encrypted at the application layer before\npersistence regardless of header name; the wire representation here\nis always plaintext on both the request and the response, so a\n`GET \u2192 mutate \u2192 PUT` round-trip preserves header values without\nrequiring the customer to re-enter secrets."
+        "description": "A single HTTP header attached to an outbound request.\n\nHeader values are encrypted at the application layer before\npersistence regardless of header name; the wire representation here\nis always plaintext on both the request and the response, so a\n`GET \u2192 mutate \u2192 PUT` round-trip preserves header values without\nrequiring the customer to re-enter secrets."
       },
       "ListMeta": {
         "properties": {
