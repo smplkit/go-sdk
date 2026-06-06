@@ -400,6 +400,9 @@ type Event struct {
 	// DoNotForward When `true`, the event is recorded but not delivered to any forwarder, and no delivery log entries are created for it.
 	DoNotForward *bool `json:"do_not_forward,omitempty"`
 
+	// Environment The environment the event occurred in. Always present on read. Resolved when the event is recorded — from a single-environment credential, or the `X-Smplkit-Environment` header for multi-environment credentials — and never set on the request body. The same content recorded in two environments produces two distinct events.
+	Environment *string `json:"environment,omitempty"`
+
 	// EventType What happened, e.g. `user.created`. Any non-empty string.
 	EventType string `json:"event_type"`
 
@@ -754,8 +757,11 @@ type Forwarder struct {
 	// Description Free-text description for the forwarder.
 	Description *string `json:"description,omitempty"`
 
-	// Enabled Whether the forwarder is currently delivering events. Set to `false` to pause deliveries without deleting the forwarder.
+	// Enabled Always false. Enablement is per-environment: a forwarder delivers in an environment only when `environments[<env>].enabled` is true. The base value is pinned false and cannot be set.
 	Enabled *bool `json:"enabled,omitempty"`
+
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the forwarder delivers in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account.
+	Environments *map[string]ForwarderEnvironment `json:"environments,omitempty"`
 
 	// Filter JSON Logic expression evaluated against each event. The event is delivered only if the expression returns truthy. Omit to deliver every event.
 	Filter *map[string]interface{} `json:"filter,omitempty"`
@@ -816,6 +822,9 @@ type ForwarderDelivery struct {
 
 	// CreatedAt When the delivery attempt was recorded.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Environment Environment the delivered event occurred in. Deliveries are scoped to one environment.
+	Environment string `json:"environment"`
 
 	// Error Error message if the delivery did not complete.
 	Error *string `json:"error,omitempty"`
@@ -888,6 +897,21 @@ type ForwarderDeliveryResource struct {
 type ForwarderDeliveryResponse struct {
 	// Data JSON:API resource envelope for a forwarder delivery log entry.
 	Data ForwarderDeliveryResource `json:"data"`
+}
+
+// ForwarderEnvironment Per-environment override for a forwarder's enablement and configuration.
+type ForwarderEnvironment struct {
+	// Configuration HTTP request configuration for delivering a payload to a destination.
+	//
+	// The shared base shape for any product that posts to a customer-supplied
+	// HTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs
+	// extends it (adding ``body`` and ``timeout``). When other transports land
+	// (``FTP``, ``SQS``, …) their own configuration schemas will join this one
+	// as members of a discriminated union under a ``configuration`` field.
+	Configuration *HttpConfiguration `json:"configuration,omitempty"`
+
+	// Enabled Whether the forwarder delivers events in this environment. A forwarder is enabled in an environment only via this field — the base `enabled` is always false.
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // ForwarderListResponse JSON:API collection response for forwarders.
@@ -1324,7 +1348,6 @@ type RecordEventParams struct {
 // ListForwardersParams defines parameters for ListForwarders.
 type ListForwardersParams struct {
 	FilterForwarderType *string `form:"filter[forwarder_type],omitempty" json:"filter[forwarder_type],omitempty"`
-	FilterEnabled       *bool   `form:"filter[enabled],omitempty" json:"filter[enabled],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `updated_at`, `-updated_at`.
 	Sort *ListForwardersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
@@ -2578,18 +2601,6 @@ func NewListForwardersRequest(server string, params *ListForwardersParams) (*htt
 		if params.FilterForwarderType != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[forwarder_type]", *params.FilterForwarderType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.FilterEnabled != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[enabled]", *params.FilterEnabled, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
