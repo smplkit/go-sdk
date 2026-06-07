@@ -84,6 +84,24 @@
         ],
         "parameters": [
           {
+            "name": "filter[environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.",
+              "title": "Filter[Environment]"
+            },
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+          },
+          {
             "name": "filter[occurred_at]",
             "in": "query",
             "required": false,
@@ -384,7 +402,7 @@
           "Events"
         ],
         "summary": "Search Events",
-        "description": "Search audit events with column filters and an optional JSON Logic expression.\n\nScoped to the resolved environment (a single-environment credential\nimplies it; otherwise send the `X-Smplkit-Environment` header).\n\nWithout a JSON Logic `filter`: behaves like `GET /api/v1/events`\nwith the same column filters.\n\nWith a JSON Logic `filter`: the search is silently capped to the\nlast 30 days by `occurred_at` (intersected with any explicit\n`filter[occurred_at]` the caller supplied), the column filters\nnarrow the candidate set in SQL, and the JSON Logic expression\nruns in memory against each candidate row using the same\n`json-logic-qubit` evaluator the forwarder pipeline uses. Up to\n50,000 rows are scanned per request; the response's `meta.scan`\nblock reports the scan stats so a selective filter doesn't look\nlike \"0 matches\" when the truth is \"ceiling reached.\"",
+        "description": "Search audit events with column filters and an optional JSON Logic expression.\n\nScoped by `filter[environment]` (a comma-separated set). When omitted, a\nsingle-environment credential is implied; otherwise send the\n`X-Smplkit-Environment` header. The reserved `smplkit` value selects\nplatform change events smplkit records about your own resources.\n\nWithout a JSON Logic `filter`: behaves like `GET /api/v1/events`\nwith the same column filters.\n\nWith a JSON Logic `filter`: the search is silently capped to the\nlast 30 days by `occurred_at` (intersected with any explicit\n`filter[occurred_at]` the caller supplied), the column filters\nnarrow the candidate set in SQL, and the JSON Logic expression\nruns in memory against each candidate row using the same\n`json-logic-qubit` evaluator the forwarder pipeline uses. Up to\n50,000 rows are scanned per request; the response's `meta.scan`\nblock reports the scan stats so a selective filter doesn't look\nlike \"0 matches\" when the truth is \"ceiling reached.\"",
         "operationId": "search_events",
         "requestBody": {
           "content": {
@@ -1122,7 +1140,7 @@
           "Resource Types"
         ],
         "summary": "List Resource Types",
-        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Default sort is `key`\nascending; pass `sort=-key` for descending. Useful for populating\nfilter dropdowns in a UI. Results are scoped to the resolved\nenvironment and to the resource types visible under the account's\ncurrent plan.",
+        "description": "List the distinct `resource_type` slugs recorded for this account.\n\nThe resource `id` is the slug itself. Default sort is `key`\nascending; pass `sort=-key` for descending. Useful for populating\nfilter dropdowns in a UI. Results are scoped to the selected\nenvironments (see `filter[environment]`); platform resource types\nappear under the reserved `smplkit` value.",
         "operationId": "list_resource_types",
         "security": [
           {
@@ -1130,6 +1148,24 @@
           }
         ],
         "parameters": [
+          {
+            "name": "filter[environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.",
+              "title": "Filter[Environment]"
+            },
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+          },
           {
             "name": "sort",
             "in": "query",
@@ -1203,7 +1239,7 @@
           "Event Types"
         ],
         "summary": "List Event Types",
-        "description": "List the distinct `event_type` slugs recorded for this account.\n\nDefault sort is `key` ascending; pass `sort=-key` for descending.\nScoped to the resolved environment. Without `filter[resource_type]`,\nreturns one row per distinct event_type. With `filter[resource_type]`,\nreturns the event_types recorded for that specific resource type.",
+        "description": "List the distinct `event_type` slugs recorded for this account.\n\nDefault sort is `key` ascending; pass `sort=-key` for descending.\nScoped to the selected environments (see `filter[environment]`).\nWithout `filter[resource_type]`, returns one row per distinct\nevent_type. With `filter[resource_type]`, returns the event_types\nrecorded for that specific resource type.",
         "operationId": "list_event_types",
         "security": [
           {
@@ -1211,6 +1247,24 @@
           }
         ],
         "parameters": [
+          {
+            "name": "filter[environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.",
+              "title": "Filter[Environment]"
+            },
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+          },
           {
             "name": "filter[resource_type]",
             "in": "query",
@@ -1300,7 +1354,7 @@
           "Categories"
         ],
         "summary": "List Categories",
-        "description": "List the distinct `category` values recorded for this account.\n\nThe resource `id` is the category value itself. Default sort is\n`key` ascending; pass `sort=-key` for descending. Scoped to the\nresolved environment. Useful for populating filter dropdowns in a UI.",
+        "description": "List the distinct `category` values recorded for this account.\n\nThe resource `id` is the category value itself. Default sort is\n`key` ascending; pass `sort=-key` for descending. Scoped to the\nselected environments (see `filter[environment]`). Useful for\npopulating filter dropdowns in a UI.",
         "operationId": "list_categories",
         "security": [
           {
@@ -1308,6 +1362,24 @@
           }
         ],
         "parameters": [
+          {
+            "name": "filter[environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.",
+              "title": "Filter[Environment]"
+            },
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+          },
           {
             "name": "sort",
             "in": "query",
@@ -1809,6 +1881,18 @@
             ],
             "title": "Filter",
             "description": "Optional JSON Logic expression evaluated against each row after column filters narrow the candidate set. Null, absent, or an empty object disables JSON Logic filtering. When present, the search is silently capped to the last 30 days by `occurred_at` (intersected with any explicit `filter[occurred_at]` the caller supplied)."
+          },
+          "filter[environment]": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter[Environment]",
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
           },
           "filter[event_type]": {
             "anyOf": [
@@ -2333,6 +2417,12 @@
             "default": false,
             "readOnly": true
           },
+          "forward_smplkit_events": {
+            "type": "boolean",
+            "title": "Forward Smplkit Events",
+            "description": "When true, this forwarder also receives platform change events that smplkit records about your own resources (flag, configuration, and similar changes). Each such event is delivered through every environment this forwarder is enabled in, using that environment's resolved configuration. Defaults to false \u2014 platform change events are not forwarded unless you opt in. Independent of the per-environment `enabled` settings, since platform change events are not tied to a deployment environment.",
+            "default": false
+          },
           "filter": {
             "anyOf": [
               {
@@ -2514,6 +2604,7 @@
                 "user.created"
               ]
             },
+            "forward_smplkit_events": false,
             "forwarder_type": "datadog",
             "name": "Datadog production",
             "transform": "{ \"message\": event_type & ' on ' & resource_type }",
@@ -2885,6 +2976,7 @@
                 "user.created"
               ]
             },
+            "forward_smplkit_events": false,
             "forwarder_type": "datadog",
             "name": "Datadog production",
             "transform": "{ \"message\": event_type & ' on ' & resource_type }",

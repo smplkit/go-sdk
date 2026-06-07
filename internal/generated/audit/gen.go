@@ -540,6 +540,9 @@ type EventSearchRequest struct {
 	// FilterDoNotForward When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline).
 	FilterDoNotForward *bool `json:"filter[do_not_forward],omitempty"`
 
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	FilterEnvironment *string `json:"filter[environment],omitempty"`
+
 	// FilterEventType Exact match on the event's `event_type` field.
 	FilterEventType *string `json:"filter[event_type],omitempty"`
 
@@ -765,6 +768,9 @@ type Forwarder struct {
 
 	// Filter JSON Logic expression evaluated against each event. The event is delivered only if the expression returns truthy. Omit to deliver every event.
 	Filter *map[string]interface{} `json:"filter,omitempty"`
+
+	// ForwardSmplkitEvents When true, this forwarder also receives platform change events that smplkit records about your own resources (flag, configuration, and similar changes). Each such event is delivered through every environment this forwarder is enabled in, using that environment's resolved configuration. Defaults to false — platform change events are not forwarded unless you opt in. Independent of the per-environment `enabled` settings, since platform change events are not tied to a deployment environment.
+	ForwardSmplkitEvents *bool `json:"forward_smplkit_events,omitempty"`
 
 	// ForwarderType Supported forwarder destination types (ADR-050).
 	ForwarderType ForwarderType `json:"forwarder_type"`
@@ -1268,6 +1274,9 @@ type hTTPBearerContextKey string
 
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
 	Sort *ListCategoriesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -1286,6 +1295,8 @@ type ListCategoriesParamsSort string
 
 // ListEventTypesParams defines parameters for ListEventTypes.
 type ListEventTypesParams struct {
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	FilterEnvironment  *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
@@ -1306,6 +1317,8 @@ type ListEventTypesParamsSort string
 
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	FilterEnvironment  *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 	FilterOccurredAt   *string `form:"filter[occurred_at],omitempty" json:"filter[occurred_at],omitempty"`
 	FilterActorType    *string `form:"filter[actor_type],omitempty" json:"filter[actor_type],omitempty"`
 	FilterActorId      *string `form:"filter[actor_id],omitempty" json:"filter[actor_id],omitempty"`
@@ -1382,6 +1395,9 @@ type ListForwarderDeliveriesParamsSort string
 
 // ListResourceTypesParams defines parameters for ListResourceTypes.
 type ListResourceTypesParams struct {
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
+
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
 	Sort *ListResourceTypesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
@@ -1932,6 +1948,18 @@ func NewListCategoriesRequest(server string, params *ListCategoriesParams) (*htt
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Sort != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -2021,6 +2049,18 @@ func NewListEventTypesRequest(server string, params *ListEventTypesParams) (*htt
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
+
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
 
 		if params.FilterResourceType != nil {
 
@@ -2123,6 +2163,18 @@ func NewListEventsRequest(server string, params *ListEventsParams) (*http.Reques
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
+
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
 
 		if params.FilterOccurredAt != nil {
 
@@ -3090,6 +3142,18 @@ func NewListResourceTypesRequest(server string, params *ListResourceTypesParams)
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
+
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
 
 		if params.Sort != nil {
 
