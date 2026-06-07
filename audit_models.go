@@ -389,6 +389,15 @@ type Forwarder struct {
 	// Currently only ForwarderTransformTypeJSONata is supported. Must
 	// be set whenever Transform is set.
 	TransformType *ForwarderTransformType
+	// ForwardSmplkitEvents, when true, also delivers smplkit's own
+	// platform change events (flag, configuration, and similar changes
+	// smplkit records about your resources) through this forwarder. Each
+	// such event is delivered through every environment this forwarder is
+	// enabled in, using that environment's resolved configuration. Nil or
+	// false (the default) means platform change events are not forwarded.
+	// Independent of the per-environment Environments enablement, since
+	// platform change events are not tied to a deployment environment.
+	ForwardSmplkitEvents *bool
 	// Configuration is the destination request configuration.
 	Configuration HttpConfiguration
 	// CreatedAt is when the audit service first persisted this

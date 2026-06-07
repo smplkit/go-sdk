@@ -85,6 +85,16 @@ func WithForwarderTransform(transformType ForwarderTransformType, transform inte
 	}
 }
 
+// WithForwardSmplkitEvents opts this forwarder into receiving smplkit's
+// own platform change events (flag, configuration, and similar changes
+// smplkit records about your resources) in addition to your audit events.
+// When true, each platform change event is delivered through every
+// environment this forwarder is enabled in. Omitting this option leaves
+// the field unset, which the server treats as false.
+func WithForwardSmplkitEvents(forward bool) ForwarderOption {
+	return func(fwd *Forwarder) { fwd.ForwardSmplkitEvents = &forward }
+}
+
 // Save creates or updates this forwarder on the server. Upsert
 // behavior keyed on CreatedAt: nil → create (POST), set → full-replace
 // update (PUT). After the call, every field is refreshed from the
@@ -158,6 +168,7 @@ func (fwd *Forwarder) apply(other *Forwarder) {
 	fwd.Filter = other.Filter
 	fwd.Transform = other.Transform
 	fwd.TransformType = other.TransformType
+	fwd.ForwardSmplkitEvents = other.ForwardSmplkitEvents
 	fwd.Configuration = other.Configuration
 	fwd.CreatedAt = other.CreatedAt
 	fwd.UpdatedAt = other.UpdatedAt
@@ -305,6 +316,10 @@ func forwarderAttributes(fwd *Forwarder) genaudit.Forwarder {
 		tt := *fwd.TransformType
 		attrs.TransformType = &tt
 	}
+	if fwd.ForwardSmplkitEvents != nil {
+		v := *fwd.ForwardSmplkitEvents
+		attrs.ForwardSmplkitEvents = &v
+	}
 	return attrs
 }
 
@@ -403,17 +418,18 @@ func forwarderFromResource(r genaudit.ForwarderResource, client *AuditForwarders
 	}
 	a := r.Attributes
 	out := Forwarder{
-		ID:            id,
-		Name:          a.Name,
-		Description:   a.Description,
-		ForwarderType: a.ForwarderType,
-		Configuration: httpConfigurationFromWire(a.Configuration),
-		TransformType: a.TransformType,
-		CreatedAt:     a.CreatedAt,
-		UpdatedAt:     a.UpdatedAt,
-		DeletedAt:     a.DeletedAt,
-		Version:       a.Version,
-		client:        client,
+		ID:                   id,
+		Name:                 a.Name,
+		Description:          a.Description,
+		ForwarderType:        a.ForwarderType,
+		Configuration:        httpConfigurationFromWire(a.Configuration),
+		TransformType:        a.TransformType,
+		ForwardSmplkitEvents: a.ForwardSmplkitEvents,
+		CreatedAt:            a.CreatedAt,
+		UpdatedAt:            a.UpdatedAt,
+		DeletedAt:            a.DeletedAt,
+		Version:              a.Version,
+		client:               client,
 	}
 	// The base `enabled` is server-pinned false; round-trip whatever the
 	// server returned (always false) without assuming a default of true.

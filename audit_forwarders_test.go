@@ -1246,3 +1246,142 @@ func TestForwarder_Get_NilTlsFieldsWhenWireOmitsThem(t *testing.T) {
 		t.Errorf("expected CaCert nil, got %q", *fwd.Configuration.CaCert)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// forward_smplkit_events — base-level opt-in for platform change events
+// ---------------------------------------------------------------------------
+
+// WithForwardSmplkitEvents records the opt-in on an unsaved forwarder.
+func TestAuditForwarders_New_WithForwardSmplkitEvents(t *testing.T) {
+	fwds := &AuditForwarders{}
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"},
+		WithForwardSmplkitEvents(true),
+	)
+	if fwd.ForwardSmplkitEvents == nil || !*fwd.ForwardSmplkitEvents {
+		t.Errorf("expected ForwardSmplkitEvents=true, got %v", fwd.ForwardSmplkitEvents)
+	}
+}
+
+// Omitting the option leaves the field nil, so the create body never
+// carries forward_smplkit_events — existing callers stay unaffected.
+func TestAuditForwarders_New_ForwardSmplkitEventsDefaultNil(t *testing.T) {
+	fwds := &AuditForwarders{}
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	if fwd.ForwardSmplkitEvents != nil {
+		t.Errorf("expected ForwardSmplkitEvents=nil by default, got %v", *fwd.ForwardSmplkitEvents)
+	}
+}
+
+// Create sends forward_smplkit_events when set; the omitted case leaves
+// it off the wire entirely.
+func TestForwarder_Save_CreateSendsForwardSmplkitEvents(t *testing.T) {
+	var captured string
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		captured = string(b)
+		writeForwarderResource(w, http.StatusCreated, "x", "")
+	})
+	defer cleanup()
+
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"},
+		WithForwardSmplkitEvents(true),
+	)
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("Save (create): %v", err)
+	}
+	if !strings.Contains(captured, `"forward_smplkit_events":true`) {
+		t.Errorf("expected forward_smplkit_events:true in create body, got %s", captured)
+	}
+}
+
+func TestForwarder_Save_CreateOmitsForwardSmplkitEventsWhenUnset(t *testing.T) {
+	var captured string
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		captured = string(b)
+		writeForwarderResource(w, http.StatusCreated, "x", "")
+	})
+	defer cleanup()
+
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("Save (create): %v", err)
+	}
+	if strings.Contains(captured, "forward_smplkit_events") {
+		t.Errorf("expected no forward_smplkit_events key in create body, got %s", captured)
+	}
+}
+
+// Update changes the field: create with false, flip to true, and confirm
+// the PUT body carries the new value.
+func TestForwarder_Save_UpdateChangesForwardSmplkitEvents(t *testing.T) {
+	var putBody string
+	calls := 0
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			writeForwarderResource(w, http.StatusCreated, "x", "")
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		putBody = string(b)
+		if r.Method != http.MethodPut {
+			t.Errorf("second call expected PUT, got %s", r.Method)
+		}
+		writeForwarderResource(w, http.StatusOK, "x", "")
+	})
+	defer cleanup()
+
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"},
+		WithForwardSmplkitEvents(false),
+	)
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("Save (create): %v", err)
+	}
+	fwd.ForwardSmplkitEvents = boolPtr(true)
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("Save (update): %v", err)
+	}
+	if !strings.Contains(putBody, `"forward_smplkit_events":true`) {
+		t.Errorf("expected forward_smplkit_events:true in update body, got %s", putBody)
+	}
+}
+
+// Read surfaces forward_smplkit_events from the server response.
+func TestForwarder_Get_SurfacesForwardSmplkitEvents(t *testing.T) {
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"` + fwdIDStr + `","type":"forwarder","attributes":{` +
+			`"name":"X","forwarder_type":"HTTP","enabled":false,` +
+			`"configuration":{"url":"https://x","method":"POST","success_status":"2xx"},` +
+			`"forward_smplkit_events":true` +
+			`}}}`))
+	})
+	defer cleanup()
+	fwd, err := fwds.Get(context.Background(), fwdIDStr)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if fwd.ForwardSmplkitEvents == nil || !*fwd.ForwardSmplkitEvents {
+		t.Errorf("expected ForwardSmplkitEvents=true from read, got %v", fwd.ForwardSmplkitEvents)
+	}
+}
+
+// Read leaves the field nil when the wire omits it — absence stays
+// absence rather than collapsing to false.
+func TestForwarder_Get_ForwardSmplkitEventsNilWhenWireOmits(t *testing.T) {
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeForwarderResource(w, http.StatusOK, "n", "")
+	})
+	defer cleanup()
+	fwd, err := fwds.Get(context.Background(), fwdIDStr)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if fwd.ForwardSmplkitEvents != nil {
+		t.Errorf("expected ForwardSmplkitEvents nil, got %v", *fwd.ForwardSmplkitEvents)
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
