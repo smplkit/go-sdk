@@ -474,6 +474,43 @@ func TestAuditResourceTypes_List_TransportError(t *testing.T) {
 	}
 }
 
+func TestAuditResourceTypes_List_Environments(t *testing.T) {
+	var captured string
+	var present bool
+	rt, cleanup := newTestAuditResourceTypes(t, func(w http.ResponseWriter, r *http.Request) {
+		captured = r.URL.Query().Get("filter[environment]")
+		_, present = r.URL.Query()["filter[environment]"]
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":1,"size":1000}}}`))
+	})
+	defer cleanup()
+
+	// Omitted by default.
+	if _, err := rt.List(context.Background(), ListResourceTypesInput{}); err != nil {
+		t.Fatalf("ResourceTypes.List: %v", err)
+	}
+	if present {
+		t.Error("expected filter[environment] absent when Environments is nil")
+	}
+
+	// Single value.
+	if _, err := rt.List(context.Background(), ListResourceTypesInput{Environments: []string{"production"}}); err != nil {
+		t.Fatalf("ResourceTypes.List: %v", err)
+	}
+	if !present || captured != "production" {
+		t.Errorf("expected filter[environment]=production, got %q (present=%v)", captured, present)
+	}
+
+	// Multiple values comma-join, including the reserved smplkit bucket.
+	if _, err := rt.List(context.Background(), ListResourceTypesInput{Environments: []string{"smplkit", "staging"}}); err != nil {
+		t.Fatalf("ResourceTypes.List: %v", err)
+	}
+	if !present || captured != "smplkit,staging" {
+		t.Errorf("expected filter[environment]=smplkit,staging, got %q (present=%v)", captured, present)
+	}
+}
+
 func TestAuditEventTypes_List_ReturnsSlugs(t *testing.T) {
 	ac, cleanup := newTestAuditEventTypes(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -516,6 +553,51 @@ func TestAuditEventTypes_List_FilterResourceType(t *testing.T) {
 	}
 	if !strings.Contains(capturedQuery, "invoice") {
 		t.Errorf("expected filter[resource_type] in query, got %q", capturedQuery)
+	}
+}
+
+func TestAuditEventTypes_List_Environments(t *testing.T) {
+	var captured string
+	var present bool
+	ac, cleanup := newTestAuditEventTypes(t, func(w http.ResponseWriter, r *http.Request) {
+		captured = r.URL.Query().Get("filter[environment]")
+		_, present = r.URL.Query()["filter[environment]"]
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":1,"size":1000}}}`))
+	})
+	defer cleanup()
+
+	// Omitted by default.
+	if _, err := ac.List(context.Background(), ListEventTypesInput{}); err != nil {
+		t.Fatalf("EventTypes.List: %v", err)
+	}
+	if present {
+		t.Error("expected filter[environment] absent when Environments is nil")
+	}
+
+	// Single value.
+	if _, err := ac.List(context.Background(), ListEventTypesInput{Environments: []string{"production"}}); err != nil {
+		t.Fatalf("EventTypes.List: %v", err)
+	}
+	if !present || captured != "production" {
+		t.Errorf("expected filter[environment]=production, got %q (present=%v)", captured, present)
+	}
+
+	// Multiple values comma-join.
+	if _, err := ac.List(context.Background(), ListEventTypesInput{Environments: []string{"production", "staging"}}); err != nil {
+		t.Fatalf("EventTypes.List: %v", err)
+	}
+	if !present || captured != "production,staging" {
+		t.Errorf("expected filter[environment]=production,staging, got %q (present=%v)", captured, present)
+	}
+
+	// Reserved smplkit bucket accepted as a standalone value.
+	if _, err := ac.List(context.Background(), ListEventTypesInput{Environments: []string{"smplkit"}}); err != nil {
+		t.Fatalf("EventTypes.List: %v", err)
+	}
+	if !present || captured != "smplkit" {
+		t.Errorf("expected filter[environment]=smplkit, got %q (present=%v)", captured, present)
 	}
 }
 

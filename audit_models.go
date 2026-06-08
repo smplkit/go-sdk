@@ -164,6 +164,15 @@ type CreateEventInput struct {
 
 // ListEventsInput passes filters and pagination to AuditEvents.List.
 type ListEventsInput struct {
+	// Environments scopes results to the given environment keys (e.g.
+	// "production", "staging"). When omitted or empty, results are scoped
+	// to your single accessible environment. The reserved value "smplkit"
+	// selects platform change events that smplkit records about your own
+	// resources (flags, configuration, and so on); these are not tied to a
+	// deployment environment and are readable regardless of which
+	// environments you manage. Multiple values are sent as a single
+	// comma-separated filter[environment].
+	Environments []string
 	// EventType filters by exact event type slug.
 	EventType string
 	// ResourceType filters by exact resource type.
@@ -232,6 +241,15 @@ type AuditResourceType struct {
 
 // ListResourceTypesInput is the pagination input for AuditResourceTypes.List.
 type ListResourceTypesInput struct {
+	// Environments scopes results to the given environment keys (e.g.
+	// "production", "staging"). When omitted or empty, results are scoped
+	// to your single accessible environment. The reserved value "smplkit"
+	// selects platform change events that smplkit records about your own
+	// resources (flags, configuration, and so on); these are not tied to a
+	// deployment environment and are readable regardless of which
+	// environments you manage. Multiple values are sent as a single
+	// comma-separated filter[environment].
+	Environments []string
 	// PageNumber is the 1-based page index. Zero defers to the server default.
 	PageNumber int
 	// PageSize is items per page. Zero defers to the server default.
@@ -258,6 +276,15 @@ type AuditEventType struct {
 
 // ListEventTypesInput is the filter + pagination input for AuditEventTypes.List.
 type ListEventTypesInput struct {
+	// Environments scopes results to the given environment keys (e.g.
+	// "production", "staging"). When omitted or empty, results are scoped
+	// to your single accessible environment. The reserved value "smplkit"
+	// selects platform change events that smplkit records about your own
+	// resources (flags, configuration, and so on); these are not tied to a
+	// deployment environment and are readable regardless of which
+	// environments you manage. Multiple values are sent as a single
+	// comma-separated filter[environment].
+	Environments []string
 	// FilterResourceType, when set, returns only event types seen with that
 	// specific resource type.
 	FilterResourceType string

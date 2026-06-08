@@ -122,6 +122,9 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 // the previous page's NextCursor as PageAfter to walk subsequent pages.
 func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEventsPage, error) {
 	params := &genaudit.ListEventsParams{}
+	if env := joinEnvironments(input.Environments); env != "" {
+		params.FilterEnvironment = &env
+	}
 	if input.EventType != "" {
 		params.FilterEventType = &input.EventType
 	}
@@ -207,6 +210,9 @@ func (e *AuditEvents) close() {
 // offset pagination via PageNumber / PageSize (ADR-014).
 func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesInput) (*ResourceTypeListPage, error) {
 	params := &genaudit.ListResourceTypesParams{}
+	if env := joinEnvironments(input.Environments); env != "" {
+		params.FilterEnvironment = &env
+	}
 	if input.PageNumber > 0 {
 		params.PageNumber = &input.PageNumber
 	}
@@ -245,6 +251,9 @@ func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesI
 // type. Sorted alphabetically; offset pagination via PageNumber / PageSize.
 func (et *AuditEventTypes) List(ctx context.Context, input ListEventTypesInput) (*EventTypeListPage, error) {
 	params := &genaudit.ListEventTypesParams{}
+	if env := joinEnvironments(input.Environments); env != "" {
+		params.FilterEnvironment = &env
+	}
 	if input.FilterResourceType != "" {
 		params.FilterResourceType = &input.FilterResourceType
 	}
@@ -333,6 +342,24 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 		out.Environment = *attrs.Environment
 	}
 	return out
+}
+
+// joinEnvironments comma-joins the requested environment keys into the
+// single filter[environment] value the audit read endpoints accept.
+// Empty/whitespace-only entries are dropped; a nil or all-empty slice
+// yields "" so the caller omits the parameter entirely (preserving the
+// pre-existing single-environment scoping).
+func joinEnvironments(envs []string) string {
+	if len(envs) == 0 {
+		return ""
+	}
+	kept := make([]string, 0, len(envs))
+	for _, e := range envs {
+		if trimmed := strings.TrimSpace(e); trimmed != "" {
+			kept = append(kept, trimmed)
+		}
+	}
+	return strings.Join(kept, ",")
 }
 
 // extractNextCursor extracts the page[after] cursor value from a

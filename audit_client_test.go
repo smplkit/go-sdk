@@ -537,6 +537,72 @@ func TestAuditEvents_List_AllFilters(t *testing.T) {
 	}
 }
 
+// captureEventsListQuery runs events.List with the given input against a
+// stub server and returns the decoded filter[environment] query value and
+// whether the parameter was present at all.
+func captureEventsListQuery(t *testing.T, input ListEventsInput) (value string, present bool) {
+	t.Helper()
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, r *http.Request) {
+		value = r.URL.Query().Get("filter[environment]")
+		_, present = r.URL.Query()["filter[environment]"]
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
+	})
+	defer cleanup()
+	if _, err := events.List(context.Background(), input); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	return value, present
+}
+
+func TestAuditEvents_List_EnvironmentsOmittedByDefault(t *testing.T) {
+	// nil Environments
+	if _, present := captureEventsListQuery(t, ListEventsInput{}); present {
+		t.Error("expected filter[environment] absent when Environments is nil")
+	}
+	// empty (non-nil) slice
+	if _, present := captureEventsListQuery(t, ListEventsInput{Environments: []string{}}); present {
+		t.Error("expected filter[environment] absent when Environments is empty")
+	}
+	// slice of only blank entries collapses to nothing → omitted
+	if _, present := captureEventsListQuery(t, ListEventsInput{Environments: []string{"", "   "}}); present {
+		t.Error("expected filter[environment] absent when Environments has only blanks")
+	}
+}
+
+func TestAuditEvents_List_EnvironmentsSingleValue(t *testing.T) {
+	value, present := captureEventsListQuery(t, ListEventsInput{Environments: []string{"production"}})
+	if !present {
+		t.Fatal("expected filter[environment] to be present")
+	}
+	if value != "production" {
+		t.Errorf("expected filter[environment]=production, got %q", value)
+	}
+}
+
+func TestAuditEvents_List_EnvironmentsMultipleCommaJoin(t *testing.T) {
+	value, present := captureEventsListQuery(t, ListEventsInput{Environments: []string{"production", "staging"}})
+	if !present {
+		t.Fatal("expected filter[environment] to be present")
+	}
+	if value != "production,staging" {
+		t.Errorf("expected filter[environment]=production,staging, got %q", value)
+	}
+}
+
+func TestAuditEvents_List_EnvironmentsSmplkitBucketAccepted(t *testing.T) {
+	// The reserved "smplkit" control-plane bucket is just another value on
+	// the wire — possibly combined with real environment keys.
+	value, present := captureEventsListQuery(t, ListEventsInput{Environments: []string{"smplkit", "production"}})
+	if !present {
+		t.Fatal("expected filter[environment] to be present")
+	}
+	if value != "smplkit,production" {
+		t.Errorf("expected filter[environment]=smplkit,production, got %q", value)
+	}
+}
+
 func TestAuditEvents_Get_500(t *testing.T) {
 	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "boom", 500)
