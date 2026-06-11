@@ -96,10 +96,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.",
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.",
               "title": "Filter[Environment]"
             },
-            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402."
           },
           {
             "name": "filter[occurred_at]",
@@ -402,7 +402,7 @@
           "Events"
         ],
         "summary": "Search Events",
-        "description": "Search audit events with column filters and an optional JSON Logic expression.\n\nScoped by `filter[environment]` (a comma-separated set). When omitted, a\nsingle-environment credential is implied; otherwise send the\n`X-Smplkit-Environment` header. The reserved `smplkit` value selects\nplatform change events smplkit records about your own resources.\n\nWithout a JSON Logic `filter`: behaves like `GET /api/v1/events`\nwith the same column filters.\n\nWith a JSON Logic `filter`: the search is silently capped to the\nlast 30 days by `occurred_at` (intersected with any explicit\n`filter[occurred_at]` the caller supplied), the column filters\nnarrow the candidate set in SQL, and the JSON Logic expression\nruns in memory against each candidate row using the same\n`json-logic-qubit` evaluator the forwarder pipeline uses. Up to\n50,000 rows are scanned per request; the response's `meta.scan`\nblock reports the scan stats so a selective filter doesn't look\nlike \"0 matches\" when the truth is \"ceiling reached.\"",
+        "description": "Search audit events with column filters and an optional JSON Logic expression.\n\nScoped by `filter[environment]` (a comma-separated set). When omitted,\nresults cover every environment you can access. The reserved `smplkit`\nvalue selects platform change events smplkit records about your own\nresources; it is included by default when your plan grants change history,\nand requesting it explicitly without that entitlement returns 402.\n\nWithout a JSON Logic `filter`: behaves like `GET /api/v1/events`\nwith the same column filters.\n\nWith a JSON Logic `filter`: the search is silently capped to the\nlast 30 days by `occurred_at` (intersected with any explicit\n`filter[occurred_at]` the caller supplied), the column filters\nnarrow the candidate set in SQL, and the JSON Logic expression\nruns in memory against each candidate row using the same\n`json-logic-qubit` evaluator the forwarder pipeline uses. Up to\n50,000 rows are scanned per request; the response's `meta.scan`\nblock reports the scan stats so a selective filter doesn't look\nlike \"0 matches\" when the truth is \"ceiling reached.\"",
         "operationId": "search_events",
         "requestBody": {
           "content": {
@@ -1161,10 +1161,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.",
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.",
               "title": "Filter[Environment]"
             },
-            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402."
           },
           {
             "name": "sort",
@@ -1260,10 +1260,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.",
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.",
               "title": "Filter[Environment]"
             },
-            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402."
           },
           {
             "name": "filter[resource_type]",
@@ -1375,10 +1375,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.",
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.",
               "title": "Filter[Environment]"
             },
-            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402."
           },
           {
             "name": "sort",
@@ -1892,7 +1892,7 @@
               }
             ],
             "title": "Filter[Environment]",
-            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage."
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402."
           },
           "filter[event_type]": {
             "anyOf": [

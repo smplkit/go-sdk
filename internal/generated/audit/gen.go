@@ -540,7 +540,7 @@ type EventSearchRequest struct {
 	// FilterDoNotForward When set, restrict to events whose `do_not_forward` flag matches the given boolean. Forwarder previews typically pass `false` to match live-pipeline semantics (events flagged `do_not_forward=true` are skipped by the forwarder pipeline).
 	FilterDoNotForward *bool `json:"filter[do_not_forward],omitempty"`
 
-	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.
 	FilterEnvironment *string `json:"filter[environment],omitempty"`
 
 	// FilterEventType Exact match on the event's `event_type` field.
@@ -1274,7 +1274,7 @@ type hTTPBearerContextKey string
 
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
-	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.
 	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
@@ -1295,7 +1295,7 @@ type ListCategoriesParamsSort string
 
 // ListEventTypesParams defines parameters for ListEventTypes.
 type ListEventTypesParams struct {
-	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.
 	FilterEnvironment  *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 	FilterResourceType *string `form:"filter[resource_type],omitempty" json:"filter[resource_type],omitempty"`
 
@@ -1317,7 +1317,7 @@ type ListEventTypesParamsSort string
 
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
-	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.
 	FilterEnvironment  *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 	FilterOccurredAt   *string `form:"filter[occurred_at],omitempty" json:"filter[occurred_at],omitempty"`
 	FilterActorType    *string `form:"filter[actor_type],omitempty" json:"filter[actor_type],omitempty"`
@@ -1395,7 +1395,7 @@ type ListForwarderDeliveriesParamsSort string
 
 // ListResourceTypesParams defines parameters for ListResourceTypes.
 type ListResourceTypesParams struct {
-	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results are scoped to your single accessible environment; send the `X-Smplkit-Environment` header instead if you can access more than one. The reserved value `smplkit` selects platform change events that smplkit records about your own resources (flags, configuration, and so on); these are not tied to a deployment environment and are readable regardless of which environments you manage.
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.
 	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `key`. Allowed values: `key`, `-key`.
