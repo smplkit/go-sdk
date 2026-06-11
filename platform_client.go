@@ -1,5 +1,28 @@
 package smplkit
 
+// The Smpl Platform client — cross-cutting CRUD on client.Platform().
+//
+// PlatformClient groups the account-wide configuration resources that aren't
+// owned by a single product, mirroring the product UI's Platform area:
+//
+//   - Platform().Environments() — environment CRUD
+//   - Platform().Services()     — service CRUD
+//   - Platform().Contexts()     — evaluation-context registration + read/delete
+//   - Platform().ContextTypes() — context-type CRUD
+//
+// All four are pure CRUD — no Install gate. Every sub-client speaks to the
+// app service, so the client needs exactly one app transport (plus the
+// context-registration buffer that Contexts drains).
+//
+// The client supports two construction shapes:
+//
+//   - Wired into SmplClient — borrows the parent's app transport and an
+//     externally-supplied context buffer. This is the common path;
+//     client.Flags() borrows client.Platform().Contexts() as its
+//     evaluation-context registration seam.
+//   - Standalone — NewPlatformClient(...) builds and owns its own app
+//     transport and buffer.
+
 import (
 	"context"
 	"encoding/json"
@@ -9,113 +32,86 @@ import (
 	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
 )
 
-// AuditManagement is the mgmt.audit.* surface — forwarder CRUD.
-// Obtained via ManagementClient.Audit().
-type AuditManagement struct {
-	forwarders *AuditForwarders
-}
-
-// Forwarders returns the SIEM forwarder CRUD sub-client.
-func (a *AuditManagement) Forwarders() *AuditForwarders {
-	return a.forwarders
-}
-
-// Jobs returns the Smpl Jobs management sub-client (mgmt.Jobs()).
-func (m *ManagementClient) Jobs() *JobsManagement {
-	return m.jobsMgmt
-}
-
-// ManagementClient is the management-plane sub-client. Obtain one via
-// Client.Manage() (or via NewManagementClient for a standalone management
-// client with zero construction side effects — no service registration,
-// no metrics, no websocket).
+// PlatformClient is the Smpl Platform client.
 //
-// The flat namespaces mirror the Python SDK's SmplManagementClient:
+// Groups the account-wide CRUD resources that aren't owned by a single
+// product, reachable as client.Platform() (SmplClient) or constructed
+// directly:
 //
-//	mgmt.Contexts()         // context entity CRUD
-//	mgmt.ContextTypes()     // context-type schemas
-//	mgmt.Environments()     // environments
-//	mgmt.Services()         // services
-//	mgmt.AccountSettings()  // account-level settings
-//	mgmt.Config()           // config CRUD (was client.Config().Management())
-//	mgmt.Flags()            // flag CRUD (was client.Flags().Management())
-//	mgmt.Loggers()          // logger CRUD (split from the old logging mgmt)
-//	mgmt.LogGroups()        // log-group CRUD (split from the old logging mgmt)
-//	mgmt.Audit()            // audit forwarder CRUD
-//	mgmt.Jobs()             // scheduled-job CRUD + runs
-type ManagementClient struct {
-	client     *Client
+//	platform, err := smplkit.NewPlatformClient(smplkit.Config{APIKey: "sk_..."})
+//	prod := platform.Environments().New("production", "Production")
+//	prod.Save(ctx)
+//	svcs, err := platform.Services().List(ctx)
+//
+// Sub-clients: Environments, Services, Contexts, ContextTypes. Pure CRUD —
+// no Install required.
+type PlatformClient struct {
 	appClient  genapp.ClientInterface
 	contextBuf *contextRegistrationBuffer
-	standalone bool
 
-	environments    *EnvironmentsManagement
-	services        *ServicesManagement
-	contextTypes    *ContextTypesManagement
-	contexts        *ContextsManagement
-	accountSettings *AccountSettingsManagement
+	environments *EnvironmentsClient
+	services     *ServicesClient
+	contextTypes *ContextTypesClient
+	contexts     *ContextsClient
+}
 
-	// Per-domain management surfaces, owned directly (rule 1):
-	// neither requires the runtime Client to operate.
-	configMgmt    *ConfigManagement
-	flagsMgmt     *FlagsManagement
-	loggingMgmt   *LoggingManagement // legacy combined surface
-	loggersMgmt   *LoggersManagement
-	logGroupsMgmt *LogGroupsManagement
-	auditMgmt     *AuditManagement
-	jobsMgmt      *JobsManagement
+// newPlatformClient wires a PlatformClient onto a pre-built app transport and
+// a shared context-registration buffer (the wired path used by SmplClient).
+func newPlatformClient(appClient genapp.ClientInterface, buf *contextRegistrationBuffer) *PlatformClient {
+	p := &PlatformClient{appClient: appClient, contextBuf: buf}
+	p.environments = &EnvironmentsClient{appClient: appClient}
+	p.services = &ServicesClient{appClient: appClient}
+	p.contextTypes = &ContextTypesClient{appClient: appClient}
+	p.contexts = &ContextsClient{appClient: appClient, contextBuf: buf}
+	return p
+}
+
+// NewPlatformClient creates a standalone Smpl Platform client that owns its
+// own app transport and context-registration buffer.
+//
+// Construction has zero side effects: no service registration, no metrics, no
+// websocket — just CRUD against the app service.
+func NewPlatformClient(cfg Config, opts ...ClientOption) (*PlatformClient, error) {
+	rc, err := resolveStandaloneConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	optCfg := defaultConfig()
+	for _, opt := range opts {
+		opt(&optCfg)
+	}
+	_, genApp := buildGenClients(optCfg, rc)
+	return newPlatformClient(genApp, newContextRegistrationBuffer()), nil
 }
 
 // Environments returns the sub-client for environment CRUD operations.
-func (m *ManagementClient) Environments() *EnvironmentsManagement {
-	if m.environments == nil {
-		m.environments = &EnvironmentsManagement{client: m}
-	}
-	return m.environments
-}
+func (p *PlatformClient) Environments() *EnvironmentsClient { return p.environments }
 
 // Services returns the sub-client for service CRUD operations.
-func (m *ManagementClient) Services() *ServicesManagement {
-	if m.services == nil {
-		m.services = &ServicesManagement{client: m}
-	}
-	return m.services
-}
+func (p *PlatformClient) Services() *ServicesClient { return p.services }
 
-// ContextTypes returns the sub-client for context type CRUD operations.
-func (m *ManagementClient) ContextTypes() *ContextTypesManagement {
-	if m.contextTypes == nil {
-		m.contextTypes = &ContextTypesManagement{client: m}
-	}
-	return m.contextTypes
-}
+// ContextTypes returns the sub-client for context-type CRUD operations.
+func (p *PlatformClient) ContextTypes() *ContextTypesClient { return p.contextTypes }
 
 // Contexts returns the sub-client for context registration and read/delete operations.
-func (m *ManagementClient) Contexts() *ContextsManagement {
-	if m.contexts == nil {
-		m.contexts = &ContextsManagement{client: m}
-	}
-	return m.contexts
-}
+func (p *PlatformClient) Contexts() *ContextsClient { return p.contexts }
 
-// AccountSettings returns the sub-client for account settings get/save.
-func (m *ManagementClient) AccountSettings() *AccountSettingsManagement {
-	if m.accountSettings == nil {
-		m.accountSettings = &AccountSettingsManagement{client: m}
-	}
-	return m.accountSettings
-}
+// Close releases resources held by a standalone PlatformClient. A wired
+// client borrows the parent's app transport and closes nothing; the
+// underlying http.Client is pooled by net/http, so this is a no-op kept for
+// symmetry and a clean defer point.
+func (p *PlatformClient) Close() error { return nil }
 
 // ── Environments ─────────────────────────────────────────────────────────────
 
-// EnvironmentsManagement provides CRUD operations for environment resources.
-// Obtain one via ManagementClient.Environments().
-type EnvironmentsManagement struct {
-	client *ManagementClient
+// EnvironmentsClient provides CRUD operations for environment resources
+// (client.Platform().Environments()).
+type EnvironmentsClient struct {
+	appClient genapp.ClientInterface
 }
 
 // New returns an unsaved Environment. Call env.Save(ctx) to persist.
-func (m *EnvironmentsManagement) New(id string, name string, opts ...EnvironmentOption) *Environment {
+func (m *EnvironmentsClient) New(id string, name string, opts ...EnvironmentOption) *Environment {
 	e := &Environment{
 		ID:             id,
 		Name:           name,
@@ -132,13 +128,13 @@ func (m *EnvironmentsManagement) New(id string, name string, opts ...Environment
 //
 // Without options the server applies its defaults (page 1, page size
 // 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
-func (m *EnvironmentsManagement) List(ctx context.Context, opts ...ListOption) ([]*Environment, error) {
+func (m *EnvironmentsClient) List(ctx context.Context, opts ...ListOption) ([]*Environment, error) {
 	o := resolveListOptions(opts)
 	params := &genapp.ListEnvironmentsParams{
 		PageNumber: o.pageNumber,
 		PageSize:   o.pageSize,
 	}
-	resp, err := m.client.appClient.ListEnvironments(ctx, params)
+	resp, err := m.appClient.ListEnvironments(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -165,8 +161,8 @@ func (m *EnvironmentsManagement) List(ctx context.Context, opts ...ListOption) (
 }
 
 // Get retrieves a single environment by ID.
-func (m *EnvironmentsManagement) Get(ctx context.Context, id string) (*Environment, error) {
-	resp, err := m.client.appClient.GetEnvironment(ctx, id)
+func (m *EnvironmentsClient) Get(ctx context.Context, id string) (*Environment, error) {
+	resp, err := m.appClient.GetEnvironment(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -188,8 +184,8 @@ func (m *EnvironmentsManagement) Get(ctx context.Context, id string) (*Environme
 }
 
 // Delete removes an environment by ID.
-func (m *EnvironmentsManagement) Delete(ctx context.Context, id string) error {
-	resp, err := m.client.appClient.DeleteEnvironment(ctx, id, nil)
+func (m *EnvironmentsClient) Delete(ctx context.Context, id string) error {
+	resp, err := m.appClient.DeleteEnvironment(ctx, id, nil)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -203,9 +199,9 @@ func (m *EnvironmentsManagement) Delete(ctx context.Context, id string) error {
 }
 
 // create sends a POST to create the environment; updates e with the server response.
-func (m *EnvironmentsManagement) create(ctx context.Context, e *Environment) error {
+func (m *EnvironmentsClient) create(ctx context.Context, e *Environment) error {
 	reqBody := environmentToCreateRequest(e)
-	resp, err := m.client.appClient.CreateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	resp, err := m.appClient.CreateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -228,9 +224,9 @@ func (m *EnvironmentsManagement) create(ctx context.Context, e *Environment) err
 }
 
 // update sends a PUT to update the environment; updates e with the server response.
-func (m *EnvironmentsManagement) update(ctx context.Context, e *Environment) error {
+func (m *EnvironmentsClient) update(ctx context.Context, e *Environment) error {
 	reqBody := environmentToRequest(e)
-	resp, err := m.client.appClient.UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx, e.ID, reqBody)
+	resp, err := m.appClient.UpdateEnvironmentWithApplicationVndAPIPlusJSONBody(ctx, e.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -286,7 +282,7 @@ func environmentToCreateRequest(e *Environment) genapp.EnvironmentCreateRequest 
 	}
 }
 
-func resourceToEnvironment(r genapp.EnvironmentResource, m *EnvironmentsManagement) *Environment {
+func resourceToEnvironment(r genapp.EnvironmentResource, m *EnvironmentsClient) *Environment {
 	e := &Environment{
 		Name:           r.Attributes.Name,
 		Color:          r.Attributes.Color,
@@ -308,14 +304,14 @@ func resourceToEnvironment(r genapp.EnvironmentResource, m *EnvironmentsManageme
 
 // ── Services ─────────────────────────────────────────────────────────────────
 
-// ServicesManagement provides CRUD operations for service resources.
-// Obtain one via ManagementClient.Services().
-type ServicesManagement struct {
-	client *ManagementClient
+// ServicesClient provides CRUD operations for service resources
+// (client.Platform().Services()).
+type ServicesClient struct {
+	appClient genapp.ClientInterface
 }
 
 // New returns an unsaved Service. Call svc.Save(ctx) to persist.
-func (m *ServicesManagement) New(id string, name string) *Service {
+func (m *ServicesClient) New(id string, name string) *Service {
 	return &Service{
 		ID:     id,
 		Name:   name,
@@ -327,13 +323,13 @@ func (m *ServicesManagement) New(id string, name string) *Service {
 //
 // Without options the server applies its defaults (page 1, page size
 // 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
-func (m *ServicesManagement) List(ctx context.Context, opts ...ListOption) ([]*Service, error) {
+func (m *ServicesClient) List(ctx context.Context, opts ...ListOption) ([]*Service, error) {
 	o := resolveListOptions(opts)
 	params := &genapp.ListServicesParams{
 		PageNumber: o.pageNumber,
 		PageSize:   o.pageSize,
 	}
-	resp, err := m.client.appClient.ListServices(ctx, params)
+	resp, err := m.appClient.ListServices(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -360,8 +356,8 @@ func (m *ServicesManagement) List(ctx context.Context, opts ...ListOption) ([]*S
 }
 
 // Get retrieves a single service by ID.
-func (m *ServicesManagement) Get(ctx context.Context, id string) (*Service, error) {
-	resp, err := m.client.appClient.GetService(ctx, id)
+func (m *ServicesClient) Get(ctx context.Context, id string) (*Service, error) {
+	resp, err := m.appClient.GetService(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -383,8 +379,8 @@ func (m *ServicesManagement) Get(ctx context.Context, id string) (*Service, erro
 }
 
 // Delete removes a service by ID.
-func (m *ServicesManagement) Delete(ctx context.Context, id string) error {
-	resp, err := m.client.appClient.DeleteService(ctx, id)
+func (m *ServicesClient) Delete(ctx context.Context, id string) error {
+	resp, err := m.appClient.DeleteService(ctx, id)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -398,9 +394,9 @@ func (m *ServicesManagement) Delete(ctx context.Context, id string) error {
 }
 
 // create sends a POST to create the service; updates s with the server response.
-func (m *ServicesManagement) create(ctx context.Context, s *Service) error {
+func (m *ServicesClient) create(ctx context.Context, s *Service) error {
 	reqBody := serviceToCreateRequest(s)
-	resp, err := m.client.appClient.CreateServiceWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	resp, err := m.appClient.CreateServiceWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -423,9 +419,9 @@ func (m *ServicesManagement) create(ctx context.Context, s *Service) error {
 }
 
 // update sends a PUT to update the service; updates s with the server response.
-func (m *ServicesManagement) update(ctx context.Context, s *Service) error {
+func (m *ServicesClient) update(ctx context.Context, s *Service) error {
 	reqBody := serviceToRequest(s)
-	resp, err := m.client.appClient.UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx, s.ID, reqBody)
+	resp, err := m.appClient.UpdateServiceWithApplicationVndAPIPlusJSONBody(ctx, s.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -478,7 +474,7 @@ func serviceToCreateRequest(s *Service) genapp.ServiceCreateRequest {
 	}
 }
 
-func resourceToService(r genapp.ServiceResource, m *ServicesManagement) *Service {
+func resourceToService(r genapp.ServiceResource, m *ServicesClient) *Service {
 	s := &Service{
 		Name:      r.Attributes.Name,
 		CreatedAt: r.Attributes.CreatedAt,
@@ -493,15 +489,15 @@ func resourceToService(r genapp.ServiceResource, m *ServicesManagement) *Service
 
 // ── ContextTypes ─────────────────────────────────────────────────────────────
 
-// ContextTypesManagement provides CRUD operations for context type resources.
-// Obtain one via ManagementClient.ContextTypes().
-type ContextTypesManagement struct {
-	client *ManagementClient
+// ContextTypesClient provides CRUD operations for context-type resources
+// (client.Platform().ContextTypes()).
+type ContextTypesClient struct {
+	appClient genapp.ClientInterface
 }
 
 // New returns an unsaved ContextType. Call ct.Save(ctx) to persist.
 // If no name option is provided the ID is used as the display name.
-func (m *ContextTypesManagement) New(id string, opts ...ContextTypeOption) *ContextType {
+func (m *ContextTypesClient) New(id string, opts ...ContextTypeOption) *ContextType {
 	ct := &ContextType{
 		ID:         id,
 		Name:       id,
@@ -518,13 +514,13 @@ func (m *ContextTypesManagement) New(id string, opts ...ContextTypeOption) *Cont
 //
 // Without options the server applies its defaults (page 1, page size
 // 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
-func (m *ContextTypesManagement) List(ctx context.Context, opts ...ListOption) ([]*ContextType, error) {
+func (m *ContextTypesClient) List(ctx context.Context, opts ...ListOption) ([]*ContextType, error) {
 	o := resolveListOptions(opts)
 	params := &genapp.ListContextTypesParams{
 		PageNumber: o.pageNumber,
 		PageSize:   o.pageSize,
 	}
-	resp, err := m.client.appClient.ListContextTypes(ctx, params)
+	resp, err := m.appClient.ListContextTypes(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -551,8 +547,8 @@ func (m *ContextTypesManagement) List(ctx context.Context, opts ...ListOption) (
 }
 
 // Get retrieves a single context type by ID.
-func (m *ContextTypesManagement) Get(ctx context.Context, id string) (*ContextType, error) {
-	resp, err := m.client.appClient.GetContextType(ctx, id)
+func (m *ContextTypesClient) Get(ctx context.Context, id string) (*ContextType, error) {
+	resp, err := m.appClient.GetContextType(ctx, id)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -569,8 +565,8 @@ func (m *ContextTypesManagement) Get(ctx context.Context, id string) (*ContextTy
 }
 
 // Delete removes a context type by ID.
-func (m *ContextTypesManagement) Delete(ctx context.Context, id string) error {
-	resp, err := m.client.appClient.DeleteContextType(ctx, id)
+func (m *ContextTypesClient) Delete(ctx context.Context, id string) error {
+	resp, err := m.appClient.DeleteContextType(ctx, id)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -583,9 +579,9 @@ func (m *ContextTypesManagement) Delete(ctx context.Context, id string) error {
 	return checkStatus(resp.StatusCode, body)
 }
 
-func (m *ContextTypesManagement) create(ctx context.Context, ct *ContextType) error {
+func (m *ContextTypesClient) create(ctx context.Context, ct *ContextType) error {
 	reqBody := contextTypeToRequest(ct)
-	resp, err := m.client.appClient.CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	resp, err := m.appClient.CreateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -606,9 +602,9 @@ func (m *ContextTypesManagement) create(ctx context.Context, ct *ContextType) er
 	return nil
 }
 
-func (m *ContextTypesManagement) update(ctx context.Context, ct *ContextType) error {
+func (m *ContextTypesClient) update(ctx context.Context, ct *ContextType) error {
 	reqBody := contextTypeToRequest(ct)
-	resp, err := m.client.appClient.UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, ct.ID, reqBody)
+	resp, err := m.appClient.UpdateContextTypeWithApplicationVndAPIPlusJSONBody(ctx, ct.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -648,7 +644,7 @@ func contextTypeToRequest(ct *ContextType) genapp.ContextTypeRequest {
 	}
 }
 
-func resourceToContextType(r genapp.ContextTypeResource, m *ContextTypesManagement) *ContextType {
+func resourceToContextType(r genapp.ContextTypeResource, m *ContextTypesClient) *ContextType {
 	typedAttrs := make(map[string]map[string]interface{})
 	if r.Attributes.Attributes != nil {
 		for k, v := range *r.Attributes.Attributes {
@@ -670,7 +666,7 @@ func resourceToContextType(r genapp.ContextTypeResource, m *ContextTypesManageme
 	return ct
 }
 
-func parseContextTypeFromBody(body []byte, m *ContextTypesManagement) (*ContextType, error) {
+func parseContextTypeFromBody(body []byte, m *ContextTypesClient) (*ContextType, error) {
 	ct, err := parseContextType(body)
 	if err != nil {
 		return nil, err
@@ -694,21 +690,22 @@ func WithContextFlush() ContextsRegisterOption {
 	return func(o *contextsRegisterOpts) { o.flush = true }
 }
 
-// ContextsManagement provides context registration, listing, and deletion.
-// Obtain one via ManagementClient.Contexts().
-type ContextsManagement struct {
-	client *ManagementClient
+// ContextsClient provides context registration, listing, and deletion
+// (client.Platform().Contexts()).
+type ContextsClient struct {
+	appClient  genapp.ClientInterface
+	contextBuf *contextRegistrationBuffer
 }
 
 // Register buffers contexts for registration with the server.
 // By default contexts are queued for background flush; use WithContextFlush()
 // to perform an immediate synchronous flush after queuing.
-func (m *ContextsManagement) Register(ctx context.Context, contexts []Context, opts ...ContextsRegisterOption) error {
+func (m *ContextsClient) Register(ctx context.Context, contexts []Context, opts ...ContextsRegisterOption) error {
 	o := &contextsRegisterOpts{}
 	for _, opt := range opts {
 		opt(o)
 	}
-	m.client.contextBuf.observe(contexts)
+	m.contextBuf.observe(contexts)
 	if o.flush {
 		return m.Flush(ctx)
 	}
@@ -716,15 +713,20 @@ func (m *ContextsManagement) Register(ctx context.Context, contexts []Context, o
 }
 
 // Flush sends any pending context observations to the server immediately.
-func (m *ContextsManagement) Flush(ctx context.Context) error {
-	batch := m.client.contextBuf.drain()
+func (m *ContextsClient) Flush(ctx context.Context) error {
+	batch := m.contextBuf.drain()
 	if len(batch) == 0 {
 		return nil
 	}
 	return m.flushBatch(ctx, batch)
 }
 
-func (m *ContextsManagement) flushBatch(ctx context.Context, batch []map[string]interface{}) error {
+// PendingCount reports the number of observations queued and awaiting flush.
+func (m *ContextsClient) PendingCount() int {
+	return m.contextBuf.pendingCount()
+}
+
+func (m *ContextsClient) flushBatch(ctx context.Context, batch []map[string]interface{}) error {
 	items := make([]genapp.ContextBulkItem, 0, len(batch))
 	for _, entry := range batch {
 		t, _ := entry["type"].(string)
@@ -736,7 +738,7 @@ func (m *ContextsManagement) flushBatch(ctx context.Context, batch []map[string]
 		items = append(items, item)
 	}
 	reqBody := genapp.ContextBulkRegister{Contexts: items}
-	resp, err := m.client.appClient.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	resp, err := m.appClient.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -753,14 +755,14 @@ func (m *ContextsManagement) flushBatch(ctx context.Context, batch []map[string]
 //
 // Without options the server applies its defaults (page 1, page size
 // 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
-func (m *ContextsManagement) List(ctx context.Context, contextType string, opts ...ListOption) ([]*ContextEntity, error) {
+func (m *ContextsClient) List(ctx context.Context, contextType string, opts ...ListOption) ([]*ContextEntity, error) {
 	o := resolveListOptions(opts)
 	params := &genapp.ListContextsParams{
 		FilterContextType: &contextType,
 		PageNumber:        o.pageNumber,
 		PageSize:          o.pageSize,
 	}
-	resp, err := m.client.appClient.ListContexts(ctx, params)
+	resp, err := m.appClient.ListContexts(ctx, params)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -795,14 +797,14 @@ func (m *ContextsManagement) List(ctx context.Context, contextType string, opts 
 // Get retrieves a single context by its composite "type:key" id, or by separate
 // type and key arguments:
 //
-//	management.Contexts().Get(ctx, "user:usr_123")
-//	management.Contexts().Get(ctx, "user", "usr_123")
-func (m *ContextsManagement) Get(ctx context.Context, parts ...string) (*ContextEntity, error) {
+//	client.Platform().Contexts().Get(ctx, "user:usr_123")
+//	client.Platform().Contexts().Get(ctx, "user", "usr_123")
+func (m *ContextsClient) Get(ctx context.Context, parts ...string) (*ContextEntity, error) {
 	composite, err := resolveContextID(parts)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := m.client.appClient.GetContext(ctx, composite)
+	resp, err := m.appClient.GetContext(ctx, composite)
 	if err != nil {
 		return nil, classifyError(err)
 	}
@@ -828,7 +830,7 @@ func (m *ContextsManagement) Get(ctx context.Context, parts ...string) (*Context
 // saveEntity is the active-record save path for a ContextEntity. It uses
 // the upsert-style bulk-register endpoint so creation and update share
 // one wire call.
-func (m *ContextsManagement) saveEntity(ctx context.Context, ce *ContextEntity) error {
+func (m *ContextsClient) saveEntity(ctx context.Context, ce *ContextEntity) error {
 	attrs := make(map[string]interface{}, len(ce.Attributes))
 	for k, v := range ce.Attributes {
 		attrs[k] = v
@@ -842,7 +844,7 @@ func (m *ContextsManagement) saveEntity(ctx context.Context, ce *ContextEntity) 
 		Attributes: &attrs,
 	}
 	body := genapp.ContextBulkRegister{Contexts: []genapp.ContextBulkItem{item}}
-	resp, err := m.client.appClient.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, body)
+	resp, err := m.appClient.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, body)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -856,12 +858,12 @@ func (m *ContextsManagement) saveEntity(ctx context.Context, ce *ContextEntity) 
 
 // Delete removes a context by its composite "type:key" id, or by separate type
 // and key arguments.
-func (m *ContextsManagement) Delete(ctx context.Context, parts ...string) error {
+func (m *ContextsClient) Delete(ctx context.Context, parts ...string) error {
 	composite, err := resolveContextID(parts)
 	if err != nil {
 		return err
 	}
-	resp, err := m.client.appClient.DeleteContext(ctx, composite)
+	resp, err := m.appClient.DeleteContext(ctx, composite)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -902,7 +904,7 @@ func containsColon(s string) bool {
 	return false
 }
 
-func parseContextEntityRawWithClient(raw json.RawMessage, client *ContextsManagement) (*ContextEntity, error) {
+func parseContextEntityRawWithClient(raw json.RawMessage, client *ContextsClient) (*ContextEntity, error) {
 	var data struct {
 		ID         string `json:"id"`
 		Attributes struct {
@@ -941,63 +943,4 @@ func indexByte(s string, b byte) int {
 		}
 	}
 	return -1
-}
-
-// ── AccountSettings ───────────────────────────────────────────────────────────
-
-// AccountSettingsManagement provides get/save for account-level settings.
-// Obtain one via ManagementClient.AccountSettings().
-type AccountSettingsManagement struct {
-	client *ManagementClient
-}
-
-// Get retrieves the current account settings.
-func (m *AccountSettingsManagement) Get(ctx context.Context) (*AccountSettings, error) {
-	resp, err := m.client.appClient.GetAccountSettings(ctx)
-	if err != nil {
-		return nil, classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	var raw map[string]interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("smplkit: failed to parse account settings: %w", err)
-	}
-	return &AccountSettings{Raw: raw, client: m}, nil
-}
-
-// save writes the settings back to the server and updates s in place.
-func (m *AccountSettingsManagement) save(ctx context.Context, s *AccountSettings) error {
-	// The spec now declares an explicit request body for put_account_settings,
-	// so the generator only emits the typed/-WithBody variants. Hand the raw
-	// map directly to the typed call — the generated client marshals it as
-	// application/vnd.api+json under the hood.
-	resp, err := m.client.appClient.PutAccountSettingsWithApplicationVndAPIPlusJSONBody(ctx, s.Raw)
-	if err != nil {
-		return classifyError(err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
-	}
-	if err := checkStatus(resp.StatusCode, body); err != nil {
-		return err
-	}
-
-	var raw map[string]interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return fmt.Errorf("smplkit: failed to parse account settings response: %w", err)
-	}
-	s.apply(&AccountSettings{Raw: raw})
-	return nil
 }

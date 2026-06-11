@@ -21,966 +21,15 @@ import (
 	"github.com/smplkit/go-sdk/v3/logging/adapters"
 )
 
-// --- NormalizeLoggerName tests ---
-
-func TestNormalizeLoggerName(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "slash and colon replaced with dot",
-			input:    "myapp/db:queries",
-			expected: "myapp.db.queries",
-		},
-		{
-			name:     "already normal lowercased",
-			input:    "Already.Normal",
-			expected: "already.normal",
-		},
-		{
-			name:     "all lowercase passthrough",
-			input:    "simple.logger",
-			expected: "simple.logger",
-		},
-		{
-			name:     "mixed separators",
-			input:    "App/Module:Sub/Deep:Leaf",
-			expected: "app.module.sub.deep.leaf",
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: "",
-		},
-		{
-			name:     "uppercase only",
-			input:    "UPPERCASE",
-			expected: "uppercase",
-		},
-		{
-			name:     "no separators uppercase",
-			input:    "MyLogger",
-			expected: "mylogger",
-		},
-		{
-			name:     "multiple consecutive slashes",
-			input:    "a//b",
-			expected: "a..b",
-		},
-		{
-			name:     "multiple consecutive colons",
-			input:    "a::b",
-			expected: "a..b",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := NormalizeLoggerName(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// --- keyToDisplayName tests ---
-
-func TestKeyToDisplayName(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "kebab-case",
-			input:    "checkout-v2",
-			expected: "Checkout V2",
-		},
-		{
-			name:     "snake_case",
-			input:    "user_service",
-			expected: "User Service",
-		},
-		{
-			name:     "single word",
-			input:    "infra",
-			expected: "Infra",
-		},
-		{
-			name:     "multiple hyphens",
-			input:    "my-cool-app",
-			expected: "My Cool App",
-		},
-		{
-			name:     "mixed separators",
-			input:    "my-service_name",
-			expected: "My Service Name",
-		},
-		{
-			name:     "already title case",
-			input:    "Already",
-			expected: "Already",
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			expected: "",
-		},
-		{
-			name:     "all uppercase",
-			input:    "API-GATEWAY",
-			expected: "API GATEWAY",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := keyToDisplayName(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// --- resolveLoggerLevel tests ---
-
-func TestResolveLoggerLevel_DirectLevel(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"level":        "WARN",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelWarn, level)
-}
-
-func TestResolveLoggerLevel_EnvironmentLevel(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"level": "WARN",
-			"environments": map[string]interface{}{
-				"production": map[string]interface{}{
-					"level": "ERROR",
-				},
-			},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelError, level)
-}
-
-func TestResolveLoggerLevel_EnvironmentOverridesBase(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"level": "DEBUG",
-			"environments": map[string]interface{}{
-				"production": map[string]interface{}{
-					"level": "ERROR",
-				},
-			},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelError, level)
-
-	// Different environment falls through to base.
-	level = resolveLoggerLevel("my.logger", "staging", loggers, groups)
-	assert.Equal(t, LogLevelDebug, level)
-}
-
-func TestResolveLoggerLevel_GroupLevel(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"group":        "group-1",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{
-		"group-1": {
-			"level":        "ERROR",
-			"environments": map[string]interface{}{},
-		},
-	}
-
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelError, level)
-}
-
-func TestResolveLoggerLevel_GroupEnvironmentLevel(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"group":        "group-1",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{
-		"group-1": {
-			"level": "WARN",
-			"environments": map[string]interface{}{
-				"production": map[string]interface{}{
-					"level": "FATAL",
-				},
-			},
-		},
-	}
-
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelFatal, level)
-}
-
-func TestResolveLoggerLevel_GroupChain(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"group":        "child-group",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{
-		"child-group": {
-			"group":        "parent-group",
-			"environments": map[string]interface{}{},
-		},
-		"parent-group": {
-			"level":        "TRACE",
-			"environments": map[string]interface{}{},
-		},
-	}
-
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelTrace, level)
-}
-
-func TestResolveLoggerLevel_GroupCycleDetection(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"group":        "group-a",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{
-		"group-a": {
-			"group":        "group-b",
-			"environments": map[string]interface{}{},
-		},
-		"group-b": {
-			"group":        "group-a",
-			"environments": map[string]interface{}{},
-		},
-	}
-
-	// Should not infinite loop; falls through to dot-notation ancestry, then INFO.
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelInfo, level)
-}
-
-func TestResolveLoggerLevel_DotNotationAncestry(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"com.acme.payments": {
-			"environments": map[string]interface{}{},
-		},
-		"com.acme": {
-			"level":        "DEBUG",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	level := resolveLoggerLevel("com.acme.payments", "production", loggers, groups)
-	assert.Equal(t, LogLevelDebug, level)
-}
-
-func TestResolveLoggerLevel_DotNotationAncestry_DeepChain(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"com.acme.payments.stripe": {
-			"environments": map[string]interface{}{},
-		},
-		"com": {
-			"level":        "WARN",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	// "com.acme.payments.stripe" -> "com.acme.payments" (not found) -> "com.acme" (not found) -> "com" (has WARN)
-	level := resolveLoggerLevel("com.acme.payments.stripe", "production", loggers, groups)
-	assert.Equal(t, LogLevelWarn, level)
-}
-
-func TestResolveLoggerLevel_Fallback(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelInfo, level)
-}
-
-func TestResolveLoggerLevel_UnknownLogger(t *testing.T) {
-	loggers := map[string]map[string]interface{}{}
-	groups := map[string]map[string]interface{}{}
-
-	level := resolveLoggerLevel("nonexistent", "production", loggers, groups)
-	assert.Equal(t, LogLevelInfo, level)
-}
-
-func TestResolveLoggerLevel_EmptyEnvironment(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"level": "DEBUG",
-			"environments": map[string]interface{}{
-				"production": map[string]interface{}{
-					"level": "ERROR",
-				},
-			},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	// Empty environment string should skip env-level check.
-	level := resolveLoggerLevel("my.logger", "", loggers, groups)
-	assert.Equal(t, LogLevelDebug, level)
-}
-
-func TestResolveLoggerLevel_GroupNotFound(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"group":        "nonexistent-group",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelInfo, level)
-}
-
-func TestResolveLoggerLevel_EnvironmentLevelEmptyString(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"level": "WARN",
-			"environments": map[string]interface{}{
-				"production": map[string]interface{}{
-					"level": "",
-				},
-			},
-		},
-	}
-	groups := map[string]map[string]interface{}{}
-
-	// Empty string env level should be skipped, fall through to base level.
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelWarn, level)
-}
-
-func TestResolveLoggerLevel_GroupEnvironmentEmptyString(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"group":        "group-1",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{
-		"group-1": {
-			"level": "WARN",
-			"environments": map[string]interface{}{
-				"production": map[string]interface{}{
-					"level": "",
-				},
-			},
-		},
-	}
-
-	// Empty string group env level should be skipped, fall through to group base.
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelWarn, level)
-}
-
-func TestResolveLoggerLevel_GroupBaseEmptyString(t *testing.T) {
-	loggers := map[string]map[string]interface{}{
-		"my.logger": {
-			"group":        "group-1",
-			"environments": map[string]interface{}{},
-		},
-	}
-	groups := map[string]map[string]interface{}{
-		"group-1": {
-			"level":        "",
-			"environments": map[string]interface{}{},
-		},
-	}
-
-	// Empty string group base level should fall through to INFO.
-	level := resolveLoggerLevel("my.logger", "production", loggers, groups)
-	assert.Equal(t, LogLevelInfo, level)
-}
-
-// --- LoggingClient accessor test (internal) ---
-
-func TestLoggingClient_Accessor(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	httpClient := &http.Client{}
-	base := httpClient.Transport
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	httpClient.Transport = &authTransport{token: "sk_test", base: base}
-
-	genLoggingClient, _ := genlogging.NewClient(server.URL, genlogging.WithHTTPClient(httpClient))
-
-	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     "test-service",
-		appURL:      server.URL,
-		httpClient:  httpClient,
-	}
-	c.logging = newLoggingClient(c, genLoggingClient)
-
-	logging := c.Logging()
-	require.NotNil(t, logging)
-	assert.Same(t, logging, c.Logging())
-}
-
-// --- Logger.apply tests ---
-
-func TestLogger_Apply(t *testing.T) {
-	logger := &Logger{
-		ID:   "old-id",
-		Name: "Old Name",
-	}
-	level := LogLevelDebug
-	groupID := "group-123"
-	other := &Logger{
-		ID:           "new-id",
-		Name:         "New Name",
-		Level:        &level,
-		Group:        &groupID,
-		Managed:      false,
-		Environments: map[string]interface{}{"prod": "data"},
-	}
-	logger.apply(other)
-
-	assert.Equal(t, "new-id", logger.ID)
-	assert.Equal(t, "New Name", logger.Name)
-	require.NotNil(t, logger.Level)
-	assert.Equal(t, LogLevelDebug, *logger.Level)
-	require.NotNil(t, logger.Group)
-	assert.Equal(t, "group-123", *logger.Group)
-	assert.False(t, logger.Managed)
-}
-
-// --- LogGroup.apply tests ---
-
-func TestLogGroup_Apply(t *testing.T) {
-	group := &LogGroup{
-		ID:   "old-id",
-		Name: "Old Name",
-	}
-	level := LogLevelError
-	parentID := "parent-123"
-	other := &LogGroup{
-		ID:           "new-id",
-		Name:         "New Name",
-		Level:        &level,
-		Group:        &parentID,
-		Environments: map[string]interface{}{"staging": "data"},
-	}
-	group.apply(other)
-
-	assert.Equal(t, "new-id", group.ID)
-	assert.Equal(t, "New Name", group.Name)
-	require.NotNil(t, group.Level)
-	assert.Equal(t, LogLevelError, *group.Level)
-	require.NotNil(t, group.Group)
-	assert.Equal(t, "parent-123", *group.Group)
-}
-
-// --- loggerRegistrationBuffer tests ---
-
-func TestLoggerRegistrationBuffer_AddAndDrain(t *testing.T) {
-	buf := newLoggerRegistrationBuffer()
-
-	buf.add("logger-a", "INFO", "INFO", "my-service", "production")
-	buf.add("logger-b", "DEBUG", "DEBUG", "my-service", "production")
-	// Duplicate should be ignored.
-	buf.add("logger-a", "WARN", "WARN", "other-service", "staging")
-
-	batch := buf.drain()
-	require.Len(t, batch, 2)
-	assert.Equal(t, "logger-a", batch[0].key)
-	assert.Equal(t, "INFO", batch[0].level)
-	assert.Equal(t, "logger-b", batch[1].key)
-
-	// Second drain should be empty.
-	batch = buf.drain()
-	assert.Empty(t, batch)
-}
-
-func TestLoggerRegistrationBuffer_DrainEmpty(t *testing.T) {
-	buf := newLoggerRegistrationBuffer()
-	batch := buf.drain()
-	assert.Empty(t, batch)
-}
-
-// --- buildLoggerAttributes tests ---
-
-func TestBuildLoggerAttributes_WithLevel(t *testing.T) {
-	level := LogLevelDebug
-	logger := &Logger{
-		ID:           "test",
-		Name:         "Test",
-		Level:        &level,
-		Managed:      true,
-		Environments: map[string]interface{}{"prod": "data"},
-		Sources:      []map[string]interface{}{{"service": "my-svc"}},
-	}
-
-	attrs := buildLoggerAttributes(logger)
-	require.NotNil(t, attrs.Level)
-	assert.Equal(t, genlogging.LogLevel("DEBUG"), *attrs.Level)
-	require.NotNil(t, attrs.Managed)
-	assert.True(t, *attrs.Managed)
-	require.NotNil(t, attrs.Environments)
-	require.NotNil(t, attrs.Sources)
-}
-
-func TestBuildLoggerAttributes_NilLevel(t *testing.T) {
-	logger := &Logger{
-		ID:      "test",
-		Name:    "Test",
-		Managed: true,
-	}
-
-	attrs := buildLoggerAttributes(logger)
-	assert.Nil(t, attrs.Level)
-}
-
-func TestBuildLoggerAttributes_NilEnvironments(t *testing.T) {
-	logger := &Logger{
-		ID:      "test",
-		Name:    "Test",
-		Managed: true,
-	}
-
-	attrs := buildLoggerAttributes(logger)
-	assert.Nil(t, attrs.Environments)
-}
-
-func TestBuildLoggerAttributes_NilSources(t *testing.T) {
-	logger := &Logger{
-		ID:      "test",
-		Name:    "Test",
-		Managed: true,
-	}
-
-	attrs := buildLoggerAttributes(logger)
-	assert.Nil(t, attrs.Sources)
-}
-
-// --- buildLogGroupAttributes tests ---
-
-func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
-	level := LogLevelWarn
-	parentID := "parent-id"
-	group := &LogGroup{
-		ID:           "infra",
-		Name:         "Infra",
-		Level:        &level,
-		Group:        &parentID,
-		Environments: map[string]interface{}{"prod": "data"},
-	}
-
-	attrs := buildLogGroupAttributes(group)
-	require.NotNil(t, attrs.Level)
-	assert.Equal(t, genlogging.LogLevel("WARN"), *attrs.Level)
-	require.NotNil(t, attrs.ParentId)
-	assert.Equal(t, "parent-id", *attrs.ParentId)
-	require.NotNil(t, attrs.Environments)
-}
-
-func TestBuildLogGroupAttributes_NilLevel(t *testing.T) {
-	group := &LogGroup{
-		ID:   "infra",
-		Name: "Infra",
-	}
-
-	attrs := buildLogGroupAttributes(group)
-	assert.Nil(t, attrs.Level)
-}
-
-func TestBuildLogGroupAttributes_NilEnvironments(t *testing.T) {
-	group := &LogGroup{
-		ID:   "infra",
-		Name: "Infra",
-	}
-
-	attrs := buildLogGroupAttributes(group)
-	assert.Nil(t, attrs.Environments)
-}
-
-// --- fireChangeListeners tests ---
-
-func TestFireChangeListeners_EmptyKey(t *testing.T) {
-	c := &LoggingClient{
-		loggersCache: make(map[string]map[string]interface{}),
-		groupsCache:  make(map[string]map[string]interface{}),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
-	}
-	c.client = &Client{environment: "test"}
-
-	var called bool
-	c.globalListeners = append(c.globalListeners, func(evt *LoggerChangeEvent) {
-		called = true
-	})
-
-	// Empty key should be a no-op.
-	c.fireChangeListeners("", "websocket")
-	assert.False(t, called)
-}
-
-func TestFireChangeListeners_GlobalAndKeyListeners(t *testing.T) {
-	c := &LoggingClient{
-		loggersCache: map[string]map[string]interface{}{
-			"my.logger": {
-				"level":        "WARN",
-				"environments": map[string]interface{}{},
-			},
-		},
-		groupsCache:  make(map[string]map[string]interface{}),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
-	}
-	c.client = &Client{environment: "test"}
-
-	var globalEvent *LoggerChangeEvent
-	var keyEvent *LoggerChangeEvent
-	c.globalListeners = append(c.globalListeners, func(evt *LoggerChangeEvent) {
-		globalEvent = evt
-	})
-	c.keyListeners["my.logger"] = append(c.keyListeners["my.logger"], func(evt *LoggerChangeEvent) {
-		keyEvent = evt
-	})
-
-	c.fireChangeListeners("my.logger", "websocket")
-
-	require.NotNil(t, globalEvent)
-	assert.Equal(t, "my.logger", globalEvent.ID)
-	assert.Equal(t, "websocket", globalEvent.Source)
-	require.NotNil(t, globalEvent.Level)
-	assert.Equal(t, LogLevelWarn, *globalEvent.Level)
-
-	require.NotNil(t, keyEvent)
-	assert.Equal(t, "my.logger", keyEvent.ID)
-}
-
-func TestFireChangeListeners_PanicRecovery(t *testing.T) {
-	c := &LoggingClient{
-		loggersCache: map[string]map[string]interface{}{
-			"my.logger": {
-				"level":        "INFO",
-				"environments": map[string]interface{}{},
-			},
-		},
-		groupsCache:  make(map[string]map[string]interface{}),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
-	}
-	c.client = &Client{environment: "test"}
-
-	var secondCalled bool
-	c.globalListeners = append(c.globalListeners, func(evt *LoggerChangeEvent) {
-		panic("bad listener")
-	})
-	c.globalListeners = append(c.globalListeners, func(evt *LoggerChangeEvent) {
-		secondCalled = true
-	})
-
-	// Should not panic.
-	c.fireChangeListeners("my.logger", "websocket")
-	assert.True(t, secondCalled)
-}
-
-func TestFireChangeListeners_KeyPanicRecovery(t *testing.T) {
-	c := &LoggingClient{
-		loggersCache: map[string]map[string]interface{}{
-			"my.logger": {
-				"level":        "INFO",
-				"environments": map[string]interface{}{},
-			},
-		},
-		groupsCache:  make(map[string]map[string]interface{}),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
-	}
-	c.client = &Client{environment: "test"}
-
-	var secondCalled bool
-	c.keyListeners["my.logger"] = append(c.keyListeners["my.logger"], func(evt *LoggerChangeEvent) {
-		panic("bad key listener")
-	})
-	c.keyListeners["my.logger"] = append(c.keyListeners["my.logger"], func(evt *LoggerChangeEvent) {
-		secondCalled = true
-	})
-
-	c.fireChangeListeners("my.logger", "websocket")
-	assert.True(t, secondCalled)
-}
-
-func TestFireChangeListeners_LoggerNotInCache(t *testing.T) {
-	c := &LoggingClient{
-		loggersCache: make(map[string]map[string]interface{}),
-		groupsCache:  make(map[string]map[string]interface{}),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
-	}
-	c.client = &Client{environment: "test"}
-
-	var event *LoggerChangeEvent
-	c.globalListeners = append(c.globalListeners, func(evt *LoggerChangeEvent) {
-		event = evt
-	})
-
-	c.fireChangeListeners("unknown.logger", "websocket")
-
-	// Should fire with nil level since logger is not in cache.
-	require.NotNil(t, event)
-	assert.Equal(t, "unknown.logger", event.ID)
-	assert.Nil(t, event.Level)
-}
-
-// --- LoggingClient.close tests ---
-
-func TestLoggingClient_Close_NilFlushDone(t *testing.T) {
-	c := &LoggingClient{
-		loggersCache: make(map[string]map[string]interface{}),
-		groupsCache:  make(map[string]map[string]interface{}),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
-		buffer:       newLoggerRegistrationBuffer(),
-	}
-	// flushDone is nil — should not panic.
-	c.close()
-}
-
-func TestLoggingClient_Close_WithFlushDone(t *testing.T) {
-	c := &LoggingClient{
-		loggersCache: make(map[string]map[string]interface{}),
-		groupsCache:  make(map[string]map[string]interface{}),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
-		buffer:       newLoggerRegistrationBuffer(),
-		flushDone:    make(chan struct{}),
-	}
-	c.close()
-	assert.Nil(t, c.flushDone)
-}
-
-// --- fetchAndCache tests ---
-
-func TestFetchAndCache(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": [{
-			"id": "my.logger",
-			"type": "logger",
-			"attributes": {
-				"id": "my.logger",
-				"name": "My Logger",
-				"level": "WARN",
-				"group": "group-id",
-				"managed": true,
-				"environments": {"production": {"level": "ERROR"}},
-				"sources": [{"service": "test-service"}]
-			}
-		}]}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": [{
-			"id": "infra",
-			"type": "log_group",
-			"attributes": {
-				"id": "infra",
-				"name": "Infra",
-				"level": "ERROR",
-				"parent_id": "parent-group-id",
-				"environments": {"staging": {"level": "DEBUG"}}
-			}
-		}]}`))
-	})
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	httpClient := &http.Client{}
-	base := httpClient.Transport
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	httpClient.Transport = &authTransport{token: "sk_test", base: base}
-
-	headerEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
-		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
-		return nil
-	})
-	genLoggingClient, _ := genlogging.NewClient(server.URL,
-		genlogging.WithHTTPClient(httpClient),
-		headerEditor,
-	)
-
-	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     "test-service",
-		httpClient:  httpClient,
-	}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.fetchAndCache(context.Background())
-	require.NoError(t, err)
-
-	// Verify logger cache.
-	require.Contains(t, lc.loggersCache, "my.logger")
-	loggerEntry := lc.loggersCache["my.logger"]
-	assert.Equal(t, "WARN", loggerEntry["level"])
-	assert.Equal(t, "group-id", loggerEntry["group"])
-	assert.Equal(t, true, loggerEntry["managed"])
-
-	// Verify group cache.
-	require.Contains(t, lc.groupsCache, "infra")
-	groupEntry := lc.groupsCache["infra"]
-	assert.Equal(t, "ERROR", groupEntry["level"])
-	assert.Equal(t, "parent-group-id", groupEntry["group"])
-}
-
-func TestFetchAndCache_LoggerError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
-	})
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	httpClient := &http.Client{}
-	genLoggingClient, _ := genlogging.NewClient(server.URL, genlogging.WithHTTPClient(httpClient))
-
-	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     "test-service",
-		httpClient:  httpClient,
-	}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.fetchAndCache(context.Background())
-	require.Error(t, err)
-}
-
-func TestFetchAndCache_GroupError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
-	})
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	httpClient := &http.Client{}
-	genLoggingClient, _ := genlogging.NewClient(server.URL, genlogging.WithHTTPClient(httpClient))
-
-	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     "test-service",
-		httpClient:  httpClient,
-	}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.fetchAndCache(context.Background())
-	require.Error(t, err)
-}
-
-// --- fetchAndCache with nil level and nil group ---
-
-func TestFetchAndCache_NilLevelAndGroup(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": [{
-			"id": "my.logger",
-			"type": "logger",
-			"attributes": {
-				"id": "my.logger",
-				"name": "My Logger",
-				"managed": true,
-				"environments": {}
-			}
-		}]}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data": [{
-			"id": "infra",
-			"type": "log_group",
-			"attributes": {
-				"id": "infra",
-				"name": "Infra",
-				"environments": {}
-			}
-		}]}`))
-	})
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	httpClient := &http.Client{}
-	genLoggingClient, _ := genlogging.NewClient(server.URL, genlogging.WithHTTPClient(httpClient))
-
-	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     "test-service",
-		httpClient:  httpClient,
-	}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.fetchAndCache(context.Background())
-	require.NoError(t, err)
-
-	// Logger cache should not have "level" or "group" keys.
-	loggerEntry := lc.loggersCache["my.logger"]
-	_, hasLevel := loggerEntry["level"]
-	_, hasGroup := loggerEntry["group"]
-	assert.False(t, hasLevel)
-	assert.False(t, hasGroup)
-
-	// Group cache should not have "level" or "group" keys.
-	groupEntry := lc.groupsCache["infra"]
-	_, hasLevel = groupEntry["level"]
-	_, hasGroup = groupEntry["group"]
-	assert.False(t, hasLevel)
-	assert.False(t, hasGroup)
-}
-
-// --- newTestLoggingClient helper ---
-
+// ── Shared internal test harness ────────────────────────────────────────────
+
+// newTestLoggingClient builds a LoggingClient wired to a parent SmplClient
+// whose generated logging transport points at an httptest server serving the
+// supplied handler. The returned client has connected=true so the
+// Install-gated live surface (OnChange / OnChangeKey / Refresh) works without
+// driving a full Install — the WS-handler and resolution tests below poke the
+// cache and handlers directly. Dedicated gate tests (pre-install path) live in
+// the external logging_client_test.go.
 func newTestLoggingClient(t *testing.T, handler http.Handler) *LoggingClient {
 	t.Helper()
 	server := httptest.NewServer(handler)
@@ -1003,432 +52,1106 @@ func newTestLoggingClient(t *testing.T, handler http.Handler) *LoggingClient {
 		headerEditor,
 	)
 
-	c := &Client{
+	c := &SmplClient{
 		apiKey:      "sk_test",
 		environment: "test",
 		service:     "test-service",
 		appURL:      server.URL,
 		httpClient:  httpClient,
 	}
-	lc := newLoggingClient(c, genLoggingClient)
+	lc := newLoggingClient(c, genLoggingClient, nil)
+	lc.connected = true
 	return lc
 }
 
-// --- deleteLoggerByID error paths ---
+// loggingFailRoundTripper returns a network error for every request.
+type loggingFailRoundTripper struct{}
 
-func TestDeleteLoggerByID_CheckStatusError(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
-	}))
-
-	err := lc.Management().Delete(context.Background(), "my-logger")
-	require.Error(t, err)
+func (t *loggingFailRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return nil, fmt.Errorf("simulated network error")
 }
 
-func TestDeleteLoggerByID_ConnectionError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	serverURL := server.URL
-	server.Close()
+// loggingBrokenBodyRoundTripper returns a status response whose body fails on Read.
+type loggingBrokenBodyRoundTripper struct{ statusCode int }
 
-	httpClient := &http.Client{}
-	genLoggingClient, _ := genlogging.NewClient(serverURL, genlogging.WithHTTPClient(httpClient))
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.Management().Delete(context.Background(), "my-logger")
-	require.Error(t, err)
-}
-
-// brokenBodyTransportLogging wraps an HTTP transport and returns a broken response body.
-type brokenBodyTransportLogging struct {
-	statusCode int
-}
-
-func (t *brokenBodyTransportLogging) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *loggingBrokenBodyRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
 	return &http.Response{
 		StatusCode: t.statusCode,
-		Body:       io.NopCloser(&brokenReaderLogging{}),
+		Body:       io.NopCloser(&loggingErrReader{err: fmt.Errorf("simulated read error")}),
 		Header:     make(http.Header),
 	}, nil
 }
 
-type brokenReaderLogging struct{}
+type loggingErrReader struct{ err error }
 
-func (b *brokenReaderLogging) Read(p []byte) (int, error) {
-	return 0, io.ErrUnexpectedEOF
+func (r *loggingErrReader) Read(_ []byte) (int, error) { return 0, r.err }
+
+// newDetachedLoggingClient builds a wired LoggingClient against a raw URL with a
+// custom transport (no httptest server). Used for the broken-body / network
+// error paths that need a hand-rolled RoundTripper.
+func newDetachedLoggingClient(transport http.RoundTripper, url string) *LoggingClient {
+	httpClient := &http.Client{Transport: transport}
+	genLoggingClient, _ := genlogging.NewClient(url, genlogging.WithHTTPClient(httpClient))
+	c := &SmplClient{environment: "test", service: "test-service", httpClient: httpClient}
+	lc := newLoggingClient(c, genLoggingClient, nil)
+	lc.connected = true
+	return lc
 }
 
-func TestDeleteLoggerByID_BodyReadFailure(t *testing.T) {
-	httpClient := &http.Client{
-		Transport: &brokenBodyTransportLogging{statusCode: 204},
+// ── NormalizeLoggerName ─────────────────────────────────────────────────────
+
+func TestNormalizeLoggerName(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"slash and colon replaced with dot", "myapp/db:queries", "myapp.db.queries"},
+		{"already normal lowercased", "Already.Normal", "already.normal"},
+		{"all lowercase passthrough", "simple.logger", "simple.logger"},
+		{"mixed separators", "App/Module:Sub/Deep:Leaf", "app.module.sub.deep.leaf"},
+		{"empty string", "", ""},
+		{"uppercase only", "UPPERCASE", "uppercase"},
+		{"no separators uppercase", "MyLogger", "mylogger"},
+		{"multiple consecutive slashes", "a//b", "a..b"},
+		{"multiple consecutive colons", "a::b", "a..b"},
 	}
-	genLoggingClient, _ := genlogging.NewClient("http://localhost",
-		genlogging.WithHTTPClient(httpClient),
-	)
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.Management().Delete(context.Background(), "my-logger")
-	require.Error(t, err)
-}
-
-// --- deleteGroupByID error paths ---
-
-func TestDeleteGroupByID_CheckStatusError(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
-	}))
-
-	err := lc.Management().DeleteGroup(context.Background(), "my-group")
-	require.Error(t, err)
-}
-
-func TestDeleteGroupByID_ConnectionError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	serverURL := server.URL
-	server.Close()
-
-	httpClient := &http.Client{}
-	genLoggingClient, _ := genlogging.NewClient(serverURL, genlogging.WithHTTPClient(httpClient))
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.Management().DeleteGroup(context.Background(), "my-group")
-	require.Error(t, err)
-}
-
-func TestDeleteGroupByID_BodyReadFailure(t *testing.T) {
-	httpClient := &http.Client{
-		Transport: &brokenBodyTransportLogging{statusCode: 204},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, NormalizeLoggerName(tt.input))
+		})
 	}
-	genLoggingClient, _ := genlogging.NewClient("http://localhost",
-		genlogging.WithHTTPClient(httpClient),
-	)
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.Management().DeleteGroup(context.Background(), "my-group")
-	require.Error(t, err)
 }
 
-// --- resourceToLogger nil optional fields ---
+// ── keyToDisplayName (used by LogGroupsClient.New) ──────────────────────────
 
-func TestResourceToLogger_NilOptionalFields(t *testing.T) {
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, nil)
+func TestKeyToDisplayName(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"kebab-case", "checkout-v2", "Checkout V2"},
+		{"snake_case", "user_service", "User Service"},
+		{"single word", "infra", "Infra"},
+		{"multiple hyphens", "my-cool-app", "My Cool App"},
+		{"mixed separators", "my-service_name", "My Service Name"},
+		{"already title case", "Already", "Already"},
+		{"empty string", "", ""},
+		{"all uppercase", "API-GATEWAY", "API GATEWAY"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, keyToDisplayName(tt.input))
+		})
+	}
+}
 
-	r := genlogging.LoggerResource{
-		Attributes: genlogging.Logger{
-			Name: "Test Logger",
-			// Id, Level, Managed, Sources, Environments all nil
+// ── resolveLoggerLevel resolution chain ─────────────────────────────────────
+
+func TestResolveLoggerLevel_DirectLevel(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"level": "WARN", "environments": map[string]interface{}{}},
+	}
+	level := resolveLoggerLevel("my.logger", "production", loggers, nil)
+	assert.Equal(t, LogLevelWarn, level)
+}
+
+func TestResolveLoggerLevel_EnvironmentLevel(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {
+			"level": "WARN",
+			"environments": map[string]interface{}{
+				"production": map[string]interface{}{"level": "ERROR"},
+			},
 		},
 	}
+	level := resolveLoggerLevel("my.logger", "production", loggers, nil)
+	assert.Equal(t, LogLevelError, level)
+}
 
-	logger := resourceToLogger(r, lc.Management())
+func TestResolveLoggerLevel_EnvironmentOverridesBase(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {
+			"level": "DEBUG",
+			"environments": map[string]interface{}{
+				"production": map[string]interface{}{"level": "ERROR"},
+			},
+		},
+	}
+	assert.Equal(t, LogLevelError, resolveLoggerLevel("my.logger", "production", loggers, nil))
+	// Different environment falls through to base.
+	assert.Equal(t, LogLevelDebug, resolveLoggerLevel("my.logger", "staging", loggers, nil))
+}
+
+func TestResolveLoggerLevel_GroupLevel(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "group-1", "environments": map[string]interface{}{}},
+	}
+	groups := map[string]map[string]interface{}{
+		"group-1": {"level": "ERROR", "environments": map[string]interface{}{}},
+	}
+	assert.Equal(t, LogLevelError, resolveLoggerLevel("my.logger", "production", loggers, groups))
+}
+
+func TestResolveLoggerLevel_GroupEnvironmentLevel(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "group-1", "environments": map[string]interface{}{}},
+	}
+	groups := map[string]map[string]interface{}{
+		"group-1": {
+			"level": "WARN",
+			"environments": map[string]interface{}{
+				"production": map[string]interface{}{"level": "FATAL"},
+			},
+		},
+	}
+	assert.Equal(t, LogLevelFatal, resolveLoggerLevel("my.logger", "production", loggers, groups))
+}
+
+func TestResolveLoggerLevel_GroupChain(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "child-group", "environments": map[string]interface{}{}},
+	}
+	groups := map[string]map[string]interface{}{
+		"child-group":  {"group": "parent-group", "environments": map[string]interface{}{}},
+		"parent-group": {"level": "TRACE", "environments": map[string]interface{}{}},
+	}
+	assert.Equal(t, LogLevelTrace, resolveLoggerLevel("my.logger", "production", loggers, groups))
+}
+
+func TestResolveLoggerLevel_GroupCycleDetection(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "group-a", "environments": map[string]interface{}{}},
+	}
+	groups := map[string]map[string]interface{}{
+		"group-a": {"group": "group-b", "environments": map[string]interface{}{}},
+		"group-b": {"group": "group-a", "environments": map[string]interface{}{}},
+	}
+	// Must not infinite loop; falls through to dot-ancestry then INFO.
+	assert.Equal(t, LogLevelInfo, resolveLoggerLevel("my.logger", "production", loggers, groups))
+}
+
+func TestResolveLoggerLevel_DotNotationAncestry(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"com.acme.payments": {"environments": map[string]interface{}{}},
+		"com.acme":          {"level": "DEBUG", "environments": map[string]interface{}{}},
+	}
+	assert.Equal(t, LogLevelDebug, resolveLoggerLevel("com.acme.payments", "production", loggers, nil))
+}
+
+func TestResolveLoggerLevel_DotNotationAncestry_DeepChain(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"com.acme.payments.stripe": {"environments": map[string]interface{}{}},
+		"com":                      {"level": "WARN", "environments": map[string]interface{}{}},
+	}
+	assert.Equal(t, LogLevelWarn, resolveLoggerLevel("com.acme.payments.stripe", "production", loggers, nil))
+}
+
+func TestResolveLoggerLevel_Fallback(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"environments": map[string]interface{}{}},
+	}
+	assert.Equal(t, LogLevelInfo, resolveLoggerLevel("my.logger", "production", loggers, nil))
+}
+
+func TestResolveLoggerLevel_UnknownLogger(t *testing.T) {
+	assert.Equal(t, LogLevelInfo, resolveLoggerLevel("nonexistent", "production", nil, nil))
+}
+
+func TestResolveLoggerLevel_EmptyEnvironment(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {
+			"level": "DEBUG",
+			"environments": map[string]interface{}{
+				"production": map[string]interface{}{"level": "ERROR"},
+			},
+		},
+	}
+	// Empty environment string skips the env-level check.
+	assert.Equal(t, LogLevelDebug, resolveLoggerLevel("my.logger", "", loggers, nil))
+}
+
+func TestResolveLoggerLevel_GroupNotFound(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "nonexistent-group", "environments": map[string]interface{}{}},
+	}
+	assert.Equal(t, LogLevelInfo, resolveLoggerLevel("my.logger", "production", loggers, nil))
+}
+
+func TestResolveLoggerLevel_EnvironmentLevelEmptyString(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {
+			"level": "WARN",
+			"environments": map[string]interface{}{
+				"production": map[string]interface{}{"level": ""},
+			},
+		},
+	}
+	// Empty string env level skipped; fall through to base.
+	assert.Equal(t, LogLevelWarn, resolveLoggerLevel("my.logger", "production", loggers, nil))
+}
+
+func TestResolveLoggerLevel_GroupEnvironmentEmptyString(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "group-1", "environments": map[string]interface{}{}},
+	}
+	groups := map[string]map[string]interface{}{
+		"group-1": {
+			"level": "WARN",
+			"environments": map[string]interface{}{
+				"production": map[string]interface{}{"level": ""},
+			},
+		},
+	}
+	assert.Equal(t, LogLevelWarn, resolveLoggerLevel("my.logger", "production", loggers, groups))
+}
+
+func TestResolveLoggerLevel_GroupBaseEmptyString(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "group-1", "environments": map[string]interface{}{}},
+	}
+	groups := map[string]map[string]interface{}{
+		"group-1": {"level": "", "environments": map[string]interface{}{}},
+	}
+	assert.Equal(t, LogLevelInfo, resolveLoggerLevel("my.logger", "production", loggers, groups))
+}
+
+func TestResolveLoggerLevel_GroupParentEmptyString(t *testing.T) {
+	// Group with an empty-string parent id must not recurse; falls through.
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "group-1", "environments": map[string]interface{}{}},
+	}
+	groups := map[string]map[string]interface{}{
+		"group-1": {"group": "", "environments": map[string]interface{}{}},
+	}
+	assert.Equal(t, LogLevelInfo, resolveLoggerLevel("my.logger", "production", loggers, groups))
+}
+
+func TestResolveLoggerLevel_LoggerEnvironmentsNotMap(t *testing.T) {
+	// environments present but not a map → env branch skipped, base used.
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"level": "WARN", "environments": "not-a-map"},
+	}
+	assert.Equal(t, LogLevelWarn, resolveLoggerLevel("my.logger", "production", loggers, nil))
+}
+
+func TestResolveLoggerLevel_GroupEnvironmentsNotMap(t *testing.T) {
+	loggers := map[string]map[string]interface{}{
+		"my.logger": {"group": "group-1", "environments": map[string]interface{}{}},
+	}
+	groups := map[string]map[string]interface{}{
+		"group-1": {"level": "ERROR", "environments": "not-a-map"},
+	}
+	assert.Equal(t, LogLevelError, resolveLoggerLevel("my.logger", "production", loggers, groups))
+}
+
+// ── Logger.apply / LogGroup.apply ───────────────────────────────────────────
+
+func TestLogger_Apply(t *testing.T) {
+	logger := &Logger{ID: "old-id", Name: "Old Name"}
+	level := LogLevelDebug
+	groupID := "group-123"
+	now := time.Now()
+	other := &Logger{
+		ID: "new-id", Name: "New Name", Level: &level, Group: &groupID,
+		Managed:      false,
+		Sources:      []map[string]interface{}{{"service": "svc"}},
+		Environments: map[string]interface{}{"prod": "data"},
+		CreatedAt:    &now, UpdatedAt: &now,
+	}
+	logger.apply(other)
+	assert.Equal(t, "new-id", logger.ID)
+	assert.Equal(t, "New Name", logger.Name)
+	require.NotNil(t, logger.Level)
+	assert.Equal(t, LogLevelDebug, *logger.Level)
+	require.NotNil(t, logger.Group)
+	assert.Equal(t, "group-123", *logger.Group)
+	assert.False(t, logger.Managed)
+	require.Len(t, logger.Sources, 1)
+	assert.NotNil(t, logger.CreatedAt)
+	assert.NotNil(t, logger.UpdatedAt)
+}
+
+func TestLogGroup_Apply(t *testing.T) {
+	group := &LogGroup{ID: "old-id", Name: "Old Name"}
+	level := LogLevelError
+	parentID := "parent-123"
+	now := time.Now()
+	other := &LogGroup{
+		ID: "new-id", Name: "New Name", Level: &level, Group: &parentID,
+		Environments: map[string]interface{}{"staging": "data"},
+		CreatedAt:    &now, UpdatedAt: &now,
+	}
+	group.apply(other)
+	assert.Equal(t, "new-id", group.ID)
+	assert.Equal(t, "New Name", group.Name)
+	require.NotNil(t, group.Level)
+	assert.Equal(t, LogLevelError, *group.Level)
+	require.NotNil(t, group.Group)
+	assert.Equal(t, "parent-123", *group.Group)
+	assert.NotNil(t, group.CreatedAt)
+}
+
+// ── Logger / LogGroup local mutation (models) ───────────────────────────────
+
+func TestLogger_SetClearBaseLevel(t *testing.T) {
+	l := &Logger{}
+	l.SetBaseLevel(LogLevelDebug)
+	require.NotNil(t, l.Level)
+	assert.Equal(t, LogLevelDebug, *l.Level)
+	l.ClearBaseLevel()
+	assert.Nil(t, l.Level)
+}
+
+func TestLogger_SetEnvironmentLevel_NilEnvironments(t *testing.T) {
+	l := &Logger{Environments: nil}
+	l.SetEnvironmentLevel("production", LogLevelError)
+	require.NotNil(t, l.Environments)
+	envData := l.Environments["production"].(map[string]interface{})
+	assert.Equal(t, "ERROR", envData["level"])
+}
+
+func TestLogger_SetEnvironmentLevel_NonMapEntry(t *testing.T) {
+	l := &Logger{Environments: map[string]interface{}{"production": "not-a-map"}}
+	l.SetEnvironmentLevel("production", LogLevelWarn)
+	envData := l.Environments["production"].(map[string]interface{})
+	assert.Equal(t, "WARN", envData["level"])
+}
+
+func TestLogger_ClearEnvironmentLevel_NilEnvironments(t *testing.T) {
+	l := &Logger{}
+	l.ClearEnvironmentLevel("staging") // must not panic
+	assert.Nil(t, l.Environments)
+}
+
+func TestLogger_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
+	l := &Logger{Environments: map[string]interface{}{"staging": "not-a-map"}}
+	l.ClearEnvironmentLevel("staging")
+	assert.Equal(t, "not-a-map", l.Environments["staging"])
+}
+
+func TestLogger_ClearEnvironmentLevel_RemovesEmptyAndPreservesOthers(t *testing.T) {
+	l := &Logger{Environments: map[string]interface{}{
+		"only":  map[string]interface{}{"level": "DEBUG"},
+		"multi": map[string]interface{}{"level": "DEBUG", "other": "keep"},
+	}}
+	l.ClearEnvironmentLevel("only")
+	assert.NotContains(t, l.Environments, "only")
+	l.ClearEnvironmentLevel("multi")
+	envData := l.Environments["multi"].(map[string]interface{})
+	assert.NotContains(t, envData, "level")
+	assert.Equal(t, "keep", envData["other"])
+}
+
+func TestLogger_ClearAllEnvironmentLevels(t *testing.T) {
+	l := &Logger{}
+	l.SetEnvironmentLevel("a", LogLevelError)
+	l.SetEnvironmentLevel("b", LogLevelDebug)
+	require.Len(t, l.Environments, 2)
+	l.ClearAllEnvironmentLevels()
+	assert.Empty(t, l.Environments)
+}
+
+func TestLogGroup_SetClearLevel(t *testing.T) {
+	g := &LogGroup{}
+	g.SetLevel(LogLevelWarn)
+	require.NotNil(t, g.Level)
+	assert.Equal(t, LogLevelWarn, *g.Level)
+	g.ClearLevel()
+	assert.Nil(t, g.Level)
+}
+
+func TestLogGroup_SetEnvironmentLevel_NilEnvironments(t *testing.T) {
+	g := &LogGroup{Environments: nil}
+	g.SetEnvironmentLevel("production", LogLevelWarn)
+	require.NotNil(t, g.Environments)
+	envData := g.Environments["production"].(map[string]interface{})
+	assert.Equal(t, "WARN", envData["level"])
+}
+
+func TestLogGroup_SetEnvironmentLevel_NonMapEntry(t *testing.T) {
+	g := &LogGroup{Environments: map[string]interface{}{"production": "not-a-map"}}
+	g.SetEnvironmentLevel("production", LogLevelError)
+	envData := g.Environments["production"].(map[string]interface{})
+	assert.Equal(t, "ERROR", envData["level"])
+}
+
+func TestLogGroup_ClearEnvironmentLevel_NilEnvironments(t *testing.T) {
+	g := &LogGroup{}
+	g.ClearEnvironmentLevel("staging") // must not panic
+	assert.Nil(t, g.Environments)
+}
+
+func TestLogGroup_ClearEnvironmentLevel_NonMapEntry(t *testing.T) {
+	g := &LogGroup{Environments: map[string]interface{}{"staging": "not-a-map"}}
+	g.ClearEnvironmentLevel("staging")
+	assert.Equal(t, "not-a-map", g.Environments["staging"])
+}
+
+func TestLogGroup_ClearEnvironmentLevel_RemovesEmptyAndPreservesOthers(t *testing.T) {
+	g := &LogGroup{Environments: map[string]interface{}{
+		"only":  map[string]interface{}{"level": "DEBUG"},
+		"multi": map[string]interface{}{"level": "DEBUG", "other": "keep"},
+	}}
+	g.ClearEnvironmentLevel("only")
+	assert.NotContains(t, g.Environments, "only")
+	g.ClearEnvironmentLevel("multi")
+	envData := g.Environments["multi"].(map[string]interface{})
+	assert.NotContains(t, envData, "level")
+	assert.Equal(t, "keep", envData["other"])
+}
+
+func TestLogGroup_ClearAllEnvironmentLevels(t *testing.T) {
+	g := &LogGroup{}
+	g.SetEnvironmentLevel("a", LogLevelError)
+	g.SetEnvironmentLevel("b", LogLevelDebug)
+	require.Len(t, g.Environments, 2)
+	g.ClearAllEnvironmentLevels()
+	assert.Empty(t, g.Environments)
+}
+
+func TestLogger_Save_NilClient(t *testing.T) {
+	l := &Logger{ID: "x"}
+	err := l.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot save")
+}
+
+func TestLogger_Delete_NilClientOrID(t *testing.T) {
+	err := (&Logger{ID: "x"}).Delete(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete")
+
+	lc := newTestLoggingClient(t, nil)
+	err = (&Logger{client: lc.loggers}).Delete(context.Background()) // empty ID
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete")
+}
+
+func TestLogGroup_Save_NilClient(t *testing.T) {
+	g := &LogGroup{ID: "x"}
+	err := g.Save(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot save")
+}
+
+func TestLogGroup_Delete_NilClientOrID(t *testing.T) {
+	err := (&LogGroup{ID: "x"}).Delete(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete")
+
+	lc := newTestLoggingClient(t, nil)
+	err = (&LogGroup{client: lc.logGroups}).Delete(context.Background()) // empty ID
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete")
+}
+
+// ── LoggerSource constructor + options ──────────────────────────────────────
+
+func TestNewLoggerSource_Options(t *testing.T) {
+	s := NewLoggerSource("sqlalchemy.engine",
+		WithLoggerSourceService("svc"),
+		WithLoggerSourceEnvironment("prod"),
+		WithLoggerSourceResolvedLevel(LogLevelDebug),
+	)
+	assert.Equal(t, "sqlalchemy.engine", s.ID)
+	require.NotNil(t, s.Service)
+	assert.Equal(t, "svc", *s.Service)
+	require.NotNil(t, s.Environment)
+	assert.Equal(t, "prod", *s.Environment)
+	require.NotNil(t, s.ResolvedLevel)
+	assert.Equal(t, LogLevelDebug, *s.ResolvedLevel)
+}
+
+// ── buildLoggerAttributes / buildLogGroupAttributes ─────────────────────────
+
+func TestBuildLoggerAttributes_WithLevel(t *testing.T) {
+	level := LogLevelDebug
+	l := &Logger{
+		ID: "test", Name: "Test", Level: &level, Managed: true,
+		Environments: map[string]interface{}{"prod": "data"},
+		Sources:      []map[string]interface{}{{"service": "svc"}},
+	}
+	attrs := buildLoggerAttributes(l)
+	require.NotNil(t, attrs.Level)
+	assert.Equal(t, genlogging.LogLevel("DEBUG"), *attrs.Level)
+	require.NotNil(t, attrs.Managed)
+	assert.True(t, *attrs.Managed)
+	require.NotNil(t, attrs.Environments)
+	require.NotNil(t, attrs.Sources)
+}
+
+func TestBuildLoggerAttributes_Nils(t *testing.T) {
+	attrs := buildLoggerAttributes(&Logger{ID: "test", Name: "Test", Managed: true})
+	assert.Nil(t, attrs.Level)
+	assert.Nil(t, attrs.Environments)
+	assert.Nil(t, attrs.Sources)
+}
+
+func TestBuildLogGroupAttributes_WithLevel(t *testing.T) {
+	level := LogLevelWarn
+	parentID := "parent-id"
+	g := &LogGroup{
+		ID: "infra", Name: "Infra", Level: &level, Group: &parentID,
+		Environments: map[string]interface{}{"prod": "data"},
+	}
+	attrs := buildLogGroupAttributes(g)
+	require.NotNil(t, attrs.Level)
+	assert.Equal(t, genlogging.LogLevel("WARN"), *attrs.Level)
+	require.NotNil(t, attrs.ParentId)
+	assert.Equal(t, "parent-id", *attrs.ParentId)
+	require.NotNil(t, attrs.Environments)
+}
+
+func TestBuildLogGroupAttributes_Nils(t *testing.T) {
+	attrs := buildLogGroupAttributes(&LogGroup{ID: "infra", Name: "Infra"})
+	assert.Nil(t, attrs.Level)
+	assert.Nil(t, attrs.Environments)
+}
+
+// ── resourceToLogger / resourceToLogGroup ───────────────────────────────────
+
+func TestResourceToLogger_NilOptionalFields(t *testing.T) {
+	r := genlogging.LoggerResource{Attributes: genlogging.Logger{Name: "Test Logger"}}
+	logger := resourceToLogger(r, nil)
 	assert.Equal(t, "", logger.ID)
 	assert.Nil(t, logger.Level)
-	assert.True(t, logger.Managed) // default true when Managed is nil
+	assert.True(t, logger.Managed) // default true when Managed nil
 	assert.Nil(t, logger.Sources)
-	assert.NotNil(t, logger.Environments) // defaults to empty map when nil
+	assert.NotNil(t, logger.Environments)
+}
+
+func TestResourceToLogger_AllFields(t *testing.T) {
+	id := "my.logger"
+	level := genlogging.LogLevel("WARN")
+	group := "grp"
+	managed := false
+	sources := []map[string]interface{}{{"service": "svc"}}
+	envs := map[string]interface{}{"prod": map[string]interface{}{"level": "ERROR"}}
+	r := genlogging.LoggerResource{
+		Id: &id,
+		Attributes: genlogging.Logger{
+			Name: "My Logger", Level: &level, Group: &group, Managed: &managed,
+			Sources: &sources, Environments: &envs,
+		},
+	}
+	logger := resourceToLogger(r, nil)
+	assert.Equal(t, "my.logger", logger.ID)
+	require.NotNil(t, logger.Level)
+	assert.Equal(t, LogLevelWarn, *logger.Level)
+	require.NotNil(t, logger.Group)
+	assert.Equal(t, "grp", *logger.Group)
+	assert.False(t, logger.Managed)
+	require.Len(t, logger.Sources, 1)
+	assert.Contains(t, logger.Environments, "prod")
 }
 
 func TestResourceToLogger_EmptyLevel(t *testing.T) {
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, nil)
-
-	emptyLevel := genlogging.LogLevel("")
-	r := genlogging.LoggerResource{
-		Attributes: genlogging.Logger{
-			Name:  "Test Logger",
-			Level: &emptyLevel,
-		},
-	}
-
-	logger := resourceToLogger(r, lc.Management())
-	assert.Nil(t, logger.Level) // empty string level treated as nil
+	empty := genlogging.LogLevel("")
+	r := genlogging.LoggerResource{Attributes: genlogging.Logger{Name: "Test", Level: &empty}}
+	assert.Nil(t, resourceToLogger(r, nil).Level)
 }
-
-func TestResourceToLogger_ManagedFalse(t *testing.T) {
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, nil)
-
-	managedFalse := false
-	r := genlogging.LoggerResource{
-		Attributes: genlogging.Logger{
-			Name:    "Test Logger",
-			Managed: &managedFalse,
-		},
-	}
-
-	logger := resourceToLogger(r, lc.Management())
-	assert.False(t, logger.Managed)
-}
-
-// --- resourceToLogGroup nil optional fields ---
 
 func TestResourceToLogGroup_NilOptionalFields(t *testing.T) {
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, nil)
-
-	r := genlogging.LogGroupResource{
-		Attributes: genlogging.LogGroup{
-			Name: "Test Group",
-			// Id, Level, Environments all nil
-		},
-	}
-
-	group := resourceToLogGroup(r, lc.Management())
+	r := genlogging.LogGroupResource{Attributes: genlogging.LogGroup{Name: "Test Group"}}
+	group := resourceToLogGroup(r, nil)
 	assert.Equal(t, "", group.ID)
 	assert.Nil(t, group.Level)
-	assert.NotNil(t, group.Environments) // defaults to empty map when nil
+	assert.NotNil(t, group.Environments)
+}
+
+func TestResourceToLogGroup_AllFields(t *testing.T) {
+	id := "infra"
+	level := genlogging.LogLevel("WARN")
+	parent := "root"
+	envs := map[string]interface{}{"staging": map[string]interface{}{"level": "DEBUG"}}
+	r := genlogging.LogGroupResource{
+		Id: &id,
+		Attributes: genlogging.LogGroup{
+			Name: "Infra", Level: &level, ParentId: &parent, Environments: &envs,
+		},
+	}
+	group := resourceToLogGroup(r, nil)
+	assert.Equal(t, "infra", group.ID)
+	require.NotNil(t, group.Level)
+	assert.Equal(t, LogLevelWarn, *group.Level)
+	require.NotNil(t, group.Group)
+	assert.Equal(t, "root", *group.Group)
+	assert.Contains(t, group.Environments, "staging")
 }
 
 func TestResourceToLogGroup_EmptyLevel(t *testing.T) {
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, nil)
-
-	emptyLevel := genlogging.LogLevel("")
-	r := genlogging.LogGroupResource{
-		Attributes: genlogging.LogGroup{
-			Name:  "Test Group",
-			Level: &emptyLevel,
-		},
-	}
-
-	group := resourceToLogGroup(r, lc.Management())
-	assert.Nil(t, group.Level) // empty string level treated as nil
+	empty := genlogging.LogLevel("")
+	r := genlogging.LogGroupResource{Attributes: genlogging.LogGroup{Name: "Test", Level: &empty}}
+	assert.Nil(t, resourceToLogGroup(r, nil).Level)
 }
 
-// --- Flush ---
+// ── loggerRegistrationBuffer ────────────────────────────────────────────────
 
-func TestFlush_Empty(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+func TestLoggerRegistrationBuffer_AddDedupeDrain(t *testing.T) {
+	buf := newLoggerRegistrationBuffer()
+	buf.add("logger-a", "INFO", "INFO", "svc", "prod")
+	buf.add("logger-b", "DEBUG", "DEBUG", "svc", "prod")
+	buf.add("logger-a", "WARN", "WARN", "other", "stg") // dup ignored
+	assert.Equal(t, 2, buf.pendingCount())
 
-	// Should not make any requests when buffer is empty
-	_ = lc.Flush(context.Background())
-}
+	batch := buf.drain()
+	require.Len(t, batch, 2)
+	assert.Equal(t, "logger-a", batch[0].key)
+	assert.Equal(t, "INFO", batch[0].level)
+	assert.Equal(t, "logger-b", batch[1].key)
+	assert.Equal(t, 0, buf.pendingCount())
 
-func TestFlush_WithEntries(t *testing.T) {
-	var receivedBody map[string]interface{}
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/loggers/bulk" {
-			b := make([]byte, 4096)
-			n, _ := r.Body.Read(b)
-			_ = json.Unmarshal(b[:n], &receivedBody)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":2}`))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	lc.buffer.add("app.logger", "INFO", "INFO", "my-service", "production")
-	lc.buffer.add("db.logger", "DEBUG", "DEBUG", "", "")
-
-	_ = lc.Flush(context.Background())
-
-	require.NotNil(t, receivedBody)
-	loggers := receivedBody["loggers"].([]interface{})
-	assert.Len(t, loggers, 2)
-}
-
-func TestFlush_WithService(t *testing.T) {
-	var receivedBody map[string]interface{}
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/loggers/bulk" {
-			b := make([]byte, 4096)
-			n, _ := r.Body.Read(b)
-			_ = json.Unmarshal(b[:n], &receivedBody)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":1}`))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	lc.buffer.add("app.logger", "INFO", "INFO", "my-service", "production")
-	_ = lc.Flush(context.Background())
-
-	require.NotNil(t, receivedBody)
-	loggers := receivedBody["loggers"].([]interface{})
-	first := loggers[0].(map[string]interface{})
-	assert.Equal(t, "my-service", first["service"])
-	assert.Equal(t, "production", first["environment"])
-}
-
-func TestFlush_SendsBothLevelAndResolvedLevel(t *testing.T) {
-	// When level and resolved_level are both set to the same value (e.g. from
-	// slog/zap adapters that have no parent inheritance), both fields must be
-	// present in the bulk payload.
-	var receivedBody map[string]interface{}
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/loggers/bulk" {
-			b := make([]byte, 4096)
-			n, _ := r.Body.Read(b)
-			_ = json.Unmarshal(b[:n], &receivedBody)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":1}`))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	lc.buffer.add("app.logger", "DEBUG", "DEBUG", "my-service", "production")
-	_ = lc.Flush(context.Background())
-
-	require.NotNil(t, receivedBody)
-	loggers := receivedBody["loggers"].([]interface{})
-	require.Len(t, loggers, 1)
-	item := loggers[0].(map[string]interface{})
-	assert.Equal(t, "DEBUG", item["level"])
-	assert.Equal(t, "DEBUG", item["resolved_level"])
-}
-
-func TestFlush_OmitsLevelWhenEmpty(t *testing.T) {
-	// When the explicit level is empty (e.g. inherited), the level field must be
-	// omitted from the payload while resolved_level is still sent.
-	var receivedBody map[string]interface{}
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/loggers/bulk" {
-			b := make([]byte, 4096)
-			n, _ := r.Body.Read(b)
-			_ = json.Unmarshal(b[:n], &receivedBody)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":1}`))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	// Empty explicit level, non-empty resolved level.
-	lc.buffer.add("inherited.logger", "", "INFO", "", "")
-	_ = lc.Flush(context.Background())
-
-	require.NotNil(t, receivedBody)
-	loggers := receivedBody["loggers"].([]interface{})
-	require.Len(t, loggers, 1)
-	item := loggers[0].(map[string]interface{})
-	assert.Nil(t, item["level"], "level should be absent when not explicitly set")
-	assert.Equal(t, "INFO", item["resolved_level"])
-}
-
-func TestFlush_ResolvedLevelDifferentFromLevel(t *testing.T) {
-	// Verify that level and resolved_level are sent as independent values when
-	// they differ (e.g. a logger with an explicitly-set level that differs from
-	// its effective resolved level after group inheritance).
-	var receivedBody map[string]interface{}
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/loggers/bulk" {
-			b := make([]byte, 4096)
-			n, _ := r.Body.Read(b)
-			_ = json.Unmarshal(b[:n], &receivedBody)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":1}`))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	lc.buffer.add("grp.logger", "WARN", "ERROR", "svc", "production")
-	_ = lc.Flush(context.Background())
-
-	require.NotNil(t, receivedBody)
-	loggers := receivedBody["loggers"].([]interface{})
-	require.Len(t, loggers, 1)
-	item := loggers[0].(map[string]interface{})
-	assert.Equal(t, "WARN", item["level"])
-	assert.Equal(t, "ERROR", item["resolved_level"])
+	assert.Empty(t, buf.drain())
 }
 
 func TestLoggerRegistrationBuffer_StoresResolvedLevel(t *testing.T) {
 	buf := newLoggerRegistrationBuffer()
-
-	buf.add("my-logger", "DEBUG", "INFO", "svc", "production")
+	buf.add("my-logger", "DEBUG", "INFO", "svc", "prod")
 	batch := buf.drain()
 	require.Len(t, batch, 1)
-	assert.Equal(t, "my-logger", batch[0].key)
 	assert.Equal(t, "DEBUG", batch[0].level)
 	assert.Equal(t, "INFO", batch[0].resolvedLevel)
 	assert.Equal(t, "svc", batch[0].service)
+	assert.Equal(t, "prod", batch[0].environment)
 }
 
-// --- periodicFlush ---
+// ── fetchAndCache ───────────────────────────────────────────────────────────
 
-func TestPeriodicFlush_Stops(t *testing.T) {
+func TestFetchAndCache_PopulatesCaches(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","group":"group-id","managed":true,"environments":{"production":{"level":"ERROR"}},"sources":[{"service":"test-service"}]}}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"infra","type":"log_group","attributes":{"id":"infra","name":"Infra","level":"ERROR","parent_id":"root","environments":{"staging":{"level":"DEBUG"}}}}]}`))
+	})
+	lc := newTestLoggingClient(t, mux)
+
+	require.NoError(t, lc.fetchAndCache(context.Background()))
+
+	require.Contains(t, lc.loggersCache, "my.logger")
+	assert.Equal(t, "WARN", lc.loggersCache["my.logger"]["level"])
+	assert.Equal(t, "group-id", lc.loggersCache["my.logger"]["group"])
+	assert.Equal(t, true, lc.loggersCache["my.logger"]["managed"])
+
+	require.Contains(t, lc.groupsCache, "infra")
+	assert.Equal(t, "ERROR", lc.groupsCache["infra"]["level"])
+	assert.Equal(t, "root", lc.groupsCache["infra"]["group"])
+}
+
+func TestFetchAndCache_NilLevelAndGroup(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","managed":true,"environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"infra","type":"log_group","attributes":{"id":"infra","name":"Infra","environments":{}}}]}`))
+	})
+	lc := newTestLoggingClient(t, mux)
+	require.NoError(t, lc.fetchAndCache(context.Background()))
+
+	_, hasLevel := lc.loggersCache["my.logger"]["level"]
+	_, hasGroup := lc.loggersCache["my.logger"]["group"]
+	assert.False(t, hasLevel)
+	assert.False(t, hasGroup)
+	_, hasLevel = lc.groupsCache["infra"]["level"]
+	_, hasGroup = lc.groupsCache["infra"]["group"]
+	assert.False(t, hasLevel)
+	assert.False(t, hasGroup)
+}
+
+func TestFetchAndCache_LoggerError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	}))
+	require.Error(t, lc.fetchAndCache(context.Background()))
+}
+
+func TestFetchAndCache_GroupError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+	})
+	lc := newTestLoggingClient(t, mux)
+	require.Error(t, lc.fetchAndCache(context.Background()))
+}
+
+// fetchAllLoggers / fetchAllLogGroups pagination: a full page forces a second
+// fetch, then a short page terminates the loop.
+func TestFetchAll_WalksPages(t *testing.T) {
+	mkLoggers := func(n int) string {
+		var b strings.Builder
+		b.WriteString(`{"data":[`)
+		for i := 0; i < n; i++ {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			fmt.Fprintf(&b, `{"id":"l%d","type":"logger","attributes":{"id":"l%d","name":"l%d","managed":true,"environments":{}}}`, i, i, i)
+		}
+		b.WriteString(`]}`)
+		return b.String()
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page[number]") == "1" {
+			_, _ = w.Write([]byte(mkLoggers(fetchAllPageSize)))
+			return
+		}
+		// short page with a distinct id so it doesn't collide in the cache map
+		_, _ = w.Write([]byte(`{"data":[{"id":"lLast","type":"logger","attributes":{"id":"lLast","name":"lLast","managed":true,"environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page[number]") == "1" {
+			// one full page of groups, then short
+			var b strings.Builder
+			b.WriteString(`{"data":[`)
+			for i := 0; i < fetchAllPageSize; i++ {
+				if i > 0 {
+					b.WriteString(",")
+				}
+				fmt.Fprintf(&b, `{"id":"g%d","type":"log_group","attributes":{"id":"g%d","name":"g%d","environments":{}}}`, i, i, i)
+			}
+			b.WriteString(`]}`)
+			_, _ = w.Write([]byte(b.String()))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"gLast","type":"log_group","attributes":{"id":"gLast","name":"gLast","environments":{}}}]}`))
+	})
+	lc := newTestLoggingClient(t, mux)
+	require.NoError(t, lc.fetchAndCache(context.Background()))
+	assert.Len(t, lc.loggersCache, fetchAllPageSize+1)
+	assert.Len(t, lc.groupsCache, fetchAllPageSize+1)
+}
+
+func TestFetchAllLoggers_ErrorPropagates(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	_, err := lc.fetchAllLoggers(context.Background())
+	require.Error(t, err)
+}
+
+func TestFetchAllLogGroups_ErrorPropagates(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	_, err := lc.fetchAllLogGroups(context.Background())
+	require.Error(t, err)
+}
+
+// ── fetchSingleLogger / fetchSingleGroup ────────────────────────────────────
+
+func TestFetchSingleLogger_WithLevelAndGroup(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"app","level":"DEBUG","managed":true,"group":"my-group","environments":{}}}}`))
+	}))
+	entry, err := lc.fetchSingleLogger(context.Background(), "com.acme.app")
+	require.NoError(t, err)
+	assert.Equal(t, "DEBUG", entry["level"])
+	assert.Equal(t, "my-group", entry["group"])
+}
+
+func TestFetchSingleLogger_NetworkError(t *testing.T) {
+	lc := newDetachedLoggingClient(&loggingFailRoundTripper{}, "http://localhost")
+	_, err := lc.fetchSingleLogger(context.Background(), "x")
+	require.Error(t, err)
+}
+
+func TestFetchSingleLogger_ReadBodyError(t *testing.T) {
+	lc := newDetachedLoggingClient(&loggingBrokenBodyRoundTripper{statusCode: 200}, "http://localhost")
+	_, err := lc.fetchSingleLogger(context.Background(), "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read response body")
+}
+
+func TestFetchSingleLogger_HTTPError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
+	}))
+	_, err := lc.fetchSingleLogger(context.Background(), "x")
+	require.Error(t, err)
+}
+
+func TestFetchSingleLogger_MalformedJSON(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`not valid json`))
+	}))
+	_, err := lc.fetchSingleLogger(context.Background(), "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+func TestFetchSingleGroup_WithLevelAndParent(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"id":"child","type":"log_group","attributes":{"id":"child","name":"Child","level":"INFO","parent_id":"parent","environments":{}}}}`))
+	}))
+	entry, err := lc.fetchSingleGroup(context.Background(), "child")
+	require.NoError(t, err)
+	assert.Equal(t, "INFO", entry["level"])
+	assert.Equal(t, "parent", entry["group"])
+}
+
+func TestFetchSingleGroup_NetworkError(t *testing.T) {
+	lc := newDetachedLoggingClient(&loggingFailRoundTripper{}, "http://localhost")
+	_, err := lc.fetchSingleGroup(context.Background(), "x")
+	require.Error(t, err)
+}
+
+func TestFetchSingleGroup_ReadBodyError(t *testing.T) {
+	lc := newDetachedLoggingClient(&loggingBrokenBodyRoundTripper{statusCode: 200}, "http://localhost")
+	_, err := lc.fetchSingleGroup(context.Background(), "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read response body")
+}
+
+func TestFetchSingleGroup_HTTPError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	_, err := lc.fetchSingleGroup(context.Background(), "x")
+	require.Error(t, err)
+}
+
+func TestFetchSingleGroup_MalformedJSON(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`not valid json`))
+	}))
+	_, err := lc.fetchSingleGroup(context.Background(), "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse response")
+}
+
+// ── Flush (LoggingClient.Flush delegating to Loggers().Flush) ───────────────
+
+func TestFlush_Empty(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("no HTTP expected for empty flush")
+	}))
+	require.NoError(t, lc.Flush(context.Background()))
+}
+
+func TestFlush_SendsLevelResolvedServiceEnvironment(t *testing.T) {
+	var body map[string]interface{}
 	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &body)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	lc.buffer.add("app.logger", "WARN", "ERROR", "my-service", "production")
+	require.NoError(t, lc.Flush(context.Background()))
+
+	require.NotNil(t, body)
+	loggers := body["loggers"].([]interface{})
+	require.Len(t, loggers, 1)
+	item := loggers[0].(map[string]interface{})
+	assert.Equal(t, "WARN", item["level"])
+	assert.Equal(t, "ERROR", item["resolved_level"])
+	assert.Equal(t, "my-service", item["service"])
+	assert.Equal(t, "production", item["environment"])
+}
+
+func TestFlush_OmitsEmptyOptionalFields(t *testing.T) {
+	var body map[string]interface{}
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			raw, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(raw, &body)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	// empty explicit level, empty service+environment → only id + resolved_level present.
+	lc.buffer.add("inherited.logger", "", "INFO", "", "")
+	require.NoError(t, lc.Flush(context.Background()))
+
+	loggers := body["loggers"].([]interface{})
+	item := loggers[0].(map[string]interface{})
+	assert.Nil(t, item["level"])
+	assert.Nil(t, item["service"])
+	assert.Nil(t, item["environment"])
+	assert.Equal(t, "INFO", item["resolved_level"])
+}
+
+func TestFlush_RecordsMetricsWhenSet(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	mr := newMetricsReporter(lc.client.httpClient, "http://metrics.invalid", "test", "svc", 0)
+	t.Cleanup(mr.Close)
+	lc.loggers.metrics = mr
+	lc.buffer.add("metric.logger", "INFO", "INFO", "svc", "prod")
+	require.NoError(t, lc.Flush(context.Background()))
+}
+
+func TestFlush_HTTPError(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"Invalid level value"}]}`))
+	}))
+	lc.buffer.add("bad.logger", "INFO", "INFO", "svc", "prod")
+	err := lc.Flush(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Invalid level value")
+}
+
+func TestFlush_NetworkError(t *testing.T) {
+	lc := newDetachedLoggingClient(&loggingFailRoundTripper{}, "http://localhost")
+	lc.buffer.add("net.logger", "INFO", "INFO", "svc", "prod")
+	err := lc.Flush(context.Background())
+	require.Error(t, err)
+	var connErr *ConnectionError
+	require.ErrorAs(t, err, &connErr)
+}
+
+func TestFlush_ReadBodyError(t *testing.T) {
+	lc := newDetachedLoggingClient(&loggingBrokenBodyRoundTripper{statusCode: 200}, "http://localhost")
+	lc.buffer.add("body.read.fail", "INFO", "INFO", "svc", "env")
+	err := lc.Flush(context.Background())
+	require.Error(t, err)
+	var connErr *ConnectionError
+	require.ErrorAs(t, err, &connErr)
+	assert.Contains(t, err.Error(), "failed to read response body")
+}
+
+func TestRegister_NoFlushUnderThreshold(t *testing.T) {
+	var bulkCalls int32
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			atomic.AddInt32(&bulkCalls, 1)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	require.NoError(t, lc.loggers.Register(context.Background(), []LoggerSource{
+		NewLoggerSource("a.logger",
+			WithLoggerSourceResolvedLevel(LogLevelInfo),
+			WithLoggerSourceService("svc"),
+			WithLoggerSourceEnvironment("prod"),
+		),
+	}, false))
+	assert.Equal(t, 1, lc.loggers.PendingCount())
+	assert.Equal(t, int32(0), atomic.LoadInt32(&bulkCalls), "below threshold → no flush")
+
+	batch := lc.buffer.drain()
+	require.Len(t, batch, 1)
+	assert.Equal(t, "svc", batch[0].service)
+	assert.Equal(t, "prod", batch[0].environment)
+}
+
+// Register with flush=false crossing loggerBatchFlushSize triggers a
+// background thresholdFlush goroutine that drains the buffer.
+func TestRegister_ThresholdTriggersBackgroundFlush(t *testing.T) {
+	var bulkCalls int32
+	flushed := make(chan struct{}, 1)
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			atomic.AddInt32(&bulkCalls, 1)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			select {
+			case flushed <- struct{}{}:
+			default:
+			}
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	done := make(chan struct{})
+	sources := make([]LoggerSource, loggerBatchFlushSize)
+	for i := range sources {
+		sources[i] = NewLoggerSource(fmt.Sprintf("logger.%d", i), WithLoggerSourceResolvedLevel(LogLevelInfo))
+	}
+	require.NoError(t, lc.loggers.Register(context.Background(), sources, false))
 
-	// Start and immediately stop
-	go lc.periodicFlush(done)
-	time.Sleep(10 * time.Millisecond)
-	close(done)
-
-	// Give goroutine time to exit
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-flushed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("threshold flush goroutine did not POST to /loggers/bulk")
+	}
+	assert.GreaterOrEqual(t, atomic.LoadInt32(&bulkCalls), int32(1))
 }
 
-func TestPeriodicFlush_TickerFires(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test that waits for 5s ticker")
-	}
+// thresholdFlush logs (does not return) an error from the background flush.
+func TestThresholdFlush_LogsErrorOnFailure(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"rejected"}]}`))
+	}))
+	lc.buffer.add("threshold.err", "INFO", "INFO", "svc", "prod")
 
-	var flushCount atomic.Int32
+	var (
+		mu  sync.Mutex
+		buf strings.Builder
+	)
+	log.SetOutput(&lockedWriter{mu: &mu, b: &buf})
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
-		flushCount.Add(1)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"registered":1}`))
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+	lc.loggers.thresholdFlush() // synchronous call exercises the log path
 
-	lc := newTestLoggingClient(t, mux)
-
-	// Add loggers to the buffer so the flush has something to send
-	lc.buffer.add("ticker.logger", "INFO", "INFO", "my-service", "production")
-
-	done := make(chan struct{})
-	go lc.periodicFlush(done)
-
-	// Wait for the 5-second ticker to fire at least once
-	time.Sleep(6 * time.Second)
-	close(done)
-
-	assert.GreaterOrEqual(t, flushCount.Load(), int32(1), "periodic flush ticker should have fired at least once")
+	mu.Lock()
+	got := buf.String()
+	mu.Unlock()
+	assert.Contains(t, got, "smplkit: logger registration flush failed")
 }
 
-func TestPeriodicFlush_LogsWarningOnFlushError(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test that waits for 5s ticker")
-	}
+func TestFlushSync_Alias(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	lc.buffer.add("sync.logger", "INFO", "INFO", "svc", "prod")
+	require.NoError(t, lc.loggers.FlushSync(context.Background()))
+	assert.Equal(t, 0, lc.loggers.PendingCount())
+}
 
+// ── periodicFlush ───────────────────────────────────────────────────────────
+
+func TestPeriodicFlush_Stops(t *testing.T) {
+	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	done := make(chan struct{})
+	exited := make(chan struct{})
+	go func() { lc.periodicFlush(done); close(exited) }()
+	close(done)
+	select {
+	case <-exited:
+	case <-time.After(time.Second):
+		t.Fatal("periodicFlush did not exit after done closed")
+	}
+}
+
+func TestPeriodicFlush_TickerFiresAndLogsError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that waits for the 5s ticker")
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"server rejected batch"}]}`))
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
-
 	lc := newTestLoggingClient(t, mux)
 	lc.buffer.add("periodic.error.logger", "INFO", "INFO", "my-service", "production")
 
-	// strings.Builder isn't safe for concurrent access, so guard it
-	// with a mutex — periodicFlush writes from a goroutine while the
-	// test reads from the main one.
 	var (
 		mu     sync.Mutex
 		buf    strings.Builder
@@ -1439,13 +1162,10 @@ func TestPeriodicFlush_LogsWarningOnFlushError(t *testing.T) {
 
 	done := make(chan struct{})
 	exited := make(chan struct{})
-	go func() {
-		lc.periodicFlush(done)
-		close(exited)
-	}()
+	go func() { lc.periodicFlush(done); close(exited) }()
 	time.Sleep(6 * time.Second)
 	close(done)
-	<-exited // happens-after ensures all writes are visible below
+	<-exited
 
 	mu.Lock()
 	got := buf.String()
@@ -1466,868 +1186,587 @@ func (w *lockedWriter) Write(p []byte) (int, error) {
 	return w.b.Write(p)
 }
 
-func TestFlush_ReturnsConnectionErrorOnBodyReadFailure(t *testing.T) {
-	httpClient := &http.Client{
-		Transport: &brokenBodyTransportLogging{statusCode: 200},
+// ── close ───────────────────────────────────────────────────────────────────
+
+func TestLoggingClient_Close_NilFields(t *testing.T) {
+	c := &LoggingClient{
+		loggersCache: map[string]map[string]interface{}{},
+		groupsCache:  map[string]map[string]interface{}{},
+		keyListeners: map[string][]func(*LoggerChangeEvent){},
+		buffer:       newLoggerRegistrationBuffer(),
 	}
-	genLoggingClient, _ := genlogging.NewClient("http://localhost",
-		genlogging.WithHTTPClient(httpClient),
-	)
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-	lc.buffer.add("body.read.fail", "INFO", "INFO", "svc", "env")
-
-	err := lc.Flush(context.Background())
-	require.Error(t, err)
-	var connErr *ConnectionError
-	require.ErrorAs(t, err, &connErr)
-	assert.Contains(t, err.Error(), "failed to read response body")
+	c.close() // flushDone, wsManager nil — must not panic
 }
 
-// --- handleLoggerChanged ---
-
-func TestHandleLoggerChanged(t *testing.T) {
-	mux := http.NewServeMux()
-	// Scoped single fetch for logger_changed event.
-	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}}`))
-	})
-
-	lc := newTestLoggingClient(t, mux)
-
-	var received *LoggerChangeEvent
-	lc.OnChange(func(evt *LoggerChangeEvent) {
-		received = evt
-	})
-
-	lc.handleLoggerChanged(map[string]interface{}{"id": "my.logger"})
-
-	require.NotNil(t, received)
-	assert.Equal(t, "my.logger", received.ID)
-	assert.Equal(t, "websocket", received.Source)
-}
-
-func TestHandleLoggerChanged_FetchError(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
-	}))
-
-	var called bool
-	lc.OnChange(func(evt *LoggerChangeEvent) {
-		called = true
-	})
-
-	// Should not panic; error causes early return
-	lc.handleLoggerChanged(map[string]interface{}{"id": "my.logger"})
-	assert.False(t, called)
-}
-
-func TestHandleLoggerChanged_UsesIDField(t *testing.T) {
-	mux := http.NewServeMux()
-	// Scoped single fetch uses the id field from the event payload.
-	mux.HandleFunc("/api/v1/loggers/my.logger", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"WARN","managed":true,"environments":{}}}}`))
-	})
-
-	lc := newTestLoggingClient(t, mux)
-
-	var received *LoggerChangeEvent
-	lc.OnChange(func(evt *LoggerChangeEvent) {
-		received = evt
-	})
-
-	lc.handleLoggerChanged(map[string]interface{}{"id": "my.logger"})
-
-	require.NotNil(t, received)
-	assert.Equal(t, "my.logger", received.ID)
-	assert.Equal(t, "websocket", received.Source)
-}
-
-// --- handleGroupChanged ---
-
-func TestHandleGroupChanged(t *testing.T) {
-	mux := http.NewServeMux()
-	// Scoped single fetch for group_changed event.
-	mux.HandleFunc("/api/v1/log_groups/sql", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}}`))
-	})
-
-	lc := newTestLoggingClient(t, mux)
-
-	// handleGroupChanged should not panic and should trigger re-fetch + applyLevels.
-	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
-}
-
-func TestHandleGroupChanged_FetchError(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
-	}))
-
-	// Should not panic; error causes early return.
-	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
-}
-
-// --- Logger.SetEnvironmentLevel with nil Environments ---
-
-func TestLoggerSetEnvironmentLevel_NilEnvironments(t *testing.T) {
-	l := &Logger{
-		Environments: nil,
+func TestLoggingClient_Close_WithFlushDoneAndAdapter(t *testing.T) {
+	adapter := &captureAdapter{}
+	c := &LoggingClient{
+		loggersCache: map[string]map[string]interface{}{},
+		groupsCache:  map[string]map[string]interface{}{},
+		keyListeners: map[string][]func(*LoggerChangeEvent){},
+		buffer:       newLoggerRegistrationBuffer(),
+		flushDone:    make(chan struct{}),
+		adapters:     []adapters.LoggingAdapter{adapter},
 	}
-
-	l.SetEnvironmentLevel("production", LogLevelError)
-
-	require.NotNil(t, l.Environments)
-	envData := l.Environments["production"].(map[string]interface{})
-	assert.Equal(t, "ERROR", envData["level"])
+	c.close()
+	assert.Nil(t, c.flushDone)
+	assert.True(t, adapter.uninstalled)
 }
 
-// --- LogGroup.SetEnvironmentLevel with nil Environments ---
-
-func TestLogGroupSetEnvironmentLevel_NilEnvironments(t *testing.T) {
-	g := &LogGroup{
-		Environments: nil,
-	}
-
-	g.SetEnvironmentLevel("production", LogLevelWarn)
-
-	require.NotNil(t, g.Environments)
-	envData := g.Environments["production"].(map[string]interface{})
-	assert.Equal(t, "WARN", envData["level"])
-}
-
-// --- Start ---
-
-func TestStart_Basic(t *testing.T) {
-	var bulkCalled atomic.Int32
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/loggers/bulk" {
-			bulkCalled.Add(1)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":0}`))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","level":"INFO","managed":true,"environments":{}}}]}`))
-	})
-	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
-		bulkCalled.Add(1)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"registered":0}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-	mux.HandleFunc("/api/ws/v1/events", func(w http.ResponseWriter, r *http.Request) {
-		// Return 200 OK; the real WS upgrade won't happen but Start handles this
-		w.WriteHeader(http.StatusOK)
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
-
-	httpClient := &http.Client{}
-	base := httpClient.Transport
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	httpClient.Transport = &authTransport{token: "sk_test", base: base}
-
-	headerEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
-		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
-		return nil
-	})
-	genLoggingClient, _ := genlogging.NewClient(server.URL,
-		genlogging.WithHTTPClient(httpClient),
-		headerEditor,
-	)
-
-	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     "test-service",
-		appURL:      server.URL,
-		httpClient:  httpClient,
-	}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.Start(context.Background())
-	require.NoError(t, err)
-	assert.True(t, lc.started)
-
-	// Clean up
-	lc.close()
-	c.stopWS()
-}
-
-func TestStart_FetchError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/loggers/bulk" {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":0}`))
-			return
-		}
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"fail"}]}`))
-	})
-	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"registered":0}`))
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
-
-	httpClient := &http.Client{}
-	genLoggingClient, _ := genlogging.NewClient(server.URL, genlogging.WithHTTPClient(httpClient))
-
-	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     "test-service",
-		appURL:      server.URL,
-		httpClient:  httpClient,
-	}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.Start(context.Background())
-	require.Error(t, err)
-	assert.False(t, lc.started)
-}
-
-func TestStart_Idempotent(t *testing.T) {
-	var callCount atomic.Int32
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/loggers/bulk" {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":0}`))
-			return
-		}
-		callCount.Add(1)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[{"id":"my.logger","type":"logger","attributes":{"id":"my.logger","name":"My Logger","managed":true,"environments":{}}}]}`))
-	})
-	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"registered":0}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
-
-	httpClient := &http.Client{}
-	base := httpClient.Transport
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	httpClient.Transport = &authTransport{token: "sk_test", base: base}
-
-	headerEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
-		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
-		return nil
-	})
-	genLoggingClient, _ := genlogging.NewClient(server.URL,
-		genlogging.WithHTTPClient(httpClient),
-		headerEditor,
-	)
-
-	c := &Client{
-		apiKey:      "sk_test",
-		environment: "test",
-		service:     "test-service",
-		appURL:      server.URL,
-		httpClient:  httpClient,
-	}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	err := lc.Start(context.Background())
-	require.NoError(t, err)
-
-	// Second call should be no-op
-	err = lc.Start(context.Background())
-	require.NoError(t, err)
-
-	// List loggers should have been called only once (during first Start)
-	assert.Equal(t, int32(1), callCount.Load())
-
-	lc.close()
-	c.stopWS()
-}
-
-// --- WS listener registration after Start ---
-
-func TestLoggingStart_RegistersWSListeners(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"registered":0}`))
-	})
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	lc := newTestLoggingClient(t, mux)
-
-	// Pre-inject a sharedWebSocket so ensureWS() uses it without starting a goroutine.
+func TestLoggingClient_Close_StandaloneOwnWS(t *testing.T) {
 	ws := &sharedWebSocket{
 		listeners: make(map[string][]eventCallback),
 		closeCh:   make(chan struct{}),
 		wsDone:    make(chan struct{}),
 	}
-	lc.client.ws = ws
-
-	err := lc.Start(context.Background())
-	require.NoError(t, err)
-
-	ws.listenersMu.Lock()
-	_, hasLoggerChanged := ws.listeners["logger_changed"]
-	_, hasLoggerDeleted := ws.listeners["logger_deleted"]
-	_, hasGroupChanged := ws.listeners["group_changed"]
-	_, hasGroupDeleted := ws.listeners["group_deleted"]
-	_, hasLoggersChanged := ws.listeners["loggers_changed"]
-	ws.listenersMu.Unlock()
-
-	assert.True(t, hasLoggerChanged, "logger_changed should be registered in WS listener map")
-	assert.True(t, hasLoggerDeleted, "logger_deleted should be registered in WS listener map")
-	assert.True(t, hasGroupChanged, "group_changed should be registered in WS listener map")
-	assert.True(t, hasGroupDeleted, "group_deleted should be registered in WS listener map")
-	assert.True(t, hasLoggersChanged, "loggers_changed should be registered in WS listener map")
-
-	lc.close()
-}
-
-// ========== New WS event handler tests for logging ==========
-
-// TestHandleLoggerChanged_ScopedFetch_ContentChanged verifies that logger_changed
-// calls GetLogger (scoped) and fires listeners when content differs.
-func TestHandleLoggerChanged_ScopedFetch_ContentChanged(t *testing.T) {
-	var fetchCount int32
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers/com.acme.app", func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&fetchCount, 1)
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"com.acme.app","level":"WARN","managed":true,"environments":{}}}}`))
-	})
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
-
-	// Pre-populate cache with different content.
-	lc.loggersCache["com.acme.app"] = map[string]interface{}{
-		"id":      "com.acme.app",
-		"name":    "com.acme.app",
-		"level":   "DEBUG",
-		"managed": true,
+	close(ws.wsDone) // so stop() returns immediately
+	c := &LoggingClient{
+		client:       nil, // standalone
+		ownWS:        ws,
+		wsManager:    ws,
+		loggersCache: map[string]map[string]interface{}{},
+		groupsCache:  map[string]map[string]interface{}{},
+		keyListeners: map[string][]func(*LoggerChangeEvent){},
+		buffer:       newLoggerRegistrationBuffer(),
 	}
-
-	var received *LoggerChangeEvent
-	lc.OnChange(func(evt *LoggerChangeEvent) {
-		received = evt
-	})
-
-	lc.handleLoggerChanged(map[string]interface{}{"id": "com.acme.app"})
-
-	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call GetLogger once")
-	require.NotNil(t, received, "listener should fire when content changed")
-	assert.Equal(t, "com.acme.app", received.ID)
+	c.close()
+	assert.Nil(t, c.ownWS)
+	assert.Nil(t, c.wsManager)
 }
 
-// TestHandleLoggerChanged_ScopedFetch_ContentUnchanged verifies that logger_changed
-// does NOT fire listeners when content is identical.
-// We pre-warm the cache using fetchSingleLogger so the stored map matches exactly.
-func TestHandleLoggerChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers/com.acme.app", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"com.acme.app","level":"DEBUG","managed":true,"environments":{}}}}`))
-	})
+// ── fireChangeListeners ─────────────────────────────────────────────────────
 
-	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
+func newBareLoggingClient(cache map[string]map[string]interface{}) *LoggingClient {
+	return &LoggingClient{
+		client:       &SmplClient{environment: "test"},
+		environment:  "test",
+		loggersCache: cache,
+		groupsCache:  map[string]map[string]interface{}{},
+		keyListeners: map[string][]func(*LoggerChangeEvent){},
+	}
+}
 
-	// Pre-warm: fetch once so the cache has the exact map representation.
-	preFetched, err := lc.fetchSingleLogger(context.Background(), "com.acme.app")
-	require.NoError(t, err)
-	lc.loggersCache["com.acme.app"] = preFetched
-
+func TestFireChangeListeners_EmptyKeyIsNoOp(t *testing.T) {
+	c := newBareLoggingClient(map[string]map[string]interface{}{})
 	var called bool
-	lc.OnChange(func(evt *LoggerChangeEvent) { called = true })
-
-	// Second handleLoggerChanged call: server returns same data → no diff.
-	lc.handleLoggerChanged(map[string]interface{}{"id": "com.acme.app"})
-
-	assert.False(t, called, "listener should NOT fire when content is unchanged")
-}
-
-// TestHandleLoggerDeleted_StoreRemoval_NoEventForDeletedKey verifies that
-// logger_deleted evicts the logger from the cache without making an HTTP
-// fetch, and fires NO listener for the deleted key (deletion is not a
-// level change — see the change-listener semantics rule).
-func TestHandleLoggerDeleted_StoreRemoval_NoEventForDeletedKey(t *testing.T) {
-	var fetchCount int32
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&fetchCount, 1)
-	}))
-
-	lc.loggersCache["gone.logger"] = map[string]interface{}{
-		"id":    "gone.logger",
-		"name":  "gone.logger",
-		"level": "WARN",
-	}
-
-	var evt *LoggerChangeEvent
-	lc.OnChange(func(e *LoggerChangeEvent) { evt = e })
-
-	lc.handleLoggerDeleted(map[string]interface{}{"id": "gone.logger"})
-
-	assert.Equal(t, int32(0), atomic.LoadInt32(&fetchCount), "logger_deleted must NOT make HTTP fetch")
-	_, stillInCache := lc.loggersCache["gone.logger"]
-	assert.False(t, stillInCache, "logger should be removed from cache")
-	assert.Nil(t, evt, "deleted key fires nothing — deletion is not a level change")
-}
-
-// TestHandleGroupChanged_ScopedFetch verifies that group_changed calls
-// GetLogGroup (scoped) without a full refetch.
-func TestHandleGroupChanged_ScopedFetch(t *testing.T) {
-	var fetchCount int32
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/log_groups/sql", func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&fetchCount, 1)
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}}`))
-	})
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
-
-	// Different content to trigger update.
-	lc.groupsCache["sql"] = map[string]interface{}{"id": "sql", "level": "DEBUG"}
-
-	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
-
-	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call GetLogGroup once")
-}
-
-// TestHandleGroupDeleted_RemovesFromCache verifies that group_deleted
-// removes the group from cache without an HTTP fetch.
-func TestHandleGroupDeleted_RemovesFromCache(t *testing.T) {
-	var fetchCount int32
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&fetchCount, 1)
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	lc.groupsCache["sql"] = map[string]interface{}{"id": "sql"}
-
-	lc.handleGroupDeleted(map[string]interface{}{"id": "sql"})
-
-	assert.Equal(t, int32(0), atomic.LoadInt32(&fetchCount), "group_deleted must NOT make HTTP fetch")
-	_, stillInCache := lc.groupsCache["sql"]
-	assert.False(t, stillInCache, "group should be removed from cache")
-}
-
-// TestHandleLoggersChanged_FullFetch_DiffFiring verifies that loggers_changed
-// fetches full list, diffs, and fires listeners for changed loggers.
-func TestHandleLoggersChanged_FullFetch_DiffFiring(t *testing.T) {
-	var listFetched int32
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&listFetched, 1)
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[
-			{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"com.acme.app","level":"WARN","managed":true,"environments":{}}},
-			{"id":"com.acme.db","type":"logger","attributes":{"id":"com.acme.db","name":"com.acme.db","level":"DEBUG","managed":true,"environments":{}}}
-		]}`))
-	})
-	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[]}`))
-	})
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
-
-	// Pre-populate with different content for com.acme.app; com.acme.db is new.
-	lc.loggersCache["com.acme.app"] = map[string]interface{}{
-		"id": "com.acme.app", "level": "DEBUG",
-	}
-
-	var globalFired int
-	var keyAppFired, keyDBFired bool
-
-	lc.OnChange(func(evt *LoggerChangeEvent) { globalFired++ })
-	lc.OnChangeKey("com.acme.app", func(evt *LoggerChangeEvent) { keyAppFired = true })
-	lc.OnChangeKey("com.acme.db", func(evt *LoggerChangeEvent) { keyDBFired = true })
-
-	lc.handleLoggersChanged(map[string]interface{}{})
-
-	assert.GreaterOrEqual(t, atomic.LoadInt32(&listFetched), int32(1), "should call list fetch")
-	assert.True(t, keyAppFired, "com.acme.app listener should fire (content changed)")
-	assert.True(t, keyDBFired, "com.acme.db listener should fire (new logger)")
-	_ = globalFired // global fires once per changed key in this path
-}
-
-// ========== Coverage gap tests ==========
-
-// TestFetchSingleLogger_NetworkError covers the network error path.
-func TestFetchSingleLogger_NetworkError(t *testing.T) {
-	httpClient := &http.Client{Transport: &failingTransportLogging{}}
-	genLoggingClient, _ := genlogging.NewClient("http://localhost",
-		genlogging.WithHTTPClient(httpClient),
-	)
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	_, err := lc.fetchSingleLogger(context.Background(), "my-logger")
-	assert.Error(t, err)
-}
-
-// TestFetchSingleLogger_ReadBodyError covers the read body error path.
-func TestFetchSingleLogger_ReadBodyError(t *testing.T) {
-	httpClient := &http.Client{Transport: &brokenBodyTransportLogging{statusCode: 200}}
-	genLoggingClient, _ := genlogging.NewClient("http://localhost",
-		genlogging.WithHTTPClient(httpClient),
-	)
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	_, err := lc.fetchSingleLogger(context.Background(), "my-logger")
-	assert.Error(t, err)
-}
-
-// TestFetchSingleLogger_HTTPError covers the HTTP error status path.
-func TestFetchSingleLogger_HTTPError(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
-	}))
-
-	_, err := lc.fetchSingleLogger(context.Background(), "missing-logger")
-	assert.Error(t, err)
-}
-
-// TestFetchSingleLogger_MalformedJSON covers the JSON parse error path.
-func TestFetchSingleLogger_MalformedJSON(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`not valid json`))
-	}))
-
-	_, err := lc.fetchSingleLogger(context.Background(), "my-logger")
-	assert.Error(t, err)
-}
-
-// TestFetchSingleLogger_WithGroup covers the l.Group != nil path.
-func TestFetchSingleLogger_WithGroup(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"com.acme.app","type":"logger","attributes":{"id":"com.acme.app","name":"com.acme.app","level":"DEBUG","managed":true,"group":"my-group","environments":{}}}}`))
-	}))
-
-	result, err := lc.fetchSingleLogger(context.Background(), "com.acme.app")
-	require.NoError(t, err)
-	assert.Equal(t, "my-group", result["group"])
-}
-
-// TestFetchSingleGroup_NetworkError covers the network error path.
-func TestFetchSingleGroup_NetworkError(t *testing.T) {
-	httpClient := &http.Client{Transport: &failingTransportLogging{}}
-	genLoggingClient, _ := genlogging.NewClient("http://localhost",
-		genlogging.WithHTTPClient(httpClient),
-	)
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	_, err := lc.fetchSingleGroup(context.Background(), "my-group")
-	assert.Error(t, err)
-}
-
-// TestFetchSingleGroup_ReadBodyError covers the read body error path.
-func TestFetchSingleGroup_ReadBodyError(t *testing.T) {
-	httpClient := &http.Client{Transport: &brokenBodyTransportLogging{statusCode: 200}}
-	genLoggingClient, _ := genlogging.NewClient("http://localhost",
-		genlogging.WithHTTPClient(httpClient),
-	)
-	c := &Client{environment: "test", service: "test-service"}
-	lc := newLoggingClient(c, genLoggingClient)
-
-	_, err := lc.fetchSingleGroup(context.Background(), "my-group")
-	assert.Error(t, err)
-}
-
-// TestFetchSingleGroup_HTTPError covers the HTTP error status path.
-func TestFetchSingleGroup_HTTPError(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
-	}))
-
-	_, err := lc.fetchSingleGroup(context.Background(), "missing-group")
-	assert.Error(t, err)
-}
-
-// TestFetchSingleGroup_MalformedJSON covers the JSON parse error path.
-func TestFetchSingleGroup_MalformedJSON(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`not valid json`))
-	}))
-
-	_, err := lc.fetchSingleGroup(context.Background(), "my-group")
-	assert.Error(t, err)
-}
-
-// TestFetchSingleGroup_WithParentGroup covers the g.Group != nil path.
-func TestFetchSingleGroup_WithParentGroup(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"child","type":"log_group","attributes":{"id":"child","name":"Child","level":"INFO","parent_id":"parent-group","environments":{}}}}`))
-	}))
-
-	result, err := lc.fetchSingleGroup(context.Background(), "child")
-	require.NoError(t, err)
-	assert.Equal(t, "parent-group", result["group"])
-}
-
-// TestHandleGroupChanged_ScopedFetch_ContentUnchanged verifies group_changed
-// does NOT call applyLevels when content is identical.
-func TestHandleGroupChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/log_groups/sql", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}}`))
-	})
-
-	lc := newTestLoggingClient(t, http.HandlerFunc(mux.ServeHTTP))
-
-	// Pre-warm: fetch once so the cache has the exact map representation.
-	preFetched, err := lc.fetchSingleGroup(context.Background(), "sql")
-	require.NoError(t, err)
-	lc.groupsCache["sql"] = preFetched
-
-	// Second handleGroupChanged call: server returns same data → no diff → early return.
-	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
-	// Test passes if no panic or unexpected behavior.
-}
-
-// TestHandleGroupChanged_FetchError_NoChange covers the early return on fetch error.
-func TestHandleGroupChanged_FetchError_NoChange(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
-	}))
-
-	// Should not panic; error causes early return.
-	lc.handleGroupChanged(map[string]interface{}{"id": "sql"})
-}
-
-// TestHandleLoggersChanged_FetchError covers the fetchAndCache error early return.
-func TestHandleLoggersChanged_FetchError(t *testing.T) {
-	lc := newTestLoggingClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
-	}))
-
-	var called bool
-	lc.OnChange(func(evt *LoggerChangeEvent) { called = true })
-
-	lc.handleLoggersChanged(map[string]interface{}{})
+	c.globalListeners = append(c.globalListeners, func(*LoggerChangeEvent) { called = true })
+	c.fireChangeListeners("", "websocket")
 	assert.False(t, called)
 }
 
-// failingTransportLogging returns a network error for all requests.
-type failingTransportLogging struct{}
+func TestFireChangeListeners_GlobalAndKey(t *testing.T) {
+	c := newBareLoggingClient(map[string]map[string]interface{}{
+		"my.logger": {"level": "WARN", "environments": map[string]interface{}{}},
+	})
+	var globalEvent, keyEvent *LoggerChangeEvent
+	c.globalListeners = append(c.globalListeners, func(e *LoggerChangeEvent) { globalEvent = e })
+	c.keyListeners["my.logger"] = append(c.keyListeners["my.logger"], func(e *LoggerChangeEvent) { keyEvent = e })
 
-func (t *failingTransportLogging) RoundTrip(_ *http.Request) (*http.Response, error) {
-	return nil, fmt.Errorf("simulated network error")
+	c.fireChangeListeners("my.logger", "websocket")
+
+	require.NotNil(t, globalEvent)
+	assert.Equal(t, "my.logger", globalEvent.ID)
+	assert.Equal(t, "websocket", globalEvent.Source)
+	require.NotNil(t, globalEvent.Level)
+	assert.Equal(t, LogLevelWarn, *globalEvent.Level)
+	require.NotNil(t, keyEvent)
+	assert.Equal(t, "my.logger", keyEvent.ID)
 }
 
-// --- Refresh ---
+func TestFireChangeListeners_LoggerNotInCacheNilLevel(t *testing.T) {
+	c := newBareLoggingClient(map[string]map[string]interface{}{})
+	var event *LoggerChangeEvent
+	c.globalListeners = append(c.globalListeners, func(e *LoggerChangeEvent) { event = e })
+	c.fireChangeListeners("unknown.logger", "websocket")
+	require.NotNil(t, event)
+	assert.Nil(t, event.Level)
+}
 
-// refreshMux serves /api/v1/loggers and /api/v1/log_groups list endpoints
-// from atomic pointers, so the test can swap the served body between
-// successive Refresh calls.
-func refreshMux(loggersBody, groupsBody *atomic.Value) http.Handler {
+func TestFireChangeListeners_GlobalPanicRecovery(t *testing.T) {
+	c := newBareLoggingClient(map[string]map[string]interface{}{
+		"my.logger": {"level": "INFO", "environments": map[string]interface{}{}},
+	})
+	var second bool
+	c.globalListeners = append(c.globalListeners, func(*LoggerChangeEvent) { panic("bad") })
+	c.globalListeners = append(c.globalListeners, func(*LoggerChangeEvent) { second = true })
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
+	c.fireChangeListeners("my.logger", "websocket")
+	assert.True(t, second)
+}
+
+func TestFireChangeListeners_KeyPanicRecovery(t *testing.T) {
+	c := newBareLoggingClient(map[string]map[string]interface{}{
+		"my.logger": {"level": "INFO", "environments": map[string]interface{}{}},
+	})
+	var second bool
+	c.keyListeners["my.logger"] = append(c.keyListeners["my.logger"], func(*LoggerChangeEvent) { panic("bad") })
+	c.keyListeners["my.logger"] = append(c.keyListeners["my.logger"], func(*LoggerChangeEvent) { second = true })
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
+	c.fireChangeListeners("my.logger", "websocket")
+	assert.True(t, second)
+}
+
+// ── requireInstalled gate (internal) ────────────────────────────────────────
+
+func TestRequireInstalled(t *testing.T) {
+	c := &LoggingClient{}
+	err := c.requireInstalled()
+	require.Error(t, err)
+	var notInstalled *NotInstalledError
+	require.ErrorAs(t, err, &notInstalled)
+
+	c.connected = true
+	require.NoError(t, c.requireInstalled())
+}
+
+func TestOnChange_GatedBeforeInstall(t *testing.T) {
+	c := &LoggingClient{keyListeners: map[string][]func(*LoggerChangeEvent){}}
+	err := c.OnChange(func(*LoggerChangeEvent) {})
+	var notInstalled *NotInstalledError
+	require.ErrorAs(t, err, &notInstalled)
+	assert.Empty(t, c.globalListeners)
+
+	c.connected = true
+	require.NoError(t, c.OnChange(func(*LoggerChangeEvent) {}))
+	assert.Len(t, c.globalListeners, 1)
+}
+
+func TestOnChangeKey_GatedBeforeInstall(t *testing.T) {
+	c := &LoggingClient{keyListeners: map[string][]func(*LoggerChangeEvent){}}
+	err := c.OnChangeKey("k", func(*LoggerChangeEvent) {})
+	var notInstalled *NotInstalledError
+	require.ErrorAs(t, err, &notInstalled)
+	assert.Empty(t, c.keyListeners["k"])
+
+	c.connected = true
+	require.NoError(t, c.OnChangeKey("k", func(*LoggerChangeEvent) {}))
+	assert.Len(t, c.keyListeners["k"], 1)
+}
+
+func TestRefresh_GatedBeforeInstall(t *testing.T) {
+	c := &LoggingClient{}
+	err := c.Refresh(context.Background())
+	var notInstalled *NotInstalledError
+	require.ErrorAs(t, err, &notInstalled)
+}
+
+// ── RegisterAdapter / RegisterLogger ────────────────────────────────────────
+
+func TestRegisterAdapter_DisablesAutoLoad(t *testing.T) {
+	c := &LoggingClient{}
+	a := &captureAdapter{}
+	c.RegisterAdapter(a)
+	assert.True(t, c.explicitAdapters)
+	require.Len(t, c.adapters, 1)
+}
+
+func TestRegisterAdapter_PanicsAfterInstall(t *testing.T) {
+	c := &LoggingClient{connected: true}
+	assert.Panics(t, func() { c.RegisterAdapter(&captureAdapter{}) })
+}
+
+func TestRegisterLogger_BuffersNormalized(t *testing.T) {
+	c := &LoggingClient{buffer: newLoggerRegistrationBuffer(), service: "svc", environment: "prod"}
+	c.RegisterLogger("MyApp/DB:Queries", LogLevelDebug)
+	c.RegisterLogger("myapp.db.queries", LogLevelInfo) // dup of normalized form
+	batch := c.buffer.drain()
+	require.Len(t, batch, 1)
+	assert.Equal(t, "myapp.db.queries", batch[0].key)
+	assert.Equal(t, "DEBUG", batch[0].level)
+}
+
+// ── onNewLogger ─────────────────────────────────────────────────────────────
+
+func TestOnNewLogger_EmptyNameIgnored(t *testing.T) {
+	c := &LoggingClient{
+		buffer:       newLoggerRegistrationBuffer(),
+		nameMap:      map[string]string{},
+		loggersCache: map[string]map[string]interface{}{},
+		groupsCache:  map[string]map[string]interface{}{},
+	}
+	c.onNewLogger("", "INFO")
+	assert.Equal(t, 0, c.buffer.pendingCount())
+}
+
+func TestOnNewLogger_NotConnectedBuffersOnly(t *testing.T) {
+	a := &captureAdapter{}
+	c := &LoggingClient{
+		buffer:       newLoggerRegistrationBuffer(),
+		nameMap:      map[string]string{},
+		loggersCache: map[string]map[string]interface{}{},
+		groupsCache:  map[string]map[string]interface{}{},
+		adapters:     []adapters.LoggingAdapter{a},
+		service:      "svc", environment: "prod",
+	}
+	c.onNewLogger("Com.Acme.New", "INFO")
+	assert.Equal(t, 1, c.buffer.pendingCount())
+	assert.Equal(t, "com.acme.new", c.nameMap["Com.Acme.New"])
+	assert.Empty(t, a.applied, "no apply before connected")
+}
+
+func TestOnNewLogger_ConnectedAppliesAndRecordsMetric(t *testing.T) {
+	a := &captureAdapter{}
+	httpClient := &http.Client{}
+	mr := newMetricsReporter(httpClient, "http://metrics.invalid", "test", "svc", 0)
+	t.Cleanup(mr.Close)
+	c := &LoggingClient{
+		connected:    true,
+		buffer:       newLoggerRegistrationBuffer(),
+		nameMap:      map[string]string{},
+		loggersCache: map[string]map[string]interface{}{},
+		groupsCache:  map[string]map[string]interface{}{},
+		adapters:     []adapters.LoggingAdapter{a},
+		metrics:      mr,
+		service:      "svc", environment: "prod",
+	}
+	c.onNewLogger("com.acme.new", "INFO")
+	require.Len(t, a.applied, 1)
+	assert.Equal(t, "com.acme.new", a.applied[0].name)
+	assert.Equal(t, "INFO", a.applied[0].level) // INFO fallback
+}
+
+// ── applyLevels ─────────────────────────────────────────────────────────────
+
+func TestApplyLevels_NoAdaptersIsNoOp(t *testing.T) {
+	c := &LoggingClient{
+		loggersCache: map[string]map[string]interface{}{},
+		groupsCache:  map[string]map[string]interface{}{},
+	}
+	c.applyLevels() // must not panic with no adapters
+}
+
+func TestApplyLevels_ResolvesAndAppliesAndRecordsMetric(t *testing.T) {
+	a := &captureAdapter{discovered: []adapters.DiscoveredLogger{
+		{Name: "com.acme.db", Level: "DEBUG"},
+		{Name: "", Level: "INFO"}, // empty name skipped
+	}}
+	httpClient := &http.Client{}
+	mr := newMetricsReporter(httpClient, "http://metrics.invalid", "test", "svc", 0)
+	t.Cleanup(mr.Close)
+	c := &LoggingClient{
+		environment: "test",
+		adapters:    []adapters.LoggingAdapter{a},
+		metrics:     mr,
+		loggersCache: map[string]map[string]interface{}{
+			"com.acme.db": {"level": "ERROR", "environments": map[string]interface{}{}},
+		},
+		groupsCache: map[string]map[string]interface{}{},
+	}
+	c.applyLevels()
+	require.Len(t, a.applied, 1)
+	assert.Equal(t, "com.acme.db", a.applied[0].name)
+	assert.Equal(t, "ERROR", a.applied[0].level)
+}
+
+// ── Install (wired path, internal) ──────────────────────────────────────────
+
+// installMux serves the endpoints Install touches: list loggers/groups, bulk,
+// and a catch-all for the rest.
+func installMux() *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"registered":0}`))
+	})
 	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(loggersBody.Load().(string)))
+		_, _ = w.Write([]byte(`{"data":[]}`))
 	})
 	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(groupsBody.Load().(string)))
+		_, _ = w.Write([]byte(`{"data":[]}`))
 	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	return mux
 }
 
-func TestRefresh_FetchesAndCachesLoggers(t *testing.T) {
-	var loggers, groups atomic.Value
-	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
-	groups.Store(`{"data":[]}`)
+// installTestClient builds a wired (connected=false) LoggingClient whose parent
+// has a pre-injected non-connecting WebSocket, so Install does not dial.
+func installTestClient(t *testing.T, mux http.Handler) *LoggingClient {
+	t.Helper()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
 
-	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
-
-	require.NoError(t, lc.Refresh(context.Background()))
-	assert.Contains(t, lc.loggersCache, "app")
-	assert.Equal(t, "INFO", lc.loggersCache["app"]["level"])
+	httpClient := &http.Client{}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: "sk_test", base: base}
+	headerEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	genLoggingClient, _ := genlogging.NewClient(server.URL,
+		genlogging.WithHTTPClient(httpClient),
+		headerEditor,
+	)
+	c := &SmplClient{apiKey: "sk_test", environment: "test", service: "test-service", appURL: server.URL, httpClient: httpClient}
+	// Pre-inject a non-connecting WS so ensureWS()/ensureStarted() do not dial.
+	c.ws = &sharedWebSocket{
+		listeners: make(map[string][]eventCallback),
+		closeCh:   make(chan struct{}),
+		wsDone:    make(chan struct{}),
+	}
+	c.started = true // skip background goroutines
+	lc := newLoggingClient(c, genLoggingClient, nil)
+	return lc
 }
 
-func TestRefresh_FiresChangeListenerWithManualSource(t *testing.T) {
-	var loggers, groups atomic.Value
-	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
-	groups.Store(`{"data":[]}`)
+func TestInstall_NoAdaptersWarnsAndConnects(t *testing.T) {
+	var logBuf strings.Builder
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
 
-	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
-	require.NoError(t, lc.Refresh(context.Background()))
-
-	var events []*LoggerChangeEvent
-	lc.OnChange(func(evt *LoggerChangeEvent) { events = append(events, evt) })
-
-	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"DEBUG","managed":true,"environments":{},"sources":[]}}]}`)
-	require.NoError(t, lc.Refresh(context.Background()))
-
-	require.Len(t, events, 1)
-	assert.Equal(t, "app", events[0].ID)
-	assert.Equal(t, "manual", events[0].Source)
-	require.NotNil(t, events[0].Level)
-	assert.Equal(t, LogLevelDebug, *events[0].Level)
+	lc := installTestClient(t, installMux())
+	require.NoError(t, lc.Install(context.Background()))
+	assert.True(t, lc.connected)
+	assert.Contains(t, logBuf.String(), "no logging adapters registered")
+	t.Cleanup(lc.close)
 }
 
-// Removing a logger from the cache fires NOTHING for its own key —
-// deletion is not a level change. (If a dependent logger's effective
-// level moved, that dependent fires through the normal change path;
-// see TestRefresh_DeletedLogger_DependentsFireChange below.)
-func TestRefresh_DeletedLogger_NoEventForDeletedKey(t *testing.T) {
-	var loggers, groups atomic.Value
-	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
-	groups.Store(`{"data":[]}`)
+func TestInstall_RegistersWSHandlers(t *testing.T) {
+	lc := installTestClient(t, installMux())
+	require.NoError(t, lc.Install(context.Background()))
 
-	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
-	require.NoError(t, lc.Refresh(context.Background()))
-
-	var events []*LoggerChangeEvent
-	lc.OnChange(func(evt *LoggerChangeEvent) { events = append(events, evt) })
-
-	loggers.Store(`{"data":[]}`)
-	require.NoError(t, lc.Refresh(context.Background()))
-
-	assert.Empty(t, events, "deleted key fires nothing — deletion is not a level change")
+	ws := lc.client.ws
+	ws.listenersMu.Lock()
+	defer ws.listenersMu.Unlock()
+	for _, ev := range []string{"logger_changed", "logger_deleted", "group_changed", "group_deleted", "loggers_changed"} {
+		_, ok := ws.listeners[ev]
+		assert.True(t, ok, "%s should be registered", ev)
+	}
+	t.Cleanup(lc.close)
 }
 
-func TestRefresh_NoListenerFireWhenUnchanged(t *testing.T) {
-	var loggers, groups atomic.Value
-	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
-	groups.Store(`{"data":[]}`)
-
-	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
-	require.NoError(t, lc.Refresh(context.Background()))
-
-	var fired int
-	lc.OnChange(func(_ *LoggerChangeEvent) { fired++ })
-
-	require.NoError(t, lc.Refresh(context.Background()))
-	assert.Zero(t, fired, "no listener should fire when fetch produces identical caches")
-}
-
-func TestRefresh_AppliesResolvedLevelToAdapter(t *testing.T) {
-	var loggers, groups atomic.Value
-	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"INFO","managed":true,"environments":{},"sources":[]}}]}`)
-	groups.Store(`{"data":[]}`)
-
-	lc := newTestLoggingClient(t, refreshMux(&loggers, &groups))
-	captured := &refreshCapturingAdapter{discovered: []refreshDiscoveredEntry{{name: "app", level: "INFO"}}}
-	lc.RegisterAdapter(captured)
-
-	require.NoError(t, lc.Refresh(context.Background()))
-	require.NotEmpty(t, captured.applied, "Refresh should call ApplyLevel on registered adapters")
-	last := captured.applied[len(captured.applied)-1]
-	assert.Equal(t, "app", last.name)
-	assert.Equal(t, "INFO", last.level)
-
-	loggers.Store(`{"data":[{"id":"app","type":"logger","attributes":{"id":"app","name":"App","level":"ERROR","managed":true,"environments":{},"sources":[]}}]}`)
-	require.NoError(t, lc.Refresh(context.Background()))
-	last = captured.applied[len(captured.applied)-1]
-	assert.Equal(t, "app", last.name)
-	assert.Equal(t, "ERROR", last.level)
-}
-
-func TestRefresh_ReturnsErrorOnFetchFailure(t *testing.T) {
+func TestInstall_DiscoversAppliesAndInstallsHooks(t *testing.T) {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"registered":1}`))
+	})
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"com.acme.db","type":"logger","attributes":{"id":"com.acme.db","name":"com.acme.db","managed":true,"group":"sql","environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"ERROR","environments":{}}}]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	lc := installTestClient(t, mux)
+	a := &captureAdapter{discovered: []adapters.DiscoveredLogger{
+		{Name: "com.acme.db", Level: "DEBUG"},
+		{Name: "", Level: "INFO"}, // empty discovery skipped
+	}}
+	lc.RegisterAdapter(a)
+	require.NoError(t, lc.Install(context.Background()))
+
+	assert.True(t, a.hookInstalled, "InstallHook should fire")
+	// Inherited level from group sql=ERROR must reach the adapter.
+	var got string
+	for _, al := range a.applied {
+		if al.name == "com.acme.db" {
+			got = al.level
+		}
+	}
+	assert.Equal(t, "ERROR", got)
+	t.Cleanup(lc.close)
+}
+
+func TestInstall_FetchErrorReturned(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"registered":0}`))
+	})
 	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"server error"}]}`))
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"fail"}]}`))
 	})
-	lc := newTestLoggingClient(t, mux)
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 
-	err := lc.Refresh(context.Background())
+	lc := installTestClient(t, mux)
+	err := lc.Install(context.Background())
+	require.Error(t, err)
+	assert.False(t, lc.connected)
+}
+
+func TestInstall_BulkFlushErrorLoggedNotFatal(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"detail":"Invalid level value"}]}`))
+	})
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	var logBuf strings.Builder
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(io.Discard) })
+
+	lc := installTestClient(t, mux)
+	a := &captureAdapter{discovered: []adapters.DiscoveredLogger{{Name: "com.acme.app", Level: "INFO"}}}
+	lc.RegisterAdapter(a)
+	require.NoError(t, lc.Install(context.Background()))
+	assert.True(t, lc.connected)
+	assert.Contains(t, logBuf.String(), "smplkit: bulk logger registration failed")
+	assert.Contains(t, logBuf.String(), "Invalid level value")
+	t.Cleanup(lc.close)
+}
+
+func TestInstall_Idempotent(t *testing.T) {
+	var listCalls atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"registered":0}`))
+	})
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		listCalls.Add(1)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	lc := installTestClient(t, mux)
+	require.NoError(t, lc.Install(context.Background()))
+	require.NoError(t, lc.Install(context.Background()))
+	assert.Equal(t, int32(1), listCalls.Load(), "second Install is a no-op")
+	t.Cleanup(lc.close)
+}
+
+func TestRefresh_PostInstall_FiresManualDeltas(t *testing.T) {
+	var groupsLevel atomic.Value
+	groupsLevel.Store("WARN")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/bulk", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"registered":0}`))
+	})
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"app.db","type":"logger","attributes":{"id":"app.db","name":"app.db","managed":true,"group":"sql","environments":{}}}]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, _ *http.Request) {
+		body := strings.ReplaceAll(`{"data":[{"id":"sql","type":"log_group","attributes":{"id":"sql","name":"SQL","level":"$L","environments":{}}}]}`, "$L", groupsLevel.Load().(string))
+		_, _ = w.Write([]byte(body))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	lc := installTestClient(t, mux)
+	require.NoError(t, lc.Install(context.Background()))
+	t.Cleanup(lc.close)
+
+	var events []*LoggerChangeEvent
+	require.NoError(t, lc.OnChange(func(e *LoggerChangeEvent) { events = append(events, e) }))
+
+	groupsLevel.Store("DEBUG")
+	require.NoError(t, lc.Refresh(context.Background()))
+	require.Len(t, events, 1)
+	assert.Equal(t, "app.db", events[0].ID)
+	assert.Equal(t, "manual", events[0].Source)
+}
+
+// ── NewLoggingClient (standalone) ───────────────────────────────────────────
+
+func TestNewLoggingClient_Standalone_CRUD(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/showcase", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "Bearer sk_test_key", r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(`{"data":{"id":"showcase","type":"logger","attributes":{"id":"showcase","name":"showcase","level":"INFO","managed":true,"environments":{}}}}`))
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	lc, err := NewLoggingClient(
+		Config{APIKey: "sk_test_key", Environment: "test", Service: "svc", DisableTelemetry: true},
+		WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "test", lc.environment)
+	assert.Equal(t, "svc", lc.service)
+	assert.Nil(t, lc.client, "standalone has no parent")
+
+	logger, err := lc.Loggers().Get(context.Background(), "showcase")
+	require.NoError(t, err)
+	assert.Equal(t, "showcase", logger.ID)
+}
+
+func TestNewLoggingClient_Standalone_ConfigError(t *testing.T) {
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("HOME", t.TempDir())
+	_, err := NewLoggingClient(Config{}) // no API key resolvable
 	require.Error(t, err)
 }
 
-// refreshCapturingAdapter records every ApplyLevel call so tests can
-// assert that Refresh propagates levels to registered adapters.
-type refreshCapturingAdapter struct {
-	discovered []refreshDiscoveredEntry
-	applied    []refreshDiscoveredEntry
+func TestNewLoggingClient_Standalone_CustomHTTPClient(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers/x", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"id":"x","type":"logger","attributes":{"id":"x","name":"x","managed":true,"environments":{}}}}`))
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	hc := &http.Client{}
+	lc, err := NewLoggingClient(
+		Config{APIKey: "sk_test_key", Environment: "test", Service: "svc", DisableTelemetry: true},
+		WithBaseURL(server.URL),
+		WithHTTPClient(hc),
+	)
+	require.NoError(t, err)
+	_, err = lc.Loggers().Get(context.Background(), "x")
+	require.NoError(t, err)
 }
 
-type refreshDiscoveredEntry struct {
+func TestNewLoggingClient_Standalone_EnsureWSOwnsSocket(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	lc, err := NewLoggingClient(
+		Config{APIKey: "sk_test_key", Environment: "test", Service: "svc", DisableTelemetry: true},
+		WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+
+	ws := lc.ensureWS()
+	require.NotNil(t, ws)
+	assert.Same(t, ws, lc.ownWS, "standalone ensureWS builds and owns its own socket")
+	assert.Same(t, ws, lc.ensureWS(), "ensureWS is idempotent")
+	lc.ownWS.stop()
+}
+
+// ── shared capture adapter ──────────────────────────────────────────────────
+
+type appliedLevel struct {
 	name  string
 	level string
 }
 
-func (a *refreshCapturingAdapter) Name() string { return "capture" }
-
-func (a *refreshCapturingAdapter) Discover() []adapters.DiscoveredLogger {
-	out := make([]adapters.DiscoveredLogger, len(a.discovered))
-	for i, d := range a.discovered {
-		out[i] = adapters.DiscoveredLogger{Name: d.name, Level: d.level}
-	}
-	return out
+// captureAdapter is a configurable adapters.LoggingAdapter test double.
+type captureAdapter struct {
+	discovered    []adapters.DiscoveredLogger
+	applied       []appliedLevel
+	hookInstalled bool
+	hookCallback  func(string, string)
+	uninstalled   bool
 }
 
-func (a *refreshCapturingAdapter) ApplyLevel(name, level string) {
-	a.applied = append(a.applied, refreshDiscoveredEntry{name: name, level: level})
+func (a *captureAdapter) Name() string { return "capture" }
+
+func (a *captureAdapter) Discover() []adapters.DiscoveredLogger { return a.discovered }
+
+func (a *captureAdapter) ApplyLevel(name, level string) {
+	a.applied = append(a.applied, appliedLevel{name: name, level: level})
 }
 
-func (a *refreshCapturingAdapter) InstallHook(_ func(string, string)) {}
+func (a *captureAdapter) InstallHook(cb func(string, string)) {
+	a.hookInstalled = true
+	a.hookCallback = cb
+}
 
-func (a *refreshCapturingAdapter) UninstallHook() {}
+func (a *captureAdapter) UninstallHook() { a.uninstalled = true }

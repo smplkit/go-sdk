@@ -93,7 +93,7 @@ func startTestServer(t *testing.T, configs []map[string]interface{}) *httptest.S
 }
 
 // connectClient creates a client pointed at the test server for lazy init testing.
-func connectClient(t *testing.T, server *httptest.Server) *smplkit.Client {
+func connectClient(t *testing.T, server *httptest.Server) *smplkit.SmplClient {
 	t.Helper()
 	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_test", Environment: "production", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL(server.URL))

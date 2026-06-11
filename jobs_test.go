@@ -19,8 +19,8 @@ const (
 
 var nowForTest = time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC)
 
-// newTestJobs wires a JobsManagement wrapper against an httptest server.
-func newTestJobs(t *testing.T, handler http.HandlerFunc) (*JobsManagement, func()) {
+// newTestJobs wires a JobsClient against an httptest server.
+func newTestJobs(t *testing.T, handler http.HandlerFunc) (*JobsClient, func()) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	gen, err := genjobs.NewClient(srv.URL)
@@ -29,13 +29,12 @@ func newTestJobs(t *testing.T, handler http.HandlerFunc) (*JobsManagement, func(
 		t.Fatalf("genjobs.NewClient: %v", err)
 	}
 	withResp := &genjobs.ClientWithResponses{ClientInterface: gen}
-	j := &JobsManagement{gen: withResp, runs: &RunsClient{gen: withResp}}
-	return j, func() { srv.Close() }
+	return newJobsClient(withResp), func() { srv.Close() }
 }
 
-// newClosedJobs returns a JobsManagement whose backing server has been
-// closed, exercising transport-error branches.
-func newClosedJobs(t *testing.T) *JobsManagement {
+// newClosedJobs returns a JobsClient whose backing server has been closed,
+// exercising transport-error branches.
+func newClosedJobs(t *testing.T) *JobsClient {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -44,7 +43,7 @@ func newClosedJobs(t *testing.T) *JobsManagement {
 	srv.Close()
 	gen, _ := genjobs.NewClient(url)
 	withResp := &genjobs.ClientWithResponses{ClientInterface: gen}
-	return &JobsManagement{gen: withResp, runs: &RunsClient{gen: withResp}}
+	return newJobsClient(withResp)
 }
 
 func jobResource(id string, created bool, version int, enabled bool) map[string]any {
@@ -154,33 +153,70 @@ func fullHandler(w http.ResponseWriter, r *http.Request) {
 func strPtr(s string) *string { return &s }
 
 // ---------------------------------------------------------------------------
-// Accessors
+// Accessors / construction
 // ---------------------------------------------------------------------------
 
-func TestManagementClient_JobsAccessor(t *testing.T) {
-	mgmt, err := NewManagementClient(ManagementConfig{APIKey: "sk_api_test"})
-	if err != nil {
-		t.Fatalf("NewManagementClient: %v", err)
-	}
-	if mgmt.Jobs() == nil {
-		t.Fatal("Jobs() returned nil")
-	}
-	if mgmt.Jobs().Runs() == nil {
-		t.Fatal("Jobs().Runs() returned nil")
-	}
-}
-
-func TestClient_ManageJobsAccessor(t *testing.T) {
+// JobsClient is reachable from the one-client SmplClient via Jobs(), and the
+// run sub-client via Jobs().Runs().
+func TestSmplClient_JobsAccessor(t *testing.T) {
 	c, err := NewClient(Config{APIKey: "sk_api_test", Environment: "dev", Service: "test"})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	defer c.Close()
-	if c.Manage().Jobs() == nil {
-		t.Fatal("Manage().Jobs() returned nil")
+	defer func() { _ = c.Close() }()
+	if c.Jobs() == nil {
+		t.Fatal("Jobs() returned nil")
 	}
-	if c.Manage().Jobs().Runs() == nil {
-		t.Fatal("Manage().Jobs().Runs() returned nil")
+	if c.Jobs().Runs() == nil {
+		t.Fatal("Jobs().Runs() returned nil")
+	}
+}
+
+// NewJobsClient builds a standalone JobsClient that owns its own transport.
+// Driving a real List call through it exercises NewJobsClient end-to-end,
+// including the request-editor closures wired by buildJobsGenClient.
+func TestNewJobsClient_Standalone(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "application/vnd.api+json" {
+			t.Errorf("missing Accept header: %q", r.Header.Get("Accept"))
+		}
+		if r.Header.Get("User-Agent") == "" {
+			t.Error("missing User-Agent header")
+		}
+		writeJSON(w, 200, map[string]any{
+			"data": []any{},
+			"meta": map[string]any{"pagination": map[string]any{"page": 1, "size": 50}},
+		})
+	}))
+	t.Cleanup(server.Close)
+
+	jobs, err := NewJobsClient(
+		Config{APIKey: "sk_test", DisableTelemetry: true},
+		WithBaseURL(server.URL),
+	)
+	if err != nil {
+		t.Fatalf("NewJobsClient: %v", err)
+	}
+	if jobs.Runs() == nil {
+		t.Fatal("Runs() returned nil")
+	}
+
+	list, err := jobs.List(context.Background(), ListJobsInput{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 0 {
+		t.Errorf("expected empty list, got %d", len(list))
+	}
+}
+
+// NewJobsClient surfaces the missing-API-key error from
+// resolveStandaloneConfig.
+func TestNewJobsClient_MissingAPIKey(t *testing.T) {
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("HOME", t.TempDir())
+	if _, err := NewJobsClient(Config{}); err == nil {
+		t.Fatal("expected error when no API key is configured")
 	}
 }
 
@@ -319,7 +355,7 @@ func TestJobs_Lifecycle(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Defaults / construction variants
+// Defaults / wire conversions
 // ---------------------------------------------------------------------------
 
 func TestJobs_NewDefaults(t *testing.T) {
@@ -336,7 +372,9 @@ func TestJobs_NewDefaults(t *testing.T) {
 
 func TestJobs_MinimalConfigWire(t *testing.T) {
 	// A configuration with no optional fields set must round-trip without
-	// panicking and without emitting the optional wire fields.
+	// panicking and without emitting the optional wire fields. This drives
+	// the zero-value branches of httpConfigToWire (no Method, no
+	// SuccessStatus, no Timeout, nil Body/TlsVerify/CaCert, empty Headers).
 	j, cleanup := newTestJobs(t, fullHandler)
 	defer cleanup()
 	job := j.New("id", "n", "now", HttpConfig{URL: "https://x"})
@@ -362,9 +400,18 @@ func TestJobs_FromResourceDefaults(t *testing.T) {
 	if job.ID != "" || job.Type != "http" || job.ConcurrencyPolicy != "ALLOW" || job.Enabled {
 		t.Errorf("unexpected defaults from minimal resource: %+v", job)
 	}
+	// httpConfigFromWire on a configuration with no optional fields: every
+	// optional must remain zero / nil.
+	if job.Configuration.Method != "" || job.Configuration.SuccessStatus != "" ||
+		job.Configuration.Timeout != 0 || job.Configuration.Body != nil ||
+		job.Configuration.TlsVerify != nil || job.Configuration.CaCert != nil ||
+		job.Configuration.Headers != nil {
+		t.Errorf("expected zero-valued configuration, got %+v", job.Configuration)
+	}
 }
 
-// A configuration that carries ca_cert on the wire must surface it.
+// A configuration that carries ca_cert (and an explicit tls_verify=false plus
+// headers) on the wire must surface them via httpConfigFromWire.
 func TestJobs_FromResourceCaCert(t *testing.T) {
 	j, cleanup := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 200, map[string]any{"data": map[string]any{
@@ -372,8 +419,10 @@ func TestJobs_FromResourceCaCert(t *testing.T) {
 			"attributes": map[string]any{
 				"name": "n", "schedule": "now",
 				"configuration": map[string]any{
-					"url":     "https://x",
-					"ca_cert": "-----BEGIN CERTIFICATE-----\nPEM\n-----END CERTIFICATE-----",
+					"url":        "https://x",
+					"tls_verify": false,
+					"ca_cert":    "-----BEGIN CERTIFICATE-----\nPEM\n-----END CERTIFICATE-----",
+					"headers":    []map[string]string{{"name": "X-Api-Key", "value": "secret"}},
 				},
 			},
 		}})
@@ -385,6 +434,12 @@ func TestJobs_FromResourceCaCert(t *testing.T) {
 	}
 	if job.Configuration.CaCert == nil || *job.Configuration.CaCert == "" {
 		t.Errorf("expected ca_cert surfaced, got %v", job.Configuration.CaCert)
+	}
+	if job.Configuration.TlsVerify == nil || *job.Configuration.TlsVerify {
+		t.Errorf("expected tls_verify=false surfaced, got %v", job.Configuration.TlsVerify)
+	}
+	if len(job.Configuration.Headers) != 1 || job.Configuration.Headers[0].Name != "X-Api-Key" {
+		t.Errorf("expected headers surfaced, got %+v", job.Configuration.Headers)
 	}
 }
 
@@ -473,6 +528,9 @@ func TestJobs_Non2xxBranches(t *testing.T) {
 	if _, err := j.List(ctx, ListJobsInput{}); err == nil {
 		t.Error("List should error on 500")
 	}
+	if _, err := j.Get(ctx, testJobID); err == nil {
+		t.Error("Get should error on 500")
+	}
 	if err := j.Delete(ctx, testJobID); err == nil {
 		t.Error("Delete should error on 500")
 	}
@@ -494,7 +552,12 @@ func TestJobs_Non2xxBranches(t *testing.T) {
 	if _, err := j.Runs().Rerun(ctx, testRunID); err == nil {
 		t.Error("Runs.Rerun should error on 500")
 	}
-	// update branch (existing job → PUT)
+	// create branch (new job → POST) returning 500 → checkStatus error.
+	newJob := j.New(testJobID, "n", "now", HttpConfig{URL: "https://x"})
+	if err := newJob.Save(ctx); err == nil {
+		t.Error("Save (create) should error on 500")
+	}
+	// update branch (existing job → PUT).
 	job := j.New(testJobID, "n", "now", HttpConfig{URL: "https://x"})
 	job.CreatedAt = &nowForTest
 	if err := job.Save(ctx); err == nil {
@@ -548,75 +611,6 @@ func TestJobs_InvalidRunID(t *testing.T) {
 	}
 	if _, err := j.Runs().Rerun(ctx, "not-a-uuid"); !errors.As(err, &ve) {
 		t.Errorf("Rerun: expected ValidationError, got %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Wiring closures (header editors hit the wire)
-// ---------------------------------------------------------------------------
-
-// Exercise the jobs headerEditor closure in NewManagementClient by making
-// a real list call against an httptest server.
-func TestJobs_ManagementHeaderEditorExercised(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Accept") != "application/vnd.api+json" {
-			t.Errorf("missing Accept header: %q", r.Header.Get("Accept"))
-		}
-		if r.Header.Get("User-Agent") == "" {
-			t.Error("missing User-Agent header")
-		}
-		writeJSON(w, 200, map[string]any{"data": []any{}, "meta": map[string]any{"pagination": map[string]any{"page": 1, "size": 50}}})
-	}))
-	t.Cleanup(server.Close)
-
-	mgmt, err := NewManagementClient(ManagementConfig{APIKey: "sk_test"}, WithBaseURL(server.URL))
-	if err != nil {
-		t.Fatalf("NewManagementClient: %v", err)
-	}
-	defer func() { _ = mgmt.Close() }()
-
-	jobs, err := mgmt.Jobs().List(context.Background(), ListJobsInput{})
-	if err != nil {
-		t.Fatalf("Jobs.List: %v", err)
-	}
-	if len(jobs) != 0 {
-		t.Errorf("expected empty list, got %d", len(jobs))
-	}
-}
-
-// Exercise the runtime-path jobs editor closures (extra-headers + standard
-// headers) by constructing a runtime Client and making a real jobs call.
-func TestJobs_RuntimeEditorsExercised(t *testing.T) {
-	var seen http.Header
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen = r.Header.Clone()
-		writeJSON(w, 200, map[string]any{"data": []any{}, "meta": map[string]any{"pagination": map[string]any{"page": 1, "size": 50}}})
-	}))
-	defer server.Close()
-
-	c, err := NewClient(
-		Config{
-			APIKey:           "sk_test_key",
-			Environment:      "test",
-			Service:          "test-svc",
-			DisableTelemetry: true,
-			ExtraHeaders:     map[string]string{"X-Extra": "1"},
-		},
-		WithBaseURL(server.URL),
-	)
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	defer func() { _ = c.Close() }()
-
-	if _, err := c.Manage().Jobs().List(context.Background(), ListJobsInput{}); err != nil {
-		t.Fatalf("Jobs.List: %v", err)
-	}
-	if seen.Get("X-Extra") != "1" {
-		t.Errorf("extra header missing: %q", seen.Get("X-Extra"))
-	}
-	if seen.Get("Accept") != "application/vnd.api+json" {
-		t.Errorf("Accept header missing: %q", seen.Get("Accept"))
 	}
 }
 

@@ -8,6 +8,27 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
+func TestFlag_TypedEnvironments_NonMapEntry(t *testing.T) {
+	// A malformed environment value that isn't a map yields a zero
+	// FlagEnvironment for that key (the non-map fallback branch).
+	f := &smplkit.Flag{Environments: map[string]interface{}{"weird": "not-a-map"}}
+	out := f.TypedEnvironments()
+	assert.Equal(t, smplkit.FlagEnvironment{}, out["weird"])
+}
+
+func TestFlag_TypedEnvironments_NonMapRule(t *testing.T) {
+	// A non-map entry inside an environment's rules array is skipped.
+	f := &smplkit.Flag{Environments: map[string]interface{}{
+		"production": map[string]interface{}{
+			"enabled": true,
+			"rules":   []interface{}{"not-a-rule-map", map[string]interface{}{"value": "x"}},
+		},
+	}}
+	out := f.TypedEnvironments()
+	_, ok := out["production"]
+	assert.True(t, ok)
+}
+
 func TestFlag_TypedEnvironments(t *testing.T) {
 	f := &smplkit.Flag{
 		Environments: map[string]interface{}{

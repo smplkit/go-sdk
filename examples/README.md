@@ -19,7 +19,7 @@ Runnable examples demonstrating the [smplkit Go SDK](https://github.com/smplkit/
 Demonstrates flag CRUD via the active record pattern: `NewBooleanFlag` / `NewStringFlag` / `NewNumberFlag` / `NewJsonFlag` → mutate → `Save()`, `AddRule()` → `Save()`, `SetEnvironmentEnabled`, `SetEnvironmentDefault`, `ClearRules`, `Get(key)`, `List()`, `Delete(key)`, `Rule` builder.
 
 ```bash
-go run examples/flags_management_showcase.go examples/helpers.go
+go run examples/flags_management_showcase.go examples/flags_management_setup.go examples/helpers.go
 ```
 
 ### Runtime Showcase
@@ -37,7 +37,7 @@ go run examples/flags_runtime_showcase.go examples/flags_runtime_setup.go exampl
 Demonstrates config CRUD via the active record pattern: `New(key)` → set items/environments → `Save()`, `Get(key)`, `List()`, `Delete(key)`.
 
 ```bash
-go run examples/config_management_showcase.go examples/helpers.go
+go run examples/config_management_showcase.go examples/config_management_setup.go examples/helpers.go
 ```
 
 ### Runtime Showcase
@@ -55,7 +55,7 @@ go run examples/config_runtime_showcase.go examples/config_runtime_setup.go exam
 Demonstrates logger and log group CRUD: `New(key)` → `SetLevel` → `Save()`, `Get(key)`, `List()`, `Delete(key)`, `NewGroup` → `SetLevel` / `SetEnvironmentLevel` → `Save()`, `GetGroup`, `ListGroups`, `DeleteGroup`, group assignment.
 
 ```bash
-go run examples/logging_management_showcase.go examples/helpers.go
+go run examples/logging_management_showcase.go examples/logging_management_setup.go examples/helpers.go
 ```
 
 ### Runtime Showcase
@@ -63,17 +63,15 @@ go run examples/logging_management_showcase.go examples/helpers.go
 Demonstrates `RegisterLogger`, `Start(ctx)`, `OnChange` / `OnChangeKey`, level resolution behavior.
 
 ```bash
-go run examples/logging_runtime_showcase.go examples/logging_runtime_setup.go examples/helpers.go
+go run examples/logging_runtime_showcase.go examples/helpers.go
 ```
 
-## Audit Showcases
+## Audit Showcase
 
-### Runtime Showcase
-
-Demonstrates fire-and-forget event emission via `client.Audit().Events().Create(...)`, idempotency-key dedup, `Flush(timeout)` to drain the in-memory buffer, server-side filtered `List(ctx, ListEventsInput{...})` with cursor pagination, and `Get(ctx, eventID)` for single-event retrieval. Audit has no management API.
+A single showcase covers the full audit surface: fire-and-forget event emission via `client.Audit().Events().Record(...)`, server-side filtered `List(ctx, ListEventsInput{...})` with cursor pagination and `Get(ctx, eventID)` for single-event retrieval, distinct-value discovery (`ResourceTypes`, `EventTypes`, `Categories`), and SIEM forwarder CRUD via `client.Audit().Forwarders()` with per-environment enablement.
 
 ```bash
-go run examples/audit_runtime_showcase.go examples/helpers.go
+go run examples/audit_showcase.go examples/helpers.go
 ```
 
 ## Client Initialization

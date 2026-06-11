@@ -16,21 +16,19 @@ var configRuntimeDemoConfigIDs = []string{
 	"showcase-database",
 }
 
-func simulateAdminOverride(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	// Real customers never read back through the management API
-	// immediately after binding via the runtime client — this is a
-	// simulation-only step. Push pending runtime-side registrations
-	// through so the lookup below can find the freshly-declared config.
-	fatalIfErr("flush registrations", mgmt.Config().Flush(ctx))
-	billing, err := mgmt.Config().Get(ctx, "showcase-billing")
+func simulateAdminOverride(ctx context.Context, config *smplkit.ConfigClient) {
+	// Push pending runtime-side registrations through so the lookup below
+	// can find the freshly-declared config.
+	fatalIfErr("flush registrations", config.Flush(ctx))
+	billing, err := config.Get(ctx, "showcase-billing")
 	fatalIfErr("get billing", err)
-	billing.SetNumber("max_seats", 25, "production")
+	billing.SetNumber("plan.max_seats", 25, "production")
 	fatalIfErr("save billing", billing.Save(ctx))
 }
 
-func cleanupConfigRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
+func cleanupConfigRuntimeShowcase(ctx context.Context, config *smplkit.ConfigClient) {
 	for _, id := range configRuntimeDemoConfigIDs {
-		if err := mgmt.Config().Delete(ctx, id); err != nil {
+		if err := config.Delete(ctx, id); err != nil {
 			var nf *smplkit.NotFoundError
 			if !errors.As(err, &nf) {
 				fatalIfErr("delete config "+id, err)

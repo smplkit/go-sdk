@@ -68,7 +68,7 @@ func repeatJSON(template string, n int) string {
 // newPaginationTestClient creates a client routed to the given handler.
 // Mirrors newManagementTestClient — duplicated here to keep this file
 // self-contained.
-func newPaginationTestClient(t *testing.T, handler http.Handler) *smplkit.Client {
+func newPaginationTestClient(t *testing.T, handler http.Handler) *smplkit.SmplClient {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
@@ -82,14 +82,14 @@ func newPaginationTestClient(t *testing.T, handler http.Handler) *smplkit.Client
 	return client
 }
 
-// ── Management List options pass through ─────────────────────────────────────
+// ── List options pass through ─────────────────────────────────────
 
 func TestConfigManagement_List_PaginationOptions(t *testing.T) {
 	var rec pageRecorder
 	handler := newPagedHandler(t, "/api/v1/configs", []string{`{"data":[{"id":"a","type":"config","attributes":{"name":"A","items":{},"environments":{}}}]}`}, &rec)
 	client := newPaginationTestClient(t, handler)
 
-	configs, err := client.Config().Management().List(context.Background(),
+	configs, err := client.Config().List(context.Background(),
 		smplkit.WithPageNumber(2), smplkit.WithPageSize(50))
 	require.NoError(t, err)
 	require.Len(t, configs, 0) // page 2 has no entries in our pages slice
@@ -105,7 +105,7 @@ func TestFlagsManagement_List_PaginationOptions(t *testing.T) {
 		&rec)
 	client := newPaginationTestClient(t, handler)
 
-	flags, err := client.Flags().Management().List(context.Background(),
+	flags, err := client.Flags().List(context.Background(),
 		smplkit.WithPageNumber(3), smplkit.WithPageSize(25))
 	require.NoError(t, err)
 	assert.Empty(t, flags) // page 3 is out of range
@@ -121,7 +121,7 @@ func TestFlagsManagement_ListContextTypes_PaginationOptions(t *testing.T) {
 		&rec)
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Flags().Management().ListContextTypes(context.Background(),
+	_, err := client.Platform().ContextTypes().List(context.Background(),
 		smplkit.WithPageNumber(4), smplkit.WithPageSize(10))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -142,7 +142,7 @@ func TestFlagsManagement_ListContexts_PaginationOptions(t *testing.T) {
 	})
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Flags().Management().ListContexts(context.Background(), "user",
+	_, err := client.Platform().Contexts().List(context.Background(), "user",
 		smplkit.WithPageNumber(5), smplkit.WithPageSize(7))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -157,7 +157,7 @@ func TestLoggingManagement_List_PaginationOptions(t *testing.T) {
 		&rec)
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Logging().Management().List(context.Background(),
+	_, err := client.Logging().Loggers().List(context.Background(),
 		smplkit.WithPageNumber(2), smplkit.WithPageSize(40))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -172,7 +172,7 @@ func TestLoggingManagement_ListGroups_PaginationOptions(t *testing.T) {
 		&rec)
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Logging().Management().ListGroups(context.Background(),
+	_, err := client.Logging().LogGroups().List(context.Background(),
 		smplkit.WithPageNumber(9), smplkit.WithPageSize(11))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -187,7 +187,7 @@ func TestEnvironmentsManagement_List_PaginationOptions(t *testing.T) {
 		&rec)
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Management().Environments().List(context.Background(),
+	_, err := client.Platform().Environments().List(context.Background(),
 		smplkit.WithPageNumber(2), smplkit.WithPageSize(3))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -202,7 +202,7 @@ func TestContextTypesManagement_List_PaginationOptions(t *testing.T) {
 		&rec)
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Management().ContextTypes().List(context.Background(),
+	_, err := client.Platform().ContextTypes().List(context.Background(),
 		smplkit.WithPageNumber(7), smplkit.WithPageSize(9))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -223,7 +223,7 @@ func TestContextsManagement_List_PaginationOptions(t *testing.T) {
 	})
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Management().Contexts().List(context.Background(), "account",
+	_, err := client.Platform().Contexts().List(context.Background(), "account",
 		smplkit.WithPageNumber(8), smplkit.WithPageSize(12))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -238,7 +238,7 @@ func TestLoggersManagement_List_PaginationOptions(t *testing.T) {
 		&rec)
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Management().Loggers().List(context.Background(),
+	_, err := client.Logging().Loggers().List(context.Background(),
 		smplkit.WithPageNumber(4), smplkit.WithPageSize(8))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -253,7 +253,7 @@ func TestLogGroupsManagement_List_PaginationOptions(t *testing.T) {
 		&rec)
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Management().LogGroups().List(context.Background(),
+	_, err := client.Logging().LogGroups().List(context.Background(),
 		smplkit.WithPageNumber(6), smplkit.WithPageSize(13))
 	require.NoError(t, err)
 	require.Len(t, rec.pageNumbers, 1)
@@ -272,7 +272,7 @@ func TestManagementList_NoOptions_OmitsPageParams(t *testing.T) {
 	})
 	client := newPaginationTestClient(t, handler)
 
-	_, err := client.Config().Management().List(context.Background())
+	_, err := client.Config().List(context.Background())
 	require.NoError(t, err)
 	assert.NotContains(t, capturedQuery, "page%5Bnumber%5D")
 	assert.NotContains(t, capturedQuery, "page%5Bsize%5D")
@@ -374,7 +374,7 @@ func TestLoggingClient_FetchAndCache_MultiPage(t *testing.T) {
 	client := newPaginationTestClient(t, handler)
 
 	// Start triggers fetchAndCache which calls both fetch helpers.
-	require.NoError(t, client.Logging().Start(context.Background()))
+	require.NoError(t, client.Logging().Install(context.Background()))
 
 	require.Equal(t, []string{"1", "2"}, loggerR.pages)
 	require.Equal(t, []string{"1", "2"}, groupR.pages)

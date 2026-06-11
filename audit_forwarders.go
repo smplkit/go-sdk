@@ -8,7 +8,12 @@ import (
 )
 
 // AuditForwarders manages SIEM streaming destinations for the
-// authenticated account. Accessed via Client.Manage().Audit().Forwarders().
+// authenticated account. Accessed via client.Audit().Forwarders().
+//
+// Forwarders are part of the single unified audit surface — there is no
+// runtime/management split for audit. Forwarder CRUD is account-wide and
+// not environment-scoped; per-environment enablement lives in each
+// forwarder's Environments map.
 type AuditForwarders struct {
 	gen *genaudit.ClientWithResponses
 }
@@ -156,6 +161,57 @@ func (fwd *Forwarder) Delete(ctx context.Context) error {
 		return &Error{Message: "forwarder was constructed without a client or id; cannot delete"}
 	}
 	return fwd.client.Delete(ctx, fwd.ID)
+}
+
+// environmentOverride returns the override for environment, creating an
+// empty one if absent.
+//
+// The per-environment mutators reach through here so an existing override's
+// other field is preserved when only one of Enabled / Configuration is being
+// set.
+func (fwd *Forwarder) environmentOverride(environment string) *ForwarderEnvironment {
+	if fwd.Environments == nil {
+		fwd.Environments = map[string]ForwarderEnvironment{}
+	}
+	env, ok := fwd.Environments[environment]
+	if !ok {
+		env = ForwarderEnvironment{}
+		fwd.Environments[environment] = env
+	}
+	return &env
+}
+
+// SetConfiguration sets this forwarder's destination configuration in memory.
+//
+// With environment empty, replaces the base Configuration. With environment
+// given, sets the per-environment override's configuration on Environments,
+// creating the override entry if it doesn't exist yet (preserving any
+// already-set Enabled on it). Call Save to persist.
+func (fwd *Forwarder) SetConfiguration(configuration HttpConfiguration, environment string) {
+	if environment == "" {
+		fwd.Configuration = configuration
+		return
+	}
+	env := fwd.environmentOverride(environment)
+	env.Configuration = &configuration
+	fwd.Environments[environment] = *env
+}
+
+// SetEnabled sets this forwarder's enablement in memory.
+//
+// With environment empty, sets the base Enabled (which the server pins false
+// regardless — enablement is per-environment). With environment given, sets
+// the per-environment override's Enabled on Environments, creating the
+// override entry if it doesn't exist yet (preserving any already-set
+// Configuration on it). Call Save to persist.
+func (fwd *Forwarder) SetEnabled(enabled bool, environment string) {
+	if environment == "" {
+		fwd.Enabled = enabled
+		return
+	}
+	env := fwd.environmentOverride(environment)
+	env.Enabled = enabled
+	fwd.Environments[environment] = *env
 }
 
 func (fwd *Forwarder) apply(other *Forwarder) {

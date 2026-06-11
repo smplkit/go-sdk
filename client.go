@@ -17,13 +17,21 @@ import (
 	genlogging "github.com/smplkit/go-sdk/v3/internal/generated/logging"
 )
 
-// Client is the top-level entry point for the smplkit SDK.
+// Periodic flush of all sub-client registration buffers (contexts, flags,
+// loggers, configs). Threshold flushes still fire immediately when buffers
+// fill up; this timer is the liveness guarantee for the tail.
+const periodicFlushInterval = 60 * time.Second
+
+// SmplClient is the canonical entry point for the smplkit SDK.
 //
 // Create one with NewClient and access sub-clients via accessor methods:
 //
 //	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_api_...", Environment: "production", Service: "my-service"})
-//	cfgs, err := client.Config().Management().List(ctx)
-type Client struct {
+//	billing, err := client.Config().Get(ctx, "billing")
+//
+// One client exposes config, flags, logging, audit, jobs, platform, and
+// account.
+type SmplClient struct {
 	apiKey       string
 	environment  string
 	service      string
@@ -31,20 +39,30 @@ type Client struct {
 	httpClient   *http.Client
 	appGenerated genapp.ClientInterface
 
-	config     *ConfigClient
-	flags      *FlagsClient
-	logging    *LoggingClient
-	audit      *AuditClient
-	management *ManagementClient
+	platform *PlatformClient
+	account  *AccountClient
+	config   *ConfigClient
+	flags    *FlagsClient
+	logging  *LoggingClient
+	audit    *AuditClient
+	jobs     *JobsClient
 
-	// Shared context registration buffer — used by both the flags runtime's
-	// auto-registration path and client.Management().Contexts().Register().
+	// Shared context registration buffer — drained by client.Platform().
+	// Contexts() and shared with the flags runtime's auto-registration path.
 	contextBuf *contextRegistrationBuffer
 
 	metrics *metricsReporter
 
 	wsMu sync.Mutex
 	ws   *sharedWebSocket
+
+	// Deferred background machinery (periodic flush + service-context
+	// registration) is started exactly once on the first config/flags/
+	// logging operation, never at construction.
+	startMu    sync.Mutex
+	started    bool
+	closed     bool
+	flushTimer *time.Timer
 }
 
 // serviceURL builds a per-service URL from the client configuration.
@@ -66,7 +84,13 @@ func serviceURL(opts clientConfig, subdomain string, rc *resolvedConfig) string 
 //  4. Explicit Config struct fields
 //
 // Use ClientOption functions to customize the timeout or HTTP client.
-func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
+//
+// Construction is side-effect-free: no background goroutines, no phone-home.
+// The periodic registration-buffer flush and the service-context registration
+// are deferred until the first config/flags/logging operation — so an
+// audit-only or jobs-only customer pays zero goroutines and zero network at
+// construction.
+func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	rc, err := resolveConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -193,11 +217,10 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	// extra-header of the same name still wins because extraHeaders is
 	// applied after this editor.
 	//
-	// The management forwarder-CRUD surface is NOT environment-scoped — it
-	// operates account-wide and per-forwarder enablement lives in the
-	// forwarder's `environments` map — so it gets its own gen client
-	// (genAuditClient below) with no environment header, passed to
-	// assembleManagementClient.
+	// The forwarder-CRUD surface is NOT environment-scoped — it operates
+	// account-wide and per-forwarder enablement lives in the forwarder's
+	// `environments` map — so it gets its own gen client (genAuditClient
+	// below) with no environment header.
 	auditEnvironment := rc.environment
 	auditEnvEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		if auditEnvironment != "" {
@@ -226,7 +249,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 	)
 	genAuditRuntimeClient := &genaudit.ClientWithResponses{ClientInterface: genAuditRuntimeRaw}
 
-	// Management audit client — same SDK + extra-header editors, but no
+	// Forwarder audit client — same SDK + extra-header editors, but no
 	// environment header (forwarder CRUD is account-wide; per-environment
 	// enablement lives in the forwarder's `environments` map).
 	genAuditRaw, _ := genaudit.NewClient(auditURL,
@@ -257,7 +280,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 
 	ctxBuf := newContextRegistrationBuffer()
 
-	c := &Client{
+	c := &SmplClient{
 		apiKey:       rc.apiKey,
 		environment:  rc.environment,
 		service:      rc.service,
@@ -271,108 +294,137 @@ func NewClient(cfg Config, opts ...ClientOption) (*Client, error) {
 		c.metrics = newMetricsReporter(httpClient, appURL, rc.environment, rc.service, 0)
 	}
 
-	c.config = &ConfigClient{client: c, generated: genConfigClient}
-	c.flags = &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
-	c.flags.runtime = newFlagsRuntime(c.flags, ctxBuf)
-	c.logging = newLoggingClient(c, genLoggingClient)
-	auditEvents := &AuditEvents{gen: genAuditRuntimeClient, buffer: newAuditEventBuffer(genAuditRuntimeClient)}
-	c.audit = &AuditClient{
-		client:        c,
-		gen:           genAuditRuntimeClient,
-		events:        auditEvents,
-		resourceTypes: &AuditResourceTypes{gen: genAuditRuntimeClient},
-		eventTypes:    &AuditEventTypes{gen: genAuditRuntimeClient},
-	}
-
-	// Build the management surface directly against the generated API
-	// clients so the management plane doesn't depend on the runtime
-	// sub-clients (rule 1 — no skeleton inversion). The runtime
-	// sub-clients then attach themselves to the same management
-	// instances so .Management() returns the same object.
-	c.management = assembleManagementClient(false, optCfg, rc, httpClient, genAppClient, genConfigClient, genFlagsClient, genLoggingClient, genAuditClient, genJobsClient)
-	c.management.client = c
-	c.management.contextBuf = ctxBuf // share the runtime's buffer so context registration coalesces
-	c.config.management = c.management.configMgmt
-	c.config.management.attachRuntime(c.config)
-	c.flags.management = c.management.flagsMgmt
-	c.flags.management.attachRuntime(c.flags)
-	c.logging.management = c.management.loggingMgmt
-	c.logging.management.attachRuntime(c.logging)
+	// Platform's cross-cutting CRUD on one client; it borrows the shared app
+	// transport and owns the context-registration buffer. Built BEFORE flags
+	// so the contexts seam below is available.
+	c.platform = newPlatformClient(genAppClient, ctxBuf)
+	// Account-level settings on one client; built from the shared app transport.
+	c.account = newAccountClient(genAppClient)
+	// Config's full surface on one client; borrows the shared config transport
+	// and the parent's WebSocket.
+	c.config = newConfigClient(c, genConfigClient, c.metrics)
+	// Flags' full surface on one client; borrows the shared flags transport and
+	// WebSocket. The contexts sub-client is the injection seam for
+	// evaluation-context registration, wired to client.Platform().Contexts().
+	c.flags = newFlagsClient(c, genFlagsClient, genAppClient, c.platform.contexts, c.metrics)
+	// Logging's full surface on one client; borrows the shared logging
+	// transport and WebSocket. The two management sub-clients live at
+	// client.Logging().Loggers() / client.Logging().LogGroups().
+	c.logging = newLoggingClient(c, genLoggingClient, c.metrics)
+	// Audit's full surface on one client; the runtime gen client carries the
+	// configured environment as X-Smplkit-Environment; forwarder CRUD uses the
+	// account-wide gen client.
+	c.audit = newAuditClient(genAuditRuntimeClient, genAuditClient)
+	c.audit.client = c
+	// Jobs has no runtime/management split — reuse the shared jobs transport
+	// (single connection pool) so client.Jobs() is one-stop.
+	c.jobs = newJobsClient(genJobsClient)
 
 	prefixLen := min(10, len(rc.apiKey))
 	maskedKey := rc.apiKey[:prefixLen] + "..."
-	debug.Debug("lifecycle", "Client created (api_key=%s, environment=%s, service=%s)", maskedKey, rc.environment, rc.service)
+	debug.Debug("lifecycle", "SmplClient created (api_key=%s, environment=%s, service=%s)", maskedKey, rc.environment, rc.service)
 
 	return c, nil
 }
 
 // Environment returns the resolved environment name.
-func (c *Client) Environment() string { return c.environment }
+func (c *SmplClient) Environment() string { return c.environment }
 
 // Service returns the resolved service name.
-func (c *Client) Service() string { return c.service }
+func (c *SmplClient) Service() string { return c.service }
 
-// Config returns the sub-client for config management operations.
-func (c *Client) Config() *ConfigClient {
-	return c.config
-}
+// Config returns the sub-client for the Smpl Config service.
+func (c *SmplClient) Config() *ConfigClient { return c.config }
 
-// Flags returns the sub-client for flags management and runtime operations.
-func (c *Client) Flags() *FlagsClient {
-	return c.flags
-}
+// Flags returns the sub-client for the Smpl Flags service.
+func (c *SmplClient) Flags() *FlagsClient { return c.flags }
 
-// Logging returns the sub-client for logging management and runtime operations.
-func (c *Client) Logging() *LoggingClient {
-	return c.logging
-}
+// Logging returns the sub-client for the Smpl Logging service.
+func (c *SmplClient) Logging() *LoggingClient { return c.logging }
 
-// Audit returns the sub-client for the audit service (ADR-047).
+// Audit returns the sub-client for the Smpl Audit service (ADR-047).
 //
-// Use ``client.Audit().Events().Create(...)`` to record an event;
-// the call is fire-and-forget — the SDK buffers the event in memory
-// and a background goroutine flushes the buffer with retry on
-// transient failures.
+// Use client.Audit().Events().Create(...) to record an event; the call is
+// fire-and-forget — the SDK buffers the event in memory and a background
+// goroutine flushes the buffer with retry on transient failures.
+func (c *SmplClient) Audit() *AuditClient { return c.audit }
 
-// Management returns the sub-client for app-service management operations
-// (environments, context types, contexts, account settings).
-func (c *Client) Management() *ManagementClient {
-	return c.management
+// Jobs returns the sub-client for the Smpl Jobs service.
+func (c *SmplClient) Jobs() *JobsClient { return c.jobs }
+
+// Platform returns the Smpl Platform sub-client — cross-cutting CRUD on
+// environments, services, contexts, and context types.
+func (c *SmplClient) Platform() *PlatformClient { return c.platform }
+
+// Account returns the Smpl Account sub-client — account-level settings.
+func (c *SmplClient) Account() *AccountClient { return c.account }
+
+// ensureStarted starts the deferred background machinery exactly once.
+//
+// Idempotent and thread-safe (lock + flag); a no-op after Close. Triggered by
+// the first config/flags/logging operation or WebSocket open — never at
+// construction.
+func (c *SmplClient) ensureStarted() {
+	c.startMu.Lock()
+	if c.started || c.closed {
+		c.startMu.Unlock()
+		return
+	}
+	c.started = true
+	c.startMu.Unlock()
+	c.schedulePeriodicFlush()
+	go c.registerServiceContext(context.Background())
 }
 
-// Close releases all resources held by the client and its sub-clients.
-func (c *Client) Close() error {
-	debug.Debug("lifecycle", "Client.Close() called")
-	if c.logging != nil {
-		c.logging.close()
+// schedulePeriodicFlush arms the periodic registration-buffer flush.
+// Self-rescheduling via periodicFlush; a no-op after Close.
+func (c *SmplClient) schedulePeriodicFlush() {
+	c.startMu.Lock()
+	if c.closed {
+		c.startMu.Unlock()
+		return
 	}
-	if c.audit != nil && c.audit.events != nil {
-		c.audit.events.close()
-	}
-	c.stopWS()
-	if c.metrics != nil {
-		c.metrics.Close()
-	}
-	return nil
+	c.flushTimer = time.AfterFunc(periodicFlushInterval, c.periodicFlush)
+	c.startMu.Unlock()
 }
 
-// registerServiceContext sends environment and service context registrations to the app service.
-// Errors are logged but not returned.
-func (c *Client) registerServiceContext(ctx context.Context) {
-	svcAttrs := map[string]interface{}{"name": c.service}
-	reqBody := genapp.ContextBulkRegister{
-		Contexts: []genapp.ContextBulkItem{
-			{
-				Type: "environment",
-				Key:  c.environment,
-			},
-			{
-				Type:       "service",
-				Key:        c.service,
-				Attributes: &svcAttrs,
-			},
-		},
+// periodicFlush drains every registration buffer (contexts, flags, loggers,
+// configs) and reschedules itself. A no-op after Close.
+func (c *SmplClient) periodicFlush() {
+	if c.isClosed() {
+		return
 	}
+	ctx := context.Background()
+	_ = c.platform.contexts.Flush(ctx)
+	c.flags.Flush(ctx)
+	_ = c.logging.Loggers().Flush(ctx)
+	_ = c.config.Flush(ctx)
+	c.schedulePeriodicFlush()
+}
+
+func (c *SmplClient) isClosed() bool {
+	c.startMu.Lock()
+	defer c.startMu.Unlock()
+	return c.closed
+}
+
+// registerServiceContext sends environment and service context registrations
+// to the app service. Only the values that are set are registered; if neither
+// environment nor service was provided the POST is skipped entirely. Errors
+// are logged but not returned.
+func (c *SmplClient) registerServiceContext(ctx context.Context) {
+	items := []genapp.ContextBulkItem{}
+	if c.environment != "" {
+		items = append(items, genapp.ContextBulkItem{Type: "environment", Key: c.environment})
+	}
+	if c.service != "" {
+		svcAttrs := map[string]interface{}{"name": c.service}
+		items = append(items, genapp.ContextBulkItem{Type: "service", Key: c.service, Attributes: &svcAttrs})
+	}
+	if len(items) == 0 {
+		return
+	}
+	reqBody := genapp.ContextBulkRegister{Contexts: items}
 	resp, err := c.appGenerated.BulkRegisterContextsWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		log.Printf("smplkit: failed to register service context: %s", err.Error())
@@ -383,7 +435,8 @@ func (c *Client) registerServiceContext(ctx context.Context) {
 }
 
 // ensureWS returns the shared WebSocket connection.
-func (c *Client) ensureWS() *sharedWebSocket {
+func (c *SmplClient) ensureWS() *sharedWebSocket {
+	c.ensureStarted()
 	c.wsMu.Lock()
 	defer c.wsMu.Unlock()
 	if c.ws == nil {
@@ -393,31 +446,61 @@ func (c *Client) ensureWS() *sharedWebSocket {
 	return c.ws
 }
 
-// WaitUntilReady eagerly opens the live-updates WebSocket and blocks
-// until the server has accepted the upgrade, validated the API key,
-// and registered the subscription. After this returns, on-change
-// listeners are guaranteed to receive every server event from this
-// point forward — including events triggered by writes the caller
-// fires immediately afterward.
+// WaitUntilReady optionally pre-warms the SDK and blocks until the live
+// socket is up.
 //
-// Without this, code that constructs a Client and immediately calls a
-// management write (Save / Delete / SetX+Save) can race the broadcast
-// of the resulting change event and silently miss it: the SDK has not
-// yet appeared in the server's subscriber registry when the broadcast
-// runs, so the broadcast goes to zero subscribers.
+// Eagerly connects config and flags — flushing discovery, pre-fetching all
+// flags and configs into the local cache, opening the live-updates WebSocket
+// — and waits for the handshake to complete. After this returns, flag.Get() /
+// client.Config().Subscribe() hit cache (no first-request connect tax) and any
+// OnChange listeners receive every server event from this point forward.
 //
-// timeout=0 uses the SDK default (5s). Context cancellation also
-// returns. Mirrors Python's client.wait_until_ready() and
-// TypeScript's client.waitUntilReady().
-func (c *Client) WaitUntilReady(ctx context.Context, timeout time.Duration) error {
+// Optional: config and flags connect lazily on first live use, so this is
+// purely a pre-warm / WebSocket-ready barrier. Logging integration is not
+// connected here — call client.Logging().Install() separately if you want it
+// (it installs adapters and hooks into your application's logger, which should
+// be opt-in).
+//
+// timeout=0 uses the SDK default. Context cancellation also returns. Returns
+// a TimeoutError if the WebSocket fails to connect within timeout.
+func (c *SmplClient) WaitUntilReady(ctx context.Context, timeout time.Duration) error {
 	if timeout == 0 {
 		timeout = wsConnectTimeout
+	}
+	if err := c.flags.runtime.ensureInit(ctx); err != nil {
+		return err
+	}
+	if err := c.config.ensureInit(ctx); err != nil {
+		return err
 	}
 	return c.ensureWS().waitConnected(ctx, timeout)
 }
 
+// Close releases all resources held by the client and its sub-clients.
+func (c *SmplClient) Close() error {
+	debug.Debug("lifecycle", "SmplClient.Close() called")
+	c.startMu.Lock()
+	c.closed = true
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+		c.flushTimer = nil
+	}
+	c.startMu.Unlock()
+	if c.logging != nil {
+		c.logging.close()
+	}
+	if c.audit != nil {
+		_ = c.audit.Close()
+	}
+	c.stopWS()
+	if c.metrics != nil {
+		c.metrics.Close()
+	}
+	return nil
+}
+
 // stopWS stops the shared WebSocket connection.
-func (c *Client) stopWS() {
+func (c *SmplClient) stopWS() {
 	c.wsMu.Lock()
 	ws := c.ws
 	c.wsMu.Unlock()

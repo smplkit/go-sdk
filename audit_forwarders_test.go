@@ -75,41 +75,25 @@ func writeForwarderResource(w http.ResponseWriter, status int, name, _ string) {
 }
 
 // ---------------------------------------------------------------------------
-// ManagementClient.Audit() accessor
+// client.Audit().Forwarders() accessor (one unified audit surface)
 // ---------------------------------------------------------------------------
 
-func TestManagementClient_AuditAccessor(t *testing.T) {
-	mgmt, err := NewManagementClient(ManagementConfig{APIKey: "sk_api_test"})
-	if err != nil {
-		t.Fatalf("NewManagementClient: %v", err)
-	}
-	if mgmt.Audit() == nil {
-		t.Fatal("Audit() returned nil")
-	}
-	if mgmt.Audit().Forwarders() == nil {
-		t.Fatal("Forwarders() returned nil")
-	}
-}
-
-func TestClient_ManageAuditAccessor(t *testing.T) {
+func TestClient_AuditForwardersAccessor(t *testing.T) {
 	c, err := NewClient(Config{APIKey: "sk_api_test", Environment: "dev", Service: "test"})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
 	defer c.Close()
-	if c.Manage().Audit() == nil {
-		t.Fatal("Manage().Audit() returned nil")
-	}
-	if c.Manage().Audit().Forwarders() == nil {
-		t.Fatal("Manage().Audit().Forwarders() returned nil")
+	if c.Audit().Forwarders() == nil {
+		t.Fatal("Audit().Forwarders() returned nil")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// AuditClient.ResourceTypes() and AuditClient.EventTypes() accessors
+// AuditClient.ResourceTypes(), EventTypes(), and Categories() accessors
 // ---------------------------------------------------------------------------
 
-func TestAuditClient_ResourceTypesAndEventTypesAccessors(t *testing.T) {
+func TestAuditClient_DiscoveryAccessors(t *testing.T) {
 	c, err := NewClient(Config{APIKey: "sk_api_test", Environment: "dev", Service: "test"})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
@@ -120,6 +104,9 @@ func TestAuditClient_ResourceTypesAndEventTypesAccessors(t *testing.T) {
 	}
 	if c.Audit().EventTypes() == nil {
 		t.Fatal("EventTypes() returned nil")
+	}
+	if c.Audit().Categories() == nil {
+		t.Fatal("Categories() returned nil")
 	}
 }
 
@@ -325,6 +312,8 @@ func TestForwarderFromResource_PopulatesOptionalFields(t *testing.T) {
 // do_not_forward (exercises AuditEvents on the runtime client)
 // ---------------------------------------------------------------------------
 
+// newTestAuditClient wires a full AuditClient (all sub-clients share one
+// backing test server), mirroring the real assembly in newAuditClient.
 func newTestAuditClient(t *testing.T, handler http.HandlerFunc) (*AuditClient, func()) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
@@ -334,15 +323,9 @@ func newTestAuditClient(t *testing.T, handler http.HandlerFunc) (*AuditClient, f
 		t.Fatalf("genaudit.NewClient: %v", err)
 	}
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	events := &AuditEvents{gen: wrapped, buffer: newAuditEventBuffer(wrapped)}
-	c := &AuditClient{
-		gen:           wrapped,
-		events:        events,
-		resourceTypes: &AuditResourceTypes{gen: wrapped},
-		eventTypes:    &AuditEventTypes{gen: wrapped},
-	}
+	c := newAuditClient(wrapped, wrapped)
 	cleanup := func() {
-		events.close()
+		_ = c.Close()
 		srv.Close()
 	}
 	return c, cleanup
@@ -375,8 +358,40 @@ func TestAuditEvents_Record_PassesDoNotForward(t *testing.T) {
 	}
 }
 
+// newAuditClient wires every sub-client off the supplied gen clients; assert
+// the wiring matches the documented field assignments.
+func TestNewAuditClient_WiresSubClients(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	rt, _ := genaudit.NewClient(srv.URL)
+	fw, _ := genaudit.NewClient(srv.URL)
+	runtimeGen := &genaudit.ClientWithResponses{ClientInterface: rt}
+	forwarderGen := &genaudit.ClientWithResponses{ClientInterface: fw}
+	c := newAuditClient(runtimeGen, forwarderGen)
+	defer c.Close()
+
+	if c.Events() == nil || c.ResourceTypes() == nil || c.EventTypes() == nil ||
+		c.Categories() == nil || c.Forwarders() == nil {
+		t.Fatal("expected all sub-clients wired")
+	}
+	// Runtime surface uses the runtime gen client; forwarders use the
+	// forwarder gen client.
+	if c.gen != runtimeGen {
+		t.Error("expected AuditClient.gen to be the runtime gen client")
+	}
+	if c.Forwarders().gen != forwarderGen {
+		t.Error("expected Forwarders to use the forwarder gen client")
+	}
+	if c.ResourceTypes().gen != runtimeGen || c.EventTypes().gen != runtimeGen ||
+		c.Categories().gen != runtimeGen {
+		t.Error("expected discovery sub-clients to use the runtime gen client")
+	}
+}
+
 // ---------------------------------------------------------------------------
-// ResourceTypes and EventTypes
+// ResourceTypes, EventTypes, and Categories
 // ---------------------------------------------------------------------------
 
 func newTestAuditResourceTypes(t *testing.T, handler http.HandlerFunc) (*AuditResourceTypes, func()) {
@@ -401,6 +416,20 @@ func newTestAuditEventTypes(t *testing.T, handler http.HandlerFunc) (*AuditEvent
 	}
 	ac := &AuditEventTypes{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
 	return ac, func() { srv.Close() }
+}
+
+// newTestAuditCategories wires an AuditCategories wrapper against an httptest
+// server, mirroring the resource-type / event-type helpers.
+func newTestAuditCategories(t *testing.T, handler http.HandlerFunc) (*AuditCategories, func()) {
+	t.Helper()
+	srv := httptest.NewServer(handler)
+	gen, err := genaudit.NewClient(srv.URL)
+	if err != nil {
+		srv.Close()
+		t.Fatalf("genaudit.NewClient: %v", err)
+	}
+	cat := &AuditCategories{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
+	return cat, func() { srv.Close() }
 }
 
 func TestAuditResourceTypes_List_ReturnsSlug(t *testing.T) {
@@ -646,6 +675,137 @@ func TestAuditEventTypes_List_TransportError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Categories.List — mirrors ResourceTypes.List
+// ---------------------------------------------------------------------------
+
+func TestAuditCategories_List_ReturnsValues(t *testing.T) {
+	cat, cleanup := newTestAuditCategories(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"auth","type":"category","attributes":{"category":"auth","created_at":"2026-05-01T00:00:00Z"}},{"id":"billing","type":"category","attributes":{"category":"billing","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":1,"size":1000}}}`))
+	})
+	defer cleanup()
+
+	page, err := cat.List(context.Background(), ListCategoriesInput{})
+	if err != nil {
+		t.Fatalf("Categories.List: %v", err)
+	}
+	if len(page.Categories) != 2 {
+		t.Fatalf("expected 2 categories, got %d", len(page.Categories))
+	}
+	vals := make(map[string]string)
+	for _, c := range page.Categories {
+		vals[c.ID] = c.Category
+	}
+	if vals["billing"] != "billing" {
+		t.Errorf("expected billing category with ID==Category, got %+v", page.Categories)
+	}
+	if page.Pagination.Page != 1 || page.Pagination.Size != 1000 {
+		t.Errorf("expected pagination page=1 size=1000, got %+v", page.Pagination)
+	}
+}
+
+func TestAuditCategories_List_ParsesPaginationWithTotals(t *testing.T) {
+	cat, cleanup := newTestAuditCategories(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"auth","type":"category","attributes":{"category":"auth","created_at":"2026-05-01T00:00:00Z"}}],"meta":{"pagination":{"page":2,"size":1,"total":3,"total_pages":3}}}`))
+	})
+	defer cleanup()
+
+	page, err := cat.List(context.Background(), ListCategoriesInput{PageNumber: 2, PageSize: 1, MetaTotal: true})
+	if err != nil {
+		t.Fatalf("Categories.List: %v", err)
+	}
+	if page.Pagination.Page != 2 || page.Pagination.Size != 1 {
+		t.Errorf("expected page=2 size=1, got %+v", page.Pagination)
+	}
+	if page.Pagination.Total == nil || *page.Pagination.Total != 3 {
+		t.Errorf("expected total=3, got %+v", page.Pagination.Total)
+	}
+	if page.Pagination.TotalPages == nil || *page.Pagination.TotalPages != 3 {
+		t.Errorf("expected total_pages=3, got %+v", page.Pagination.TotalPages)
+	}
+}
+
+func TestAuditCategories_List_WithPageNumber(t *testing.T) {
+	var capturedQuery string
+	cat, cleanup := newTestAuditCategories(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":3,"size":1}}}`))
+	})
+	defer cleanup()
+
+	if _, err := cat.List(context.Background(), ListCategoriesInput{PageNumber: 3, PageSize: 1}); err != nil {
+		t.Fatalf("Categories.List: %v", err)
+	}
+	if !strings.Contains(capturedQuery, "page%5Bnumber%5D=3") ||
+		!strings.Contains(capturedQuery, "page%5Bsize%5D=1") {
+		t.Errorf("expected page[number]=3 and page[size]=1 in query, got %q", capturedQuery)
+	}
+}
+
+func TestAuditCategories_List_Environments(t *testing.T) {
+	var captured string
+	var present bool
+	cat, cleanup := newTestAuditCategories(t, func(w http.ResponseWriter, r *http.Request) {
+		captured = r.URL.Query().Get("filter[environment]")
+		_, present = r.URL.Query()["filter[environment]"]
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":1,"size":1000}}}`))
+	})
+	defer cleanup()
+
+	// Omitted by default.
+	if _, err := cat.List(context.Background(), ListCategoriesInput{}); err != nil {
+		t.Fatalf("Categories.List: %v", err)
+	}
+	if present {
+		t.Error("expected filter[environment] absent when Environments is nil")
+	}
+
+	// Single value.
+	if _, err := cat.List(context.Background(), ListCategoriesInput{Environments: []string{"production"}}); err != nil {
+		t.Fatalf("Categories.List: %v", err)
+	}
+	if !present || captured != "production" {
+		t.Errorf("expected filter[environment]=production, got %q (present=%v)", captured, present)
+	}
+
+	// Multiple values comma-join, including the reserved smplkit bucket.
+	if _, err := cat.List(context.Background(), ListCategoriesInput{Environments: []string{"smplkit", "staging"}}); err != nil {
+		t.Fatalf("Categories.List: %v", err)
+	}
+	if !present || captured != "smplkit,staging" {
+		t.Errorf("expected filter[environment]=smplkit,staging, got %q (present=%v)", captured, present)
+	}
+}
+
+func TestAuditCategories_List_Error(t *testing.T) {
+	cat, cleanup := newTestAuditCategories(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer cleanup()
+	if _, err := cat.List(context.Background(), ListCategoriesInput{}); err == nil {
+		t.Fatal("expected error from 500")
+	}
+}
+
+func TestAuditCategories_List_TransportError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+	gen, _ := genaudit.NewClient(url)
+	cat := &AuditCategories{gen: &genaudit.ClientWithResponses{ClientInterface: gen}}
+	if _, err := cat.List(context.Background(), ListCategoriesInput{}); err == nil {
+		t.Fatal("expected transport error")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // ResourceTypes.List and EventTypes.List — PageNumber/PageSize query coverage
 // ---------------------------------------------------------------------------
 
@@ -708,45 +868,6 @@ func TestExtractNextCursor(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
-
-// ---------------------------------------------------------------------------
-// buildAuditGenClient header editor — exercised via NewManagementClient + httptest
-// ---------------------------------------------------------------------------
-
-func TestBuildAuditGenClient_HeaderEditorFires(t *testing.T) {
-	gotAccept := make(chan string, 1)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case gotAccept <- r.Header.Get("Accept"):
-		default:
-		}
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":1,"size":1000}}}`))
-	}))
-	defer srv.Close()
-
-	// withBaseURLOverride routes all service URLs (including audit) to the test server.
-	mgmt, err := NewManagementClient(ManagementConfig{APIKey: "sk_api_test"}, withBaseURLOverride(srv.URL))
-	if err != nil {
-		t.Fatalf("NewManagementClient: %v", err)
-	}
-
-	// A real request triggers the header-editor closure inside buildAuditGenClient.
-	ctx := context.Background()
-	if _, err := mgmt.Audit().Forwarders().List(ctx, ListForwardersInput{}); err != nil {
-		t.Logf("List error (ok — server returns forwarder-shaped body): %v", err)
-	}
-
-	select {
-	case accept := <-gotAccept:
-		if !strings.Contains(accept, "application/vnd.api+json") {
-			t.Fatalf("expected Accept header from buildAuditGenClient editor, got %q", accept)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("server never received request from management client")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Active-record surface: New, Save, Delete, options
@@ -1059,6 +1180,19 @@ func TestForwarderResourceFromForwarder_AllBranches(t *testing.T) {
 	}
 }
 
+// forwarderResourceFromForwarder leaves the resource id nil when the
+// forwarder id is empty (the id == "" branch).
+func TestForwarderResourceFromForwarder_EmptyID(t *testing.T) {
+	r := forwarderResourceFromForwarder("", &Forwarder{
+		Name:          "x",
+		ForwarderType: ForwarderTypeHTTP,
+		Configuration: HttpConfiguration{URL: "https://x"},
+	})
+	if r.Id != nil {
+		t.Fatalf("expected nil resource id for empty forwarder id, got %v", *r.Id)
+	}
+}
+
 // Save sends the per-environment override map on the wire, with the base
 // `enabled` omitted (server-pinned false per ADR-055). A per-environment
 // configuration override is serialized as a full HttpConfiguration.
@@ -1162,6 +1296,143 @@ func TestForwarder_Get_ReadsEnvironments(t *testing.T) {
 	}
 	if stg := fwd.Environments["staging"]; stg.Enabled || stg.Configuration != nil {
 		t.Fatalf("expected staging enabled=false, no config, got %+v", stg)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Per-environment setters: SetConfiguration / SetEnabled (base + override)
+// ---------------------------------------------------------------------------
+
+// SetConfiguration with an empty environment replaces the base Configuration.
+func TestForwarder_SetConfiguration_Base(t *testing.T) {
+	fwds := &AuditForwarders{}
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://old"})
+	fwd.SetConfiguration(HttpConfiguration{URL: "https://new"}, "")
+	if fwd.Configuration.URL != "https://new" {
+		t.Errorf("expected base configuration replaced, got %q", fwd.Configuration.URL)
+	}
+	if len(fwd.Environments) != 0 {
+		t.Errorf("expected no per-environment overrides created, got %+v", fwd.Environments)
+	}
+}
+
+// SetEnabled with an empty environment sets the (read-only) base Enabled.
+func TestForwarder_SetEnabled_Base(t *testing.T) {
+	fwds := &AuditForwarders{}
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://x"})
+	fwd.SetEnabled(true, "")
+	if !fwd.Enabled {
+		t.Error("expected base Enabled=true after SetEnabled(true, \"\")")
+	}
+	if len(fwd.Environments) != 0 {
+		t.Errorf("expected no per-environment overrides created, got %+v", fwd.Environments)
+	}
+}
+
+// SetConfiguration with an environment creates the override entry (the
+// Environments==nil → allocate, and the absent-key → create-empty paths in
+// environmentOverride) and sets only its configuration.
+func TestForwarder_SetConfiguration_PerEnvironment_CreatesOverride(t *testing.T) {
+	fwds := &AuditForwarders{}
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://base"})
+	fwd.SetConfiguration(HttpConfiguration{URL: "https://prod"}, "production")
+	prod, ok := fwd.Environments["production"]
+	if !ok {
+		t.Fatal("expected production override created")
+	}
+	if prod.Configuration == nil || prod.Configuration.URL != "https://prod" {
+		t.Errorf("expected production configuration override, got %+v", prod.Configuration)
+	}
+	if prod.Enabled {
+		t.Error("expected Enabled untouched (false) when only configuration is set")
+	}
+}
+
+// SetEnabled with an environment creates the override entry and sets only its
+// Enabled.
+func TestForwarder_SetEnabled_PerEnvironment_CreatesOverride(t *testing.T) {
+	fwds := &AuditForwarders{}
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://base"})
+	fwd.SetEnabled(true, "production")
+	prod, ok := fwd.Environments["production"]
+	if !ok {
+		t.Fatal("expected production override created")
+	}
+	if !prod.Enabled {
+		t.Error("expected production Enabled=true")
+	}
+	if prod.Configuration != nil {
+		t.Errorf("expected no configuration set, got %+v", prod.Configuration)
+	}
+}
+
+// The per-environment setters reach through environmentOverride, which
+// preserves the other field on an existing override: setting Enabled then
+// Configuration (and vice-versa) on the same environment keeps both.
+func TestForwarder_PerEnvironmentSetters_PreserveExistingOverride(t *testing.T) {
+	fwds := &AuditForwarders{}
+
+	// Enabled first, then Configuration — Configuration must not wipe Enabled.
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://base"})
+	fwd.SetEnabled(true, "production")
+	fwd.SetConfiguration(HttpConfiguration{URL: "https://prod"}, "production")
+	prod := fwd.Environments["production"]
+	if !prod.Enabled {
+		t.Error("expected Enabled preserved after a later SetConfiguration")
+	}
+	if prod.Configuration == nil || prod.Configuration.URL != "https://prod" {
+		t.Errorf("expected configuration set, got %+v", prod.Configuration)
+	}
+
+	// Configuration first, then Enabled — Enabled must not wipe Configuration.
+	fwd2 := fwds.New("y", "y", ForwarderTypeHTTP, HttpConfiguration{URL: "https://base"})
+	fwd2.SetConfiguration(HttpConfiguration{URL: "https://stg"}, "staging")
+	fwd2.SetEnabled(true, "staging")
+	stg := fwd2.Environments["staging"]
+	if stg.Configuration == nil || stg.Configuration.URL != "https://stg" {
+		t.Errorf("expected configuration preserved after a later SetEnabled, got %+v", stg.Configuration)
+	}
+	if !stg.Enabled {
+		t.Error("expected Enabled set after SetEnabled")
+	}
+}
+
+// SetConfiguration on a forwarder that already carries an Environments map
+// (from WithForwarderEnvironments) updates the existing entry rather than
+// allocating a new map (covers the Environments != nil, key present path).
+func TestForwarder_SetConfiguration_UpdatesExistingMapEntry(t *testing.T) {
+	fwds := &AuditForwarders{}
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://base"},
+		WithForwarderEnvironments(map[string]ForwarderEnvironment{
+			"production": {Enabled: true},
+		}),
+	)
+	fwd.SetConfiguration(HttpConfiguration{URL: "https://prod"}, "production")
+	prod := fwd.Environments["production"]
+	if !prod.Enabled {
+		t.Error("expected pre-existing Enabled preserved")
+	}
+	if prod.Configuration == nil || prod.Configuration.URL != "https://prod" {
+		t.Errorf("expected configuration set on existing entry, got %+v", prod.Configuration)
+	}
+}
+
+// A per-environment setter result round-trips through Save onto the wire.
+func TestForwarder_SetEnabled_PerEnvironment_SavedToWire(t *testing.T) {
+	var capturedBody []byte
+	fwds, cleanup := newTestAuditForwarders(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		writeForwarderResource(w, http.StatusCreated, "x", "")
+	})
+	defer cleanup()
+	fwd := fwds.New("x", "x", ForwarderTypeHTTP, HttpConfiguration{URL: "https://base"})
+	fwd.SetEnabled(true, "production")
+	if err := fwd.Save(context.Background()); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	body := string(capturedBody)
+	if !strings.Contains(body, `"production"`) || !strings.Contains(body, `"enabled":true`) {
+		t.Fatalf("expected per-env enablement on wire, got: %s", body)
 	}
 }
 

@@ -18,12 +18,12 @@ func TestSmplError_Error(t *testing.T) {
 	}{
 		{
 			name:     "base error without status",
-			err:      &smplkit.SmplError{Message: "something failed"},
+			err:      &smplkit.Error{Message: "something failed"},
 			expected: "something failed",
 		},
 		{
 			name:     "base error with status",
-			err:      &smplkit.SmplError{Message: "not found", StatusCode: 404},
+			err:      &smplkit.Error{Message: "not found", StatusCode: 404},
 			expected: "not found (status 404)",
 		},
 	}
@@ -40,12 +40,13 @@ func TestErrorTypes_ImplementError(t *testing.T) {
 		name string
 		err  error
 	}{
-		{"SmplError", &smplkit.SmplError{Message: "base"}},
-		{"SmplConnectionError", &smplkit.SmplConnectionError{}},
-		{"SmplTimeoutError", &smplkit.SmplTimeoutError{}},
-		{"SmplNotFoundError", &smplkit.SmplNotFoundError{}},
-		{"SmplConflictError", &smplkit.SmplConflictError{}},
-		{"SmplValidationError", &smplkit.SmplValidationError{}},
+		{"Error", &smplkit.Error{Message: "base"}},
+		{"ConnectionError", &smplkit.ConnectionError{}},
+		{"TimeoutError", &smplkit.TimeoutError{}},
+		{"NotFoundError", &smplkit.NotFoundError{}},
+		{"ConflictError", &smplkit.ConflictError{}},
+		{"ValidationError", &smplkit.ValidationError{}},
+		{"NotInstalledError", &smplkit.NotInstalledError{}},
 	}
 
 	for _, tt := range tests {
@@ -60,33 +61,34 @@ func TestErrorsAs_BaseError(t *testing.T) {
 		name string
 		err  error
 	}{
-		{"connection", &smplkit.SmplConnectionError{smplkit.SmplError{Message: "conn"}}},
-		{"timeout", &smplkit.SmplTimeoutError{smplkit.SmplError{Message: "timeout"}}},
-		{"not found", &smplkit.SmplNotFoundError{smplkit.SmplError{Message: "404"}}},
-		{"conflict", &smplkit.SmplConflictError{smplkit.SmplError{Message: "409"}}},
-		{"validation", &smplkit.SmplValidationError{smplkit.SmplError{Message: "422"}}},
+		{"connection", &smplkit.ConnectionError{smplkit.Error{Message: "conn"}}},
+		{"timeout", &smplkit.TimeoutError{smplkit.Error{Message: "timeout"}}},
+		{"not found", &smplkit.NotFoundError{smplkit.Error{Message: "404"}}},
+		{"conflict", &smplkit.ConflictError{smplkit.Error{Message: "409"}}},
+		{"validation", &smplkit.ValidationError{smplkit.Error{Message: "422"}}},
+		{"not installed", &smplkit.NotInstalledError{smplkit.Error{Message: "not installed"}}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var base *smplkit.SmplError
-			require.True(t, errors.As(tt.err, &base), "errors.As should match SmplError")
+			var base *smplkit.Error
+			require.True(t, errors.As(tt.err, &base), "errors.As should match Error")
 		})
 	}
 }
 
 func TestErrorsAs_SpecificTypes(t *testing.T) {
-	err := &smplkit.SmplNotFoundError{
-		smplkit.SmplError{Message: "not found", StatusCode: 404, ResponseBody: `{"error":"not found"}`},
+	err := &smplkit.NotFoundError{
+		smplkit.Error{Message: "not found", StatusCode: 404, ResponseBody: `{"error":"not found"}`},
 	}
 
-	var notFound *smplkit.SmplNotFoundError
+	var notFound *smplkit.NotFoundError
 	require.True(t, errors.As(err, &notFound))
 	assert.Equal(t, 404, notFound.Base.StatusCode)
 	assert.Equal(t, `{"error":"not found"}`, notFound.Base.ResponseBody)
 
 	// Should not match other specific types.
-	var conflict *smplkit.SmplConflictError
+	var conflict *smplkit.ConflictError
 	assert.False(t, errors.As(err, &conflict))
 }
 
@@ -98,28 +100,33 @@ func TestSubtypeErrors_Error(t *testing.T) {
 	}{
 		{
 			name:     "connection error",
-			err:      &smplkit.ConnectionError{Base: smplkit.SmplError{Message: "conn failed"}},
+			err:      &smplkit.ConnectionError{Base: smplkit.Error{Message: "conn failed"}},
 			expected: "conn failed",
 		},
 		{
 			name:     "timeout error",
-			err:      &smplkit.TimeoutError{Base: smplkit.SmplError{Message: "timed out"}},
+			err:      &smplkit.TimeoutError{Base: smplkit.Error{Message: "timed out"}},
 			expected: "timed out",
 		},
 		{
 			name:     "not found error",
-			err:      &smplkit.NotFoundError{Base: smplkit.SmplError{Message: "missing", StatusCode: 404}},
+			err:      &smplkit.NotFoundError{Base: smplkit.Error{Message: "missing", StatusCode: 404}},
 			expected: "missing (status 404)",
 		},
 		{
 			name:     "conflict error",
-			err:      &smplkit.ConflictError{Base: smplkit.SmplError{Message: "conflict", StatusCode: 409}},
+			err:      &smplkit.ConflictError{Base: smplkit.Error{Message: "conflict", StatusCode: 409}},
 			expected: "conflict (status 409)",
 		},
 		{
 			name:     "validation error",
-			err:      &smplkit.ValidationError{Base: smplkit.SmplError{Message: "invalid", StatusCode: 422}},
+			err:      &smplkit.ValidationError{Base: smplkit.Error{Message: "invalid", StatusCode: 422}},
 			expected: "invalid (status 422)",
+		},
+		{
+			name:     "not installed error",
+			err:      &smplkit.NotInstalledError{Base: smplkit.Error{Message: "logging not installed"}},
+			expected: "logging not installed",
 		},
 	}
 
@@ -131,13 +138,13 @@ func TestSubtypeErrors_Error(t *testing.T) {
 }
 
 func TestErrorUnwrap(t *testing.T) {
-	inner := smplkit.SmplError{Message: "inner", StatusCode: 500}
+	inner := smplkit.Error{Message: "inner", StatusCode: 500}
 	err := &smplkit.ConnectionError{Base: inner}
 
 	unwrapped := errors.Unwrap(err)
 	require.NotNil(t, unwrapped)
 
-	var base *smplkit.SmplError
+	var base *smplkit.Error
 	require.True(t, errors.As(unwrapped, &base))
 	assert.Equal(t, "inner (status 500)", base.Error())
 }
@@ -155,9 +162,9 @@ func TestCheckStatus_SingleError400(t *testing.T) {
 	err := smplkit.CheckStatusForTest(400, body)
 	require.Error(t, err)
 
-	// Should be SmplValidationError.
-	var valErr *smplkit.SmplValidationError
-	require.True(t, errors.As(err, &valErr), "expected SmplValidationError")
+	// Should be ValidationError.
+	var valErr *smplkit.ValidationError
+	require.True(t, errors.As(err, &valErr), "expected ValidationError")
 
 	// Message derived from first error's Detail.
 	assert.Contains(t, valErr.Base.Message, "The 'name' field is required.")
@@ -230,7 +237,7 @@ func TestCheckStatus_MultiError400(t *testing.T) {
 	err := smplkit.CheckStatusForTest(400, body)
 	require.Error(t, err)
 
-	var valErr *smplkit.SmplValidationError
+	var valErr *smplkit.ValidationError
 	require.True(t, errors.As(err, &valErr))
 
 	// Message has "(and 1 more error)".
@@ -259,8 +266,8 @@ func TestCheckStatus_404Response(t *testing.T) {
 	err := smplkit.CheckStatusForTest(404, body)
 	require.Error(t, err)
 
-	var notFound *smplkit.SmplNotFoundError
-	require.True(t, errors.As(err, &notFound), "expected SmplNotFoundError")
+	var notFound *smplkit.NotFoundError
+	require.True(t, errors.As(err, &notFound), "expected NotFoundError")
 	assert.Contains(t, notFound.Base.Message, "Config with key 'nonexistent' not found.")
 }
 
@@ -276,8 +283,8 @@ func TestCheckStatus_409Response(t *testing.T) {
 	err := smplkit.CheckStatusForTest(409, body)
 	require.Error(t, err)
 
-	var conflict *smplkit.SmplConflictError
-	require.True(t, errors.As(err, &conflict), "expected SmplConflictError")
+	var conflict *smplkit.ConflictError
+	require.True(t, errors.As(err, &conflict), "expected ConflictError")
 	assert.Contains(t, conflict.Base.Message, "A config with this key already exists.")
 }
 
@@ -297,7 +304,7 @@ func TestCheckStatus_402Response(t *testing.T) {
 	require.True(t, errors.As(err, &pre), "expected PaymentRequiredError")
 	assert.Contains(t, pre.Base.Message, "This feature requires the Pro plan.")
 	// Unwrap walks to the embedded base Error.
-	var base *smplkit.SmplError
+	var base *smplkit.Error
 	require.True(t, errors.As(err, &base))
 	if pre.Error() == "" {
 		t.Fatal("Error() returned empty string")
@@ -313,7 +320,7 @@ func TestCheckStatus_NonJSON502(t *testing.T) {
 	err := smplkit.CheckStatusForTest(502, body)
 	require.Error(t, err)
 
-	var base *smplkit.SmplError
+	var base *smplkit.Error
 	require.True(t, errors.As(err, &base))
 
 	// Falls back to HTTP status code message.

@@ -24,7 +24,7 @@ func TestParseJSONAPIErrors_FallbackToTitle(t *testing.T) {
 	err := smplkit.CheckStatusForTest(422, body)
 	require.Error(t, err)
 
-	var valErr *smplkit.SmplValidationError
+	var valErr *smplkit.ValidationError
 	require.True(t, errors.As(err, &valErr))
 	assert.Equal(t, "Validation Error", valErr.Base.Message)
 }
@@ -40,7 +40,7 @@ func TestParseJSONAPIErrors_FallbackToStatus(t *testing.T) {
 	err := smplkit.CheckStatusForTest(500, body)
 	require.Error(t, err)
 
-	var base *smplkit.SmplError
+	var base *smplkit.Error
 	require.True(t, errors.As(err, &base))
 	assert.Equal(t, "500", base.Message)
 }
@@ -54,7 +54,7 @@ func TestParseJSONAPIErrors_FallbackToDefault(t *testing.T) {
 	err := smplkit.CheckStatusForTest(500, body)
 	require.Error(t, err)
 
-	var base *smplkit.SmplError
+	var base *smplkit.Error
 	require.True(t, errors.As(err, &base))
 	assert.Equal(t, "An API error occurred", base.Message)
 }
@@ -68,8 +68,8 @@ func TestClassifyError_URLErrorIncludesURL(t *testing.T) {
 	err := smplkit.ClassifyErrorForTest(urlErr)
 	require.Error(t, err)
 
-	var connErr *smplkit.SmplConnectionError
-	require.True(t, errors.As(err, &connErr), "expected SmplConnectionError, got %T: %v", err, err)
+	var connErr *smplkit.ConnectionError
+	require.True(t, errors.As(err, &connErr), "expected ConnectionError, got %T: %v", err, err)
 	assert.Contains(t, connErr.Base.Message, "http://config.localhost/api/v1/configs")
 	assert.Contains(t, connErr.Base.Message, "no such host")
 }
@@ -79,7 +79,7 @@ func TestClassifyError_NonURLErrorFallback(t *testing.T) {
 	err := smplkit.ClassifyErrorForTest(plain)
 	require.Error(t, err)
 
-	var connErr *smplkit.SmplConnectionError
+	var connErr *smplkit.ConnectionError
 	require.True(t, errors.As(err, &connErr))
 	assert.Contains(t, connErr.Base.Message, "some generic error")
 }
@@ -97,7 +97,7 @@ func TestParseJSONAPIErrors_PluralMoreErrors(t *testing.T) {
 	err := smplkit.CheckStatusForTest(400, body)
 	require.Error(t, err)
 
-	var valErr *smplkit.SmplValidationError
+	var valErr *smplkit.ValidationError
 	require.True(t, errors.As(err, &valErr))
 	assert.Contains(t, valErr.Base.Message, "(and 2 more errors)")
 	require.Len(t, valErr.Base.Errors, 3)

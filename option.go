@@ -12,7 +12,7 @@ type clientConfig struct {
 	httpClient      *http.Client
 }
 
-// defaultConfig returns sensible defaults for a new Client.
+// defaultConfig returns sensible defaults for a new SmplClient.
 func defaultConfig() clientConfig {
 	return clientConfig{
 		timeout: 30 * time.Second,

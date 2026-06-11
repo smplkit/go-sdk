@@ -197,7 +197,7 @@ func (ws *sharedWebSocket) start() {
 }
 
 // stop closes the WebSocket connection and waits for the goroutine to exit.
-func (ws *sharedWebSocket) stop() { //nolint:unused // lifecycle method called by Client.stopWS
+func (ws *sharedWebSocket) stop() { //nolint:unused // lifecycle method called by SmplClient.stopWS
 	ws.closeOnce.Do(func() {
 		close(ws.closeCh)
 	})

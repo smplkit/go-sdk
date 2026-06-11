@@ -97,7 +97,7 @@ type Job struct {
 	// starting at 1.
 	Version *int
 
-	client *JobsManagement
+	client *JobsClient
 }
 
 // Run is one occurrence of a job executing (read-only).
@@ -161,7 +161,7 @@ type Usage struct {
 	ActiveJobsLimit int
 }
 
-// ListJobsInput passes filters and pagination to JobsManagement.List.
+// ListJobsInput passes filters and pagination to JobsClient.List.
 type ListJobsInput struct {
 	// Enabled filters by enabled/disabled state. Nil returns both.
 	Enabled *bool

@@ -1,6 +1,6 @@
 //go:build ignore
 
-// Demonstrates the smplkit management SDK for Smpl Jobs.
+// Demonstrates the smplkit SDK for Smpl Jobs.
 //
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk/v3
@@ -26,25 +26,27 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// create the management client
-	manage, err := smplkit.NewManagementClient(smplkit.ManagementConfig{})
-	fatalIfErr("create management client", err)
+	// Jobs has no runtime/management split — one client. Here we use the
+	// standalone JobsClient; the same surface is also reachable as
+	// client.Jobs() on a SmplClient.
+	jobs, err := smplkit.NewJobsClient(smplkit.Config{})
+	fatalIfErr("create jobs client", err)
 
 	jobID := "showcase-mgmt-" + randomHexJobs(4)
 
 	// tear-down: never leave the showcase job behind, even on failure
 	defer func() {
-		err := manage.Jobs().Delete(ctx, jobID)
+		err := jobs.Delete(ctx, jobID)
 		var notFound *smplkit.NotFoundError
 		if err != nil && !errors.As(err, &notFound) {
 			fatalIfErr("jobs.Delete (teardown)", err)
 		}
 	}()
 
-	// create a disabled cron job
+	// create a job
 	authHeader := "Bearer s3cr3t"
 	body := `{"scope": "all"}`
-	job := manage.Jobs().New(
+	job := jobs.New(
 		jobID,
 		"Nightly cache warm",
 		"0 2 * * *", // 5-field cron, UTC
@@ -65,7 +67,7 @@ func main() {
 	fmt.Printf("Created job %q (v%d)\n", job.ID, *job.Version)
 
 	// get a job
-	fetched, err := manage.Jobs().Get(ctx, jobID)
+	fetched, err := jobs.Get(ctx, jobID)
 	fatalIfErr("jobs.Get", err)
 	if fetched.Configuration.URL != "https://api.example.com/cache/warm" {
 		fatalIfErr("assertion", fmt.Errorf("fetched job url mismatch: %s", fetched.Configuration.URL))
@@ -74,10 +76,10 @@ func main() {
 
 	// list jobs
 	disabled := false
-	jobs, err := manage.Jobs().List(ctx, smplkit.ListJobsInput{Enabled: &disabled})
+	listing, err := jobs.List(ctx, smplkit.ListJobsInput{Enabled: &disabled})
 	fatalIfErr("jobs.List", err)
 	found := false
-	for _, j := range jobs {
+	for _, j := range listing {
 		if j.ID == jobID {
 			found = true
 			break
@@ -99,7 +101,7 @@ func main() {
 	fmt.Printf("Updated job to v%d: schedule=%q\n", *job.Version, job.Schedule)
 
 	// trigger an immediate run (a MANUAL run)
-	run, err := manage.Jobs().Run(ctx, jobID)
+	run, err := jobs.Run(ctx, jobID)
 	fatalIfErr("jobs.Run", err)
 	if run.Trigger != "MANUAL" || run.Job != jobID {
 		fatalIfErr("assertion", fmt.Errorf("expected MANUAL trigger for %s, got trigger=%s job=%s", jobID, run.Trigger, run.Job))
@@ -107,7 +109,7 @@ func main() {
 	fmt.Printf("Triggered run %s (trigger=%s, status=%s)\n", run.ID, run.Trigger, run.Status)
 
 	// read run history for this job, and fetch a single run
-	runs, err := manage.Jobs().Runs().List(ctx, smplkit.ListRunsInput{Job: jobID})
+	runs, err := jobs.Runs().List(ctx, smplkit.ListRunsInput{Job: jobID})
 	fatalIfErr("jobs.Runs.List", err)
 	seen := false
 	for _, r := range runs {
@@ -119,7 +121,7 @@ func main() {
 	if !seen {
 		fatalIfErr("assertion", fmt.Errorf("run %s not found in runs listing", run.ID))
 	}
-	got, err := manage.Jobs().Runs().Get(ctx, run.ID)
+	got, err := jobs.Runs().Get(ctx, run.ID)
 	fatalIfErr("jobs.Runs.Get", err)
 	if got.ID != run.ID {
 		fatalIfErr("assertion", fmt.Errorf("fetched run id mismatch: %s != %s", got.ID, run.ID))
@@ -127,12 +129,12 @@ func main() {
 	fmt.Printf("Listed %d run(s); fetched run %s (status=%s)\n", len(runs), got.ID, got.Status)
 
 	// re-run from a prior run, then cancel it while it's still pending
-	rerun, err := manage.Jobs().Runs().Rerun(ctx, run.ID)
+	rerun, err := jobs.Runs().Rerun(ctx, run.ID)
 	fatalIfErr("jobs.Runs.Rerun", err)
 	if rerun.Trigger != "RERUN" || rerun.RerunOf == nil || *rerun.RerunOf != run.ID {
 		fatalIfErr("assertion", fmt.Errorf("rerun mismatch: trigger=%s rerun_of=%v", rerun.Trigger, rerun.RerunOf))
 	}
-	canceled, err := manage.Jobs().Runs().Cancel(ctx, rerun.ID)
+	canceled, err := jobs.Runs().Cancel(ctx, rerun.ID)
 	fatalIfErr("jobs.Runs.Cancel", err)
 	if canceled.Status != "CANCELED" {
 		fatalIfErr("assertion", fmt.Errorf("expected CANCELED, got %s", canceled.Status))
@@ -141,14 +143,14 @@ func main() {
 
 	// delete a job
 	fatalIfErr("jobs.Delete", job.Delete(ctx))
-	remaining, err := manage.Jobs().List(ctx, smplkit.ListJobsInput{})
+	remaining, err := jobs.List(ctx, smplkit.ListJobsInput{})
 	fatalIfErr("jobs.List", err)
 	for _, j := range remaining {
 		if j.ID == jobID {
 			fatalIfErr("assertion", fmt.Errorf("job %s still present after delete", jobID))
 		}
 	}
-	fmt.Printf("Deleted job %q — management showcase complete.\n", jobID)
+	fmt.Printf("Deleted job %q — jobs showcase complete.\n", jobID)
 }
 
 func randomHexJobs(nBytes int) string {

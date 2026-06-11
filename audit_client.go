@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -12,20 +13,23 @@ import (
 	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
 
-// AuditClient is the runtime audit surface — accessed via Client.Audit().
+// AuditClient is the Smpl Audit client.
 //
-// Sub-clients: Events for event recording / listing / retrieval,
-// ResourceTypes for the distinct resource-type index,
-// EventTypes for the distinct event-type index.
+// Audit installs no in-process machinery, so it has no runtime/management
+// split: one AuditClient exposes the full surface — event recording and
+// reads, distinct-value discovery, and SIEM forwarder CRUD — reachable as
+// client.Audit() or constructed directly via NewAuditClient.
 //
-// SIEM forwarder CRUD lives on the management plane:
-// Client.Manage().Audit().Forwarders().
+// Namespaces: Events (Record/Flush/List/Get), ResourceTypes, EventTypes,
+// Categories (discovery), and Forwarders (CRUD).
 type AuditClient struct {
-	client        *Client
+	client        *SmplClient
 	gen           *genaudit.ClientWithResponses
 	events        *AuditEvents
 	resourceTypes *AuditResourceTypes
 	eventTypes    *AuditEventTypes
+	categories    *AuditCategories
+	forwarders    *AuditForwarders
 }
 
 // AuditEvents handles event recording, listing, and retrieval. Writes are
@@ -46,9 +50,9 @@ type AuditEventTypes struct {
 	gen *genaudit.ClientWithResponses
 }
 
-// Audit returns the audit-product sub-client. Same instance every call.
-func (c *Client) Audit() *AuditClient {
-	return c.audit
+// AuditCategories lists the distinct category values seen in the account.
+type AuditCategories struct {
+	gen *genaudit.ClientWithResponses
 }
 
 // Events returns the events sub-client.
@@ -64,6 +68,136 @@ func (a *AuditClient) ResourceTypes() *AuditResourceTypes {
 // EventTypes returns the event-types index sub-client.
 func (a *AuditClient) EventTypes() *AuditEventTypes {
 	return a.eventTypes
+}
+
+// Categories returns the categories index sub-client.
+func (a *AuditClient) Categories() *AuditCategories {
+	return a.categories
+}
+
+// Forwarders returns the SIEM forwarder CRUD sub-client.
+func (a *AuditClient) Forwarders() *AuditForwarders {
+	return a.forwarders
+}
+
+// newAuditClient assembles an AuditClient from two generated audit clients.
+//
+// runtimeGen carries the X-Smplkit-Environment header and backs the
+// environment-scoped surface (Events, ResourceTypes, EventTypes — ADR-055).
+// forwarderGen has no environment header and backs forwarder CRUD, which is
+// account-wide (per-forwarder enablement lives in the forwarder's
+// environments map). The top-level SmplClient wires this in and sets the
+// optional client back-reference itself.
+func newAuditClient(runtimeGen, forwarderGen *genaudit.ClientWithResponses) *AuditClient {
+	events := &AuditEvents{gen: runtimeGen, buffer: newAuditEventBuffer(runtimeGen)}
+	return &AuditClient{
+		gen:           runtimeGen,
+		events:        events,
+		resourceTypes: &AuditResourceTypes{gen: runtimeGen},
+		eventTypes:    &AuditEventTypes{gen: runtimeGen},
+		categories:    &AuditCategories{gen: runtimeGen},
+		forwarders:    &AuditForwarders{gen: forwarderGen},
+	}
+}
+
+// NewAuditClient builds a standalone Smpl Audit client.
+//
+// Audit installs no in-process machinery, so it has no runtime/management
+// split: the returned AuditClient exposes the full surface — event recording
+// and reads, distinct-value discovery, and SIEM forwarder CRUD.
+//
+// The environment-scoped surface (Events, ResourceTypes, EventTypes) sends
+// cfg.Environment as the X-Smplkit-Environment header (ADR-055). The
+// forwarder-CRUD surface is account-wide and is not environment-scoped, so
+// it uses a separate transport with no environment header. Config is
+// resolved from cfg merged with SMPLKIT_* environment variables and the
+// ~/.smplkit profile.
+//
+// Call Close when done to release the underlying HTTP resources and drain
+// the in-memory event buffer.
+func NewAuditClient(cfg Config, opts ...ClientOption) (*AuditClient, error) {
+	rc, err := resolveConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	optCfg := defaultConfig()
+	for _, opt := range opts {
+		opt(&optCfg)
+	}
+
+	httpClient := optCfg.httpClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: optCfg.timeout}
+	}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: rc.apiKey, base: base}
+
+	auditURL := serviceURL(optCfg, "audit", rc)
+
+	// Capture extra headers once; the editor closures below close over it.
+	extraHeaders := rc.extraHeaders
+
+	// The runtime audit surface is environment-scoped (ADR-055): the audit
+	// service resolves the environment from the X-Smplkit-Environment request
+	// header. We stamp it once from the configured runtime environment so
+	// every runtime call carries it; a caller-supplied extra-header of the
+	// same name still wins because extraHeaders is applied after this editor.
+	auditEnvironment := rc.environment
+	auditEnvEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		if auditEnvironment != "" {
+			req.Header.Set("X-Smplkit-Environment", auditEnvironment)
+		}
+		return nil
+	})
+	auditHeaderEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	auditExtraEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	})
+
+	// Editor order matters: env header first, then SDK headers, then caller
+	// extra headers (which therefore win on any collision).
+	runtimeRaw, _ := genaudit.NewClient(auditURL,
+		genaudit.WithHTTPClient(httpClient),
+		auditEnvEditor,
+		auditHeaderEditor,
+		auditExtraEditor,
+	)
+	runtimeGen := &genaudit.ClientWithResponses{ClientInterface: runtimeRaw}
+
+	// Forwarder-CRUD client — same SDK + extra-header editors, but no
+	// environment header (forwarder CRUD is account-wide; per-environment
+	// enablement lives in the forwarder's environments map).
+	forwarderRaw, _ := genaudit.NewClient(auditURL,
+		genaudit.WithHTTPClient(httpClient),
+		auditHeaderEditor,
+		auditExtraEditor,
+	)
+	forwarderGen := &genaudit.ClientWithResponses{ClientInterface: forwarderRaw}
+
+	return newAuditClient(runtimeGen, forwarderGen), nil
+}
+
+// Close drains the in-memory event buffer, blocking until it empties or the
+// drain times out. Call it when done with a standalone AuditClient (one built
+// via NewAuditClient) so buffered fire-and-forget events are delivered before
+// the process exits. When the audit surface was wired in by a top-level
+// Client, SmplClient.Close drives this.
+func (a *AuditClient) Close() error {
+	if a.events != nil {
+		a.events.close()
+	}
+	return nil
 }
 
 // Record enqueues an audit event for asynchronous delivery.
@@ -96,6 +230,10 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 	if input.ActorLabel != "" {
 		al := input.ActorLabel
 		attrs.ActorLabel = &al
+	}
+	if input.Category != "" {
+		cat := input.Category
+		attrs.Category = &cat
 	}
 	if input.Data != nil {
 		d := input.Data
@@ -191,12 +329,12 @@ func (e *AuditEvents) Get(ctx context.Context, eventID uuid.UUID) (*AuditEvent, 
 
 // Flush blocks until the in-memory event buffer is drained or the
 // timeout elapses. Useful for shutdown semantics in short-lived
-// processes that don't always reach Client.Close.
+// processes that don't always reach SmplClient.Close.
 func (e *AuditEvents) Flush(timeout time.Duration) {
 	e.buffer.flush(timeout)
 }
 
-// close drains and stops the background worker. Called from Client.Close.
+// close drains and stops the background worker. Called from SmplClient.Close.
 func (e *AuditEvents) close() {
 	if e.buffer != nil {
 		e.buffer.close(5 * time.Second)
@@ -288,6 +426,48 @@ func (et *AuditEventTypes) List(ctx context.Context, input ListEventTypesInput) 
 	return page, nil
 }
 
+// List returns one page of distinct category values seen in the account.
+//
+// Backed by a maintain-by-write side table (ADR-047 §2.5), so the response
+// time is independent of how many years of events the account has
+// accumulated. Sorted alphabetically; offset pagination via PageNumber /
+// PageSize (ADR-014).
+func (cat *AuditCategories) List(ctx context.Context, input ListCategoriesInput) (*CategoryListPage, error) {
+	params := &genaudit.ListCategoriesParams{}
+	if env := joinEnvironments(input.Environments); env != "" {
+		params.FilterEnvironment = &env
+	}
+	if input.PageNumber > 0 {
+		params.PageNumber = &input.PageNumber
+	}
+	if input.PageSize > 0 {
+		params.PageSize = &input.PageSize
+	}
+	if input.MetaTotal {
+		mt := true
+		params.MetaTotal = &mt
+	}
+	resp, err := cat.gen.ListCategoriesWithResponse(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("audit Categories.List: %w", err)
+	}
+	if resp.StatusCode() != 200 {
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
+	}
+	body := resp.ApplicationvndApiJSON200
+	page := &CategoryListPage{
+		Categories: make([]AuditCategory, 0, len(body.Data)),
+		Pagination: paginationFromMeta(body.Meta.Pagination),
+	}
+	for _, r := range body.Data {
+		page.Categories = append(page.Categories, AuditCategory{
+			ID:       r.Id,
+			Category: r.Attributes.Category,
+		})
+	}
+	return page, nil
+}
+
 // paginationFromMeta converts the generated PaginationMeta into the
 // wrapper-public Pagination shape, sharing the optional Total /
 // TotalPages pointers as-is.
@@ -328,6 +508,9 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 	}
 	if attrs.ActorLabel != nil {
 		out.ActorLabel = *attrs.ActorLabel
+	}
+	if attrs.Category != nil {
+		out.Category = *attrs.Category
 	}
 	if attrs.Data != nil {
 		out.Data = *attrs.Data

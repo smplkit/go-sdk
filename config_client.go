@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"reflect"
 	"sync"
 
 	"github.com/smplkit/go-sdk/v3/internal/debug"
 	genconfig "github.com/smplkit/go-sdk/v3/internal/generated/config"
 )
+
+// configRegistrationFlushSize is the pending-queue size that triggers an
+// immediate background flush of the config discovery buffer.
+const configRegistrationFlushSize = 50
 
 // ConfigChangeEvent describes a single value change detected on refresh.
 type ConfigChangeEvent struct {
@@ -32,12 +37,39 @@ type configChangeListener struct {
 	cb       func(*ConfigChangeEvent)
 }
 
-// ConfigClient provides operations for config resources and
-// resolved value access.
-// Obtain one via Client.Config().
+// ConfigClient is the Smpl Config client.
+//
+// One client exposes the full surface, reachable as client.Config()
+// (SmplClient) or constructed directly:
+//
+//	config, err := smplkit.NewConfigClient(smplkit.Config{Environment: "production", Service: "billing"})
+//	billing := config.New("billing", smplkit.WithConfigName("Billing"))
+//	billing.Save(ctx)
+//	proxy, _ := config.Subscribe(ctx, "billing")
+//	v, _ := proxy.Get("max_seats")
+//
+// The management surface (New / Get / List / Delete and discovery) is pure
+// CRUD. The live surface (Subscribe / GetValue / Bind / OnChange / Refresh)
+// connects lazily on first use — the first call flushes discovery, fetches
+// and resolves all configs into the local cache, and opens the live-updates
+// WebSocket. No explicit install step is required.
 type ConfigClient struct {
-	client      *Client
-	generated   genconfig.ClientInterface
+	client    *SmplClient // parent; nil when constructed standalone
+	generated genconfig.ClientInterface
+
+	// buffer holds pending config / item declarations for bulk-discovery
+	// upload. Owned by this client (no management delegation).
+	buffer *configRegistrationBuffer
+
+	// Runtime / standalone configuration mirrored from the parent (or
+	// resolved directly when standalone) so the live surface works in both
+	// construction shapes.
+	environment string
+	service     string
+	metrics     *metricsReporter
+	appURL      string
+	apiKey      string
+
 	configCache map[string]map[string]interface{}
 
 	initOnce sync.Once
@@ -47,33 +79,340 @@ type ConfigClient struct {
 	listeners   []configChangeListener
 
 	// proxyCache returns the same *LiveConfig instance on repeat
-	// Get calls so callers can hold one as a parent reference.
-	// Mirrors Python's _proxies cache.
+	// Subscribe calls so callers can hold one as a parent reference.
 	proxyCacheMu sync.Mutex
 	proxyCache   map[string]*LiveConfig
 
 	// bindings holds targets (struct pointers or string-keyed maps)
 	// registered via Bind. WebSocket dispatch mutates these in place
-	// when values change. Mirrors Python's _bindings.
+	// when values change.
 	bindingsMu sync.Mutex
 	bindings   map[string]interface{}
 
+	wsMu      sync.Mutex
+	ownWS     *sharedWebSocket // standalone-owned WebSocket (nil when wired)
 	wsManager *sharedWebSocket
-
-	management *ConfigManagement
 }
 
-// Management returns the sub-object for config CRUD operations.
-//
-// Returns the same *ConfigManagement instance that
-// client.Manage().Config() returns — runtime and management surfaces
-// share one management object.
-func (c *ConfigClient) Management() *ConfigManagement {
-	if c.management == nil {
-		c.management = newConfigManagement(c.generated)
-		c.management.attachRuntime(c)
+// newConfigClient wires a ConfigClient onto a parent SmplClient (the common
+// path), borrowing the parent's config transport, metrics, and WebSocket.
+func newConfigClient(parent *SmplClient, gen genconfig.ClientInterface, metrics *metricsReporter) *ConfigClient {
+	return &ConfigClient{
+		client:      parent,
+		generated:   gen,
+		buffer:      newConfigRegistrationBuffer(),
+		environment: parent.environment,
+		service:     parent.service,
+		metrics:     metrics,
 	}
-	return c.management
+}
+
+// NewConfigClient creates a standalone Smpl Config client that builds and
+// owns its own config transport, and on first live use opens and owns its
+// own WebSocket.
+func NewConfigClient(cfg Config, opts ...ClientOption) (*ConfigClient, error) {
+	rc, err := resolveConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if rc.debug {
+		debug.Enable()
+	}
+	optCfg := defaultConfig()
+	for _, opt := range opts {
+		opt(&optCfg)
+	}
+	httpClient := optCfg.httpClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: optCfg.timeout}
+	}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: rc.apiKey, base: base}
+	configURL := serviceURL(optCfg, "config", rc)
+	appURL := serviceURL(optCfg, "app", rc)
+	headerEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	})
+	gen, _ := genconfig.NewClient(configURL, genconfig.WithHTTPClient(httpClient), headerEditor)
+	return &ConfigClient{
+		generated:   gen,
+		buffer:      newConfigRegistrationBuffer(),
+		environment: rc.environment,
+		service:     rc.service,
+		appURL:      appURL,
+		apiKey:      rc.apiKey,
+	}, nil
+}
+
+// ensureWS returns the shared WebSocket — the parent's when wired, else our own.
+func (c *ConfigClient) ensureWS() *sharedWebSocket {
+	if c.client != nil {
+		return c.client.ensureWS()
+	}
+	c.wsMu.Lock()
+	defer c.wsMu.Unlock()
+	if c.ownWS == nil {
+		c.ownWS = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
+		c.ownWS.start()
+	}
+	return c.ownWS
+}
+
+// ------------------------------------------------------------------
+// Management surface: CRUD (no live connection)
+// ------------------------------------------------------------------
+
+// New returns a new unsaved ConfigEntry. Call ConfigEntry.Save to persist.
+// If name is not provided via WithConfigName it is auto-generated from the ID.
+func (c *ConfigClient) New(id string, opts ...ConfigOption) *ConfigEntry {
+	cfg := &ConfigEntry{
+		ID:           id,
+		Name:         keyToDisplayName(id),
+		Items:        map[string]interface{}{},
+		Environments: map[string]map[string]interface{}{},
+		client:       c,
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
+}
+
+// Get fetches the editable ConfigEntry resource by id.
+//
+// Returns a NotFoundError if no config with that id exists. For a live,
+// dict-like view of resolved values use Subscribe; for typed access via a
+// bound struct/map use Bind.
+func (c *ConfigClient) Get(ctx context.Context, id string) (*ConfigEntry, error) {
+	resp, err := c.generated.GetConfig(ctx, id)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genconfig.ConfigResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+	return resourceToConfig(result.Data, c), nil
+}
+
+// List returns one page of configs for the account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+func (c *ConfigClient) List(ctx context.Context, opts ...ListOption) ([]*ConfigEntry, error) {
+	o := resolveListOptions(opts)
+	params := &genconfig.ListConfigsParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := c.generated.ListConfigs(ctx, params)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genconfig.ConfigListResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+
+	configs := make([]*ConfigEntry, len(result.Data))
+	for i := range result.Data {
+		configs[i] = resourceToConfig(result.Data[i], c)
+	}
+	return configs, nil
+}
+
+// Delete removes a config by id.
+func (c *ConfigClient) Delete(ctx context.Context, id string) error {
+	resp, err := c.generated.DeleteConfig(ctx, id)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	return checkStatus(resp.StatusCode, body)
+}
+
+// createConfig creates the config on the server and updates the local
+// instance. Called from ConfigEntry.Save when CreatedAt is nil.
+func (c *ConfigClient) createConfig(ctx context.Context, cfg *ConfigEntry) error {
+	reqBody := buildConfigCreateRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+	resp, err := c.generated.CreateConfigWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+	var result genconfig.ConfigResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+	cfg.apply(resourceToConfig(result.Data, c))
+	return nil
+}
+
+// updateConfig updates the config on the server and updates the local
+// instance. Called from ConfigEntry.Save when CreatedAt is set.
+func (c *ConfigClient) updateConfig(ctx context.Context, cfg *ConfigEntry) error {
+	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+	resp, err := c.generated.UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx, cfg.ID, reqBody)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+	var result genconfig.ConfigResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+	cfg.apply(resourceToConfig(result.Data, c))
+	return nil
+}
+
+// ------------------------------------------------------------------
+// Management surface: discovery buffer (owned directly)
+// ------------------------------------------------------------------
+
+// RegisterConfig queues a configuration declaration for bulk-discovery upload.
+func (c *ConfigClient) RegisterConfig(configID, service, environment, parent, name, description string) {
+	c.buffer.declare(configID, configBufferMeta{
+		service:     service,
+		environment: environment,
+		parent:      parent,
+		name:        name,
+		description: description,
+	})
+	if c.buffer.pendingCount() >= configRegistrationFlushSize {
+		go func() { _ = c.Flush(context.Background()) }()
+	}
+}
+
+// RegisterConfigItem queues a config item declaration. RegisterConfig must run first.
+func (c *ConfigClient) RegisterConfigItem(configID, itemKey, itemType string, defaultVal interface{}, description string) {
+	c.buffer.addItem(configID, itemKey, itemType, defaultVal, description)
+	if c.buffer.pendingCount() >= configRegistrationFlushSize {
+		go func() { _ = c.Flush(context.Background()) }()
+	}
+}
+
+// PendingCount returns the number of pending config declarations awaiting flush.
+func (c *ConfigClient) PendingCount() int {
+	return c.buffer.pendingCount()
+}
+
+// Flush POSTs pending declarations to /api/v1/configs/bulk.
+//
+// Per ADR-024 §2.9, bulk registration always lands rows as managed=false
+// and is plan-limit-exempt — failures here never propagate to customer
+// code. Drained entries are not requeued; the SDK will re-observe on the
+// next process start.
+func (c *ConfigClient) Flush(ctx context.Context) error {
+	batch := c.buffer.drain()
+	if len(batch) == 0 {
+		return nil
+	}
+	configs := make([]genconfig.ConfigBulkItem, 0, len(batch))
+	for _, entry := range batch {
+		item := genconfig.ConfigBulkItem{Id: entry.id}
+		if entry.service != "" {
+			s := entry.service
+			item.Service = &s
+		}
+		if entry.environment != "" {
+			e := entry.environment
+			item.Environment = &e
+		}
+		if entry.parent != "" {
+			p := entry.parent
+			item.Parent = &p
+		}
+		if entry.name != "" {
+			n := entry.name
+			item.Name = &n
+		}
+		if entry.description != "" {
+			d := entry.description
+			item.Description = &d
+		}
+		if len(entry.items) > 0 {
+			items := make(map[string]genconfig.ConfigItemDefinition, len(entry.items))
+			for k, v := range entry.items {
+				def := genconfig.ConfigItemDefinition{}
+				val := v.value
+				def.Value = &val
+				switch v.itemType {
+				case "STRING":
+					typed := genconfig.STRING
+					def.Type = &typed
+				case "NUMBER":
+					typed := genconfig.NUMBER
+					def.Type = &typed
+				case "BOOLEAN":
+					typed := genconfig.BOOLEAN
+					def.Type = &typed
+				case "JSON":
+					typed := genconfig.JSON
+					def.Type = &typed
+				}
+				if v.description != "" {
+					d := v.description
+					def.Description = &d
+				}
+				items[k] = def
+			}
+			item.Items = &items
+		}
+		configs = append(configs, item)
+	}
+	body := genconfig.ConfigBulkRequest{Configs: configs}
+	resp, err := c.generated.BulkRegisterConfigsWithApplicationVndAPIPlusJSONBody(ctx, body)
+	if err != nil {
+		// Fire-and-forget per ADR-024 §2.9.
+		return nil
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+	return nil
 }
 
 // getByID retrieves a config by its ID (internal use for chain walking).
@@ -86,9 +425,7 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*ConfigEntry, er
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, &ConnectionError{
-			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
-		}
+		return nil, &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
 	}
 	if err := checkStatus(resp.StatusCode, body); err != nil {
 		return nil, err
@@ -98,29 +435,32 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*ConfigEntry, er
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
 	}
-	return resourceToConfig(result.Data, c.Management()), nil
+	return resourceToConfig(result.Data, c), nil
 }
 
-// (createConfig and updateConfig moved to config_management.go so
-// the active-record save path doesn't depend on the runtime client —
-// rule 1 of the cross-SDK overhaul.)
+// ------------------------------------------------------------------
+// Live surface: subscribe, lazy connect
+// ------------------------------------------------------------------
 
-// Get returns the resolved config values for the given ID.
-// Get returns a LiveConfig — a live, dict-like, read-only proxy whose
-// reads always reflect the latest resolved values for the given config
-// ID. WebSocket updates are picked up automatically.
+// Subscribe returns a live, dict-like, read-only LiveConfig proxy whose reads
+// always reflect the latest resolved values for the given config id.
+// WebSocket updates are picked up automatically. Subscribing registers the
+// config declaration for code-first observability so the reference appears in
+// the smplkit console.
 //
-// Returns a NotFoundError if the config is missing. For typed access
-// via an in-place-mutated struct or map, use Bind instead.
-func (c *ConfigClient) Get(ctx context.Context, id string) (*LiveConfig, error) {
+// Connects lazily on first use — no explicit install step. Returns a
+// NotFoundError if the config is unknown. For typed access via an
+// in-place-mutated struct or map, use Bind instead.
+func (c *ConfigClient) Subscribe(ctx context.Context, id string) (*LiveConfig, error) {
 	if err := c.ensureInit(ctx); err != nil {
 		return nil, err
 	}
+	c.observeConfigDeclaration(id, "", "", "")
 	if _, ok := c.configCache[id]; !ok {
 		return nil, &NotFoundError{Base: Error{Message: fmt.Sprintf("config with id %q not found", id)}}
 	}
-	if metrics := c.client.metrics; metrics != nil {
-		metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config": id})
+	if c.metrics != nil {
+		c.metrics.Record("config.resolutions", 1, "resolutions", map[string]string{"config": id})
 	}
 	return c.cachedProxy(id), nil
 }
@@ -141,38 +481,37 @@ func (c *ConfigClient) cachedProxy(id string) *LiveConfig {
 	return proxy
 }
 
-// observeConfigDeclaration queues a config declaration with the
-// management buffer. Called by Bind and GetValueOr.
+// observeConfigDeclaration queues a config declaration with the owned
+// discovery buffer. Called by Bind, Subscribe and GetValueOr.
 func (c *ConfigClient) observeConfigDeclaration(configID, parent, name, description string) {
-	mgmt := c.Management()
-	service := ""
-	environment := ""
-	if c.client != nil {
-		service = c.client.service
-		environment = c.client.environment
-	}
-	mgmt.RegisterConfig(configID, service, environment, parent, name, description)
+	c.RegisterConfig(configID, c.service, c.environment, parent, name, description)
 }
 
-// observeItemDeclaration queues a config item declaration with the
-// management buffer. Called by Bind and GetValueOr.
+// observeItemDeclaration queues a config item declaration with the owned
+// discovery buffer. Called by Bind and GetValueOr.
 func (c *ConfigClient) observeItemDeclaration(configID, itemKey, itemType string, defaultVal interface{}, description string) {
-	c.Management().RegisterConfigItem(configID, itemKey, itemType, defaultVal, description)
+	c.RegisterConfigItem(configID, itemKey, itemType, defaultVal, description)
 }
 
 // ensureInit performs initialization on first runtime access.
+//
+// Flushes any buffered discovery declarations, fetches and resolves every
+// config for the configured environment into the local cache, opens the
+// shared WebSocket, and subscribes to config_changed / config_deleted /
+// configs_changed events. Idempotent and internal — every live method calls
+// it on first use, so the live surface auto-connects with no explicit step.
 func (c *ConfigClient) ensureInit(ctx context.Context) error {
 	c.initOnce.Do(func() {
-		environment := c.client.environment
+		if c.client != nil {
+			c.client.ensureStarted()
+		}
+		environment := c.environment
 
 		// Flush any buffered discovery declarations BEFORE the initial
 		// fetch so newly-bound configs appear in the cache on first read.
-		// Mirrors python-sdk and typescript-sdk's pre-start flush hook.
 		// Per ADR-024 §2.9, Flush is fire-and-forget — failures never
 		// propagate to customer code, so we don't observe its return.
-		if mgmt := c.Management(); mgmt != nil {
-			_ = mgmt.Flush(ctx)
-		}
+		_ = c.Flush(ctx)
 
 		debug.Debug("api", "fetching config definitions")
 		configs, err := c.fetchAllConfigs(ctx)
@@ -194,11 +533,7 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 		c.configCache = cache
 
 		// Register WebSocket listeners for real-time config updates.
-		// The WS connect happens in the background — callers that need
-		// to be sure the subscription is registered server-side before
-		// firing writes should call Client.WaitUntilReady (matches
-		// Python's wait_until_ready and TypeScript's waitUntilReady).
-		ws := c.client.ensureWS()
+		ws := c.ensureWS()
 		c.wsManager = ws
 		ws.on("config_changed", c.handleConfigChanged)
 		ws.on("config_deleted", c.handleConfigDeleted)
@@ -212,23 +547,20 @@ func (c *ConfigClient) handleConfigChanged(data map[string]interface{}) {
 	debug.Debug("websocket", "config_changed event received, key=%q", configKey)
 
 	ctx := context.Background()
-	environment := c.client.environment
+	environment := c.environment
 
 	if c.configCache == nil {
 		c.configCache = make(map[string]map[string]interface{})
 	}
 
-	// Snapshot pre-state for this config.
 	oldResolved := c.configCache[configKey]
 
-	// Scoped fetch: fetch the chain for this single config key and resolve.
 	chain, err := c.fetchChain(ctx, configKey)
 	if err != nil {
 		return
 	}
 	newResolved := resolveChain(chain, environment)
 
-	// Only update and fire if content changed.
 	if reflect.DeepEqual(oldResolved, newResolved) {
 		return
 	}
@@ -255,7 +587,6 @@ func (c *ConfigClient) handleConfigDeleted(data map[string]interface{}) {
 
 	delete(c.configCache, configKey)
 
-	// Fire listeners with old value → nil to signal removal.
 	oldCache := map[string]map[string]interface{}{configKey: oldResolved}
 	newCache := map[string]map[string]interface{}{configKey: {}}
 	c.diffAndFire(oldCache, newCache, "websocket")
@@ -272,7 +603,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 	if err := c.ensureInit(ctx); err != nil {
 		return err
 	}
-	environment := c.client.environment
+	environment := c.environment
 	if environment == "" {
 		return &Error{Message: "No environment set."}
 	}
@@ -296,7 +627,7 @@ func (c *ConfigClient) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// OnChange registers a listener that fires when a config value changes (on Refresh).
+// OnChange registers a listener that fires when a config value changes.
 // Use WithConfigID and/or WithItemKey to scope the listener.
 func (c *ConfigClient) OnChange(cb func(*ConfigChangeEvent), opts ...ChangeListenerOption) {
 	var cfg changeListenerConfig
@@ -376,10 +707,8 @@ func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]inte
 				// reading the bound object see the new value.
 				c.mutateBoundTargetsForChanges(cfgKey, iKey, newVal)
 
-				if c.client != nil {
-					if metrics := c.client.metrics; metrics != nil {
-						metrics.Record("config.changes", 1, "changes", map[string]string{"config": cfgKey})
-					}
+				if c.metrics != nil {
+					c.metrics.Record("config.changes", 1, "changes", map[string]string{"config": cfgKey})
 				}
 				if len(listeners) == 0 {
 					continue
@@ -412,10 +741,9 @@ func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]inte
 // list. The server caps page size at fetchAllPageSize; we stop when a
 // short page (fewer than fetchAllPageSize items) comes back.
 func (c *ConfigClient) fetchAllConfigs(ctx context.Context) ([]*ConfigEntry, error) {
-	mgmt := c.Management()
 	var all []*ConfigEntry
 	for page := 1; ; page++ {
-		batch, err := mgmt.List(ctx, WithPageNumber(page), WithPageSize(fetchAllPageSize))
+		batch, err := c.List(ctx, WithPageNumber(page), WithPageSize(fetchAllPageSize))
 		if err != nil {
 			return nil, err
 		}
@@ -449,9 +777,9 @@ func (c *ConfigClient) fetchChain(ctx context.Context, rootID string) ([]chainEn
 }
 
 // resourceToConfig converts a generated ConfigResource to the SDK
-// ConfigEntry type. The management back-reference allows the active
-// record to Save / Delete itself.
-func resourceToConfig(r genconfig.ConfigResource, m *ConfigManagement) *ConfigEntry {
+// ConfigEntry type. The client back-reference allows the active record to
+// Save / Delete itself.
+func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *ConfigEntry {
 	attrs := r.Attributes
 	id := ""
 	if r.Id != nil {
@@ -466,7 +794,7 @@ func resourceToConfig(r genconfig.ConfigResource, m *ConfigManagement) *ConfigEn
 		Environments: derefEnvs(attrs.Environments),
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
-		client:       m,
+		client:       c,
 	}
 }
 

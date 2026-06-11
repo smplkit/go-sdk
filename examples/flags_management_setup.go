@@ -1,5 +1,6 @@
 //go:build ignore
 
+// Setup / cleanup helpers for flags_management_showcase.go.
 package main
 
 import (
@@ -16,13 +17,13 @@ var flagsMgmtDemoFlagIDs = []string{
 	"ui-theme",
 }
 
-func setupFlagsManagementShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	cleanupFlagsManagementShowcase(ctx, mgmt)
+func setupFlagsManagementShowcase(ctx context.Context, flags *smplkit.FlagsClient) {
+	cleanupFlagsManagementShowcase(ctx, flags)
 }
 
-func cleanupFlagsManagementShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
+func cleanupFlagsManagementShowcase(ctx context.Context, flags *smplkit.FlagsClient) {
 	for _, id := range flagsMgmtDemoFlagIDs {
-		if err := mgmt.Flags().Delete(ctx, id); err != nil {
+		if err := flags.Delete(ctx, id); err != nil {
 			var nf *smplkit.NotFoundError
 			if !errors.As(err, &nf) {
 				fatalIfErr("delete flag "+id, err)

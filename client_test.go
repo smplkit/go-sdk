@@ -16,12 +16,36 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
-func TestClient_WaitUntilReady_TimeoutOnUnreachableHost(t *testing.T) {
-	// Point at a closed port so the WS dial loop never reaches "connected".
-	// WaitUntilReady must return a timeout error rather than blocking forever.
+// waitReadyServer serves empty config/flag lists so WaitUntilReady's eager
+// config+flags connect succeeds, leaving only the WebSocket handshake (which a
+// plain httptest server rejects) to drive the readiness wait.
+func waitReadyServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	h := http.NewServeMux()
+	empty := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}
+	h.HandleFunc("/api/v1/configs", empty)
+	h.HandleFunc("/api/v1/flags", empty)
+	h.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestClient_WaitUntilReady_TimeoutWhenWSNeverConnects(t *testing.T) {
+	// config + flags connect successfully (empty lists), so the only thing
+	// left is the WebSocket handshake — which a plain httptest server rejects,
+	// so the WS dial loop never reaches "connected" and WaitUntilReady must
+	// return a timeout error rather than blocking forever.
+	srv := waitReadyServer(t)
 	client, err := smplkit.NewClient(
 		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
-		smplkit.WithBaseURL("http://127.0.0.1:1"),
+		smplkit.WithBaseURL(srv.URL),
 	)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
@@ -31,7 +55,10 @@ func TestClient_WaitUntilReady_TimeoutOnUnreachableHost(t *testing.T) {
 	assert.Contains(t, err.Error(), "timed out")
 }
 
-func TestClient_WaitUntilReady_ContextCancel(t *testing.T) {
+func TestClient_WaitUntilReady_EagerConnectError(t *testing.T) {
+	// Point at a closed port: WaitUntilReady eagerly connects flags + config
+	// before waiting on the socket (matching Python's wait_until_ready), so the
+	// connection failure surfaces rather than blocking forever.
 	client, err := smplkit.NewClient(
 		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://127.0.0.1:1"),
@@ -39,15 +66,13 @@ func TestClient_WaitUntilReady_ContextCancel(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err = client.WaitUntilReady(ctx, time.Second)
-	require.ErrorIs(t, err, context.Canceled)
+	err = client.WaitUntilReady(context.Background(), 50*time.Millisecond)
+	require.Error(t, err)
 }
 
 func TestClient_WaitUntilReady_ZeroTimeoutUsesDefault(t *testing.T) {
-	// Pre-cancel the context so we exit the wait immediately without
-	// having to actually elapse the (5s) default timeout.
+	// timeout=0 falls back to the SDK default; the eager flags/config connect
+	// against an unreachable host returns the failure without waiting it out.
 	client, err := smplkit.NewClient(
 		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
 		smplkit.WithBaseURL("http://127.0.0.1:1"),
@@ -55,10 +80,39 @@ func TestClient_WaitUntilReady_ZeroTimeoutUsesDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err = client.WaitUntilReady(ctx, 0)
-	require.ErrorIs(t, err, context.Canceled)
+	err = client.WaitUntilReady(context.Background(), 0)
+	require.Error(t, err)
+}
+
+func TestClient_WaitUntilReady_ConfigConnectError(t *testing.T) {
+	// flags connects (empty list) but config returns 500 — WaitUntilReady
+	// surfaces the config connect failure (it eagerly connects flags first,
+	// then config, before the WebSocket wait).
+	h := http.NewServeMux()
+	h.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	h.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"errors":[{"status":"500","detail":"config down"}]}`))
+	})
+	h.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	client, err := smplkit.NewClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL(srv.URL),
+	)
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+
+	err = client.WaitUntilReady(context.Background(), time.Second)
+	require.Error(t, err)
 }
 
 func TestNewClient_Defaults(t *testing.T) {
@@ -164,7 +218,7 @@ func TestNewClient_ErrorWhenNoKey(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, client)
 
-	var smplErr *smplkit.SmplError
+	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "No API key provided")
 	assert.Contains(t, smplErr.Message, "SMPLKIT_API_KEY")
@@ -178,7 +232,7 @@ func TestNewClient_ErrorWhenNoKey_ShowsProfileInSection(t *testing.T) {
 	_, err := smplkit.NewClient(smplkit.Config{Environment: "production", Service: "test-service", DisableTelemetry: true})
 	require.Error(t, err)
 
-	var smplErr *smplkit.SmplError
+	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "[default]")
 }
@@ -223,7 +277,7 @@ func TestNewClient_MissingFileSkipped(t *testing.T) {
 	_, err := smplkit.NewClient(smplkit.Config{Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.Error(t, err)
 	// Should fail with "no API key" since the file doesn't exist.
-	var smplErr *smplkit.SmplError
+	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "No API key provided")
 }
@@ -264,7 +318,7 @@ func TestNewClient_MissingProfile(t *testing.T) {
 	// Named profile "myprofile" is missing and file has other non-common sections.
 	_, err = smplkit.NewClient(smplkit.Config{Profile: "myprofile", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.Error(t, err)
-	var smplErr *smplkit.SmplError
+	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "Profile [myprofile] not found")
 }
@@ -286,7 +340,7 @@ func TestNewClient_MissingEnvironment(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	_, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", DisableTelemetry: true})
 	require.Error(t, err)
-	var smplErr *smplkit.SmplError
+	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "No environment provided")
 }
@@ -320,7 +374,7 @@ func TestNewClient_MissingService(t *testing.T) {
 	t.Setenv("SMPLKIT_SERVICE", "")
 	_, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", DisableTelemetry: true})
 	require.Error(t, err)
-	var smplErr *smplkit.SmplError
+	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "No service provided")
 	assert.Contains(t, smplErr.Message, "Config.Service")
@@ -348,7 +402,7 @@ func TestNewClient_ResolutionOrder_EnvironmentBeforeService(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	_, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", DisableTelemetry: true})
 	require.Error(t, err)
-	var smplErr *smplkit.SmplError
+	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "No environment provided")
 }
@@ -360,7 +414,7 @@ func TestNewClient_ResolutionOrder_ServiceBeforeAPIKey(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	_, err := smplkit.NewClient(smplkit.Config{Environment: "test", DisableTelemetry: true})
 	require.Error(t, err)
-	var smplErr *smplkit.SmplError
+	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
 	assert.Contains(t, smplErr.Message, "No service provided")
 }
@@ -418,7 +472,7 @@ func TestNewClient_ExtraHeaders_PresentOnRequests(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 
-	_, _ = client.Config().Management().List(context.Background())
+	_, _ = client.Config().List(context.Background())
 
 	require.NotNil(t, seen)
 	assert.Equal(t, "hello", seen.Get("X-Custom"))
@@ -452,7 +506,7 @@ func TestNewClient_ExtraHeaders_SDKHeadersWinOnCollision(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
 
-	_, _ = client.Config().Management().List(context.Background())
+	_, _ = client.Config().List(context.Background())
 
 	require.NotNil(t, seen)
 	assert.Equal(t, "Bearer sk_test_key", seen.Get("Authorization"))

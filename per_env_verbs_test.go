@@ -9,6 +9,35 @@ import (
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
+func TestFlag_EnableRules_PerEnv(t *testing.T) {
+	f := &smplkit.Flag{Environments: map[string]interface{}{}}
+	// Non-empty environment routes through SetEnvironmentEnabled.
+	f.EnableRules("production")
+	prod, ok := f.Environments["production"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, true, prod["enabled"])
+}
+
+func TestFlag_RemoveValue_NilMismatch(t *testing.T) {
+	f := &smplkit.Flag{}
+	f.AddValue("blue", "blue")
+	// value=nil vs an existing non-nil value exercises fmtEqual's
+	// one-nil-one-not branch (no match → nothing removed).
+	f.RemoveValue(nil)
+	require.NotNil(t, f.Values)
+	assert.Len(t, *f.Values, 1)
+}
+
+func TestFlag_RemoveValue_BothNil(t *testing.T) {
+	f := &smplkit.Flag{}
+	f.AddValue("blank", nil)
+	// value=nil vs an existing nil value exercises fmtEqual's both-nil
+	// branch (match → removed).
+	f.RemoveValue(nil)
+	require.NotNil(t, f.Values)
+	assert.Len(t, *f.Values, 0)
+}
+
 func TestFlag_SetDefault_BaseAndEnv(t *testing.T) {
 	f := &smplkit.Flag{
 		Default:      false,
@@ -272,7 +301,7 @@ func TestContext_PanicsOnEmpty(t *testing.T) {
 	assert.Panics(t, func() { smplkit.NewContext("user", "", nil) })
 }
 
-func TestContext_CompositeID(t *testing.T) {
+func TestContext_CompositeID_Verbs(t *testing.T) {
 	c := smplkit.NewContext("user", "u-123", nil)
 	assert.Equal(t, "user:u-123", c.CompositeID())
 }

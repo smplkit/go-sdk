@@ -1,5 +1,6 @@
 //go:build ignore
 
+// Setup / cleanup helpers for config_management_showcase.go.
 package main
 
 import (
@@ -11,13 +12,13 @@ import (
 
 var configMgmtDemoConfigIDs = []string{"showcase-user-service", "showcase-common"}
 
-func setupConfigManagementShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	cleanupConfigManagementShowcase(ctx, mgmt)
+func setupConfigManagementShowcase(ctx context.Context, config *smplkit.ConfigClient) {
+	cleanupConfigManagementShowcase(ctx, config)
 }
 
-func cleanupConfigManagementShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
+func cleanupConfigManagementShowcase(ctx context.Context, config *smplkit.ConfigClient) {
 	for _, id := range configMgmtDemoConfigIDs {
-		if err := mgmt.Config().Delete(ctx, id); err != nil {
+		if err := config.Delete(ctx, id); err != nil {
 			var nf *smplkit.NotFoundError
 			if !errors.As(err, &nf) {
 				fatalIfErr("delete config "+id, err)

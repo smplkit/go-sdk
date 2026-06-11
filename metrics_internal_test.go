@@ -708,12 +708,12 @@ func TestFlagsRuntime_EvaluationRecordsMetrics(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	client := &Client{
+	client := &SmplClient{
 		environment: "test",
 		service:     "test-service",
 		metrics:     r,
 	}
-	fc := &FlagsClient{client: client}
+	fc := &FlagsClient{client: client, metrics: client.metrics}
 	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	// Populate flag store.
@@ -750,12 +750,12 @@ func TestFlagsRuntime_CacheHitRecordsMetrics(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	client := &Client{
+	client := &SmplClient{
 		environment: "test",
 		service:     "test-service",
 		metrics:     r,
 	}
-	fc := &FlagsClient{client: client}
+	fc := &FlagsClient{client: client, metrics: client.metrics}
 	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	rt.mu.Lock()
@@ -791,12 +791,12 @@ func TestFlagsRuntime_MissingFlagRecordsEvaluation(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	client := &Client{
+	client := &SmplClient{
 		environment: "test",
 		service:     "test-service",
 		metrics:     r,
 	}
-	fc := &FlagsClient{client: client}
+	fc := &FlagsClient{client: client, metrics: client.metrics}
 	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	rt.mu.Lock()
@@ -844,12 +844,12 @@ func TestFlagsRuntime_NoMetricsWhenNilClient(t *testing.T) {
 }
 
 func TestFlagsRuntime_NoMetricsWhenDisabled(t *testing.T) {
-	client := &Client{
+	client := &SmplClient{
 		environment: "test",
 		service:     "test-service",
 		metrics:     nil,
 	}
-	fc := &FlagsClient{client: client}
+	fc := &FlagsClient{client: client, metrics: client.metrics}
 	rt := newFlagsRuntime(fc, newContextRegistrationBuffer())
 
 	rt.mu.Lock()
@@ -876,18 +876,18 @@ func TestConfigClient_GetRecordsMetric(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	client := &Client{
+	client := &SmplClient{
 		environment: "test",
 		service:     "test-service",
 		metrics:     r,
 	}
-	cc := &ConfigClient{client: client}
+	cc := &ConfigClient{client: client, metrics: client.metrics, buffer: newConfigRegistrationBuffer()}
 	cc.configCache = map[string]map[string]interface{}{
 		"my-config": {"host": "localhost"},
 	}
 	cc.initOnce.Do(func() {}) // Mark init complete.
 
-	result, err := cc.Get(context.Background(), "my-config")
+	result, err := cc.Subscribe(context.Background(), "my-config")
 	require.NoError(t, err)
 	assert.Equal(t, "localhost", result.Value()["host"])
 
@@ -905,18 +905,18 @@ func TestConfigClient_GetRecordsMetric(t *testing.T) {
 }
 
 func TestConfigClient_GetNoMetricsWhenDisabled(t *testing.T) {
-	client := &Client{
+	client := &SmplClient{
 		environment: "test",
 		service:     "test-service",
 		metrics:     nil,
 	}
-	cc := &ConfigClient{client: client}
+	cc := &ConfigClient{client: client, metrics: client.metrics, buffer: newConfigRegistrationBuffer()}
 	cc.configCache = map[string]map[string]interface{}{
 		"my-config": {"host": "localhost"},
 	}
 	cc.initOnce.Do(func() {})
 
-	result, err := cc.Get(context.Background(), "my-config")
+	result, err := cc.Subscribe(context.Background(), "my-config")
 	require.NoError(t, err)
 	assert.Equal(t, "localhost", result.Value()["host"])
 }
@@ -925,12 +925,12 @@ func TestConfigClient_ChangeListenersRecordMetric(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	client := &Client{
+	client := &SmplClient{
 		environment: "test",
 		service:     "test-service",
 		metrics:     r,
 	}
-	cc := &ConfigClient{client: client}
+	cc := &ConfigClient{client: client, metrics: client.metrics, buffer: newConfigRegistrationBuffer()}
 
 	oldCache := map[string]map[string]interface{}{
 		"my-config": {"host": "old"},
@@ -960,12 +960,12 @@ func TestConfigClient_NoChangeNoMetric(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	client := &Client{
+	client := &SmplClient{
 		environment: "test",
 		service:     "test-service",
 		metrics:     r,
 	}
-	cc := &ConfigClient{client: client}
+	cc := &ConfigClient{client: client, metrics: client.metrics, buffer: newConfigRegistrationBuffer()}
 
 	sameCache := map[string]map[string]interface{}{
 		"my-config": {"host": "same"},

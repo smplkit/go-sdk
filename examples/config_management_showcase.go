@@ -7,7 +7,6 @@
 //   - A valid smplkit API key, provided via one of:
 //   - SMPLKIT_API_KEY environment variable
 //   - ~/.smplkit configuration file (see SDK docs)
-//   - The smplkit Config service running and reachable
 //
 // Usage:
 //
@@ -24,15 +23,17 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// create the client (management-only — zero side effects)
-	mgmt, err := smplkit.NewManagementClient(smplkit.ManagementConfig{})
-	fatalIfErr("create management client", err)
-	defer mgmt.Close()
+	// or NewClient for the full one-client surface
+	config, err := smplkit.NewConfigClient(smplkit.Config{
+		Environment: "production",
+		Service:     "showcase-service",
+	})
+	fatalIfErr("create config client", err)
 
-	setupConfigManagementShowcase(ctx, mgmt)
+	setupConfigManagementShowcase(ctx, config)
 
 	// create a "parent" configuration that all other configs inherit from
-	shared := mgmt.Config().New("showcase-common",
+	shared := config.New("showcase-common",
 		smplkit.WithConfigName("Showcase Common"),
 		smplkit.WithConfigDescription("Showcase-only shared configuration."),
 	)
@@ -43,12 +44,11 @@ func main() {
 	shared.SetNumber("pagination_default_page_size", 25, "")
 	shared.SetNumber("max_retries", 5, "production")
 	shared.SetNumber("request_timeout_ms", 10000, "production")
-	shared.SetNumber("max_retries", 2, "production")
 	fatalIfErr("save shared", shared.Save(ctx))
 	fmt.Printf("Created config: %s\n", shared.ID)
 
 	// create a config (inherits from showcase-common)
-	userService := mgmt.Config().New("showcase-user-service",
+	userService := config.New("showcase-user-service",
 		smplkit.WithConfigName("Showcase User Service"),
 		smplkit.WithConfigDescription("Configuration for the user microservice."),
 		smplkit.WithConfigParent(shared.ID),
@@ -72,7 +72,7 @@ func main() {
 	fmt.Printf("Updated config: %s\n", userService.ID)
 
 	// list configs
-	configs, err := mgmt.Config().List(ctx)
+	configs, err := config.List(ctx)
 	fatalIfErr("list configs", err)
 	for _, cfg := range configs {
 		parentInfo := " (root)"
@@ -83,7 +83,7 @@ func main() {
 	}
 
 	// get a config
-	fetched, err := mgmt.Config().Get(ctx, "showcase-user-service")
+	fetched, err := config.Get(ctx, "showcase-user-service")
 	fatalIfErr("get user_service", err)
 	desc := ""
 	if fetched.Description != nil {
@@ -103,11 +103,11 @@ func main() {
 	fmt.Printf("  items: %v\n", itemKeys)
 
 	// delete configs
-	fatalIfErr("delete user_service", mgmt.Config().Delete(ctx, userService.ID))
-	fatalIfErr("delete shared", mgmt.Config().Delete(ctx, shared.ID))
+	fatalIfErr("delete user_service", userService.Delete(ctx))
+	fatalIfErr("delete shared", shared.Delete(ctx))
 	fmt.Println("Deleted configs")
 
 	// cleanup
-	cleanupConfigManagementShowcase(ctx, mgmt)
+	cleanupConfigManagementShowcase(ctx, config)
 	fmt.Println("Done!")
 }

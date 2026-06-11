@@ -50,10 +50,10 @@ type Logger struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *LoggingManagement
+	client *LoggersClient
 }
 
-// LoggerOption configures an unsaved Logger returned by LoggingClient.New.
+// LoggerOption configures an unsaved Logger returned by LoggersClient.New.
 type LoggerOption func(*Logger)
 
 // WithLoggerName sets the display name for a logger.
@@ -73,11 +73,11 @@ func (l *Logger) Save(ctx context.Context) error {
 	if l.client == nil {
 		return &Error{Message: "logger was constructed without a client; cannot save"}
 	}
-	return l.client.updateLogger(ctx, l)
+	return l.client.saveLogger(ctx, l)
 }
 
 // Delete removes the logger from the server. Equivalent to
-// mgmt.Loggers().Delete(ctx, l.ID).
+// client.Logging().Loggers().Delete(ctx, l.ID).
 func (l *Logger) Delete(ctx context.Context) error {
 	if l.client == nil || l.ID == "" {
 		return &Error{Message: "logger was constructed without a client or id; cannot delete"}
@@ -167,10 +167,10 @@ type LogGroup struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *LoggingManagement
+	client *LogGroupsClient
 }
 
-// LogGroupOption configures an unsaved LogGroup returned by LoggingClient.NewGroup.
+// LogGroupOption configures an unsaved LogGroup returned by LogGroupsClient.New.
 type LogGroupOption func(*LogGroup)
 
 // WithLogGroupName sets the display name for a log group.
@@ -183,13 +183,22 @@ func WithLogGroupParent(groupID string) LogGroupOption {
 	return func(g *LogGroup) { g.Group = &groupID }
 }
 
-// Save persists the log group to the server.
+// Save persists the log group to the server (create or update).
 // The LogGroup instance is updated with the server response.
 func (g *LogGroup) Save(ctx context.Context) error {
-	if g.CreatedAt == nil {
-		return g.client.createGroup(ctx, g)
+	if g.client == nil {
+		return &Error{Message: "log group was constructed without a client; cannot save"}
 	}
-	return g.client.updateGroup(ctx, g)
+	return g.client.saveGroup(ctx, g)
+}
+
+// Delete removes the log group from the server. Equivalent to
+// client.Logging().LogGroups().Delete(ctx, g.ID).
+func (g *LogGroup) Delete(ctx context.Context) error {
+	if g.client == nil || g.ID == "" {
+		return &Error{Message: "log group was constructed without a client or id; cannot delete"}
+	}
+	return g.client.Delete(ctx, g.ID)
 }
 
 // SetLevel sets the base log level. Call Save to persist.
@@ -251,7 +260,7 @@ func (g *LogGroup) apply(other *LogGroup) {
 }
 
 // LoggerSource describes a logger observed in a remote service process.
-// Used with LoggingManagement.RegisterSources to seed source discovery data
+// Used with LoggersClient.RegisterSources to seed source discovery data
 // (e.g. for sample-data loading or cross-service migration) without running
 // the actual service.
 type LoggerSource struct {

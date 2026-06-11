@@ -1,5 +1,6 @@
 //go:build ignore
 
+// Setup / cleanup helpers for flags_runtime_showcase.go.
 package main
 
 import (
@@ -11,10 +12,10 @@ import (
 
 var flagsRuntimeDemoFlagIDs = []string{"checkout-v2", "banner-color", "max-retries"}
 
-func setupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
-	cleanupFlagsRuntimeShowcase(ctx, mgmt)
+func setupFlagsRuntimeShowcase(ctx context.Context, flags *smplkit.FlagsClient) {
+	cleanupFlagsRuntimeShowcase(ctx, flags)
 
-	checkout := mgmt.Flags().NewBooleanFlag("checkout-v2", false,
+	checkout := flags.NewBooleanFlag("checkout-v2", false,
 		smplkit.WithFlagDescription("Controls rollout of the new checkout experience."),
 	)
 	checkout.EnableRules("production")
@@ -33,7 +34,7 @@ func setupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClie
 	))
 	fatalIfErr("save checkout-v2", checkout.Save(ctx))
 
-	banner := mgmt.Flags().NewStringFlag("banner-color", "red",
+	banner := flags.NewStringFlag("banner-color", "red",
 		smplkit.WithFlagName("Banner Color"),
 		smplkit.WithFlagDescription("Controls the banner color shown to users."),
 		smplkit.WithFlagValues([]smplkit.FlagValue{
@@ -57,7 +58,7 @@ func setupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClie
 	))
 	fatalIfErr("save banner-color", banner.Save(ctx))
 
-	retries := mgmt.Flags().NewNumberFlag("max-retries", 3,
+	retries := flags.NewNumberFlag("max-retries", 3,
 		smplkit.WithFlagDescription("Maximum number of API retries before failing."),
 	)
 	retries.EnableRules("production")
@@ -70,9 +71,9 @@ func setupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClie
 	fatalIfErr("save max-retries", retries.Save(ctx))
 }
 
-func cleanupFlagsRuntimeShowcase(ctx context.Context, mgmt *smplkit.ManagementClient) {
+func cleanupFlagsRuntimeShowcase(ctx context.Context, flags *smplkit.FlagsClient) {
 	for _, id := range flagsRuntimeDemoFlagIDs {
-		if err := mgmt.Flags().Delete(ctx, id); err != nil {
+		if err := flags.Delete(ctx, id); err != nil {
 			var nf *smplkit.NotFoundError
 			if !errors.As(err, &nf) {
 				fatalIfErr("delete flag "+id, err)

@@ -248,8 +248,8 @@ func (rt *FlagsRuntime) BooleanFlag(key string, defaultValue bool) *BooleanFlagH
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
-	if rt.flagsClient != nil && rt.flagsClient.client != nil {
-		rt.flagBuffer.add(key, "BOOLEAN", defaultValue, rt.flagsClient.client.service, rt.flagsClient.client.environment)
+	if rt.flagsClient != nil {
+		rt.flagBuffer.add(key, "BOOLEAN", defaultValue, rt.flagsClient.service, rt.flagsClient.environment)
 		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
 			go rt.flushFlagBuffer(context.Background())
 		}
@@ -263,8 +263,8 @@ func (rt *FlagsRuntime) StringFlag(key string, defaultValue string) *StringFlagH
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
-	if rt.flagsClient != nil && rt.flagsClient.client != nil {
-		rt.flagBuffer.add(key, "STRING", defaultValue, rt.flagsClient.client.service, rt.flagsClient.client.environment)
+	if rt.flagsClient != nil {
+		rt.flagBuffer.add(key, "STRING", defaultValue, rt.flagsClient.service, rt.flagsClient.environment)
 		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
 			go rt.flushFlagBuffer(context.Background())
 		}
@@ -278,8 +278,8 @@ func (rt *FlagsRuntime) NumberFlag(key string, defaultValue float64) *NumberFlag
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
-	if rt.flagsClient != nil && rt.flagsClient.client != nil {
-		rt.flagBuffer.add(key, "NUMERIC", defaultValue, rt.flagsClient.client.service, rt.flagsClient.client.environment)
+	if rt.flagsClient != nil {
+		rt.flagBuffer.add(key, "NUMERIC", defaultValue, rt.flagsClient.service, rt.flagsClient.environment)
 		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
 			go rt.flushFlagBuffer(context.Background())
 		}
@@ -293,8 +293,8 @@ func (rt *FlagsRuntime) JsonFlag(key string, defaultValue map[string]interface{}
 	rt.handlesMu.Lock()
 	rt.handles[key] = &h.flagHandle
 	rt.handlesMu.Unlock()
-	if rt.flagsClient != nil && rt.flagsClient.client != nil {
-		rt.flagBuffer.add(key, "JSON", defaultValue, rt.flagsClient.client.service, rt.flagsClient.client.environment)
+	if rt.flagsClient != nil {
+		rt.flagBuffer.add(key, "JSON", defaultValue, rt.flagsClient.service, rt.flagsClient.environment)
 		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
 			go rt.flushFlagBuffer(context.Background())
 		}
@@ -446,8 +446,14 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 		return nil
 	}
 
-	if rt.flagsClient == nil || rt.flagsClient.client == nil {
+	if rt.flagsClient == nil {
 		return &ConnectionError{Base: Error{Message: "flags client not initialized"}}
+	}
+
+	// Kick off deferred background machinery on the parent before the
+	// first live touch (no-op when standalone).
+	if rt.flagsClient.client != nil {
+		rt.flagsClient.client.ensureStarted()
 	}
 
 	// Still inside the backoff window — don't hammer the server.
@@ -456,11 +462,14 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 	}
 
 	rt.mu.Lock()
-	rt.environment = rt.flagsClient.client.environment
+	rt.environment = rt.flagsClient.environment
 	rt.mu.Unlock()
 
-	// Register service context.
-	rt.flagsClient.client.registerServiceContext(ctx)
+	// Register service context (wired path only; the parent owns the
+	// environment/service context registration).
+	if rt.flagsClient.client != nil {
+		rt.flagsClient.client.registerServiceContext(ctx)
+	}
 
 	// Flush any flags registered before init. Non-destructive: items stay in
 	// the buffer until the POST succeeds, so failures here don't lose declarations.
@@ -481,7 +490,7 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 	// Register WebSocket handlers exactly once across all retry attempts.
 	// A second successful start after a transient failure must not double-register.
 	rt.wsOnce.Do(func() {
-		ws := rt.flagsClient.client.ensureWS()
+		ws := rt.flagsClient.ensureWS()
 		rt.wsManager = ws
 		ws.on("flag_changed", rt.handleFlagChanged)
 		ws.on("flag_deleted", rt.handleFlagDeleted)
@@ -610,9 +619,9 @@ func (rt *FlagsRuntime) Evaluate(ctx context.Context, key string, environment st
 	evalDict := contextsToEvalDict(contexts)
 
 	// Auto-inject service context if set and not already provided.
-	if rt.flagsClient != nil && rt.flagsClient.client != nil && rt.flagsClient.client.service != "" {
+	if rt.flagsClient != nil && rt.flagsClient.service != "" {
 		if _, has := evalDict["service"]; !has {
-			evalDict["service"] = map[string]interface{}{"key": rt.flagsClient.client.service}
+			evalDict["service"] = map[string]interface{}{"key": rt.flagsClient.service}
 		}
 	}
 
@@ -669,9 +678,9 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 	}
 
 	// Auto-inject service context if set and not already provided.
-	if rt.flagsClient != nil && rt.flagsClient.client != nil && rt.flagsClient.client.service != "" {
+	if rt.flagsClient != nil && rt.flagsClient.service != "" {
 		if _, has := evalDict["service"]; !has {
-			evalDict["service"] = map[string]interface{}{"key": rt.flagsClient.client.service}
+			evalDict["service"] = map[string]interface{}{"key": rt.flagsClient.service}
 		}
 	}
 
@@ -679,8 +688,8 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 	cacheKey := fmt.Sprintf("%s:%s", key, ctxHash)
 
 	var metrics *metricsReporter
-	if rt.flagsClient != nil && rt.flagsClient.client != nil {
-		metrics = rt.flagsClient.client.metrics
+	if rt.flagsClient != nil {
+		metrics = rt.flagsClient.metrics
 	}
 
 	if cached, hit := rt.cache.get(cacheKey); hit {

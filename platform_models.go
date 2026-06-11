@@ -1,5 +1,7 @@
 package smplkit
 
+// Active-record models for client.Platform().* resources.
+
 import (
 	"context"
 	"time"
@@ -7,7 +9,7 @@ import (
 
 // ── Environment ──────────────────────────────────────────────────────────────
 
-// EnvironmentOption configures an unsaved Environment returned by EnvironmentsManagement.New.
+// EnvironmentOption configures an unsaved Environment returned by EnvironmentsClient.New.
 type EnvironmentOption func(*Environment)
 
 // WithEnvironmentColor sets the display color (hex string, e.g. "#ef4444").
@@ -20,8 +22,7 @@ func WithEnvironmentClassification(c EnvironmentClassification) EnvironmentOptio
 	return func(e *Environment) { e.Classification = c }
 }
 
-// Environment represents a smplkit environment resource.
-// Mutate fields and call Save(ctx) to persist.
+// Environment resource. Mutate fields, then call Save(ctx).
 type Environment struct {
 	// ID is the environment slug (e.g. "production").
 	ID string
@@ -36,16 +37,16 @@ type Environment struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *EnvironmentsManagement
+	client *EnvironmentsClient
 }
 
 // TypedColor returns the environment's display color as a typed Color
 // value, or a zero Color if no color is set on this environment.
 //
 // Mirrors Python's Environment.color property which returns a Color
-// instance (rule 9). The wire transports a hex string; the SDK wraps
-// it at the boundary. A malformed hex string on the wire returns the
-// zero Color rather than surfacing a validation error on read.
+// instance. The wire transports a hex string; the SDK wraps it at the
+// boundary. A malformed hex string on the wire returns the zero Color
+// rather than surfacing a validation error on read.
 func (e *Environment) TypedColor() Color {
 	if e.Color == nil || *e.Color == "" {
 		return Color{}
@@ -73,12 +74,20 @@ func (e *Environment) SetTypedColor(c Color) {
 // PUT semantics: creates if CreatedAt is nil, otherwise updates.
 func (e *Environment) Save(ctx context.Context) error {
 	if e.client == nil {
-		return &Error{Message: "environment was constructed without a client; cannot save"}
+		return &Error{Message: "Environment was constructed without a client; cannot save"}
 	}
 	if e.CreatedAt == nil {
 		return e.client.create(ctx, e)
 	}
 	return e.client.update(ctx, e)
+}
+
+// Delete removes this environment from the server.
+func (e *Environment) Delete(ctx context.Context) error {
+	if e.client == nil || e.ID == "" {
+		return &Error{Message: "Environment was constructed without a client or id; cannot delete"}
+	}
+	return e.client.Delete(ctx, e.ID)
 }
 
 func (e *Environment) apply(other *Environment) {
@@ -92,11 +101,10 @@ func (e *Environment) apply(other *Environment) {
 
 // ── Service ──────────────────────────────────────────────────────────────────
 
-// Service represents a smplkit service resource — a backend application
-// or microservice in the customer's stack that contexts can be evaluated
-// against.
+// Service resource — a backend application or microservice in the
+// customer's stack that contexts can be evaluated against.
 //
-// Mutate fields and call Save(ctx) to persist.
+// Mutate fields, then call Save(ctx).
 type Service struct {
 	// ID is the service slug (e.g. "user_service").
 	ID string
@@ -107,7 +115,7 @@ type Service struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *ServicesManagement
+	client *ServicesClient
 }
 
 // Save creates or updates the service on the server.
@@ -115,7 +123,7 @@ type Service struct {
 // PUT semantics: creates if CreatedAt is nil, otherwise updates.
 func (s *Service) Save(ctx context.Context) error {
 	if s.client == nil {
-		return &Error{Message: "service was constructed without a client; cannot save"}
+		return &Error{Message: "Service was constructed without a client; cannot save"}
 	}
 	if s.CreatedAt == nil {
 		return s.client.create(ctx, s)
@@ -123,11 +131,10 @@ func (s *Service) Save(ctx context.Context) error {
 	return s.client.update(ctx, s)
 }
 
-// Delete removes this service from the server. Equivalent to
-// mgmt.Services().Delete(ctx, s.ID).
+// Delete removes this service from the server.
 func (s *Service) Delete(ctx context.Context) error {
-	if s.client == nil {
-		return &Error{Message: "service was constructed without a client; cannot delete"}
+	if s.client == nil || s.ID == "" {
+		return &Error{Message: "Service was constructed without a client or id; cannot delete"}
 	}
 	return s.client.Delete(ctx, s.ID)
 }
@@ -141,7 +148,7 @@ func (s *Service) apply(other *Service) {
 
 // ── ContextType ───────────────────────────────────────────────────────────────
 
-// ContextTypeOption configures an unsaved ContextType returned by ContextTypesManagement.New.
+// ContextTypeOption configures an unsaved ContextType returned by ContextTypesClient.New.
 type ContextTypeOption func(*ContextType)
 
 // WithContextTypeName sets the display name for a context type.
@@ -149,9 +156,9 @@ func WithContextTypeName(name string) ContextTypeOption {
 	return func(ct *ContextType) { ct.Name = name }
 }
 
-// ContextType represents a context-type resource on the smplkit platform.
+// ContextType resource on the smplkit platform.
 // Mutate Attributes via AddAttribute / RemoveAttribute / UpdateAttribute,
-// then call Save(ctx) to persist.
+// then call Save(ctx).
 type ContextType struct {
 	// ID is the context type identifier (e.g. "user", "account").
 	ID string
@@ -164,11 +171,11 @@ type ContextType struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *ContextTypesManagement
+	client *ContextTypesClient
 }
 
-// AddAttribute adds (or replaces) an attribute slot with the given metadata.
-// Call Save(ctx) to persist.
+// AddAttribute adds a known-attribute slot with the given metadata.
+// Local; call Save(ctx) to persist.
 func (ct *ContextType) AddAttribute(name string, meta ...map[string]interface{}) {
 	if ct.Attributes == nil {
 		ct.Attributes = make(map[string]map[string]interface{})
@@ -184,12 +191,12 @@ func (ct *ContextType) AddAttribute(name string, meta ...map[string]interface{})
 	}
 }
 
-// RemoveAttribute removes an attribute slot. Call Save(ctx) to persist.
+// RemoveAttribute removes a known-attribute slot. Local; call Save(ctx) to persist.
 func (ct *ContextType) RemoveAttribute(name string) {
 	delete(ct.Attributes, name)
 }
 
-// UpdateAttribute replaces an attribute slot's metadata. Call Save(ctx) to persist.
+// UpdateAttribute replaces a known-attribute slot's metadata. Local; call Save(ctx).
 func (ct *ContextType) UpdateAttribute(name string, meta map[string]interface{}) {
 	if ct.Attributes == nil {
 		ct.Attributes = make(map[string]map[string]interface{})
@@ -205,12 +212,20 @@ func (ct *ContextType) UpdateAttribute(name string, meta map[string]interface{})
 // Creates if CreatedAt is nil, otherwise updates.
 func (ct *ContextType) Save(ctx context.Context) error {
 	if ct.client == nil {
-		return &Error{Message: "context type was constructed without a client; cannot save"}
+		return &Error{Message: "ContextType was constructed without a client; cannot save"}
 	}
 	if ct.CreatedAt == nil {
 		return ct.client.create(ctx, ct)
 	}
 	return ct.client.update(ctx, ct)
+}
+
+// Delete removes this context type from the server.
+func (ct *ContextType) Delete(ctx context.Context) error {
+	if ct.client == nil || ct.ID == "" {
+		return &Error{Message: "ContextType was constructed without a client or id; cannot delete"}
+	}
+	return ct.client.Delete(ctx, ct.ID)
 }
 
 func (ct *ContextType) apply(other *ContextType) {
@@ -224,14 +239,12 @@ func (ct *ContextType) apply(other *ContextType) {
 // ── ContextEntity ─────────────────────────────────────────────────────────────
 
 // ContextEntity is the active-record model returned by
-// ContextsManagement.List / Get. Mutate Attributes (or Name) and call
+// ContextsClient.List / Get. Mutate Attributes (or Name) and call
 // Save(ctx) to persist; call Delete(ctx) to remove.
 //
-// Mirrors Python's smplkit.Context active-record model (rule 3). The
-// builder-style smplkit.Context (in flags_types.go) remains the
-// canonical input type for flag evaluation; this struct is the
-// management-side read/write model with a back-reference to its parent
-// client.
+// The builder-style Context (in flags_types.go) remains the canonical
+// input type for flag evaluation; this struct is the management-side
+// read/write model with a back-reference to its parent client.
 type ContextEntity struct {
 	// ContextType is the context type key (e.g. "user").
 	ContextType string
@@ -246,7 +259,7 @@ type ContextEntity struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	client *ContextsManagement
+	client *ContextsClient
 }
 
 // CompositeID returns the composite "type:key" identifier.
@@ -258,77 +271,16 @@ func (ce *ContextEntity) CompositeID() string {
 // updated with server-returned fields on success.
 func (ce *ContextEntity) Save(ctx context.Context) error {
 	if ce.client == nil {
-		return &Error{Message: "context entity was constructed without a client; cannot save"}
+		return &Error{Message: "ContextEntity was constructed without a client; cannot save"}
 	}
 	return ce.client.saveEntity(ctx, ce)
 }
 
 // Delete removes this context entity from the server. Equivalent to
-// mgmt.Contexts().Delete(ctx, ce.ContextType, ce.Key).
+// client.Platform().Contexts().Delete(ctx, ce.ContextType, ce.Key).
 func (ce *ContextEntity) Delete(ctx context.Context) error {
 	if ce.client == nil {
-		return &Error{Message: "context entity was constructed without a client; cannot delete"}
+		return &Error{Message: "ContextEntity was constructed without a client; cannot delete"}
 	}
 	return ce.client.Delete(ctx, ce.ContextType, ce.Key)
-}
-
-// ── AccountSettings ───────────────────────────────────────────────────────────
-
-// AccountSettings holds per-account configuration.
-// The wire format is an opaque JSON object; documented keys are exposed as
-// typed accessors, and all keys (known and unknown) are preserved in Raw.
-// Mutate via the setters and call Save(ctx) to persist.
-type AccountSettings struct {
-	// Raw is the full settings map. Mutations here are persisted on Save.
-	Raw map[string]interface{}
-
-	client *AccountSettingsManagement
-}
-
-// EnvironmentOrder returns the canonical ordering of STANDARD environments.
-// Returns nil if not set.
-func (s *AccountSettings) EnvironmentOrder() []string {
-	raw, ok := s.Raw["environment_order"]
-	if !ok || raw == nil {
-		return nil
-	}
-	switch v := raw.(type) {
-	case []string:
-		out := make([]string, len(v))
-		copy(out, v)
-		return out
-	case []interface{}:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if str, ok := item.(string); ok {
-				out = append(out, str)
-			}
-		}
-		return out
-	}
-	return nil
-}
-
-// SetEnvironmentOrder sets the canonical ordering of STANDARD environments.
-func (s *AccountSettings) SetEnvironmentOrder(order []string) {
-	if s.Raw == nil {
-		s.Raw = make(map[string]interface{})
-	}
-	cp := make([]interface{}, len(order))
-	for i, v := range order {
-		cp[i] = v
-	}
-	s.Raw["environment_order"] = cp
-}
-
-// Save writes the full settings object back to the server.
-func (s *AccountSettings) Save(ctx context.Context) error {
-	if s.client == nil {
-		return &Error{Message: "account settings was constructed without a client; cannot save"}
-	}
-	return s.client.save(ctx, s)
-}
-
-func (s *AccountSettings) apply(other *AccountSettings) {
-	s.Raw = other.Raw
 }

@@ -12,10 +12,10 @@
 //
 //	make flags_runtime_showcase
 //
-// Note: this showcase calls client.Flags().SetContextProvider inline to
-// demonstrate context-driven flag evaluation. In a real app (chi, gin,
-// echo, etc.), the provider is wired once into middleware — not
-// scattered through your handlers.
+// Note: this showcase passes evaluation context to each flag.Get(...) call
+// to demonstrate context-driven flag evaluation. In a real app (chi, gin,
+// echo, etc.), the context provider is wired once into middleware via
+// client.Flags().SetContextProvider — not scattered through your handlers.
 package main
 
 import (
@@ -56,7 +56,7 @@ var (
 	}
 )
 
-// Create context within which flags will be evaluated.
+// createContext creates context within which flags will be evaluated.
 func createContext(user, account map[string]interface{}) []smplkit.Context {
 	return []smplkit.Context{
 		smplkit.NewContext("user", user["email"].(string), nil,
@@ -76,7 +76,7 @@ func createContext(user, account map[string]interface{}) []smplkit.Context {
 func main() {
 	ctx := context.Background()
 
-	// create the client
+	// or NewClient for synchronous use
 	client, err := smplkit.NewClient(smplkit.Config{
 		Environment: "production",
 		Service:     "showcase-service",
@@ -84,13 +84,7 @@ func main() {
 	fatalIfErr("create client", err)
 	defer client.Close()
 
-	setupFlagsRuntimeShowcase(ctx, client.Manage())
-
-	// Block until the live-updates WebSocket subscription is registered
-	// server-side. Without this, writes fired immediately afterward can
-	// race the broadcast of their own change events (the SDK isn't in
-	// the subscriber registry yet) and silently miss them. Mirrors
-	// `await client.wait_until_ready()` in the Python showcase.
+	setupFlagsRuntimeShowcase(ctx, client.Flags())
 	fatalIfErr("wait until ready", client.WaitUntilReady(ctx, 0))
 
 	// declare flags - default values will be used if the flag does not
@@ -116,22 +110,53 @@ func main() {
 	// request 1 — Alice from a large tech account
 	checkoutResult := checkoutV2.Get(ctx, createContext(alice, largeTechAccount)...)
 	fmt.Printf("checkout-v2 = %v\n", checkoutResult)
+	if checkoutResult != true {
+		fatalIfErr("checkout-v2 (Alice)", fmt.Errorf("expected true, got %v", checkoutResult))
+	}
 
 	bannerResult := bannerColor.Get(ctx, createContext(alice, largeTechAccount)...)
 	fmt.Printf("banner-color = %v\n", bannerResult)
+	if bannerResult != "blue" {
+		fatalIfErr("banner-color (Alice)", fmt.Errorf("expected blue, got %v", bannerResult))
+	}
 
 	retriesResult := maxRetries.Get(ctx, createContext(alice, largeTechAccount)...)
 	fmt.Printf("max-retries = %v\n", retriesResult)
+	if retriesResult != 5 {
+		fatalIfErr("max-retries (Alice)", fmt.Errorf("expected 5, got %v", retriesResult))
+	}
 
 	// request 2 — Bob from a small retail account
 	checkoutResult2 := checkoutV2.Get(ctx, createContext(bob, smallRetailAccount)...)
 	fmt.Printf("checkout-v2 = %v\n", checkoutResult2)
+	if checkoutResult2 != false {
+		fatalIfErr("checkout-v2 (Bob)", fmt.Errorf("expected false, got %v", checkoutResult2))
+	}
 
 	bannerResult2 := bannerColor.Get(ctx, createContext(bob, smallRetailAccount)...)
 	fmt.Printf("banner-color = %v\n", bannerResult2)
+	if bannerResult2 != "red" {
+		fatalIfErr("banner-color (Bob)", fmt.Errorf("expected red, got %v", bannerResult2))
+	}
 
 	retriesResult2 := maxRetries.Get(ctx, createContext(bob, smallRetailAccount)...)
 	fmt.Printf("max-retries = %v\n", retriesResult2)
+	if retriesResult2 != 3 {
+		fatalIfErr("max-retries (Bob)", fmt.Errorf("expected 3, got %v", retriesResult2))
+	}
+
+	// scoped override — temporarily impersonate Alice without disturbing the
+	// surrounding request's context (each Get is independently scoped).
+	scopedResult := checkoutV2.Get(ctx, createContext(alice, largeTechAccount)...)
+	fmt.Printf("checkout-v2 (scoped: Alice) = %v\n", scopedResult)
+	if scopedResult != true {
+		fatalIfErr("checkout-v2 (scoped Alice)", fmt.Errorf("expected true, got %v", scopedResult))
+	}
+
+	// context reverts to Bob/small retail here
+	if checkoutV2.Get(ctx, createContext(bob, smallRetailAccount)...) != false {
+		fatalIfErr("checkout-v2 (Bob revert)", fmt.Errorf("expected false after scoped override"))
+	}
 
 	// get a flag's value (explicitly pass context)
 	explicitResult := checkoutV2.Get(ctx,
@@ -144,6 +169,9 @@ func main() {
 		),
 	)
 	fmt.Printf("checkout-v2 (free, JP) = %v\n", explicitResult)
+	if explicitResult != false {
+		fatalIfErr("checkout-v2 (free, JP)", fmt.Errorf("expected false, got %v", explicitResult))
+	}
 
 	// simulate someone making changes to a flag to trigger listeners
 	updateRules(ctx, client)
@@ -161,12 +189,12 @@ func main() {
 		fatalIfErr("bannerChanges", fmt.Errorf("expected at least one banner change"))
 	}
 
-	cleanupFlagsRuntimeShowcase(ctx, client.Manage())
+	cleanupFlagsRuntimeShowcase(ctx, client.Flags())
 	fmt.Println("Done!")
 }
 
-func updateRules(ctx context.Context, client *smplkit.Client) {
-	currentBanner, err := client.Manage().Flags().Get(ctx, "banner-color")
+func updateRules(ctx context.Context, client *smplkit.SmplClient) {
+	currentBanner, err := client.Flags().Get(ctx, "banner-color")
 	fatalIfErr("get banner-color", err)
 	fatalIfErr("add small rule", currentBanner.AddRule(
 		smplkit.NewRule("Red for small companies").

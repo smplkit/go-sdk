@@ -23,22 +23,24 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// create the client (management-only — zero side effects)
-	mgmt, err := smplkit.NewManagementClient(smplkit.ManagementConfig{})
-	fatalIfErr("create management client", err)
-	defer mgmt.Close()
+	// or NewClient for the full one-client surface
+	flags, err := smplkit.NewFlagsClient(smplkit.Config{
+		Environment: "production",
+		Service:     "showcase-service",
+	})
+	fatalIfErr("create flags client", err)
 
-	setupFlagsManagementShowcase(ctx, mgmt)
+	setupFlagsManagementShowcase(ctx, flags)
 
 	// create a boolean flag
-	checkoutFlag := mgmt.Flags().NewBooleanFlag("checkout-v2", false,
+	checkoutFlag := flags.NewBooleanFlag("checkout-v2", false,
 		smplkit.WithFlagDescription("Controls rollout of the new checkout experience."),
 	)
 	fatalIfErr("save checkout-v2", checkoutFlag.Save(ctx))
 	fmt.Printf("Created flag: %s\n", checkoutFlag.ID)
 
 	// create a string flag (constrained)
-	bannerFlag := mgmt.Flags().NewStringFlag("banner-color", "red",
+	bannerFlag := flags.NewStringFlag("banner-color", "red",
 		smplkit.WithFlagName("Banner Color"),
 		smplkit.WithFlagDescription("Controls the banner color shown to users."),
 		smplkit.WithFlagValues([]smplkit.FlagValue{
@@ -51,14 +53,14 @@ func main() {
 	fmt.Printf("Created flag: %s\n", bannerFlag.ID)
 
 	// create a numeric flag (unconstrained)
-	retryFlag := mgmt.Flags().NewNumberFlag("max-retries", 3,
+	retryFlag := flags.NewNumberFlag("max-retries", 3,
 		smplkit.WithFlagDescription("Maximum number of API retries before failing."),
 	)
 	fatalIfErr("save max-retries", retryFlag.Save(ctx))
 	fmt.Printf("Created flag: %s\n", retryFlag.ID)
 
 	// create a JSON flag (constrained)
-	themeFlag := mgmt.Flags().NewJsonFlag("ui-theme", map[string]interface{}{
+	themeFlag := flags.NewJsonFlag("ui-theme", map[string]interface{}{
 		"mode":   "light",
 		"accent": "#0066cc",
 	},
@@ -96,29 +98,27 @@ func main() {
 	fmt.Printf("Updated flag: %s\n", checkoutFlag.ID)
 
 	// list flags
-	flags, err := mgmt.Flags().List(ctx)
+	allFlags, err := flags.List(ctx)
 	fatalIfErr("list flags", err)
-	fmt.Printf("Total flags: %d\n", len(flags))
-	for _, f := range flags {
+	fmt.Printf("Total flags: %d\n", len(allFlags))
+	for _, f := range allFlags {
 		envs := make([]string, 0, len(f.Environments))
 		for k := range f.Environments {
 			envs = append(envs, k)
 		}
-		fmt.Printf("  %s (%s) - default=%v, environments=%v\n", f.ID, f.Type, f.Default, envs)
+		fmt.Printf("  %s (%s) — default=%v, environments=%v\n", f.ID, f.Type, f.Default, envs)
 	}
 
 	// get a flag
-	fetched, err := mgmt.Flags().Get(ctx, "checkout-v2")
+	fetched, err := flags.Get(ctx, "checkout-v2")
 	fatalIfErr("get checkout-v2", err)
 	fmt.Printf("\nFetched by id: %s\n", fetched.ID)
 	prodRules := 0
+	prodEnabled := false
 	if envData, ok := fetched.Environments["production"].(map[string]interface{}); ok {
 		if rules, ok := envData["rules"].([]interface{}); ok {
 			prodRules = len(rules)
 		}
-	}
-	prodEnabled := false
-	if envData, ok := fetched.Environments["production"].(map[string]interface{}); ok {
 		if e, ok := envData["enabled"].(bool); ok {
 			prodEnabled = e
 		}
@@ -129,7 +129,7 @@ func main() {
 	// update a flag
 	bannerFlag.AddValue("Purple", "purple")
 	bannerFlag.Default = "blue"
-	desc := "Controls the banner color - updated"
+	desc := "Controls the banner color — updated"
 	bannerFlag.Description = &desc
 	fatalIfErr("add purple rule", bannerFlag.AddRule(
 		smplkit.NewRule("Purple for enterprise users").
@@ -144,10 +144,6 @@ func main() {
 	// delete all the rules of a flag
 	checkoutFlag.ClearRules("production")
 	fatalIfErr("save cleared rules", checkoutFlag.Save(ctx))
-
-	// revert production's default value back to the flag default
-	checkoutFlag.ClearDefault("production")
-	fatalIfErr("save cleared default", checkoutFlag.Save(ctx))
 	fmt.Printf("Updated flag: %s'\n", checkoutFlag.ID)
 
 	// clear values (flag becomes unconstrained)
@@ -156,11 +152,11 @@ func main() {
 	fmt.Printf("Updated flag: %s'\n", bannerFlag.ID)
 
 	// delete flags
-	fatalIfErr("delete checkout-v2", mgmt.Flags().Delete(ctx, "checkout-v2"))
+	fatalIfErr("delete checkout-v2", flags.Delete(ctx, "checkout-v2"))
 	fatalIfErr("delete banner-color", bannerFlag.Delete(ctx))
 	fmt.Println("Deleted flags")
 
 	// cleanup
-	cleanupFlagsManagementShowcase(ctx, mgmt)
+	cleanupFlagsManagementShowcase(ctx, flags)
 	fmt.Println("Done!")
 }

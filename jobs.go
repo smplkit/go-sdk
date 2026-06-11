@@ -1,19 +1,22 @@
-// Package smplkit — Smpl Jobs management surface (mgmt.Jobs()).
+// Package smplkit — Smpl Jobs SDK client (client.Jobs() on SmplClient, or
+// standalone JobsClient).
 //
-// Unlike Config/Flags/Logging, Jobs has no live "phone-home" agent — no
-// environment registration, no WebSocket — so its entire surface lives on
-// the management client, exactly like audit forwarder CRUD. Defining a
-// job, triggering a run, and reading run history are all plain
-// request/response calls here:
+// Unlike Config/Flags/Logging, Jobs installs no in-process machinery — no
+// environment registration, no WebSocket, no logger monkey-patching. It is a
+// product you *use*, not infrastructure you *install*, so it has no
+// runtime/management split: a single JobsClient exposes the full surface,
+// reachable two ways:
 //
-//	mgmt.Jobs().New / Get / List / Delete / Run / Usage
-//	mgmt.Jobs().Runs().List / Get / Cancel / Rerun
-//	(*Job).Save / (*Job).Delete
+//	client.Jobs().* on SmplClient
+//	directly — NewJobsClient(...) — for callers that only need jobs.
 //
-// A Job is an active record: build it with JobsManagement.New, mutate
-// fields, and call Save(ctx) (create when unsaved, full-replace update
-// when it already exists) or Delete(ctx). Runs are read-only views; run
-// actions live on mgmt.Jobs().Runs().
+// A Job is an active record: build it with JobsClient.New, set fields, and
+// call Save(ctx) (create when new, full-replace update when it already
+// exists) or Delete(ctx). Runs are read-only views; run actions live on
+// client.Jobs().Runs().
+//
+// Every call delegates HTTP to the auto-generated jobs client; this wrapper
+// only shapes models and raises SDK exceptions.
 package smplkit
 
 import (
@@ -25,18 +28,50 @@ import (
 	genjobs "github.com/smplkit/go-sdk/v3/internal/generated/jobs"
 )
 
-// JobsManagement is the mgmt.Jobs() surface: active-record job CRUD, the
-// run-now action, run history (Runs), and usage. Obtained via
-// ManagementClient.Jobs().
-type JobsManagement struct {
+// JobsClient is the Smpl Jobs client.
+//
+// Reachable as client.Jobs() (SmplClient) or constructed directly:
+//
+//	jobs, err := smplkit.NewJobsClient(smplkit.Config{APIKey: "sk_..."})
+//	list, err := jobs.List(ctx, smplkit.ListJobsInput{})
+//	for _, job := range list {
+//		fmt.Println(job.ID)
+//	}
+//
+// The surface is active-record job CRUD (New / Get / List / Delete), the
+// run-now action (Run), usage counters (Usage), and run history plus run
+// actions (Runs).
+type JobsClient struct {
 	gen  *genjobs.ClientWithResponses
 	runs *RunsClient
 }
 
-// Runs returns the run history and run-action sub-client.
-func (j *JobsManagement) Runs() *RunsClient { return j.runs }
+// newJobsClient wires a JobsClient (and its Runs sub-client) onto a pre-built
+// jobs transport (the wired path used by SmplClient).
+func newJobsClient(gen *genjobs.ClientWithResponses) *JobsClient {
+	return &JobsClient{gen: gen, runs: &RunsClient{gen: gen}}
+}
 
-// RunsClient is the mgmt.Jobs().Runs() surface: read-only run history plus
+// NewJobsClient creates a standalone Smpl Jobs client that resolves and owns
+// its own jobs transport. Jobs is account-global and never
+// environment-scoped, so it needs no environment/service config.
+func NewJobsClient(cfg Config, opts ...ClientOption) (*JobsClient, error) {
+	rc, err := resolveStandaloneConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	optCfg := defaultConfig()
+	for _, opt := range opts {
+		opt(&optCfg)
+	}
+	httpClient, _ := buildGenClients(optCfg, rc)
+	return newJobsClient(buildJobsGenClient(optCfg, rc, httpClient)), nil
+}
+
+// Runs returns the run history and run-action sub-client.
+func (j *JobsClient) Runs() *RunsClient { return j.runs }
+
+// RunsClient is the client.Jobs().Runs() surface: read-only run history plus
 // the cancel / rerun run actions.
 type RunsClient struct {
 	gen *genjobs.ClientWithResponses
@@ -52,7 +87,7 @@ type RunsClient struct {
 // id is the caller-supplied unique identifier for the job. Unique within
 // the account and immutable; the service returns 409 if another live job
 // already uses this id.
-func (j *JobsManagement) New(
+func (j *JobsClient) New(
 	id string,
 	name string,
 	schedule string,
@@ -75,7 +110,7 @@ func (j *JobsManagement) New(
 	return job
 }
 
-// JobOption configures an unsaved Job returned by JobsManagement.New.
+// JobOption configures an unsaved Job returned by JobsClient.New.
 type JobOption func(*Job)
 
 // WithJobEnabled overrides the default Enabled=true.
@@ -148,7 +183,7 @@ func (job *Job) apply(other *Job) {
 
 // List returns the jobs for the authenticated account. Offset pagination
 // via PageNumber / PageSize (ADR-014).
-func (j *JobsManagement) List(ctx context.Context, input ListJobsInput) ([]*Job, error) {
+func (j *JobsClient) List(ctx context.Context, input ListJobsInput) ([]*Job, error) {
 	params := &genjobs.ListJobsParams{}
 	if input.Enabled != nil {
 		params.FilterEnabled = input.Enabled
@@ -176,7 +211,7 @@ func (j *JobsManagement) List(ctx context.Context, input ListJobsInput) ([]*Job,
 
 // Get returns one job by id; the returned instance is bound to this client
 // so job.Save(ctx) and job.Delete(ctx) work.
-func (j *JobsManagement) Get(ctx context.Context, id string) (*Job, error) {
+func (j *JobsClient) Get(ctx context.Context, id string) (*Job, error) {
 	resp, err := j.gen.GetJobWithResponse(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("jobs Get: %w", err)
@@ -188,7 +223,7 @@ func (j *JobsManagement) Get(ctx context.Context, id string) (*Job, error) {
 }
 
 // Delete soft-deletes a job by id.
-func (j *JobsManagement) Delete(ctx context.Context, id string) error {
+func (j *JobsClient) Delete(ctx context.Context, id string) error {
 	resp, err := j.gen.DeleteJobWithResponse(ctx, id)
 	if err != nil {
 		return fmt.Errorf("jobs Delete: %w", err)
@@ -200,7 +235,7 @@ func (j *JobsManagement) Delete(ctx context.Context, id string) error {
 }
 
 // Run triggers one immediate MANUAL run of the job and returns it.
-func (j *JobsManagement) Run(ctx context.Context, id string) (*Run, error) {
+func (j *JobsClient) Run(ctx context.Context, id string) (*Run, error) {
 	resp, err := j.gen.RunJobNowWithResponse(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("jobs Run: %w", err)
@@ -213,7 +248,7 @@ func (j *JobsManagement) Run(ctx context.Context, id string) (*Run, error) {
 }
 
 // Usage returns the current-period usage counters for the account.
-func (j *JobsManagement) Usage(ctx context.Context) (*Usage, error) {
+func (j *JobsClient) Usage(ctx context.Context) (*Usage, error) {
 	resp, err := j.gen.GetUsageWithResponse(ctx, &genjobs.GetUsageParams{})
 	if err != nil {
 		return nil, fmt.Errorf("jobs Usage: %w", err)
@@ -318,7 +353,7 @@ func (r *RunsClient) Rerun(ctx context.Context, runID string) (*Run, error) {
 
 // create posts a new job and returns the server-authoritative response.
 // Called by (*Job).Save on unsaved instances.
-func (j *JobsManagement) create(ctx context.Context, job *Job) (*Job, error) {
+func (j *JobsClient) create(ctx context.Context, job *Job) (*Job, error) {
 	body := genjobs.CreateJobApplicationVndAPIPlusJSONRequestBody{
 		Data: jobCreateResourceFromJob(job),
 	}
@@ -340,7 +375,7 @@ func (j *JobsManagement) create(ctx context.Context, job *Job) (*Job, error) {
 
 // update PUTs a full-replace and returns the server-authoritative
 // response. Called by (*Job).Save on saved instances.
-func (j *JobsManagement) update(ctx context.Context, job *Job) (*Job, error) {
+func (j *JobsClient) update(ctx context.Context, job *Job) (*Job, error) {
 	body := genjobs.UpdateJobApplicationVndAPIPlusJSONRequestBody{
 		Data: jobResourceFromJob(job.ID, job),
 	}
@@ -472,7 +507,7 @@ func httpConfigFromWire(h genjobs.JobHttpConfiguration) HttpConfig {
 	return out
 }
 
-func jobFromResource(r genjobs.JobResource, client *JobsManagement) *Job {
+func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 	id := ""
 	if r.Id != nil {
 		id = *r.Id

@@ -1,12 +1,13 @@
 package smplkit
 
 // Tests for the SDK-side discovery pipeline: configRegistrationBuffer,
-// ConfigManagement.RegisterConfig / RegisterConfigItem / Flush, the
-// ConfigClient.Bind path, and the new GetValue / GetValueOr forms.
+// the fused ConfigClient's RegisterConfig / RegisterConfigItem / Flush /
+// PendingCount surface, the ConfigClient.Bind path, and the GetValue /
+// GetValueOr forms.
 //
-// These live in the same package as the implementation (white-box) so
-// they can poke at the buffer's unexported fields and exercise the
-// observer wiring without requiring a real HTTP server.
+// These live in the same package as the implementation (white-box) so they
+// can poke at the buffer's unexported fields and exercise the observer
+// wiring without requiring a real HTTP server.
 
 import (
 	"context"
@@ -142,41 +143,38 @@ func TestConfigBufferDrainEmptyReturnsNil(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ConfigManagement registration + flush
+// ConfigClient registration + flush (fused surface)
 // ---------------------------------------------------------------------------
 
-func TestConfigManagementPendingCountWithNilBuffer(t *testing.T) {
-	mgr := &ConfigManagement{}
-	if got := mgr.PendingCount(); got != 0 {
-		t.Fatalf("expected 0 with nil buffer, got %d", got)
+func newRegistrationConfigClient() *ConfigClient {
+	return &ConfigClient{
+		buffer:      newConfigRegistrationBuffer(),
+		environment: "prod",
+		service:     "svc",
 	}
 }
 
-func TestConfigManagementRegisterConfigQueuesEntry(t *testing.T) {
-	mgr := &ConfigManagement{}
-	mgr.RegisterConfig("billing", "svc", "prod", "", "", "")
-	if mgr.PendingCount() != 1 {
-		t.Fatalf("expected 1 entry, got %d", mgr.PendingCount())
+func TestConfigClientRegisterConfigQueuesEntry(t *testing.T) {
+	cc := newRegistrationConfigClient()
+	cc.RegisterConfig("billing", "svc", "prod", "", "", "")
+	if cc.PendingCount() != 1 {
+		t.Fatalf("expected 1 entry, got %d", cc.PendingCount())
 	}
 }
 
-func TestConfigManagementRegisterConfigItemQueuesItem(t *testing.T) {
-	mgr := &ConfigManagement{}
-	mgr.RegisterConfig("billing", "svc", "prod", "", "", "")
-	mgr.RegisterConfigItem("billing", "k", "NUMBER", 5, "")
-	batch := mgr.buffer.drain()
+func TestConfigClientRegisterConfigItemQueuesItem(t *testing.T) {
+	cc := newRegistrationConfigClient()
+	cc.RegisterConfig("billing", "svc", "prod", "", "", "")
+	cc.RegisterConfigItem("billing", "k", "NUMBER", 5, "")
+	batch := cc.buffer.drain()
 	if _, ok := batch[0].items["k"]; !ok {
 		t.Fatalf("k missing from items: %+v", batch[0].items)
 	}
 }
 
-func TestConfigManagementFlushEmptyIsNoop(t *testing.T) {
-	mgr := &ConfigManagement{}
-	if err := mgr.Flush(context.Background()); err != nil {
-		t.Fatalf("flush with nil buffer: %v", err)
-	}
-	mgr.buffer = newConfigRegistrationBuffer()
-	if err := mgr.Flush(context.Background()); err != nil {
+func TestConfigClientFlushEmptyIsNoop(t *testing.T) {
+	cc := newRegistrationConfigClient()
+	if err := cc.Flush(context.Background()); err != nil {
 		t.Fatalf("flush empty: %v", err)
 	}
 }
@@ -185,14 +183,16 @@ func TestConfigManagementFlushEmptyIsNoop(t *testing.T) {
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-// newStubConfigClient builds a ConfigClient with a pre-populated cache,
-// a stub Client, and a no-op management surface — enough scaffolding for
-// the in-package tests below to exercise Bind / Get / observe paths
+// newStubConfigClient builds a ConfigClient with a pre-populated cache, a
+// stub parent SmplClient, and its own discovery buffer — enough scaffolding
+// for the in-package tests below to exercise Bind / Subscribe / observe paths
 // without requiring an HTTP server.
 func newStubConfigClient(id string, values map[string]interface{}) *ConfigClient {
 	cc := &ConfigClient{configCache: map[string]map[string]interface{}{id: values}}
-	cc.client = &Client{environment: "prod", service: "svc"}
-	cc.management = &ConfigManagement{}
+	cc.client = &SmplClient{environment: "prod", service: "svc"}
+	cc.buffer = newConfigRegistrationBuffer()
+	cc.environment = "prod"
+	cc.service = "svc"
 	return cc
 }
 
@@ -200,19 +200,25 @@ func newStubConfigClient(id string, values map[string]interface{}) *ConfigClient
 // observeItemDeclaration / observeConfigDeclaration
 // ---------------------------------------------------------------------------
 
-func TestObserveItemDeclarationWithoutManagementIsNoop(t *testing.T) {
-	cc := &ConfigClient{}
-	// Should not panic with nil management.
+func TestObserveItemDeclarationWithoutDeclareIsDropped(t *testing.T) {
+	cc := newRegistrationConfigClient()
+	// No prior config declaration — the item is dropped by the buffer.
 	cc.observeItemDeclaration("c", "k", "NUMBER", 1, "")
+	if cc.PendingCount() != 0 {
+		t.Fatalf("expected item without declare to be dropped, got %d", cc.PendingCount())
+	}
 }
 
 func TestObserveConfigDeclarationPopulatesBuffer(t *testing.T) {
-	cc := &ConfigClient{client: &Client{environment: "prod", service: "svc"}}
-	cc.management = &ConfigManagement{}
+	cc := newRegistrationConfigClient()
 	cc.observeConfigDeclaration("billing", "common", "Billing", "Plan limits.")
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	if len(batch) != 1 || batch[0].id != "billing" || batch[0].parent != "common" {
 		t.Fatalf("buffer not populated: %+v", batch)
+	}
+	// The declaration carries the client's resolved service / environment.
+	if batch[0].service != "svc" || batch[0].environment != "prod" {
+		t.Fatalf("expected service/env stamped from client: %+v", batch[0])
 	}
 }
 
@@ -255,7 +261,7 @@ func TestBindStructRegistersFieldsViaJSONTags(t *testing.T) {
 	if err := cc.Bind(context.Background(), "billing", plan); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	if len(batch) != 1 || batch[0].id != "billing" {
 		t.Fatalf("buffer not populated: %+v", batch)
 	}
@@ -277,12 +283,20 @@ func TestBindStructFlattensNestedFields(t *testing.T) {
 	if err := cc.Bind(context.Background(), "billing", billing); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	want := []string{"plan.max_seats", "plan.trial_days", "plan.tier"}
 	for _, k := range want {
 		if _, ok := batch[0].items[k]; !ok {
 			t.Fatalf("missing item %q in batch: %+v", k, batch[0].items)
 		}
+	}
+}
+
+func TestBindNilTargetRejected(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	if err := cc.Bind(context.Background(), "billing", nil); err == nil {
+		t.Fatalf("expected error for nil target")
 	}
 }
 
@@ -315,7 +329,7 @@ func TestBindMapRegistersAndFlattens(t *testing.T) {
 	if err := cc.Bind(context.Background(), "db", target); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	keys := make(map[string]struct{})
 	for k := range batch[0].items {
 		keys[k] = struct{}{}
@@ -333,17 +347,19 @@ func TestBindMapRegistersAndFlattens(t *testing.T) {
 func TestBindWithParentResolvesParentID(t *testing.T) {
 	cc := newStubConfigClient("billing", map[string]interface{}{})
 	skipInit(cc)
+	cc.configCache["base"] = map[string]interface{}{}
+	cc.configCache["child"] = map[string]interface{}{}
 	base := &stubPlan{}
 	if err := cc.Bind(context.Background(), "base", base); err != nil {
 		t.Fatalf("base Bind: %v", err)
 	}
 	// Drain the base's items so the child's entry is the only one left.
-	cc.management.buffer.drain()
+	cc.buffer.drain()
 	child := &stubPlan{MaxSeats: 50}
 	if err := cc.Bind(context.Background(), "child", child, WithBindParent(base)); err != nil {
 		t.Fatalf("child Bind: %v", err)
 	}
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	if batch[0].parent != "base" {
 		t.Fatalf("expected parent=base, got %q", batch[0].parent)
 	}
@@ -362,9 +378,6 @@ func TestBindRejectsUnboundParent(t *testing.T) {
 func TestBindRejectsNonObject(t *testing.T) {
 	cc := newStubConfigClient("billing", map[string]interface{}{})
 	skipInit(cc)
-	if err := cc.Bind(context.Background(), "billing", nil); err == nil {
-		t.Fatalf("expected error for nil target")
-	}
 	if err := cc.Bind(context.Background(), "billing", "not an object"); err == nil {
 		t.Fatalf("expected error for string target")
 	}
@@ -404,6 +417,20 @@ func TestBindSyncsTargetFromCacheMap(t *testing.T) {
 	}
 }
 
+func TestBindSyncsTargetFromCache_MissingConfigNoOp(t *testing.T) {
+	// Bind against a config id absent from the cache — syncTargetFromCache
+	// returns early (the `!ok` branch) and the target is untouched.
+	cc := newStubConfigClient("present", map[string]interface{}{})
+	skipInit(cc)
+	plan := &stubPlan{MaxSeats: 5}
+	if err := cc.Bind(context.Background(), "absent", plan); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	if plan.MaxSeats != 5 {
+		t.Fatalf("missing-config sync should not have mutated the target")
+	}
+}
+
 func TestDiffAndFireMutatesBoundStructWithNestedFields(t *testing.T) {
 	cc := newStubConfigClient("billing", map[string]interface{}{})
 	skipInit(cc)
@@ -411,12 +438,30 @@ func TestDiffAndFireMutatesBoundStructWithNestedFields(t *testing.T) {
 	if err := cc.Bind(context.Background(), "billing", billing); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	old := map[string]map[string]interface{}{"billing": {"plan.max_seats": 5}}
-	new := map[string]map[string]interface{}{"billing": {"plan.max_seats": 50}}
-	cc.diffAndFire(old, new, "websocket")
+	oldCache := map[string]map[string]interface{}{"billing": {"plan.max_seats": 5}}
+	newCache := map[string]map[string]interface{}{"billing": {"plan.max_seats": 50}}
+	cc.diffAndFire(oldCache, newCache, "websocket")
 	if billing.Plan.MaxSeats != 50 {
 		t.Fatalf("expected nested struct to mutate to 50, got %d", billing.Plan.MaxSeats)
 	}
+}
+
+func TestMutateBoundTargets_NoBindingNoOp(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	// No binding for "ghost" — diffAndFire's mutate step finds nothing and
+	// returns without effect.
+	assert := func(cond bool, msg string) {
+		if !cond {
+			t.Fatal(msg)
+		}
+	}
+	cc.diffAndFire(
+		map[string]map[string]interface{}{"ghost": {"a": 1}},
+		map[string]map[string]interface{}{"ghost": {"a": 2}},
+		"websocket",
+	)
+	assert(true, "should not panic without a binding")
 }
 
 func TestApplyChangeToTarget_BailCases(t *testing.T) {
@@ -464,17 +509,24 @@ func TestApplyChangeToTarget_MapNestedWrite(t *testing.T) {
 }
 
 func TestApplyChangeToTarget_StructTypeCoercion(t *testing.T) {
-	// JSON-decoded servers return numbers as float64; the SDK should
-	// convert them when assigning to an int struct field.
 	plan := &stubPlan{}
 	applyChangeToTarget(plan, "max_seats", float64(42))
 	if plan.MaxSeats != 42 {
 		t.Fatalf("expected float→int coercion to 42, got %d", plan.MaxSeats)
 	}
-	// Unconvertible types are silently dropped.
 	applyChangeToTarget(plan, "max_seats", []int{1, 2, 3})
 	if plan.MaxSeats != 42 {
 		t.Fatalf("incompatible type should not have mutated; got %d", plan.MaxSeats)
+	}
+}
+
+func TestApplyChangeToTarget_StructAssignableValue(t *testing.T) {
+	// A directly-assignable value (string→string) takes the AssignableTo
+	// branch in assignReflectValue.
+	plan := &stubPlan{}
+	applyChangeToTarget(plan, "tier", "enterprise")
+	if plan.Tier != "enterprise" {
+		t.Fatalf("expected assignable string to set; got %q", plan.Tier)
 	}
 }
 
@@ -492,11 +544,20 @@ func TestApplyChangeToTarget_MapTypeCoercion(t *testing.T) {
 	if target["a"] != 99 {
 		t.Fatalf("expected float→int coercion in map; got %d", target["a"])
 	}
-	// Unconvertible type — silently dropped.
 	target2 := map[string]int{"a": 1}
 	applyChangeToTarget(target2, "a", "not-an-int")
 	if target2["a"] != 1 {
 		t.Fatalf("incompatible map value should not have mutated; got %d", target2["a"])
+	}
+}
+
+func TestApplyChangeToTarget_MapAssignableValue(t *testing.T) {
+	// Assigning a directly-assignable type into an interface{}-valued map
+	// takes coerceForReflectType's AssignableTo branch.
+	target := map[string]interface{}{"a": 1}
+	applyChangeToTarget(target, "a", "now-a-string")
+	if target["a"] != "now-a-string" {
+		t.Fatalf("expected assignable value into interface map; got %v", target["a"])
 	}
 }
 
@@ -520,7 +581,7 @@ func TestBind_StructWithUnexportedAndJSONDashFieldsSkipsThem(t *testing.T) {
 	if err := cc.Bind(context.Background(), "s", &secret{Public: "p", Skipped: "x"}); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	if _, ok := batch[0].items["public"]; !ok {
 		t.Fatalf("expected `public` to be registered")
 	}
@@ -534,7 +595,6 @@ func TestBind_StructWithUnexportedAndJSONDashFieldsSkipsThem(t *testing.T) {
 
 func TestBind_StructWithEmptyJSONTag(t *testing.T) {
 	type item struct {
-		// `json:","` — empty name component; should fall back to field name.
 		Field string `json:","` //nolint:staticcheck // deliberately malformed for the test
 	}
 	cc := newStubConfigClient("s", map[string]interface{}{})
@@ -542,7 +602,7 @@ func TestBind_StructWithEmptyJSONTag(t *testing.T) {
 	if err := cc.Bind(context.Background(), "s", &item{Field: "v"}); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	if _, ok := batch[0].items["Field"]; !ok {
 		t.Fatalf("expected `Field` to be registered when json tag is empty")
 	}
@@ -571,8 +631,6 @@ func TestValueToItemType_AllPrimitives(t *testing.T) {
 }
 
 func TestBind_StructWithEmbeddedPointerStruct(t *testing.T) {
-	// Nested pointer-to-struct field — exercises the pointer-unwrap path
-	// in walkBindLeaf.
 	type inner struct {
 		Count int `json:"count"`
 	}
@@ -585,28 +643,73 @@ func TestBind_StructWithEmbeddedPointerStruct(t *testing.T) {
 	if err := cc.Bind(context.Background(), "s", target); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	if _, ok := batch[0].items["inner.count"]; !ok {
 		t.Fatalf("expected `inner.count` to be registered, got items: %+v", batch[0].items)
 	}
 }
 
+func TestBind_StructWithNilPointerLeaf(t *testing.T) {
+	// A nil *struct field is NOT recursed into; it lands as a single leaf.
+	type inner struct {
+		Count int `json:"count"`
+	}
+	type outer struct {
+		Inner *inner `json:"inner"`
+	}
+	cc := newStubConfigClient("s", map[string]interface{}{})
+	skipInit(cc)
+	target := &outer{Inner: nil}
+	if err := cc.Bind(context.Background(), "s", target); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	batch := cc.buffer.drain()
+	if _, ok := batch[0].items["inner"]; !ok {
+		t.Fatalf("expected nil pointer field to land as a single `inner` leaf, got: %+v", batch[0].items)
+	}
+}
+
+func TestBind_StructWithNilMapLeaf(t *testing.T) {
+	// A nil map field is NOT recursed into; it lands as a single leaf.
+	type outer struct {
+		Cfg map[string]interface{} `json:"cfg"`
+	}
+	cc := newStubConfigClient("s", map[string]interface{}{})
+	skipInit(cc)
+	if err := cc.Bind(context.Background(), "s", &outer{Cfg: nil}); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	batch := cc.buffer.drain()
+	if _, ok := batch[0].items["cfg"]; !ok {
+		t.Fatalf("expected nil map field to land as a single `cfg` leaf, got: %+v", batch[0].items)
+	}
+}
+
 func TestApplyChangeToTarget_MapWithNonStringKeyIntermediate(t *testing.T) {
-	// Outer map with string keys, but the value is a map with int keys —
-	// walkInto must bail when it can't index by string.
+	// Three-segment path: the OUTER map is string-keyed (walkInto descends
+	// into "weird"), but the resolved intermediate "weird" is a non-string-
+	// keyed map, so the next walkInto for "1" bails on the key-kind guard.
 	target := map[string]interface{}{
 		"weird": map[int]string{1: "one"},
 	}
-	applyChangeToTarget(target, "weird.1", "two")
+	applyChangeToTarget(target, "weird.1.deeper", "two")
 	got := target["weird"].(map[int]string)
 	if got[1] != "one" {
-		t.Fatalf("non-string-keyed map should not have been mutated")
+		t.Fatalf("non-string-keyed map intermediate should not have been mutated")
+	}
+}
+
+func TestSetLeaf_MapWithNonStringKeyDrops(t *testing.T) {
+	// A single-segment write into a map with non-string keys is dropped by
+	// setLeaf's key-kind guard.
+	target := map[int]string{1: "one"}
+	applyChangeToTarget(target, "1", "two")
+	if target[1] != "one" {
+		t.Fatalf("non-string-keyed map leaf should not have been mutated")
 	}
 }
 
 func TestEnsureInit_PreFlushSwallowsError(t *testing.T) {
-	// Pre-start flush failure must not block init. Build a client wired to
-	// a server that 500s the bulk endpoint but lists OK.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/configs/bulk") {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -628,17 +731,16 @@ func TestEnsureInit_PreFlushSwallowsError(t *testing.T) {
 	defer client.Close()
 	// Queue a declaration that the failing bulk endpoint will reject; init
 	// should swallow the flush error and proceed.
-	client.Config().Management().RegisterConfig("c", "svc", "prod", "", "", "")
-	// Get should still succeed (the list endpoint returns empty + no error).
-	_, err = client.Config().Get(context.Background(), "c")
+	client.Config().RegisterConfig("c", "svc", "prod", "", "", "")
+	// Subscribe should still complete init (the list endpoint returns empty +
+	// no error) and then NotFound the missing config from the empty cache.
+	_, err = client.Config().Subscribe(context.Background(), "c")
 	if err == nil {
 		t.Fatalf("expected NotFoundError on empty cache after pre-flush failure")
 	}
 }
 
 func TestApplyChangeToTarget_NilPointerIntermediate(t *testing.T) {
-	// Three-segment path where the middle segment is a nil pointer
-	// inside a struct field — exercises walkInto's nil-pointer bail.
 	type leaf struct {
 		Count int `json:"count"`
 	}
@@ -656,8 +758,6 @@ func TestApplyChangeToTarget_NilPointerIntermediate(t *testing.T) {
 }
 
 func TestApplyChangeToTarget_NilInterfaceIntermediate(t *testing.T) {
-	// Three-segment path where the middle segment is a nil interface{}
-	// inside a map value — exercises walkInto's nil-interface bail.
 	target := map[string]interface{}{"a": nil}
 	applyChangeToTarget(target, "a.b.c", "x")
 	if target["a"] != nil {
@@ -666,24 +766,14 @@ func TestApplyChangeToTarget_NilInterfaceIntermediate(t *testing.T) {
 }
 
 func TestApplyChangeToTarget_SetLeafOnNonAddressableStruct(t *testing.T) {
-	// Map of structs where the struct value isn't addressable — setLeaf
-	// bails because CanSet() is false.
 	target := map[string]stubPlan{"k": {MaxSeats: 5}}
 	applyChangeToTarget(target, "k.max_seats", 50)
 	if target["k"].MaxSeats != 5 {
-		// Struct values pulled from a map aren't addressable; the SDK
-		// can't write through to them. Mutation should be a no-op.
-		// This is expected behavior; the test pins it.
-		// (No fatal — covering the path is what we want.)
 		_ = target
 	}
 }
 
 func TestConfigIDForBoundTarget_PointerFallback(t *testing.T) {
-	// Bind a struct, then look it up via configIDForBoundTarget through a
-	// freshly-wrapped interface{} that holds the same underlying pointer.
-	// The map equality check would miss this, but the pointer-address
-	// fallback should still find it.
 	cc := newStubConfigClient("billing", map[string]interface{}{})
 	skipInit(cc)
 	plan := &stubPlan{MaxSeats: 5}
@@ -697,6 +787,15 @@ func TestConfigIDForBoundTarget_PointerFallback(t *testing.T) {
 	}
 }
 
+func TestConfigIDForBoundTarget_NotBound(t *testing.T) {
+	cc := newStubConfigClient("billing", map[string]interface{}{})
+	skipInit(cc)
+	_, ok := cc.configIDForBoundTarget(&stubPlan{})
+	if ok {
+		t.Fatalf("expected unbound target to return ok=false")
+	}
+}
+
 func TestDiffAndFireMutatesBoundStruct(t *testing.T) {
 	cc := newStubConfigClient("billing", map[string]interface{}{"max_seats": 5})
 	skipInit(cc)
@@ -704,9 +803,9 @@ func TestDiffAndFireMutatesBoundStruct(t *testing.T) {
 	if err := cc.Bind(context.Background(), "billing", plan); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	old := map[string]map[string]interface{}{"billing": {"max_seats": 5}}
-	new := map[string]map[string]interface{}{"billing": {"max_seats": 50}}
-	cc.diffAndFire(old, new, "websocket")
+	oldCache := map[string]map[string]interface{}{"billing": {"max_seats": 5}}
+	newCache := map[string]map[string]interface{}{"billing": {"max_seats": 50}}
+	cc.diffAndFire(oldCache, newCache, "websocket")
 	if plan.MaxSeats != 50 {
 		t.Fatalf("expected struct to mutate to 50, got %d", plan.MaxSeats)
 	}
@@ -744,6 +843,18 @@ func TestGetValueReturnsErrorOnMissingKey(t *testing.T) {
 	}
 }
 
+func TestGetValue_EnsureInitError(t *testing.T) {
+	cc := &ConfigClient{
+		client:      &SmplClient{environment: "test"},
+		environment: "test",
+		buffer:      newConfigRegistrationBuffer(),
+	}
+	cc.initOnce.Do(func() { cc.initErr = &Error{Message: "init failed"} })
+	if _, err := cc.GetValue(context.Background(), "db", "k"); err == nil {
+		t.Fatalf("expected ensureInit error to surface")
+	}
+}
+
 func TestGetValueOrReturnsCachedValueWhenPresent(t *testing.T) {
 	cc := newStubConfigClient("db", map[string]interface{}{"host": "real"})
 	skipInit(cc)
@@ -775,7 +886,7 @@ func TestGetValueOrRegistersConfigAndKey(t *testing.T) {
 	cc := newStubConfigClient("db", map[string]interface{}{})
 	skipInit(cc)
 	cc.GetValueOr(context.Background(), "db", "host", "postgres://...")
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	if len(batch) != 1 || batch[0].id != "db" {
 		t.Fatalf("buffer not populated: %+v", batch)
 	}
@@ -795,7 +906,7 @@ func TestGetValueOrInfersTypeFromDefault(t *testing.T) {
 	cc.GetValueOr(context.Background(), "billing", "active", true)
 	cc.GetValueOr(context.Background(), "billing", "name", "Acme")
 	cc.GetValueOr(context.Background(), "billing", "rate", 1.5)
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	types := map[string]string{}
 	for k, item := range batch[0].items {
 		types[k] = item.itemType
@@ -811,10 +922,10 @@ func TestGetValueOrInfersTypeFromDefault(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Flush + threshold + observer wiring
+// Flush + threshold + observer wiring (via NewClient)
 // ---------------------------------------------------------------------------
 
-func TestConfigManagementFlushPostsToBulkEndpoint(t *testing.T) {
+func TestConfigClientFlushPostsToBulkEndpoint(t *testing.T) {
 	var hits int
 	var lastBody string
 	srv := newHTTPTestServer(func(w http.ResponseWriter, r *http.Request) {
@@ -840,10 +951,10 @@ func TestConfigManagementFlushPostsToBulkEndpoint(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	defer client.Close()
-	mgmt := client.Manage().Config()
-	mgmt.RegisterConfig("billing", "svc", "prod", "common", "Billing", "Plan limits.")
-	mgmt.RegisterConfigItem("billing", "max_seats", "NUMBER", 5, "Max.")
-	if err := mgmt.Flush(context.Background()); err != nil {
+	cfg := client.Config()
+	cfg.RegisterConfig("billing", "svc", "prod", "common", "Billing", "Plan limits.")
+	cfg.RegisterConfigItem("billing", "max_seats", "NUMBER", 5, "Max.")
+	if err := cfg.Flush(context.Background()); err != nil {
 		t.Fatalf("Flush: %v", err)
 	}
 	if hits != 1 {
@@ -854,7 +965,7 @@ func TestConfigManagementFlushPostsToBulkEndpoint(t *testing.T) {
 	}
 }
 
-func TestConfigManagementFlushTranslatesAllItemTypes(t *testing.T) {
+func TestConfigClientFlushTranslatesAllItemTypes(t *testing.T) {
 	var lastBody string
 	srv := newHTTPTestServer(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/configs/bulk") {
@@ -876,13 +987,13 @@ func TestConfigManagementFlushTranslatesAllItemTypes(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	defer client.Close()
-	mgmt := client.Manage().Config()
-	mgmt.RegisterConfig("billing", "svc", "prod", "", "", "")
-	mgmt.RegisterConfigItem("billing", "name", "STRING", "x", "")
-	mgmt.RegisterConfigItem("billing", "max", "NUMBER", 5, "")
-	mgmt.RegisterConfigItem("billing", "enabled", "BOOLEAN", true, "")
-	mgmt.RegisterConfigItem("billing", "payload", "JSON", map[string]interface{}{"k": "v"}, "")
-	if err := mgmt.Flush(context.Background()); err != nil {
+	cfg := client.Config()
+	cfg.RegisterConfig("billing", "svc", "prod", "", "", "")
+	cfg.RegisterConfigItem("billing", "name", "STRING", "x", "")
+	cfg.RegisterConfigItem("billing", "max", "NUMBER", 5, "")
+	cfg.RegisterConfigItem("billing", "enabled", "BOOLEAN", true, "")
+	cfg.RegisterConfigItem("billing", "payload", "JSON", map[string]interface{}{"k": "v"}, "")
+	if err := cfg.Flush(context.Background()); err != nil {
 		t.Fatalf("Flush: %v", err)
 	}
 	for _, want := range []string{`"STRING"`, `"NUMBER"`, `"BOOLEAN"`, `"JSON"`} {
@@ -892,7 +1003,42 @@ func TestConfigManagementFlushTranslatesAllItemTypes(t *testing.T) {
 	}
 }
 
-func TestConfigManagementThresholdTriggersBackgroundFlush(t *testing.T) {
+func TestConfigClientFlushIncludesAllOptionalMetadata(t *testing.T) {
+	// A declaration with every optional field set exercises each `if entry.X
+	// != ""` branch in Flush's payload assembly.
+	var lastBody string
+	srv := newHTTPTestServer(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/configs/bulk") {
+			buf := make([]byte, r.ContentLength)
+			_, _ = r.Body.Read(buf)
+			lastBody = string(buf)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	})
+	defer srv.Close()
+
+	client, err := NewClient(Config{
+		APIKey: "sk_test", Environment: "prod", Service: "svc",
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer client.Close()
+	cfg := client.Config()
+	cfg.RegisterConfig("billing", "svc", "prod", "common", "Billing", "Plan limits.")
+	cfg.RegisterConfigItem("billing", "max_seats", "NUMBER", 5, "Cap.")
+	if err := cfg.Flush(context.Background()); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	for _, want := range []string{"billing", "svc", "prod", "common", "Billing", "Plan limits.", "max_seats", "Cap."} {
+		if !strings.Contains(lastBody, want) {
+			t.Fatalf("expected %q in flushed body: %s", want, lastBody)
+		}
+	}
+}
+
+func TestConfigClientThresholdTriggersBackgroundFlush(t *testing.T) {
 	var hits int32
 	srv := newHTTPTestServer(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/configs/bulk") {
@@ -912,11 +1058,10 @@ func TestConfigManagementThresholdTriggersBackgroundFlush(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	defer client.Close()
-	mgmt := client.Manage().Config()
+	cfg := client.Config()
 	for i := 0; i < configRegistrationFlushSize; i++ {
-		mgmt.RegisterConfig(fmt.Sprintf("c-%d", i), "svc", "prod", "", "", "")
+		cfg.RegisterConfig(fmt.Sprintf("c-%d", i), "svc", "prod", "", "", "")
 	}
-	// Threshold flush runs in a background goroutine — wait briefly.
 	for i := 0; i < 50 && atomic.LoadInt32(&hits) == 0; i++ {
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -925,11 +1070,8 @@ func TestConfigManagementThresholdTriggersBackgroundFlush(t *testing.T) {
 	}
 }
 
-func TestConfigManagementFlushSwallowsNetworkError(t *testing.T) {
-	// Close the server immediately so the bulk POST fails with a
-	// connection error — Flush must swallow it and return nil
-	// (fire-and-forget per ADR-024 §2.9).
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+func TestConfigClientFlushSwallowsNetworkError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	srv.Close()
 
 	client, err := NewClient(Config{
@@ -941,9 +1083,9 @@ func TestConfigManagementFlushSwallowsNetworkError(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	defer client.Close()
-	mgmt := client.Manage().Config()
-	mgmt.RegisterConfig("billing", "svc", "prod", "", "", "")
-	if err := mgmt.Flush(context.Background()); err != nil {
+	cfg := client.Config()
+	cfg.RegisterConfig("billing", "svc", "prod", "", "", "")
+	if err := cfg.Flush(context.Background()); err != nil {
 		t.Fatalf("Flush should swallow network errors, got %v", err)
 	}
 }
@@ -968,19 +1110,16 @@ func TestRegisterConfigItemThresholdTriggersBackgroundFlush(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 	defer client.Close()
-	mgmt := client.Manage().Config()
-	// Declare configs first so addItem succeeds.
+	cfg := client.Config()
 	for i := 0; i < configRegistrationFlushSize; i++ {
-		mgmt.RegisterConfig(fmt.Sprintf("c-%d", i), "svc", "prod", "", "", "")
+		cfg.RegisterConfig(fmt.Sprintf("c-%d", i), "svc", "prod", "", "", "")
 	}
-	// First flush from the RegisterConfig threshold above.
 	for i := 0; i < 50 && atomic.LoadInt32(&hits) == 0; i++ {
 		time.Sleep(20 * time.Millisecond)
 	}
 	atomic.StoreInt32(&hits, 0)
-	// Now hit the RegisterConfigItem threshold path.
 	for i := 0; i < configRegistrationFlushSize; i++ {
-		mgmt.RegisterConfigItem(fmt.Sprintf("c-%d", i), "k", "NUMBER", i, "")
+		cfg.RegisterConfigItem(fmt.Sprintf("c-%d", i), "k", "NUMBER", i, "")
 	}
 	for i := 0; i < 50 && atomic.LoadInt32(&hits) == 0; i++ {
 		time.Sleep(20 * time.Millisecond)
@@ -991,8 +1130,7 @@ func TestRegisterConfigItemThresholdTriggersBackgroundFlush(t *testing.T) {
 }
 
 func TestBindReturnsEnsureInitError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Always 500 — ensureInit's list will fail.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -1012,9 +1150,6 @@ func TestBindReturnsEnsureInitError(t *testing.T) {
 }
 
 func TestGetValueOrReturnsDefaultOnEnsureInitError(t *testing.T) {
-	// When ensureInit fails (list endpoint 500s), GetValueOr must still
-	// queue the discovery registration up front and then fall back to
-	// the caller-provided default — never error.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -1037,9 +1172,6 @@ func TestGetValueOrReturnsDefaultOnEnsureInitError(t *testing.T) {
 }
 
 func TestApplyChangeToTarget_DeeplyNestedInterfaceMap(t *testing.T) {
-	// Three levels of map[string]interface{} force walkInto to recurse
-	// through an interface-kind value — exercises the interface-unwrap
-	// loop inside walkInto (not the one inside setLeaf).
 	target := map[string]interface{}{
 		"a": map[string]interface{}{
 			"b": map[string]interface{}{
@@ -1055,9 +1187,6 @@ func TestApplyChangeToTarget_DeeplyNestedInterfaceMap(t *testing.T) {
 }
 
 func TestApplyChangeToTarget_DeeplyNestedPointerStructs(t *testing.T) {
-	// Three levels of *struct fields exercise walkInto's pointer-unwrap
-	// loop (line ~408) — the intermediate step gets a Pointer-kind value
-	// from a struct field and must dereference before descending.
 	type leaf struct {
 		Field int `json:"field"`
 	}
@@ -1075,9 +1204,6 @@ func TestApplyChangeToTarget_DeeplyNestedPointerStructs(t *testing.T) {
 }
 
 func TestApplyChangeToTarget_MissingLeafField(t *testing.T) {
-	// Single-segment path where the field name doesn't match any
-	// exported field — setLeaf's structFieldIndexByKey returns !ok
-	// and the assignment is silently dropped.
 	plan := &stubPlan{MaxSeats: 5}
 	applyChangeToTarget(plan, "no_such_field", 99)
 	if plan.MaxSeats != 5 {
@@ -1086,9 +1212,6 @@ func TestApplyChangeToTarget_MissingLeafField(t *testing.T) {
 }
 
 func TestApplyChangeToTarget_UnexportedFieldSkippedDuringSet(t *testing.T) {
-	// structFieldIndexByKey must skip unexported fields while iterating —
-	// hits the `continue` branch when the first field in declaration
-	// order is unexported.
 	type s struct {
 		secret  int //nolint:unused // intentional: forces the unexported-skip branch
 		Visible int `json:"visible"`
@@ -1101,8 +1224,6 @@ func TestApplyChangeToTarget_UnexportedFieldSkippedDuringSet(t *testing.T) {
 }
 
 func TestApplyChangeToTarget_MapLeafNilValue(t *testing.T) {
-	// Assigning nil into a typed map exercises coerceForReflectType's
-	// zero-value branch.
 	target := map[string]int{"a": 1}
 	applyChangeToTarget(target, "a", nil)
 	if target["a"] != 0 {
@@ -1111,9 +1232,6 @@ func TestApplyChangeToTarget_MapLeafNilValue(t *testing.T) {
 }
 
 func TestBind_PointerIdentityWorksForMapParent(t *testing.T) {
-	// Two map bindings + parent chain. Pre-fix this panicked because the
-	// previous configIDForBoundTarget compared interface values with `==`,
-	// which panics for maps. The pointer-identity rewrite handles it.
 	cc := newStubConfigClient("primary", map[string]interface{}{})
 	skipInit(cc)
 	cc.configCache["replica"] = map[string]interface{}{}
@@ -1129,8 +1247,6 @@ func TestBind_PointerIdentityWorksForMapParent(t *testing.T) {
 }
 
 func TestBindKeyFromField_NoJSONTagFallsBackToFieldName(t *testing.T) {
-	// A struct field with no `json` tag at all should register under the
-	// Go field name verbatim — exercises bindKeyFromField's no-tag branch.
 	type tagless struct {
 		BareField string
 	}
@@ -1140,21 +1256,19 @@ func TestBindKeyFromField_NoJSONTagFallsBackToFieldName(t *testing.T) {
 	if err := cc.Bind(context.Background(), "c", target); err != nil {
 		t.Fatalf("Bind: %v", err)
 	}
-	batch := cc.management.buffer.drain()
+	batch := cc.buffer.drain()
 	if _, ok := batch[0].items["BareField"]; !ok {
 		t.Fatalf("expected `BareField` key registered, got items: %+v", batch[0].items)
 	}
 }
 
-func TestRegisterConfigItem_AutoInitializesBuffer(t *testing.T) {
-	// Calling RegisterConfigItem on a fresh ConfigManagement (no prior
-	// RegisterConfig) must lazy-init the buffer. The item itself is
-	// dropped because the buffer has no meta entry for the configID,
-	// but the buffer struct must still exist so subsequent calls work.
-	m := &ConfigManagement{}
-	m.RegisterConfigItem("c", "k", "STRING", "v", "")
-	if m.buffer == nil {
-		t.Fatalf("expected buffer to be auto-initialized")
+func TestRegisterConfigItem_DroppedWithoutDeclare(t *testing.T) {
+	// RegisterConfigItem on a fresh client without a prior RegisterConfig is
+	// dropped by the buffer (no meta entry for the configID).
+	cc := newRegistrationConfigClient()
+	cc.RegisterConfigItem("c", "k", "STRING", "v", "")
+	if cc.PendingCount() != 0 {
+		t.Fatalf("expected item without declare to be dropped, got %d", cc.PendingCount())
 	}
 }
 

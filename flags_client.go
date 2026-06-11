@@ -5,38 +5,163 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"sync"
 	"time"
 
 	genapp "github.com/smplkit/go-sdk/v3/internal/generated/app"
 	genflags "github.com/smplkit/go-sdk/v3/internal/generated/flags"
 )
 
-// FlagsClient provides management and runtime operations for flag resources.
-// Obtain one via Client.Flags().
+// FlagsClient is the Smpl Flags client.
+//
+// One client exposes the full surface, reachable as client.Flags()
+// or constructed directly via NewFlagsClient. The management surface
+// (NewBooleanFlag / NewStringFlag / NewNumberFlag / NewJsonFlag, Get /
+// List / Delete, and the flag-declaration discovery buffer) is pure
+// CRUD. The live surface (BooleanFlag / StringFlag / NumberFlag /
+// JsonFlag / Refresh / Stats / OnChange) connects lazily on first use —
+// the first call flushes discovery, fetches all flag definitions into
+// the local cache, and opens the live-updates WebSocket. No explicit
+// install step is required.
+//
+// The client supports two construction shapes:
+//
+//   - Wired into SmplClient — borrows the parent's flags transport for both
+//     runtime fetch and CRUD, the parent's shared WebSocket for the live
+//     channel, and the platform contexts sub-client for evaluation-context
+//     registration. This is the common path.
+//   - Standalone — NewFlagsClient(cfg, ...) builds and owns its own flags
+//     and app transports, and on first live use opens and owns its own
+//     WebSocket.
 type FlagsClient struct {
-	client       *Client
+	// client is the owning parent SmplClient when wired, nil when standalone.
+	client       *SmplClient
 	generated    genflags.ClientInterface
 	appGenerated genapp.ClientInterface
 
-	runtime    *FlagsRuntime
-	management *FlagsManagement
+	// Parent-or-own state. When wired these mirror the parent's fields;
+	// when standalone they are resolved at construction so the live
+	// surface can open its own WebSocket without a parent.
+	environment string
+	service     string
+	metrics     *metricsReporter
+	appURL      string
+	apiKey      string
+
+	// wsMu guards the lazily-created own WebSocket (standalone path).
+	wsMu  sync.Mutex
+	ownWS *sharedWebSocket
+
+	// contexts is the platform contexts sub-client used as the
+	// evaluation-context registration seam (wired path).
+	contexts *ContextsClient
+
+	runtime *FlagsRuntime
 }
 
-// Management returns the sub-object for flag CRUD operations.
-func (c *FlagsClient) Management() *FlagsManagement {
-	if c.management == nil {
-		c.management = newFlagsManagement(c.generated, c.appGenerated)
-		c.management.attachRuntime(c)
+// newFlagsClient wires a FlagsClient onto the parent SmplClient's pre-built
+// generated flags + app transports, the parent's platform contexts
+// sub-client (the evaluation-context registration seam), and the
+// parent's metrics reporter.
+func newFlagsClient(parent *SmplClient, gen genflags.ClientInterface, appGen genapp.ClientInterface, contexts *ContextsClient, metrics *metricsReporter) *FlagsClient {
+	c := &FlagsClient{
+		client:       parent,
+		generated:    gen,
+		appGenerated: appGen,
+		environment:  parent.environment,
+		service:      parent.service,
+		metrics:      metrics,
+		contexts:     contexts,
 	}
-	return c.management
+	var ctxBuf *contextRegistrationBuffer
+	if contexts != nil {
+		ctxBuf = contexts.contextBuf
+	}
+	if ctxBuf == nil {
+		ctxBuf = newContextRegistrationBuffer()
+	}
+	c.runtime = newFlagsRuntime(c, ctxBuf)
+	return c
 }
 
-// (createFlag and updateFlag moved to flags_management.go so the
-// active-record save path doesn't depend on the runtime client —
-// rule 1 of the cross-SDK overhaul.)
+// NewFlagsClient creates a standalone Smpl Flags client that builds and
+// owns its own generated flags + app transports and, on first live use,
+// its own WebSocket against the event gateway.
+//
+// Flags needs environment + service: the environment scopes runtime flag
+// values and discovery declarations, and the service is auto-injected as
+// an evaluation context. Both resolve from cfg (or ~/.smplkit / env vars).
+func NewFlagsClient(cfg Config, opts ...ClientOption) (*FlagsClient, error) {
+	rc, err := resolveConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	optCfg := defaultConfig()
+	for _, opt := range opts {
+		opt(&optCfg)
+	}
+
+	httpClient := optCfg.httpClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: optCfg.timeout}
+	}
+	base := httpClient.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	httpClient.Transport = &authTransport{token: rc.apiKey, base: base}
+
+	flagsURL := serviceURL(optCfg, "flags", rc)
+	appURL := serviceURL(optCfg, "app", rc)
+
+	headerEditor := func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Accept", "application/vnd.api+json")
+		req.Header.Set("User-Agent", userAgent)
+		return nil
+	}
+	genFlags, _ := genflags.NewClient(flagsURL,
+		genflags.WithHTTPClient(httpClient),
+		genflags.WithRequestEditorFn(headerEditor),
+	)
+	genApp, _ := genapp.NewClient(appURL,
+		genapp.WithHTTPClient(httpClient),
+		genapp.WithRequestEditorFn(headerEditor),
+	)
+
+	ctxBuf := newContextRegistrationBuffer()
+	c := &FlagsClient{
+		client:       nil,
+		generated:    genFlags,
+		appGenerated: genApp,
+		environment:  rc.environment,
+		service:      rc.service,
+		metrics:      nil,
+		appURL:       appURL,
+		apiKey:       rc.apiKey,
+		contexts:     &ContextsClient{appClient: genApp, contextBuf: ctxBuf},
+	}
+	c.runtime = newFlagsRuntime(c, ctxBuf)
+	return c, nil
+}
+
+// ensureWS returns the shared WebSocket — the parent's when wired, else
+// our own (built lazily on first live use).
+func (c *FlagsClient) ensureWS() *sharedWebSocket {
+	if c.client != nil {
+		return c.client.ensureWS()
+	}
+	c.wsMu.Lock()
+	defer c.wsMu.Unlock()
+	if c.ownWS == nil {
+		c.ownWS = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
+		c.ownWS.start()
+	}
+	return c.ownWS
+}
 
 // resourceToFlag converts a generated FlagResource to the SDK Flag type.
-func resourceToFlag(r genflags.FlagResource, m *FlagsManagement) *Flag {
+func resourceToFlag(r genflags.FlagResource, c *FlagsClient) *Flag {
 	attrs := r.Attributes
 	id := ""
 	if r.Id != nil {
@@ -66,7 +191,7 @@ func resourceToFlag(r genflags.FlagResource, m *FlagsManagement) *Flag {
 		Environments: envs,
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
-		client:       m,
+		client:       c,
 	}
 }
 
@@ -474,4 +599,238 @@ func (c *FlagsClient) flushContexts(ctx context.Context, batch []map[string]inte
 	if err == nil && resp != nil {
 		resp.Body.Close()
 	}
+}
+
+// ------------------------------------------------------------------
+// Management surface: CRUD (no live connection)
+// ------------------------------------------------------------------
+
+// NewBooleanFlag returns a new unsaved boolean Flag. Call Save() to persist.
+func (c *FlagsClient) NewBooleanFlag(id string, defaultValue bool, opts ...FlagOption) *Flag {
+	boolValues := []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}}
+	f := &Flag{
+		ID:           id,
+		Name:         keyToDisplayName(id),
+		Type:         string(FlagTypeBoolean),
+		Default:      defaultValue,
+		Values:       &boolValues,
+		Environments: map[string]interface{}{},
+		client:       c,
+	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
+}
+
+// NewStringFlag returns a new unsaved string Flag. Call Save() to persist.
+func (c *FlagsClient) NewStringFlag(id string, defaultValue string, opts ...FlagOption) *Flag {
+	f := &Flag{
+		ID:           id,
+		Name:         keyToDisplayName(id),
+		Type:         string(FlagTypeString),
+		Default:      defaultValue,
+		Environments: map[string]interface{}{},
+		client:       c,
+	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
+}
+
+// NewNumberFlag returns a new unsaved numeric Flag. Call Save() to persist.
+func (c *FlagsClient) NewNumberFlag(id string, defaultValue float64, opts ...FlagOption) *Flag {
+	f := &Flag{
+		ID:           id,
+		Name:         keyToDisplayName(id),
+		Type:         string(FlagTypeNumeric),
+		Default:      defaultValue,
+		Environments: map[string]interface{}{},
+		client:       c,
+	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
+}
+
+// NewJsonFlag returns a new unsaved JSON Flag. Call Save() to persist.
+func (c *FlagsClient) NewJsonFlag(id string, defaultValue map[string]interface{}, opts ...FlagOption) *Flag {
+	f := &Flag{
+		ID:           id,
+		Name:         keyToDisplayName(id),
+		Type:         string(FlagTypeJSON),
+		Default:      defaultValue,
+		Environments: map[string]interface{}{},
+		client:       c,
+	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
+}
+
+// Get fetches the editable Flag resource by id.
+func (c *FlagsClient) Get(ctx context.Context, id string) (*Flag, error) {
+	resp, err := c.generated.GetFlag(ctx, id)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genflags.FlagResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+
+	return resourceToFlag(result.Data, c), nil
+}
+
+// List lists flags for the authenticated account.
+//
+// Without options the server applies its defaults (page 1, page size
+// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional
+// pages. The wrapper does not loop — callers that want every flag
+// should iterate until a short page is returned.
+func (c *FlagsClient) List(ctx context.Context, opts ...ListOption) ([]*Flag, error) {
+	o := resolveListOptions(opts)
+	params := &genflags.ListFlagsParams{
+		PageNumber: o.pageNumber,
+		PageSize:   o.pageSize,
+	}
+	resp, err := c.generated.ListFlags(ctx, params)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	var result genflags.FlagListResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+
+	flags := make([]*Flag, len(result.Data))
+	for i := range result.Data {
+		flags[i] = resourceToFlag(result.Data[i], c)
+	}
+	return flags, nil
+}
+
+// Delete deletes a flag by id.
+func (c *FlagsClient) Delete(ctx context.Context, id string) error {
+	resp, err := c.generated.DeleteFlag(ctx, id)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{
+			Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)},
+		}
+	}
+	return checkStatus(resp.StatusCode, body)
+}
+
+// createFlag creates the flag on the server and updates the local
+// instance. Called from Flag.Save when CreatedAt is nil.
+func (c *FlagsClient) createFlag(ctx context.Context, flag *Flag) error {
+	reqBody := buildFlagCreateRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
+	resp, err := c.generated.CreateFlagWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+	var result genflags.FlagResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+	flag.apply(resourceToFlag(result.Data, c))
+	return nil
+}
+
+// updateFlag updates the flag on the server and updates the local
+// instance. Called from Flag.Save when CreatedAt is set.
+func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
+	reqBody := buildFlagRequest(flag.ID, flag.Name, flag.Type, flag.Default, flag.Values, flag.Description, flag.Environments)
+	resp, err := c.generated.UpdateFlagWithApplicationVndAPIPlusJSONBody(ctx, flag.ID, reqBody)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &ConnectionError{Base: Error{Message: fmt.Sprintf("failed to read response body: %s", err)}}
+	}
+	if err := checkStatus(resp.StatusCode, body); err != nil {
+		return err
+	}
+	var result genflags.FlagResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("smplkit: failed to parse response: %w", err)
+	}
+	flag.apply(resourceToFlag(result.Data, c))
+	return nil
+}
+
+// ------------------------------------------------------------------
+// Management surface: discovery buffer (owned directly)
+// ------------------------------------------------------------------
+
+// RegisterFlag buffers a flag declaration for bulk-discovery upload.
+//
+// Service and environment default to the client's resolved values. The
+// declaration is queued for background flush; once the pending count
+// reaches the batch threshold a flush is kicked off in the background.
+// Items remain in the buffer until the POST succeeds, so failed flushes
+// are retried by the next Flush() call.
+func (c *FlagsClient) RegisterFlag(id, flagType string, defaultVal interface{}) {
+	c.runtime.flagBuffer.add(id, flagType, defaultVal, c.service, c.environment)
+	if c.runtime.flagBuffer.pendingCount() >= flagRegistrationThreshold {
+		go c.runtime.flushFlagBuffer(context.Background())
+	}
+}
+
+// Flush POSTs pending declarations to the flags bulk endpoint.
+//
+// Items remain in the buffer until the request succeeds, so a flush
+// against an unhealthy flags service is automatically retried by the
+// next Flush() call (periodic background flush, install retry, or final
+// flush on close).
+func (c *FlagsClient) Flush(ctx context.Context) {
+	c.runtime.flushFlagBuffer(ctx)
+}
+
+// PendingCount returns the number of pending flag declarations awaiting flush.
+func (c *FlagsClient) PendingCount() int {
+	return c.runtime.flagBuffer.pendingCount()
 }

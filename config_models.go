@@ -24,9 +24,9 @@ type ConfigEntry struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	// client is the back-reference to the management surface that owns
+	// client is the back-reference to the fused ConfigClient that owns
 	// the create/update/delete logic for this active-record model.
-	client *ConfigManagement
+	client *ConfigClient
 }
 
 // ConfigOption configures an unsaved Config returned by ConfigClient.New.
@@ -70,7 +70,7 @@ func (c *ConfigEntry) Save(ctx context.Context) error {
 }
 
 // Delete removes the config from the server. Equivalent to
-// mgmt.Config().Delete(ctx, c.ID).
+// client.Config().Delete(ctx, c.ID).
 func (c *ConfigEntry) Delete(ctx context.Context) error {
 	if c.client == nil || c.ID == "" {
 		return &Error{Message: "config was constructed without a client or id; cannot delete"}
@@ -90,14 +90,14 @@ func (c *ConfigEntry) apply(other *ConfigEntry) {
 }
 
 // LiveConfig is a live, dict-like, read-only proxy for a config's resolved
-// values. Returned by ConfigClient.Get. Every read goes through the
+// values. Returned by ConfigClient.Subscribe. Every read goes through the
 // client's resolved-config cache, so WebSocket updates are picked up
 // automatically.
 //
 // Customer mutation paths are absent: there is no Set / Put / Delete
-// method on LiveConfig. To mutate configs use the management surface:
+// method on LiveConfig. To mutate configs use the editable record:
 //
-//	client.Manage().Config().Get(ctx, id) // active-record model with Save / Delete
+//	client.Config().Get(ctx, id) // active-record model with Save / Delete
 type LiveConfig struct {
 	client *ConfigClient
 	id     string
@@ -171,9 +171,8 @@ func (lc *LiveConfig) Len() int {
 	return len(resolved)
 }
 
-// OnChange registers a listener that fires when any item in this config
-// changes. Mirrors Python's `proxy.on_change(fn)` listener-form sugar
-// (rule 11 — the proxy-scoped form of OnChange).
+// OnChange registers a change listener scoped to this config: it fires when
+// any item in this config changes.
 func (lc *LiveConfig) OnChange(cb func(*ConfigChangeEvent)) {
 	lc.client.OnChange(cb, WithConfigID(lc.id))
 }

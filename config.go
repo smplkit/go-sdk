@@ -62,12 +62,75 @@ type resolvedConfig struct {
 	extraHeaders     map[string]string
 }
 
-// resolveConfig merges configuration from four layers:
+// resolveConfig merges configuration from four layers and validates the
+// fields a full runtime client requires (environment, service, api key).
 // 1. Defaults
 // 2. Config file (~/.smplkit) [common] + selected profile
 // 3. Environment variables
 // 4. Explicit Config struct fields
 func resolveConfig(cfg Config) (*resolvedConfig, error) {
+	rc, err := resolveConfigLayers(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if rc.environment == "" {
+		return nil, &Error{
+			Message: "No environment provided. Set one of:\n" +
+				"  1. Set Config.Environment\n" +
+				"  2. Set the SMPLKIT_ENVIRONMENT environment variable\n" +
+				"  3. Add environment to your ~/.smplkit profile",
+		}
+	}
+	if rc.service == "" {
+		return nil, &Error{
+			Message: "No service provided. Set one of:\n" +
+				"  1. Set Config.Service\n" +
+				"  2. Set the SMPLKIT_SERVICE environment variable\n" +
+				"  3. Add service to your ~/.smplkit profile",
+		}
+	}
+	if err := rc.requireAPIKey(); err != nil {
+		return nil, err
+	}
+	return rc, nil
+}
+
+// resolveStandaloneConfig merges the same four layers as resolveConfig but
+// only requires an api key — the standalone platform, account, and jobs
+// clients perform pure account-wide CRUD and need no environment or service.
+func resolveStandaloneConfig(cfg Config) (*resolvedConfig, error) {
+	rc, err := resolveConfigLayers(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := rc.requireAPIKey(); err != nil {
+		return nil, err
+	}
+	return rc, nil
+}
+
+// requireAPIKey returns an error if no api key was resolved from any layer.
+func (rc *resolvedConfig) requireAPIKey() error {
+	if rc.apiKey == "" {
+		return &Error{
+			Message: "No API key provided. Set one of:\n" +
+				"  1. Set Config.APIKey\n" +
+				"  2. Set the SMPLKIT_API_KEY environment variable\n" +
+				"  3. Add api_key to your ~/.smplkit profile:\n" +
+				"     [" + rc.profile + "]\n" +
+				"     api_key = your_key_here",
+		}
+	}
+	return nil
+}
+
+// resolveConfigLayers merges configuration from four layers without
+// validating any required field.
+// 1. Defaults
+// 2. Config file (~/.smplkit) [common] + selected profile
+// 3. Environment variables
+// 4. Explicit Config struct fields
+func resolveConfigLayers(cfg Config) (*resolvedConfig, error) {
 	// Layer 1: Defaults.
 	rc := &resolvedConfig{
 		scheme:     "https",
@@ -150,34 +213,6 @@ func resolveConfig(cfg Config) (*resolvedConfig, error) {
 	}
 	if len(cfg.ExtraHeaders) > 0 {
 		rc.extraHeaders = cfg.ExtraHeaders
-	}
-
-	// Validate required fields.
-	if rc.environment == "" {
-		return nil, &Error{
-			Message: "No environment provided. Set one of:\n" +
-				"  1. Set Config.Environment\n" +
-				"  2. Set the SMPLKIT_ENVIRONMENT environment variable\n" +
-				"  3. Add environment to your ~/.smplkit profile",
-		}
-	}
-	if rc.service == "" {
-		return nil, &Error{
-			Message: "No service provided. Set one of:\n" +
-				"  1. Set Config.Service\n" +
-				"  2. Set the SMPLKIT_SERVICE environment variable\n" +
-				"  3. Add service to your ~/.smplkit profile",
-		}
-	}
-	if rc.apiKey == "" {
-		return nil, &Error{
-			Message: "No API key provided. Set one of:\n" +
-				"  1. Set Config.APIKey\n" +
-				"  2. Set the SMPLKIT_API_KEY environment variable\n" +
-				"  3. Add api_key to your ~/.smplkit profile:\n" +
-				"     [" + rc.profile + "]\n" +
-				"     api_key = your_key_here",
-		}
 	}
 
 	return rc, nil

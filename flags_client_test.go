@@ -33,6 +33,16 @@ func sampleFlagListJSON(id, name, flagType string) string {
 	}`
 }
 
+func newExternalFlagsClient(t *testing.T, server *httptest.Server) *smplkit.FlagsClient {
+	t.Helper()
+	client, err := smplkit.NewClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+	return client.Flags()
+}
+
 func TestClient_FlagsReturnsSubClient(t *testing.T) {
 	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
@@ -42,47 +52,68 @@ func TestClient_FlagsReturnsSubClient(t *testing.T) {
 	assert.Same(t, flags, client.Flags())
 }
 
-func TestFlagsClient_Get(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/v1/flags/feature-x" {
-			w.Header().Set("Content-Type", "application/vnd.api+json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(sampleFlagListJSON("feature-x", "Feature X", "BOOLEAN")))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	})
-
-	server := httptest.NewServer(handler)
+func TestFlagsClient_Get_External(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Single-flag GET returns a single-object envelope.
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"feature-x","type":"flag","attributes":{"id":"feature-x","name":"Feature X","type":"BOOLEAN","default":true,"environments":{}}}}`))
+	}))
 	defer server.Close()
 
-	// Use a client that routes flags requests to our test server.
-	// Since the flags client uses a hardcoded URL, we test via the generated client interface.
-	// Instead, let's test the Get method by constructing the client properly.
-	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithBaseURL(server.URL))
+	flags := newExternalFlagsClient(t, server)
+	flag, err := flags.Get(context.Background(), "feature-x")
 	require.NoError(t, err)
+	assert.Equal(t, "feature-x", flag.ID)
+	assert.Equal(t, "BOOLEAN", flag.Type)
+}
 
-	// The flags client uses https://flags.smplkit.com hardcoded.
-	// For unit testing, we verify the logic by testing the models and types directly.
-	// The actual HTTP integration is covered by e2e tests.
-	_ = client
+func TestFlagsClient_List_External(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleFlagListJSON("feature-x", "Feature X", "BOOLEAN")))
+	}))
+	defer server.Close()
+
+	flags := newExternalFlagsClient(t, server)
+	list, err := flags.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "feature-x", list[0].ID)
+}
+
+func TestFlagsClient_Delete_External(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "DELETE", r.Method)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	flags := newExternalFlagsClient(t, server)
+	err := flags.Delete(context.Background(), "feature-x")
+	assert.NoError(t, err)
 }
 
 func TestFlagsClient_Get_ByID_Error(t *testing.T) {
-	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
+	client, err := smplkit.NewClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithHTTPClient(&http.Client{Transport: &failTransport{}}),
+	)
 	require.NoError(t, err)
 
-	// Get by ID will fail because the real server is unreachable
-	_, err = client.Flags().Management().Get(context.Background(), "some-flag")
+	_, err = client.Flags().Get(context.Background(), "some-flag")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Delete_ByID_Error(t *testing.T) {
-	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
+	client, err := smplkit.NewClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithHTTPClient(&http.Client{Transport: &failTransport{}}),
+	)
 	require.NoError(t, err)
 
-	// Delete by ID will fail because the real server is unreachable
-	err = client.Flags().Management().Delete(context.Background(), "some-flag")
+	err = client.Flags().Delete(context.Background(), "some-flag")
 	assert.Error(t, err)
 }
 
@@ -91,7 +122,7 @@ func TestFlagsClient_NewBooleanFlag_AutoValues(t *testing.T) {
 	require.NoError(t, err)
 
 	// NewBooleanFlag auto-generates True/False values.
-	flag := client.Flags().Management().NewBooleanFlag("feature-x", false)
+	flag := client.Flags().NewBooleanFlag("feature-x", false)
 	assert.Equal(t, "feature-x", flag.ID)
 	require.NotNil(t, flag.Values)
 	assert.Len(t, *flag.Values, 2)
@@ -102,7 +133,7 @@ func TestFlagsClient_NewStringFlag_Unconstrained(t *testing.T) {
 	require.NoError(t, err)
 
 	// NewStringFlag without WithFlagValues creates an unconstrained flag (Values=nil).
-	flag := client.Flags().Management().NewStringFlag("greeting", "hello")
+	flag := client.Flags().NewStringFlag("greeting", "hello")
 	assert.Equal(t, "greeting", flag.ID)
 	assert.Equal(t, "hello", flag.Default)
 	assert.Nil(t, flag.Values)
@@ -112,7 +143,7 @@ func TestFlagsClient_NewNumberFlag_Unconstrained(t *testing.T) {
 	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
-	flag := client.Flags().Management().NewNumberFlag("max-retries", 3.0)
+	flag := client.Flags().NewNumberFlag("max-retries", 3.0)
 	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values)
 }
@@ -121,7 +152,7 @@ func TestFlagsClient_NewJsonFlag_Unconstrained(t *testing.T) {
 	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
-	flag := client.Flags().Management().NewJsonFlag("config", map[string]interface{}{"key": "value"})
+	flag := client.Flags().NewJsonFlag("config", map[string]interface{}{"key": "value"})
 	assert.Equal(t, "config", flag.ID)
 	assert.Nil(t, flag.Values)
 }
@@ -130,7 +161,7 @@ func TestFlagsClient_NewStringFlag_Constrained(t *testing.T) {
 	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
 	require.NoError(t, err)
 
-	flag := client.Flags().Management().NewStringFlag("theme", "light",
+	flag := client.Flags().NewStringFlag("theme", "light",
 		smplkit.WithFlagValues([]smplkit.FlagValue{
 			{Name: "Light", Value: "light"},
 			{Name: "Dark", Value: "dark"},
@@ -139,6 +170,76 @@ func TestFlagsClient_NewStringFlag_Constrained(t *testing.T) {
 	assert.Equal(t, "theme", flag.ID)
 	require.NotNil(t, flag.Values)
 	assert.Len(t, *flag.Values, 2)
+}
+
+// --- Live runtime surface (external) ---
+
+func TestFlagsClient_RuntimeAccessors(t *testing.T) {
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
+	require.NoError(t, err)
+	flags := client.Flags()
+
+	assert.Equal(t, "disconnected", flags.ConnectionStatus())
+	stats := flags.Stats()
+	assert.Equal(t, 0, stats.CacheHits)
+	assert.Equal(t, 0, stats.CacheMisses)
+
+	// Listeners register without firing.
+	flags.OnChange(func(*smplkit.FlagChangeEvent) {})
+	flags.OnChangeKey("feature-x", func(*smplkit.FlagChangeEvent) {})
+	flags.SetContextProvider(func(context.Context) []smplkit.Context { return nil })
+}
+
+func TestFlagsClient_TypedHandle_Default_Unreachable(t *testing.T) {
+	// With an unreachable transport, init fails and Get returns the default.
+	client, err := smplkit.NewClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
+		smplkit.WithHTTPClient(&http.Client{Transport: &failTransport{}}),
+	)
+	require.NoError(t, err)
+	flags := client.Flags()
+
+	assert.Equal(t, false, flags.BooleanFlag("b", false).Get(context.Background()))
+	assert.Equal(t, "light", flags.StringFlag("s", "light").Get(context.Background()))
+	assert.Equal(t, 3.0, flags.NumberFlag("n", 3.0).Get(context.Background()))
+	dflt := map[string]interface{}{"k": "v"}
+	assert.Equal(t, dflt, flags.JsonFlag("j", dflt).Get(context.Background()))
+}
+
+func TestFlagsClient_Discovery_External(t *testing.T) {
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true})
+	require.NoError(t, err)
+	flags := client.Flags()
+
+	assert.Equal(t, 0, flags.PendingCount())
+	flags.RegisterFlag("dark-mode", "BOOLEAN", true)
+	assert.Equal(t, 1, flags.PendingCount())
+}
+
+// --- Standalone NewFlagsClient (external) ---
+
+func TestNewFlagsClient_Standalone_External(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleFlagListJSON("feature-x", "Feature X", "BOOLEAN")))
+	}))
+	defer server.Close()
+
+	flags, err := smplkit.NewFlagsClient(
+		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "svc", DisableTelemetry: true},
+		smplkit.WithBaseURL(server.URL),
+	)
+	require.NoError(t, err)
+
+	list, err := flags.List(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, list, 1)
+}
+
+func TestNewFlagsClient_Standalone_ConfigError_External(t *testing.T) {
+	_, err := smplkit.NewFlagsClient(smplkit.Config{Environment: "test"})
+	assert.Error(t, err)
 }
 
 // --- Flag model tests ---
@@ -159,28 +260,9 @@ func TestFlag_AddRule_RequiresEnvironment(t *testing.T) {
 	assert.Contains(t, err.Error(), "environment")
 }
 
-// --- ContextType tests ---
-
-func TestContextType_Fields(t *testing.T) {
-	planMeta := map[string]interface{}{"type": "string"}
-	ct := smplkit.ContextType{
-		ID:         "user",
-		Name:       "User",
-		Attributes: map[string]map[string]interface{}{"plan": planMeta},
-	}
-	assert.Equal(t, "user", ct.ID)
-	assert.Equal(t, "User", ct.Name)
-	assert.Equal(t, planMeta, ct.Attributes["plan"])
-}
-
 // --- Error classification tests ---
 
 func TestFlagsClient_NetworkError(t *testing.T) {
-	// The flags client connects to https://flags.smplkit.com which is unreachable
-	// with a short timeout. Use a broken transport to force a network error.
-	transport := &http.Transport{}
-	transport.CloseIdleConnections()
-
 	httpClient := &http.Client{
 		Transport: &failTransport{},
 	}
@@ -188,10 +270,10 @@ func TestFlagsClient_NetworkError(t *testing.T) {
 	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true}, smplkit.WithHTTPClient(httpClient))
 	require.NoError(t, err)
 
-	_, err = client.Flags().Management().Get(context.Background(), "feature-x")
+	_, err = client.Flags().Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 
-	var connErr *smplkit.SmplConnectionError
+	var connErr *smplkit.ConnectionError
 	assert.True(t, errors.As(err, &connErr))
 }
 
@@ -208,7 +290,7 @@ func TestNewBooleanFlag_Fields(t *testing.T) {
 	require.NoError(t, err)
 
 	desc := "A feature flag"
-	flag := client.Flags().Management().NewBooleanFlag("feature-x", true,
+	flag := client.Flags().NewBooleanFlag("feature-x", true,
 		smplkit.WithFlagName("Feature X"),
 		smplkit.WithFlagDescription(desc),
 		smplkit.WithFlagValues([]smplkit.FlagValue{

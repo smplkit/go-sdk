@@ -13,9 +13,9 @@ import (
 const userAgent = "smplkit-go-sdk/0.0.0"
 
 // parseJSONAPIErrors extracts error details from a response body.
-func parseJSONAPIErrors(body []byte) ([]ErrorDetail, string) {
+func parseJSONAPIErrors(body []byte) ([]ApiErrorDetail, string) {
 	var envelope struct {
-		Errors []ErrorDetail `json:"errors"`
+		Errors []ApiErrorDetail `json:"errors"`
 	}
 	if err := json.Unmarshal(body, &envelope); err != nil || len(envelope.Errors) == 0 {
 		return nil, ""

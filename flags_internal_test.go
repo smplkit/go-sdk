@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,6 +21,24 @@ import (
 )
 
 // --- Test helpers ---
+
+// newTestParentClient builds a minimal wired SmplClient parent backed by the
+// given app-generated transport, with the platform sub-client (the
+// evaluation-context registration seam) wired so newFlagsClient can borrow it.
+func newTestParentClient(appURL string, httpClient *http.Client, genApp genapp.ClientInterface) *SmplClient {
+	ctxBuf := newContextRegistrationBuffer()
+	c := &SmplClient{
+		apiKey:       "sk_test",
+		environment:  "test",
+		service:      "test-service",
+		appURL:       appURL,
+		httpClient:   httpClient,
+		appGenerated: genApp,
+		contextBuf:   ctxBuf,
+	}
+	c.platform = newPlatformClient(genApp, ctxBuf)
+	return c
+}
 
 func newTestFlagsClient(t *testing.T, handler http.HandlerFunc) (*FlagsClient, *httptest.Server) {
 	t.Helper()
@@ -62,18 +79,13 @@ func newTestFlagsClient(t *testing.T, handler http.HandlerFunc) (*FlagsClient, *
 		appHeaderEditor,
 	)
 
-	c := &Client{
-		apiKey:       "sk_test",
-		appURL:       server.URL,
-		httpClient:   httpClient,
-		appGenerated: genAppClient,
-	}
-	fc := &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
-	fc.runtime = newFlagsRuntime(fc, newContextRegistrationBuffer())
+	c := newTestParentClient(server.URL, httpClient, genAppClient)
+	fc := newFlagsClient(c, genFlagsClient, genAppClient, c.platform.contexts, nil)
+	c.flags = fc
 	return fc, server
 }
 
-// --- Context type management ---
+// --- Context type parsing (shared helpers in flags_models.go) ---
 
 func TestParseContextType(t *testing.T) {
 	body := []byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{"plan":{"type":"string"}}}}}`)
@@ -104,11 +116,30 @@ func TestParseContextTypeRaw_FallbackToAttributeID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "user", ct.ID)
 	assert.Equal(t, "User", ct.Name)
+	// Non-map attribute value falls back to empty map.
+	assert.Equal(t, map[string]interface{}{}, ct.Attributes["plan"])
 }
 
 func TestParseContextTypeRaw_InvalidJSON(t *testing.T) {
 	_, err := parseContextTypeRaw(json.RawMessage(`{invalid}`))
 	assert.Error(t, err)
+}
+
+func TestParseContextTypeRaw_Timestamps(t *testing.T) {
+	raw := json.RawMessage(`{"id":"user","attributes":{"id":"user","name":"User","attributes":{},"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-06-15T12:00:00Z"}}`)
+	ct, err := parseContextTypeRaw(raw)
+	require.NoError(t, err)
+	require.NotNil(t, ct.CreatedAt)
+	require.NotNil(t, ct.UpdatedAt)
+}
+
+func TestParseContextTypeRaw_BadTimestamps(t *testing.T) {
+	// Unparseable timestamps are ignored (left nil).
+	raw := json.RawMessage(`{"id":"user","attributes":{"id":"user","name":"User","attributes":{},"created_at":"not-a-time","updated_at":"also-bad"}}`)
+	ct, err := parseContextTypeRaw(raw)
+	require.NoError(t, err)
+	assert.Nil(t, ct.CreatedAt)
+	assert.Nil(t, ct.UpdatedAt)
 }
 
 // --- resourceToFlag ---
@@ -122,13 +153,14 @@ func TestResourceToFlag(t *testing.T) {
 	now := time.Now()
 	r := flagResource(id, flagType, "Feature X", "BOOLEAN", true, desc, now)
 
-	flag := resourceToFlag(r, fc.Management())
+	flag := resourceToFlag(r, fc)
 	assert.Equal(t, id, flag.ID)
 	assert.Equal(t, "Feature X", flag.Name)
 	assert.Equal(t, "BOOLEAN", flag.Type)
 	assert.Equal(t, true, flag.Default)
 	assert.Equal(t, &desc, flag.Description)
 	assert.NotNil(t, flag.CreatedAt)
+	assert.Same(t, fc, flag.client)
 }
 
 func TestResourceToFlag_NilID(t *testing.T) {
@@ -137,7 +169,7 @@ func TestResourceToFlag_NilID(t *testing.T) {
 	now := time.Now()
 	r := flagResourceNoID("Feature X", "BOOLEAN", true, now)
 
-	flag := resourceToFlag(r, fc.Management())
+	flag := resourceToFlag(r, fc)
 	assert.Equal(t, "", flag.ID)
 }
 
@@ -162,15 +194,46 @@ func TestResourceToFlag_NilValues(t *testing.T) {
 		},
 	}
 
-	flag := resourceToFlag(r, fc.Management())
+	flag := resourceToFlag(r, fc)
 	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values, "unconstrained flag should have nil Values")
 	assert.Equal(t, float64(3), flag.Default)
 }
 
+func TestResourceToFlag_WithValues(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	id := "theme"
+	now := time.Now()
+	vals := []genflags.FlagValue{{Name: "Light", Value: "light"}, {Name: "Dark", Value: "dark"}}
+	r := genflags.FlagResource{
+		Id:   &id,
+		Type: genflags.FlagResourceTypeFlag,
+		Attributes: genflags.Flag{
+			Name:      "Theme",
+			Type:      "STRING",
+			Default:   "light",
+			Values:    &vals,
+			CreatedAt: &now,
+		},
+	}
+	flag := resourceToFlag(r, fc)
+	require.NotNil(t, flag.Values)
+	assert.Len(t, *flag.Values, 2)
+}
+
 func TestBuildFlagRequest_NilValues(t *testing.T) {
 	req := buildFlagRequest("max-retries", "Max Retries", "NUMERIC", float64(3), nil, nil, nil)
 	assert.Nil(t, req.Data.Attributes.Values, "nil values should serialize as null")
+}
+
+func TestBuildFlagCreateRequest(t *testing.T) {
+	desc := "A test flag"
+	values := []FlagValue{{Name: "True", Value: true}}
+	req := buildFlagCreateRequest("feature-x", "Feature X", "BOOLEAN", true, &values, &desc, nil)
+	assert.Equal(t, "feature-x", req.Data.Id)
+	assert.Equal(t, genflags.FlagCreateResourceTypeFlag, req.Data.Type)
+	require.NotNil(t, req.Data.Attributes.Values)
+	assert.Len(t, *req.Data.Attributes.Values, 1)
 }
 
 // --- extractFlagEnvironments ---
@@ -299,6 +362,8 @@ func TestBuildGenFlagEnvironments_WithRules(t *testing.T) {
 	assert.True(t, *prod.Enabled)
 	require.NotNil(t, prod.Rules)
 	assert.Len(t, *prod.Rules, 1)
+	require.NotNil(t, (*prod.Rules)[0].Description)
+	assert.Equal(t, "test rule", *(*prod.Rules)[0].Description)
 }
 
 func TestBuildGenFlagEnvironments_RuleNonMapLogic(t *testing.T) {
@@ -377,7 +442,7 @@ func TestFlushContexts_SendsBatch(t *testing.T) {
 	}))
 
 	batch := []map[string]interface{}{
-		{"type": "user", "key": "u1"},
+		{"type": "user", "key": "u1", "attributes": map[string]interface{}{"plan": "free"}},
 	}
 	fc.flushContexts(context.Background(), batch)
 
@@ -386,6 +451,9 @@ func TestFlushContexts_SendsBatch(t *testing.T) {
 	require.NotNil(t, receivedPayload)
 	contexts := receivedPayload["contexts"].([]interface{})
 	assert.Len(t, contexts, 1)
+	item := contexts[0].(map[string]interface{})
+	assert.Equal(t, "user", item["type"])
+	assert.Equal(t, "u1", item["key"])
 }
 
 // --- Flag model helpers ---
@@ -422,460 +490,20 @@ func TestFlagApply(t *testing.T) {
 	}
 	f.apply(other)
 	assert.Equal(t, "new", f.ID)
+	assert.Equal(t, "Feature", f.Name)
 }
 
-// --- sharedWebSocket tests ---
+// --- Client ensureWS (SmplClient) ---
 
-func TestSharedWebSocket_BuildWSURL(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "sk_test", nil)
-	url := ws.buildWSURL()
-	assert.Contains(t, url, "wss://app.smplkit.com")
-	assert.Contains(t, url, "api_key=sk_test")
-}
-
-func TestSharedWebSocket_BuildWSURL_HTTP(t *testing.T) {
-	ws := newSharedWebSocket("http://localhost:8000", "sk_test", nil)
-	url := ws.buildWSURL()
-	assert.Contains(t, url, "ws://localhost:8000")
-}
-
-func TestSharedWebSocket_BuildWSURL_NoScheme(t *testing.T) {
-	ws := newSharedWebSocket("app.smplkit.com", "sk_test", nil)
-	url := ws.buildWSURL()
-	assert.Contains(t, url, "wss://app.smplkit.com")
-}
-
-func TestSharedWebSocket_BuildWSURL_TrailingSlash(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com/", "sk_test", nil)
-	url := ws.buildWSURL()
-	assert.Contains(t, url, "wss://app.smplkit.com/api/ws/v1/events")
-}
-
-func TestSharedWebSocket_OnOff(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-
-	var called bool
-	cb := func(data map[string]interface{}) { called = true }
-	ws.on("test_event", cb)
-
-	ws.dispatch("test_event", map[string]interface{}{})
-	assert.True(t, called)
-
-	called = false
-	ws.off("test_event", cb)
-	ws.dispatch("test_event", map[string]interface{}{})
-	assert.False(t, called)
-}
-
-func TestSharedWebSocket_DispatchPanicRecovery(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ws.on("crash_event", func(data map[string]interface{}) {
-		panic("test panic")
-	})
-
-	assert.NotPanics(t, func() {
-		ws.dispatch("crash_event", map[string]interface{}{})
-	})
-}
-
-func TestSharedWebSocket_ConnectionStatus(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	assert.Equal(t, "disconnected", ws.connectionStatus())
-
-	ws.setStatus("connected")
-	assert.Equal(t, "connected", ws.connectionStatus())
-}
-
-func TestSharedWebSocket_WaitConnected_Success(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-
-	// Flip to connected on a separate goroutine so waitConnected has to
-	// actually block on the channel, not return on the fast path.
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		ws.setStatus("connected")
-	}()
-
-	err := ws.waitConnected(context.Background(), time.Second)
-	require.NoError(t, err)
-}
-
-func TestSharedWebSocket_WaitConnected_AlreadyConnected_FastPath(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ws.setStatus("connected")
-
-	// Already-closed channel: must return immediately even with a zero timeout.
-	err := ws.waitConnected(context.Background(), 0)
-	require.NoError(t, err)
-}
-
-func TestSharedWebSocket_WaitConnected_Timeout(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	// Never transitions to connected.
-	err := ws.waitConnected(context.Background(), 30*time.Millisecond)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timed out")
-}
-
-func TestSharedWebSocket_WaitConnected_ContextCancel(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		cancel()
-	}()
-	err := ws.waitConnected(ctx, time.Second)
-	require.ErrorIs(t, err, context.Canceled)
-}
-
-func TestSharedWebSocket_WaitConnected_OnlyClosesOnce(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-
-	// First connect closes the channel; subsequent reconnects (e.g. after
-	// a network blip) must not panic by trying to close it again.
-	ws.setStatus("connected")
-	ws.setStatus("reconnecting")
-	ws.setStatus("connected")
-
-	err := ws.waitConnected(context.Background(), 0)
-	require.NoError(t, err)
-}
-
-func TestSharedWebSocket_Off_Empty(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	// off on empty list should not panic
-	ws.off("nonexistent", func(data map[string]interface{}) {})
-}
-
-func TestSharedWebSocket_DispatchNoListeners(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	// dispatch with no listeners should not panic
-	ws.dispatch("no_listeners", map[string]interface{}{})
-}
-
-func TestSharedWebSocket_Stop(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ws.dialWS = func(url string) (*websocket.Conn, error) {
-		return nil, assert.AnError
-	}
-	ws.start()
-
-	// Give it time to start the goroutine
-	time.Sleep(50 * time.Millisecond)
-
-	ws.stop()
-	assert.Equal(t, "disconnected", ws.connectionStatus())
-}
-
-func TestSharedWebSocket_Run_ClosedImmediately(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	close(ws.closeCh)
-	ws.run() // should exit immediately
-	assert.Equal(t, "disconnected", ws.connectionStatus())
-}
-
-func TestSharedWebSocket_Connect_DialError(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ws.dialWS = func(url string) (*websocket.Conn, error) {
-		return nil, assert.AnError
-	}
-	closed := ws.connect()
-	assert.False(t, closed)
-}
-
-func TestSharedWebSocket_Connect_DialError_Closed(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	close(ws.closeCh)
-	ws.dialWS = func(url string) (*websocket.Conn, error) {
-		return nil, assert.AnError
-	}
-	closed := ws.connect()
-	assert.True(t, closed)
-}
-
-func TestSharedWebSocket_Connect_ErrorMessage(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		// Send error message
-		_ = conn.WriteJSON(map[string]interface{}{
-			"type":    "error",
-			"message": "unauthorized",
-		})
-	}))
-	defer server.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", nil)
-	closed := ws.connect()
-	assert.False(t, closed)
-}
-
-func TestSharedWebSocket_Connect_ReadConfirmError_Closed(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		// Close immediately so ReadJSON fails
-		conn.Close()
-	}))
-	defer server.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", nil)
-	close(ws.closeCh)
-	closed := ws.connect()
-	assert.True(t, closed)
-}
-
-func TestSharedWebSocket_Connect_ReadConfirmError_NotClosed(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		conn.Close()
-	}))
-	defer server.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", nil)
-	closed := ws.connect()
-	assert.False(t, closed)
-}
-
-func TestSharedWebSocket_Connect_PingPong(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-
-		// Send connected confirmation
-		_ = conn.WriteJSON(map[string]interface{}{"type": "connected"})
-
-		// Send a ping
-		_ = conn.WriteMessage(websocket.TextMessage, []byte("ping"))
-
-		// Read pong response
-		_, msg, err := conn.ReadMessage()
-		if err == nil {
-			assert.Equal(t, "pong", string(msg))
-		}
-
-		// Send an event
-		_ = conn.WriteJSON(map[string]interface{}{
-			"event": "test_event",
-			"data":  "hello",
-		})
-
-		// Keep alive briefly
-		time.Sleep(100 * time.Millisecond)
-		conn.Close()
-	}))
-	defer server.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", nil)
-	var dispatched bool
-	var mu sync.Mutex
-	ws.on("test_event", func(data map[string]interface{}) {
-		mu.Lock()
-		dispatched = true
-		mu.Unlock()
-	})
-
-	// Run connect in goroutine
-	done := make(chan bool)
-	go func() {
-		closed := ws.connect()
-		done <- closed
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("connect did not return")
-	}
-
-	mu.Lock()
-	assert.True(t, dispatched)
-	mu.Unlock()
-}
-
-func TestSharedWebSocket_Connect_InvalidJSON(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-
-		_ = conn.WriteJSON(map[string]interface{}{"type": "connected"})
-		// Send invalid JSON
-		_ = conn.WriteMessage(websocket.TextMessage, []byte("not json"))
-		// Close to end the test
-		time.Sleep(50 * time.Millisecond)
-		conn.Close()
-	}))
-	defer server.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", nil)
-	closed := ws.connect()
-	assert.False(t, closed)
-}
-
-func TestSharedWebSocket_Connect_EventNoEventField(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-
-		_ = conn.WriteJSON(map[string]interface{}{"type": "connected"})
-		_ = conn.WriteJSON(map[string]interface{}{"no_event_key": true})
-		time.Sleep(50 * time.Millisecond)
-		conn.Close()
-	}))
-	defer server.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", nil)
-	closed := ws.connect()
-	assert.False(t, closed)
-}
-
-func TestSharedWebSocket_Run_Reconnect(t *testing.T) {
-	var connectCount int
-	var mu sync.Mutex
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		connectCount++
-		mu.Unlock()
-
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		// Close immediately to trigger reconnect
-		conn.Close()
-	}))
-	defer server.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", nil)
-
-	go ws.run()
-
-	// Wait for reconnect cycles (backoff starts at 1s, doubles each time)
-	time.Sleep(2500 * time.Millisecond)
-
-	ws.closeOnce.Do(func() {
-		close(ws.closeCh)
-	})
-	<-ws.wsDone
-
-	mu.Lock()
-	assert.True(t, connectCount >= 2, "expected at least 2 connect attempts, got %d", connectCount)
-	mu.Unlock()
-}
-
-func TestSharedWebSocket_Connect_ReadError_CloseCh(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		_ = conn.WriteJSON(map[string]interface{}{"type": "connected"})
-		// Keep alive
-		time.Sleep(2 * time.Second)
-	}))
-	defer server.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", nil)
-
-	done := make(chan bool)
-	go func() {
-		closed := ws.connect()
-		done <- closed
-	}()
-
-	// Wait for connected status
-	for i := 0; i < 100; i++ {
-		if ws.connectionStatus() == "connected" {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	close(ws.closeCh)
-
-	select {
-	case closed := <-done:
-		assert.True(t, closed)
-	case <-time.After(2 * time.Second):
-		t.Fatal("connect did not return")
-	}
-}
-
-func TestSharedWebSocket_Connect_WithMetrics(t *testing.T) {
-	wsUpgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := wsUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		// Send connected confirmation
-		_ = conn.WriteJSON(map[string]interface{}{"type": "connected"})
-		// Close immediately to trigger read error
-		time.Sleep(50 * time.Millisecond)
-	}))
-	defer server.Close()
-
-	metrics := newMetricsReporter(http.DefaultClient, "https://app.smplkit.com", "test", "test-service", 60*time.Second)
-	defer metrics.Close()
-
-	ws := newSharedWebSocket(server.URL, "test", metrics)
-
-	done := make(chan bool)
-	go func() {
-		closed := ws.connect()
-		done <- closed
-	}()
-
-	select {
-	case closed := <-done:
-		assert.False(t, closed) // read error, not closeCh
-	case <-time.After(2 * time.Second):
-		t.Fatal("connect did not return")
-	}
-}
-
-// --- Client ensureWS / stopWS ---
-
-func TestClient_EnsureWS(t *testing.T) {
-	c := &Client{
+func TestSmplClient_EnsureWS(t *testing.T) {
+	c := &SmplClient{
 		apiKey: "sk_test",
 		appURL: "https://app.smplkit.com",
 	}
-	// Note: ensureWS creates a real WS manager and starts a goroutine.
-	// We need to ensure it creates one and returns the same on subsequent calls.
 	ws1 := c.ensureWS()
 	ws2 := c.ensureWS()
 	assert.Same(t, ws1, ws2)
 
-	// Stop the WS to clean up
 	c.stopWS()
 }
 
@@ -1018,18 +646,6 @@ func TestFlagsClient_OnChange(t *testing.T) {
 	assert.True(t, called)
 }
 
-func TestFlagsClient_Register(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	fc.runtime.Register(context.Background(), Context{Type: "user", Key: "u1"})
-	assert.Equal(t, 1, fc.runtime.contextBuffer.pendingCount())
-}
-
-func TestFlagsClient_FlushContexts_Empty(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, nil)
-	// Should not panic
-	fc.runtime.FlushContexts(context.Background())
-}
-
 func TestFlagsClient_Evaluate_ConnectedWithStore(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
@@ -1098,13 +714,6 @@ func TestNumberFlagHandle_GetInt(t *testing.T) {
 	handle := rt.NumberFlag("retries", 0.0)
 	result := handle.Get(context.Background())
 	assert.Equal(t, 3.0, result)
-}
-
-func TestNumberFlagHandle_Get_NoContexts_Int(t *testing.T) {
-	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
-	rt.connected = true
-	handle := rt.NumberFlag("retries", 5.0)
-	assert.Equal(t, 5.0, handle.Get(context.Background()))
 }
 
 // --- EvaluateFlag edge cases ---
@@ -1297,7 +906,7 @@ func TestFlagsClient_Get_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flag, err := fc.Management().Get(context.Background(), "feature-x")
+	flag, err := fc.Get(context.Background(), "feature-x")
 	require.NoError(t, err)
 	assert.Equal(t, "feature-x", flag.ID)
 	assert.Equal(t, "Feature X", flag.Name)
@@ -1311,7 +920,7 @@ func TestFlagsClient_Get_NotFound(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
 
-	_, err := fc.Management().Get(context.Background(), "nonexistent-flag")
+	_, err := fc.Get(context.Background(), "nonexistent-flag")
 	assert.Error(t, err)
 }
 
@@ -1332,7 +941,7 @@ func TestFlagsClient_Create_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flag := fc.Management().NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
+	flag := fc.NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "feature-x", flag.ID)
@@ -1348,27 +957,11 @@ func TestFlagsClient_Create_EmptyID_PostPath(t *testing.T) {
 		_, _ = w.Write([]byte(sampleFlagResponseJSON("server-id", "Feature X", "BOOLEAN")))
 	}))
 
-	flag := fc.Management().NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
+	flag := fc.NewBooleanFlag("feature-x", true, WithFlagName("Feature X"))
 	flag.ID = "" // Clear ID to trigger create (POST) path
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "server-id", flag.ID)
-}
-
-func TestFlagsClient_Create_NonBooleanNoAutoValues(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(sampleFlagResponseJSON("color", "Color", "STRING")))
-	}))
-
-	flag := fc.Management().NewStringFlag("color", "red",
-		WithFlagName("Color"),
-		WithFlagValues([]FlagValue{{Name: "Red", Value: "red"}, {Name: "Blue", Value: "blue"}}),
-	)
-	err := flag.Save(context.Background())
-	require.NoError(t, err)
-	assert.NotNil(t, flag)
 }
 
 func TestFlagsClient_Create_Unconstrained(t *testing.T) {
@@ -1405,7 +998,7 @@ func TestFlagsClient_Create_Unconstrained(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flag := fc.Management().NewNumberFlag("max-retries", 3, WithFlagName("Max Retries"))
+	flag := fc.NewNumberFlag("max-retries", 3, WithFlagName("Max Retries"))
 	err := flag.Save(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "max-retries", flag.ID)
@@ -1436,7 +1029,7 @@ func TestFlagsClient_Get_Unconstrained(t *testing.T) {
 		_, _ = w.Write([]byte(unconstrainedResp))
 	}))
 
-	flag, err := fc.Management().Get(context.Background(), "max-retries")
+	flag, err := fc.Get(context.Background(), "max-retries")
 	require.NoError(t, err)
 	assert.Equal(t, "max-retries", flag.ID)
 	assert.Nil(t, flag.Values, "unconstrained flag should have nil Values")
@@ -1454,10 +1047,24 @@ func TestFlagsClient_List_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	flags, err := fc.Management().List(context.Background())
+	flags, err := fc.List(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, flags, 1)
 	assert.Equal(t, "feature-x", flags[0].ID)
+}
+
+func TestFlagsClient_List_WithOptions(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "2", r.URL.Query().Get("page[number]"))
+		assert.Equal(t, "5", r.URL.Query().Get("page[size]"))
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sampleFlagListResponseJSON("feature-x", "Feature X", "BOOLEAN")))
+	}))
+
+	flags, err := fc.List(context.Background(), WithPageNumber(2), WithPageSize(5))
+	require.NoError(t, err)
+	assert.Len(t, flags, 1)
 }
 
 func TestFlagsClient_Delete_Success(t *testing.T) {
@@ -1469,7 +1076,7 @@ func TestFlagsClient_Delete_Success(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 
-	err := fc.Management().Delete(context.Background(), "feature-x")
+	err := fc.Delete(context.Background(), "feature-x")
 	assert.NoError(t, err)
 }
 
@@ -1478,7 +1085,7 @@ func TestFlagsClient_Delete_NotFound(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"not found"}]}`))
 	}))
-	err := fc.Management().Delete(context.Background(), "nonexistent-flag")
+	err := fc.Delete(context.Background(), "nonexistent-flag")
 	assert.Error(t, err)
 }
 
@@ -1500,11 +1107,11 @@ func TestFlagsClient_UpdateFlag_Success(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc.Management(),
+		client:       fc,
 	}
 
 	flag.Name = "Updated Name"
-	err := fc.Management().updateFlag(context.Background(), flag)
+	err := fc.updateFlag(context.Background(), flag)
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Name", flag.Name)
 }
@@ -1523,7 +1130,7 @@ func TestFlagsClient_UpdateFlag_WithAllParams(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc.Management(),
+		client:       fc,
 	}
 
 	newDesc := "New Description"
@@ -1537,7 +1144,7 @@ func TestFlagsClient_UpdateFlag_WithAllParams(t *testing.T) {
 			"enabled": true,
 		},
 	}
-	err := fc.Management().updateFlag(context.Background(), flag)
+	err := fc.updateFlag(context.Background(), flag)
 	require.NoError(t, err)
 }
 
@@ -1559,7 +1166,7 @@ func TestFlag_Save_UpdatePath(t *testing.T) {
 		Type:      "BOOLEAN",
 		Default:   true,
 		CreatedAt: &now,
-		client:    fc.Management(),
+		client:    fc,
 	}
 
 	err := flag.Save(context.Background())
@@ -1567,113 +1174,26 @@ func TestFlag_Save_UpdatePath(t *testing.T) {
 	assert.Equal(t, "Updated via Save", flag.Name)
 }
 
-// --- Context management methods (via doJSONApp) ---
-
-// These tests exercise the actual context management methods that use doJSONApp,
-// which now routes to the test server when baseURL is overridden.
-
-func TestFlagsClient_CreateContextType_FullMethod(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" && r.URL.Path == "/api/v1/context_types" {
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"data":{"id":"user","attributes":{"id":"user","name":"User","attributes":{}}}}`))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-
-	ct, err := fc.Management().CreateContextType(context.Background(), "user", "User")
-	require.NoError(t, err)
-	assert.Equal(t, "user", ct.ID)
+func TestFlag_Save_NoClient(t *testing.T) {
+	flag := &Flag{ID: "x"}
+	err := flag.Save(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "without a client")
 }
 
-func TestFlagsClient_UpdateContextType_FullMethod(t *testing.T) {
-	ctID := "user"
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" && r.URL.Path == "/api/v1/context_types/"+ctID {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":{"id":"` + ctID + `","attributes":{"id":"` + ctID + `","name":"User","attributes":{"plan":{"type":"string"}}}}}`))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-
-	ct, err := fc.Management().UpdateContextType(context.Background(), ctID, map[string]interface{}{"plan": map[string]interface{}{"type": "string"}})
-	require.NoError(t, err)
-	assert.Equal(t, map[string]interface{}{"type": "string"}, ct.Attributes["plan"])
+func TestFlag_Delete_NoClient(t *testing.T) {
+	flag := &Flag{ID: "x"}
+	err := flag.Delete(context.Background())
+	assert.Error(t, err)
 }
 
-func TestFlagsClient_ListContextTypes_FullMethod(t *testing.T) {
+func TestFlag_Delete_Success(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/v1/context_types" {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":[
-				{"id":"user","attributes":{"id":"user","name":"User","attributes":{}}},
-				{"id":"account","attributes":{"id":"account","name":"Account","attributes":{}}}
-			]}`))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusNoContent)
 	}))
-
-	types, err := fc.Management().ListContextTypes(context.Background())
-	require.NoError(t, err)
-	assert.Len(t, types, 2)
-	assert.Equal(t, "user", types[0].ID)
-}
-
-func TestFlagsClient_DeleteContextType_FullMethod(t *testing.T) {
-	ctID := "user"
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "DELETE" && r.URL.Path == "/api/v1/context_types/"+ctID {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-
-	err := fc.Management().DeleteContextType(context.Background(), ctID)
+	flag := &Flag{ID: testFlagID, client: fc}
+	err := flag.Delete(context.Background())
 	assert.NoError(t, err)
-}
-
-func TestFlagsClient_ListContexts_FullMethod(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" && r.URL.Path == "/api/v1/contexts" {
-			assert.Contains(t, r.URL.RawQuery, "filter%5Bcontext_type%5D=user")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"data":[{"id":"ctx-1","type":"context","attributes":{"key":"u1"}}]}`))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-
-	contexts, err := fc.Management().ListContexts(context.Background(), "user")
-	require.NoError(t, err)
-	assert.Len(t, contexts, 1)
-}
-
-func TestFlagsClient_FlushContexts_FullMethod(t *testing.T) {
-	var receivedPayload map[string]interface{}
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" && r.URL.Path == "/api/v1/contexts/bulk" {
-			b, _ := io.ReadAll(r.Body)
-			_ = json.Unmarshal(b, &receivedPayload)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"registered":1}`))
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	batch := []map[string]interface{}{{"type": "user", "key": "u1"}}
-	fc.flushContexts(context.Background(), batch)
-
-	require.NotNil(t, receivedPayload)
-	contexts := receivedPayload["contexts"].([]interface{})
-	assert.Len(t, contexts, 1)
-	item := contexts[0].(map[string]interface{})
-	assert.Equal(t, "user", item["type"])
-	assert.Equal(t, "u1", item["key"])
 }
 
 // --- fetchAllFlags / fetchFlagsList ---
@@ -1703,6 +1223,47 @@ func TestFlagsClient_FetchFlagsList(t *testing.T) {
 	assert.Equal(t, "feature-x", flags[0]["id"])
 }
 
+func TestFlagsClient_FetchFlagsList_Pagination(t *testing.T) {
+	// First page returns a full page (fetchAllPageSize rows), second returns short.
+	page := 0
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		var sb strings.Builder
+		sb.WriteString(`{"data":[`)
+		if page == 1 {
+			for i := 0; i < fetchAllPageSize; i++ {
+				if i > 0 {
+					sb.WriteString(",")
+				}
+				sb.WriteString(`{"id":"f` + string(rune('a'+i%26)) + string(rune('0'+i/26)) + `","type":"flag","attributes":{"name":"F","type":"BOOLEAN","default":true,"environments":{}}}`)
+			}
+		} else {
+			sb.WriteString(`{"id":"last","type":"flag","attributes":{"name":"F","type":"BOOLEAN","default":true,"environments":{}}}`)
+		}
+		sb.WriteString(`]}`)
+		_, _ = w.Write([]byte(sb.String()))
+	}))
+
+	flags, err := fc.fetchFlagsList(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, fetchAllPageSize+1, len(flags))
+	assert.Equal(t, 2, page, "should fetch two pages")
+}
+
+func TestFlagsClient_FetchFlagsPage_WithValues(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[{"id":"theme","type":"flag","attributes":{"name":"Theme","type":"STRING","default":"light","values":[{"name":"Light","value":"light"}],"environments":{}}}]}`))
+	}))
+	flags, err := fc.fetchFlagsPage(context.Background(), 1, fetchAllPageSize)
+	require.NoError(t, err)
+	require.Len(t, flags, 1)
+	assert.NotNil(t, flags[0]["values"])
+}
+
 // --- FlagsRuntime Connect / Disconnect / Refresh ---
 
 func TestFlagsRuntime_LazyInit(t *testing.T) {
@@ -1712,6 +1273,7 @@ func TestFlagsRuntime_LazyInit(t *testing.T) {
 		_, _ = w.Write([]byte(sampleFlagListResponseJSON("feature-x", "Feature X", "BOOLEAN")))
 	}))
 	fc.client.environment = "production"
+	fc.environment = "production"
 
 	err := fc.runtime.ensureInit(context.Background())
 	require.NoError(t, err)
@@ -1735,6 +1297,7 @@ func TestFlagsRuntime_Disconnect(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
 	fc.client.environment = "staging"
+	fc.environment = "staging"
 
 	_ = fc.runtime.ensureInit(context.Background())
 	fc.Disconnect(context.Background())
@@ -1766,7 +1329,7 @@ func TestFlagsRuntime_Refresh(t *testing.T) {
 	assert.True(t, callCount > 0)
 }
 
-// --- FlagsRuntime Evaluate (Tier 1 explicit) ---
+// --- FlagsRuntime Evaluate (explicit) ---
 
 func TestFlagsRuntime_Evaluate_NotConnected_Fetches(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1817,7 +1380,7 @@ func TestFlag_Update(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc.Management(),
+		client:       fc,
 	}
 
 	err := flag.Save(context.Background())
@@ -1835,7 +1398,7 @@ func TestFlag_AddRule_Success(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc.Management(),
+		client:       fc,
 	}
 
 	rule := NewRule("test").
@@ -1854,7 +1417,7 @@ func TestFlag_AddRule_Success(t *testing.T) {
 
 func TestFlag_AddRule_MissingEnvironment(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	flag := &Flag{ID: testFlagID, client: fc.Management()}
+	flag := &Flag{ID: testFlagID, client: fc}
 
 	err := flag.AddRule(map[string]interface{}{
 		"logic": map[string]interface{}{},
@@ -1967,7 +1530,7 @@ func TestFlagsClient_FlushContexts_Lifecycle(t *testing.T) {
 	assert.True(t, received)
 }
 
-// --- BooleanFlagHandle type mismatch ---
+// --- Typed flag handle type mismatch ---
 
 func TestBooleanFlagHandle_Get_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
@@ -2088,7 +1651,7 @@ func TestFlagsClient_Get_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"internal error"}]}`))
 	}))
 
-	_, err := fc.Management().Get(context.Background(), "feature-x")
+	_, err := fc.Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -2098,7 +1661,7 @@ func TestFlagsClient_Get_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	_, err := fc.Management().Get(context.Background(), "feature-x")
+	_, err := fc.Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -2108,7 +1671,7 @@ func TestFlagsClient_Create_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
@@ -2119,7 +1682,7 @@ func TestFlagsClient_Create_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
@@ -2130,7 +1693,7 @@ func TestFlagsClient_List_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	_, err := fc.Management().List(context.Background())
+	_, err := fc.List(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2140,7 +1703,7 @@ func TestFlagsClient_List_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	_, err := fc.Management().List(context.Background())
+	_, err := fc.List(context.Background())
 	assert.Error(t, err)
 }
 
@@ -2150,7 +1713,7 @@ func TestFlagsClient_Delete_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
 	}))
 
-	err := fc.Management().Delete(context.Background(), "feature-x")
+	err := fc.Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
@@ -2160,8 +1723,8 @@ func TestFlagsClient_UpdateFlag_ServerError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
 	}))
 
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
-	err := fc.Management().updateFlag(context.Background(), flag)
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2171,78 +1734,8 @@ func TestFlagsClient_UpdateFlag_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
-	err := fc.Management().updateFlag(context.Background(), flag)
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_CreateContextType_ServerError(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
-	}))
-
-	_, err := fc.Management().CreateContextType(context.Background(), "user", "User")
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_UpdateContextType_ServerError(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"bad request"}]}`))
-	}))
-
-	_, err := fc.Management().UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_ListContextTypes_ServerError(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
-	}))
-
-	_, err := fc.Management().ListContextTypes(context.Background())
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_ListContextTypes_InvalidJSON(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`not json`))
-	}))
-
-	_, err := fc.Management().ListContextTypes(context.Background())
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_DeleteContextType_ServerError(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
-	}))
-
-	err := fc.Management().DeleteContextType(context.Background(), "user-type")
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_ListContexts_ServerError(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"errors":[{"detail":"forbidden"}]}`))
-	}))
-
-	_, err := fc.Management().ListContexts(context.Background(), "user")
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_ListContexts_InvalidJSON(t *testing.T) {
-	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`not json`))
-	}))
-
-	_, err := fc.Management().ListContexts(context.Background(), "user")
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2276,7 +1769,7 @@ func TestFlagsClient_FetchAllFlags_Error(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- Get with contexts type coercion and mismatch ---
+// --- Get with contexts type coercion and mismatch (no-contexts provider path) ---
 
 func TestBooleanFlagHandle_Get_NoContexts_TypeMismatch(t *testing.T) {
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
@@ -2420,7 +1913,7 @@ func TestFlag_Update_Error(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
 	}))
 
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
@@ -2430,7 +1923,7 @@ func TestFlag_Update_Error(t *testing.T) {
 func TestFlag_AddRule_MissingEnvironmentKey(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
 	// Rule without environment key should fail.
 	rule := map[string]interface{}{
 		"logic": map[string]interface{}{},
@@ -2561,72 +2054,6 @@ func TestFlagsRuntime_Disconnect_NoWSManager(t *testing.T) {
 	fc.runtime.mu.RUnlock()
 }
 
-// --- ws.go run backoff cap ---
-
-func TestSharedWebSocket_Run_BackoffCap(t *testing.T) {
-	var mu sync.Mutex
-	var connectCount int
-
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ws.dialWS = func(url string) (*websocket.Conn, error) {
-		mu.Lock()
-		connectCount++
-		mu.Unlock()
-		return nil, assert.AnError
-	}
-
-	go ws.run()
-
-	// Wait for several backoff cycles
-	time.Sleep(2500 * time.Millisecond)
-
-	ws.closeOnce.Do(func() {
-		close(ws.closeCh)
-	})
-	<-ws.wsDone
-
-	mu.Lock()
-	assert.True(t, connectCount >= 2)
-	mu.Unlock()
-}
-
-// --- ws.go run: closeCh already closed before loop starts ---
-
-func TestSharedWebSocket_Run_ClosedBeforeLoop(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ws.initBackoff = time.Millisecond
-	ws.maxBackoff = time.Millisecond
-	// Close the channel before run() starts — exercises the top-of-loop select
-	close(ws.closeCh)
-	go ws.run()
-	<-ws.wsDone
-	assert.Equal(t, "disconnected", ws.connectionStatus())
-}
-
-// --- ws.go run: closeCh signaled during backoff select ---
-
-func TestSharedWebSocket_Run_ClosedDuringBackoff(t *testing.T) {
-	var mu sync.Mutex
-	connectCount := 0
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ws.initBackoff = 500 * time.Millisecond
-	ws.maxBackoff = 500 * time.Millisecond
-	ws.dialWS = func(url string) (*websocket.Conn, error) {
-		mu.Lock()
-		connectCount++
-		mu.Unlock()
-		return nil, assert.AnError
-	}
-
-	go ws.run()
-	// Wait for first connect to fail and backoff to start
-	time.Sleep(100 * time.Millisecond)
-	// Signal close during the backoff select
-	ws.closeOnce.Do(func() { close(ws.closeCh) })
-	<-ws.wsDone
-	assert.Equal(t, "disconnected", ws.connectionStatus())
-}
-
 // --- FlagsRuntime ensureInit error ---
 
 func TestFlagsRuntime_EnsureInit_FetchError(t *testing.T) {
@@ -2635,9 +2062,24 @@ func TestFlagsRuntime_EnsureInit_FetchError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"error"}]}`))
 	}))
 	fc.client.environment = "production"
+	fc.environment = "production"
 
 	err := fc.runtime.ensureInit(context.Background())
 	assert.Error(t, err)
+}
+
+func TestFlagsRuntime_EnsureInit_NilClient(t *testing.T) {
+	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
+	err := rt.ensureInit(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not initialized")
+}
+
+func TestFlagsRuntime_EnsureInit_AlreadyConnected(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	fc.runtime.connected = true
+	err := fc.runtime.ensureInit(context.Background())
+	assert.NoError(t, err)
 }
 
 // --- helpers for test infrastructure ---
@@ -2724,13 +2166,9 @@ func newFlagsClientWithTransport(t *testing.T, transport http.RoundTripper) *Fla
 		appHeaderEditor,
 	)
 
-	c := &Client{
-		apiKey:       "sk_test",
-		httpClient:   httpClient,
-		appGenerated: genAppClient,
-	}
-	fc := &FlagsClient{client: c, generated: genFlagsClient, appGenerated: genAppClient}
-	fc.runtime = newFlagsRuntime(fc, newContextRegistrationBuffer())
+	c := newTestParentClient("http://localhost:1", httpClient, genAppClient)
+	fc := newFlagsClient(c, genFlagsClient, genAppClient, c.platform.contexts, nil)
+	c.flags = fc
 	return fc
 }
 
@@ -2738,33 +2176,33 @@ func newFlagsClientWithTransport(t *testing.T, transport http.RoundTripper) *Fla
 
 func TestFlagsClient_Get_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Management().Get(context.Background(), "feature-x")
+	_, err := fc.Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Create_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_List_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Management().List(context.Background())
+	_, err := fc.List(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Delete_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	err := fc.Management().Delete(context.Background(), "feature-x")
+	err := fc.Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_UpdateFlag_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
-	err := fc.Management().updateFlag(context.Background(), flag)
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2778,33 +2216,33 @@ func TestFlagsClient_FetchFlagsList_NetworkError(t *testing.T) {
 
 func TestFlagsClient_Get_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Management().Get(context.Background(), "feature-x")
+	_, err := fc.Get(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Create_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_List_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Management().List(context.Background())
+	_, err := fc.List(context.Background())
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_Delete_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	err := fc.Management().Delete(context.Background(), "feature-x")
+	err := fc.Delete(context.Background(), "feature-x")
 	assert.Error(t, err)
 }
 
 func TestFlagsClient_UpdateFlag_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc.Management()}
-	err := fc.Management().updateFlag(context.Background(), flag)
+	flag := &Flag{ID: testFlagID, Type: "BOOLEAN", Default: true, Values: &[]FlagValue{}, Environments: map[string]interface{}{}, client: fc}
+	err := fc.updateFlag(context.Background(), flag)
 	assert.Error(t, err)
 }
 
@@ -2814,71 +2252,7 @@ func TestFlagsClient_FetchFlagsList_ReadBodyError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// --- Context management error paths (via generated app client) ---
-
-func TestFlagsClient_CreateContextType_NetworkError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Management().CreateContextType(context.Background(), "user", "User")
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_UpdateContextType_NetworkError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Management().UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_ListContextTypes_NetworkError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Management().ListContextTypes(context.Background())
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_DeleteContextType_NetworkError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	err := fc.Management().DeleteContextType(context.Background(), "user-type")
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_ListContexts_NetworkError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	_, err := fc.Management().ListContexts(context.Background(), "user")
-	assert.Error(t, err)
-}
-
-// --- Context management io.ReadAll error paths ---
-
-func TestFlagsClient_CreateContextType_ReadBodyError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Management().CreateContextType(context.Background(), "user", "User")
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_UpdateContextType_ReadBodyError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Management().UpdateContextType(context.Background(), "user-type", map[string]interface{}{})
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_ListContextTypes_ReadBodyError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Management().ListContextTypes(context.Background())
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_DeleteContextType_ReadBodyError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	err := fc.Management().DeleteContextType(context.Background(), "user-type")
-	assert.Error(t, err)
-}
-
-func TestFlagsClient_ListContexts_ReadBodyError(t *testing.T) {
-	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	_, err := fc.Management().ListContexts(context.Background(), "user")
-	assert.Error(t, err)
-}
-
-// --- Flag.AddRule error path: updateFlag fails after successful Get ---
+// --- Flag.AddRule error path: updateFlag fails after successful AddRule ---
 
 func TestFlag_AddRule_ThenSave_UpdateError(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2887,6 +2261,7 @@ func TestFlag_AddRule_ThenSave_UpdateError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"update failed"}]}`))
 	}))
 
+	now := time.Now()
 	flag := &Flag{
 		ID:           testFlagID,
 		Name:         "Feature X",
@@ -2894,7 +2269,8 @@ func TestFlag_AddRule_ThenSave_UpdateError(t *testing.T) {
 		Default:      true,
 		Values:       &[]FlagValue{{Name: "True", Value: true}},
 		Environments: map[string]interface{}{},
-		client:       fc.Management(),
+		CreatedAt:    &now,
+		client:       fc,
 	}
 
 	rule := NewRule("test").
@@ -2952,62 +2328,6 @@ func TestFlagsRuntime_Evaluate_FetchError(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// --- ws.go connect with nil dialWS ---
-
-func TestSharedWebSocket_Connect_NilDialWS(t *testing.T) {
-	ws := &sharedWebSocket{
-		appBaseURL: "https://unreachable.example.com",
-		apiKey:     "test",
-		listeners:  make(map[string][]eventCallback),
-		status:     "disconnected",
-		closeCh:    make(chan struct{}),
-		wsDone:     make(chan struct{}),
-		dialWS:     nil, // nil — should use defaultDialWS fallback
-	}
-	// connect will fail because the URL is unreachable, but should not panic
-	closed := ws.connect()
-	assert.False(t, closed)
-}
-
-// --- ws.go run backoff exceeds maxBackoff ---
-
-func TestSharedWebSocket_Run_BackoffExceedsMax(t *testing.T) {
-	var mu sync.Mutex
-	var connectCount int
-
-	ws := &sharedWebSocket{
-		appBaseURL:  "https://app.smplkit.com",
-		apiKey:      "test",
-		listeners:   make(map[string][]eventCallback),
-		status:      "disconnected",
-		closeCh:     make(chan struct{}),
-		wsDone:      make(chan struct{}),
-		initBackoff: 10 * time.Millisecond, // Start very small
-		maxBackoff:  30 * time.Millisecond, // Cap at 30ms so we hit it after a few doubles
-		dialWS: func(url string) (*websocket.Conn, error) {
-			mu.Lock()
-			connectCount++
-			mu.Unlock()
-			return nil, assert.AnError
-		},
-	}
-
-	go ws.run()
-
-	// With 10ms init and 30ms max: 10ms, 20ms, 30ms(cap), 30ms, ...
-	// After ~100ms we should have several connects including hitting the cap
-	time.Sleep(200 * time.Millisecond)
-
-	ws.closeOnce.Do(func() {
-		close(ws.closeCh)
-	})
-	<-ws.wsDone
-
-	mu.Lock()
-	assert.True(t, connectCount >= 3, "expected at least 3 connects (enough to cap backoff), got %d", connectCount)
-	mu.Unlock()
-}
-
 // --- Service context auto-injection ---
 
 func TestFlagsRuntime_ServiceContextAutoInjection(t *testing.T) {
@@ -3019,7 +2339,9 @@ func TestFlagsRuntime_ServiceContextAutoInjection(t *testing.T) {
 
 	// Set service on the client
 	fc.client.service = "my-service"
+	fc.service = "my-service"
 	fc.client.environment = "production"
+	fc.environment = "production"
 
 	// Init and set up a flag with a rule that checks service.key
 	err := fc.runtime.ensureInit(context.Background())
@@ -3060,6 +2382,7 @@ func TestFlagsRuntime_ServiceContextAutoInjection(t *testing.T) {
 func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	fc.client.service = "auto-service"
+	fc.service = "auto-service"
 
 	fc.runtime.connected = true
 	fc.runtime.mu.Lock()
@@ -3096,11 +2419,64 @@ func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
 	fc.client.stopWS()
 }
 
+// --- Evaluate service-context auto-injection (explicit Evaluate path) ---
+
+func TestFlagsRuntime_Evaluate_ServiceAutoInject(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	fc.service = "svc-x"
+	fc.runtime.connected = true
+	fc.runtime.mu.Lock()
+	fc.runtime.flagStore = map[string]map[string]interface{}{
+		"feature": {
+			"default": false,
+			"environments": map[string]interface{}{
+				"production": map[string]interface{}{
+					"enabled": true,
+					"default": false,
+					"rules": []interface{}{
+						map[string]interface{}{
+							"logic": map[string]interface{}{
+								"==": []interface{}{map[string]interface{}{"var": "service.key"}, "svc-x"},
+							},
+							"value": true,
+						},
+					},
+				},
+			},
+		},
+	}
+	fc.runtime.mu.Unlock()
+
+	result := fc.Evaluate(context.Background(), "feature", "production", nil)
+	assert.Equal(t, true, result)
+}
+
+// ---------- NewBooleanFlag ----------
+
+func TestNewBooleanFlag(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	flag := fc.NewBooleanFlag("dark_mode", false)
+	assert.Equal(t, "dark_mode", flag.ID)
+	assert.Equal(t, "Dark Mode", flag.Name)
+	assert.Equal(t, string(FlagTypeBoolean), flag.Type)
+	require.NotNil(t, flag.Values)
+	assert.Len(t, *flag.Values, 2)
+	assert.Same(t, fc, flag.client)
+}
+
+func TestNewStringFlag(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	flag := fc.NewStringFlag("greeting", "hello")
+	assert.Equal(t, "greeting", flag.ID)
+	assert.Equal(t, string(FlagTypeString), flag.Type)
+	assert.Nil(t, flag.Values)
+}
+
 // ---------- NewNumberFlag ----------
 
 func TestNewNumberFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	flag := fc.Management().NewNumberFlag("price_multiplier", 1.5)
+	flag := fc.NewNumberFlag("price_multiplier", 1.5)
 	assert.Equal(t, "price_multiplier", flag.ID)
 	assert.Equal(t, "Price Multiplier", flag.Name)
 	assert.Equal(t, string(FlagTypeNumeric), flag.Type)
@@ -3111,7 +2487,7 @@ func TestNewNumberFlag(t *testing.T) {
 func TestNewNumberFlag_WithOptions(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	desc := "A number flag"
-	flag := fc.Management().NewNumberFlag("rate", 0.5, WithFlagName("Rate"), WithFlagDescription(desc))
+	flag := fc.NewNumberFlag("rate", 0.5, WithFlagName("Rate"), WithFlagDescription(desc))
 	assert.Equal(t, "Rate", flag.Name)
 	require.NotNil(t, flag.Description)
 	assert.Equal(t, desc, *flag.Description)
@@ -3122,7 +2498,7 @@ func TestNewNumberFlag_WithOptions(t *testing.T) {
 func TestNewJsonFlag(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	defaultVal := map[string]interface{}{"theme": "dark"}
-	flag := fc.Management().NewJsonFlag("ui_config", defaultVal)
+	flag := fc.NewJsonFlag("ui_config", defaultVal)
 	assert.Equal(t, "ui_config", flag.ID)
 	assert.Equal(t, "Ui Config", flag.Name)
 	assert.Equal(t, string(FlagTypeJSON), flag.Type)
@@ -3133,7 +2509,7 @@ func TestNewJsonFlag(t *testing.T) {
 func TestNewJsonFlag_WithOptions(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
 	defaultVal := map[string]interface{}{"key": "val"}
-	flag := fc.Management().NewJsonFlag("config", defaultVal, WithFlagName("JSON Config"))
+	flag := fc.NewJsonFlag("config", defaultVal, WithFlagName("JSON Config"))
 	assert.Equal(t, "JSON Config", flag.Name)
 }
 
@@ -3159,6 +2535,55 @@ func TestFlagsClient_OnChangeKey(t *testing.T) {
 	require.NotNil(t, received)
 	assert.Equal(t, "my-flag", received.ID)
 	assert.Equal(t, "manual", received.Source)
+}
+
+// ---------- FlagsClient discovery (RegisterFlag / Flush / PendingCount) ----------
+
+func TestFlagsClient_RegisterFlag_PendingCount(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	assert.Equal(t, 0, fc.PendingCount())
+	fc.RegisterFlag("my-flag", "BOOLEAN", true)
+	assert.Equal(t, 1, fc.PendingCount())
+	// Duplicate is ignored.
+	fc.RegisterFlag("my-flag", "BOOLEAN", false)
+	assert.Equal(t, 1, fc.PendingCount())
+}
+
+func TestFlagsClient_RegisterFlag_ThresholdFlush(t *testing.T) {
+	var bulkCalls atomic.Int32
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/flags/bulk") {
+			bulkCalls.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for i := 0; i < flagRegistrationThreshold; i++ {
+		fc.RegisterFlag("reg-"+string(rune('a'+i%26))+string(rune('0'+i/26)), "BOOLEAN", true)
+	}
+	time.Sleep(50 * time.Millisecond)
+	assert.GreaterOrEqual(t, bulkCalls.Load(), int32(1), "threshold flush should fire")
+}
+
+func TestFlagsClient_Flush(t *testing.T) {
+	var bulkCalls atomic.Int32
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/flags/bulk") {
+			bulkCalls.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	fc.RegisterFlag("flag-a", "BOOLEAN", true)
+	fc.Flush(context.Background())
+	assert.Equal(t, int32(1), bulkCalls.Load())
+	assert.Equal(t, 0, fc.PendingCount(), "buffer committed after successful flush")
 }
 
 // ---------- SetEnvironmentEnabled ----------
@@ -3409,7 +2834,7 @@ func TestHandleFlagChanged(t *testing.T) {
 
 func TestFlagsClient_CreateFlag_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
-	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
 	flag.ID = "" // trigger create (POST) path
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
@@ -3417,7 +2842,7 @@ func TestFlagsClient_CreateFlag_NetworkError(t *testing.T) {
 
 func TestFlagsClient_CreateFlag_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
-	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
 	flag.ID = ""
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
@@ -3429,7 +2854,7 @@ func TestFlagsClient_CreateFlag_HTTPError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"validation error"}]}`))
 	}))
 
-	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
 	flag.ID = ""
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
@@ -3441,7 +2866,7 @@ func TestFlagsClient_CreateFlag_MalformedJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{not valid}`))
 	}))
 
-	flag := fc.Management().NewBooleanFlag("x", true, WithFlagName("X"))
+	flag := fc.NewBooleanFlag("x", true, WithFlagName("X"))
 	flag.ID = ""
 	err := flag.Save(context.Background())
 	assert.Error(t, err)
@@ -3526,8 +2951,8 @@ func TestFlagRegistrationBuffer_ConcurrentSafety(t *testing.T) {
 
 func TestFlagMethods_PopulateBuffer(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, nil)
-	fc.client.service = "my-svc"
-	fc.client.environment = "staging"
+	fc.service = "my-svc"
+	fc.environment = "staging"
 	rt := fc.runtime
 
 	rt.BooleanFlag("bool-flag", true)
@@ -3582,8 +3007,8 @@ func TestFlagMethods_ThresholdFlush(t *testing.T) {
 	})
 
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
-	fc.client.service = "my-svc"
-	fc.client.environment = "prod"
+	fc.service = "my-svc"
+	fc.environment = "prod"
 	rt := fc.runtime
 
 	// Add exactly flagRegistrationThreshold flags — the 50th triggers a goroutine flush.
@@ -3612,8 +3037,8 @@ func TestFlagMethods_ThresholdFlush_AllTypes(t *testing.T) {
 
 	// Test StringFlag threshold.
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
-	fc.client.service = "svc"
-	fc.client.environment = "prod"
+	fc.service = "svc"
+	fc.environment = "prod"
 	rt := fc.runtime
 	for i := 0; i < flagRegistrationThreshold; i++ {
 		rt.StringFlag("str-"+string(rune('a'+i%26))+string(rune('0'+i/26)), "val")
@@ -3662,8 +3087,8 @@ func TestFlushFlagBuffer_Success(t *testing.T) {
 	})
 
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
-	fc.client.service = "my-svc"
-	fc.client.environment = "prod"
+	fc.service = "my-svc"
+	fc.environment = "prod"
 	rt := fc.runtime
 
 	rt.flagBuffer.add("flag-a", "BOOLEAN", true, "my-svc", "prod")
@@ -3783,18 +3208,17 @@ func TestRunPeriodicFlagFlush_TickerFires(t *testing.T) {
 // --- ensureInit flush-before-fetch ordering ---
 
 func TestEnsureInit_FlushesBeforeFetch(t *testing.T) {
-	var bulkCalledBefore bool
-	var fetchCalled bool
+	var bulkCalledBefore, fetchCalled atomic.Bool
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/flags/bulk", func(w http.ResponseWriter, r *http.Request) {
-		if !fetchCalled {
-			bulkCalledBefore = true
+		if !fetchCalled.Load() {
+			bulkCalledBefore.Store(true)
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"registered":1}`))
 	})
 	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
-		fetchCalled = true
+		fetchCalled.Store(true)
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data":[]}`))
@@ -3804,8 +3228,8 @@ func TestEnsureInit_FlushesBeforeFetch(t *testing.T) {
 	})
 
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
-	fc.client.service = "svc"
-	fc.client.environment = "prod"
+	fc.service = "svc"
+	fc.environment = "prod"
 	rt := fc.runtime
 
 	// Add a flag before init.
@@ -3814,7 +3238,7 @@ func TestEnsureInit_FlushesBeforeFetch(t *testing.T) {
 	err := rt.ensureInit(context.Background())
 	require.NoError(t, err)
 
-	assert.True(t, bulkCalledBefore, "bulk registration should happen before flag fetch")
+	assert.True(t, bulkCalledBefore.Load(), "bulk registration should happen before flag fetch")
 
 	rt.disconnect(context.Background())
 	fc.client.stopWS()
@@ -3887,10 +3311,8 @@ func TestDisconnect_StopsFlagFlushGoroutine(t *testing.T) {
 	fc.client.stopWS()
 }
 
-// ========== New WS event handler tests ==========
+// ========== WS event handler tests ==========
 
-// TestHandleFlagChanged_ScopedFetch_ContentChanged verifies that flag_changed
-// calls GetFlag (scoped) and fires listeners when content differs.
 func TestHandleFlagChanged_ScopedFetch_ContentChanged(t *testing.T) {
 	var fetchCount int32
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3922,10 +3344,6 @@ func TestHandleFlagChanged_ScopedFetch_ContentChanged(t *testing.T) {
 	assert.False(t, received.Deleted)
 }
 
-// TestHandleFlagChanged_ScopedFetch_ContentUnchanged verifies that flag_changed
-// does NOT fire listeners when content is the same.
-// We pre-warm the store by calling fetchSingleFlag first, so the stored map
-// matches exactly what the server returns on the second call.
 func TestHandleFlagChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/flags/my-flag") {
@@ -3948,15 +3366,11 @@ func TestHandleFlagChanged_ScopedFetch_ContentUnchanged(t *testing.T) {
 		called = true
 	})
 
-	// Second handleFlagChanged call: server returns same data → no diff.
 	rt.handleFlagChanged(map[string]interface{}{"id": "my-flag"})
 
 	assert.False(t, called, "listener should NOT fire when content is unchanged")
 }
 
-// TestHandleFlagDeleted_StoreRemoval_ListenerFired verifies that flag_deleted
-// removes the flag from the store and fires the listener with Deleted=true,
-// without making any HTTP fetch.
 func TestHandleFlagDeleted_StoreRemoval_ListenerFired(t *testing.T) {
 	var fetchCount int32
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3982,9 +3396,6 @@ func TestHandleFlagDeleted_StoreRemoval_ListenerFired(t *testing.T) {
 	assert.Equal(t, "gone-flag", evt.ID)
 }
 
-// TestHandleFlagsChanged_FullFetch_DiffFiring verifies that flags_changed
-// fetches the full list, diffs, fires global listener once, and fires per-key
-// listeners for each changed key.
 func TestHandleFlagsChanged_FullFetch_DiffFiring(t *testing.T) {
 	var fetchCount int32
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4026,9 +3437,6 @@ func TestHandleFlagsChanged_FullFetch_DiffFiring(t *testing.T) {
 	assert.True(t, keyBFired, "flag-b key listener should fire (new flag)")
 }
 
-// TestHandleFlagsChanged_NoChange_NoListeners verifies that flags_changed
-// does NOT fire any listeners when the full fetch returns identical content.
-// We pre-warm the store using fetchAllFlags so the stored map matches exactly.
 func TestHandleFlagsChanged_NoChange_NoListeners(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/flags" {
@@ -4049,7 +3457,6 @@ func TestHandleFlagsChanged_NoChange_NoListeners(t *testing.T) {
 	var called bool
 	rt.OnChange(func(evt *FlagChangeEvent) { called = true })
 
-	// Second handleFlagsChanged call: server returns same data → no diff.
 	rt.handleFlagsChanged(map[string]interface{}{})
 
 	assert.False(t, called, "no listener should fire when content is unchanged")
@@ -4057,21 +3464,18 @@ func TestHandleFlagsChanged_NoChange_NoListeners(t *testing.T) {
 
 // ========== Coverage gap tests ==========
 
-// TestFetchSingleFlag_NetworkError covers the network error path.
 func TestFetchSingleFlag_NetworkError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &failingTransport{})
 	_, err := fc.fetchSingleFlag(context.Background(), "my-flag")
 	assert.Error(t, err)
 }
 
-// TestFetchSingleFlag_ReadBodyError covers the read body error path.
 func TestFetchSingleFlag_ReadBodyError(t *testing.T) {
 	fc := newFlagsClientWithTransport(t, &brokenBodyTransport{})
 	_, err := fc.fetchSingleFlag(context.Background(), "my-flag")
 	assert.Error(t, err)
 }
 
-// TestFetchSingleFlag_HTTPError covers the HTTP error status path.
 func TestFetchSingleFlag_HTTPError(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -4081,7 +3485,6 @@ func TestFetchSingleFlag_HTTPError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestFetchSingleFlag_MalformedJSON covers the JSON parse error path.
 func TestFetchSingleFlag_MalformedJSON(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -4091,7 +3494,6 @@ func TestFetchSingleFlag_MalformedJSON(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestFetchSingleFlag_WithValues covers the attrs.Values != nil path.
 func TestFetchSingleFlag_WithValues(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -4103,7 +3505,6 @@ func TestFetchSingleFlag_WithValues(t *testing.T) {
 	assert.NotNil(t, result["values"])
 }
 
-// TestHandleFlagsChanged_FetchError covers the early return on fetch error.
 func TestHandleFlagsChanged_FetchError(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -4118,7 +3519,6 @@ func TestHandleFlagsChanged_FetchError(t *testing.T) {
 	assert.False(t, called)
 }
 
-// TestFireGlobalOnce_PanicRecovery covers the panic recovery path.
 func TestFireGlobalOnce_PanicRecovery(t *testing.T) {
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.OnChange(func(e *FlagChangeEvent) {
@@ -4129,7 +3529,6 @@ func TestFireGlobalOnce_PanicRecovery(t *testing.T) {
 	})
 }
 
-// TestFireKeyListenersOnly_EmptyKey covers the empty key early return.
 func TestFireKeyListenersOnly_EmptyKey(t *testing.T) {
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	var called bool
@@ -4138,7 +3537,6 @@ func TestFireKeyListenersOnly_EmptyKey(t *testing.T) {
 	assert.False(t, called)
 }
 
-// TestFireKeyListenersOnly_KeyListenerPanic covers the key listener panic recovery.
 func TestFireKeyListenersOnly_KeyListenerPanic(t *testing.T) {
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	rt.OnChangeKey("feature", func(e *FlagChangeEvent) {
@@ -4149,7 +3547,6 @@ func TestFireKeyListenersOnly_KeyListenerPanic(t *testing.T) {
 	})
 }
 
-// TestFireKeyListenersOnly_WithHandle covers the flagHandle path.
 func TestFireKeyListenersOnly_WithHandle(t *testing.T) {
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	handle := rt.BooleanFlag("feature", true)
@@ -4161,7 +3558,6 @@ func TestFireKeyListenersOnly_WithHandle(t *testing.T) {
 	assert.True(t, handleFired)
 }
 
-// TestFireKeyListenersOnly_WithHandlePanic covers the handle-specific listener panic recovery.
 func TestFireKeyListenersOnly_WithHandlePanic(t *testing.T) {
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	handle := rt.BooleanFlag("feature", true)
@@ -4171,7 +3567,6 @@ func TestFireKeyListenersOnly_WithHandlePanic(t *testing.T) {
 	})
 }
 
-// TestFireDeletedListener_EmptyKey covers the empty key path.
 func TestFireDeletedListener_EmptyKey(t *testing.T) {
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
 	var called bool
@@ -4180,7 +3575,38 @@ func TestFireDeletedListener_EmptyKey(t *testing.T) {
 	assert.False(t, called)
 }
 
-// --- flagRegistrationBuffer peek/commit tests (issue #116) ---
+// --- Runtime Register / FlushContexts ---
+
+func TestFlagsRuntime_Register(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	fc.runtime.Register(context.Background(), Context{Type: "user", Key: "u1"})
+	assert.Equal(t, 1, fc.runtime.contextBuffer.pendingCount())
+}
+
+func TestFlagsRuntime_FlushContexts_Empty(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	// Should not panic with no pending contexts.
+	fc.runtime.FlushContexts(context.Background())
+}
+
+func TestFlagsRuntime_FlushContexts_SendsBatch(t *testing.T) {
+	var received bool
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/api/v1/contexts/bulk" {
+			received = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	fc.runtime.Register(context.Background(), Context{Type: "user", Key: "u1"})
+	fc.runtime.FlushContexts(context.Background())
+	assert.True(t, received)
+}
+
+// --- flagRegistrationBuffer peek/commit tests ---
 
 func TestFlagRegistrationBuffer_CommitEmpty(t *testing.T) {
 	buf := newFlagRegistrationBuffer()
@@ -4204,6 +3630,11 @@ func TestFlagRegistrationBuffer_PeekDoesNotDrain(t *testing.T) {
 	assert.Len(t, second, 2, "second peek must still see all items")
 }
 
+func TestFlagRegistrationBuffer_PeekEmpty(t *testing.T) {
+	buf := newFlagRegistrationBuffer()
+	assert.Nil(t, buf.peek())
+}
+
 func TestFlagRegistrationBuffer_CommitRemovesTargets(t *testing.T) {
 	buf := newFlagRegistrationBuffer()
 	buf.add("flag1", "BOOLEAN", false, "svc", "prod")
@@ -4217,7 +3648,7 @@ func TestFlagRegistrationBuffer_CommitRemovesTargets(t *testing.T) {
 	assert.Equal(t, "flag2", remaining[0].id)
 }
 
-// --- flushFlagBuffer non-destructive behavior (issue #116) ---
+// --- flushFlagBuffer non-destructive behavior ---
 
 func TestFlagsRuntime_FlushFlagBuffer_500RetainsBuffer(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4280,13 +3711,14 @@ func TestFlagsRuntime_FlushFlagBuffer_500Then200(t *testing.T) {
 	assert.Equal(t, 0, fc.runtime.flagBuffer.pendingCount(), "buffer committed on 200")
 }
 
-// --- ensureInit retry / backoff (issue #116) ---
+// --- ensureInit retry / backoff ---
 
 func TestFlagsRuntime_EnsureInit_ConnectedFalseAfterFailure(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	fc.client.environment = "production"
+	fc.environment = "production"
 
 	err := fc.runtime.ensureInit(context.Background())
 	assert.Error(t, err)
@@ -4301,16 +3733,21 @@ func TestFlagsRuntime_EnsureInit_ConnectedFalseAfterFailure(t *testing.T) {
 }
 
 func TestFlagsRuntime_EnsureInit_BackoffWindow(t *testing.T) {
-	requestCount := 0
+	// Count only flag-list requests; the async service-context POST hits a
+	// different path and must not perturb the backoff-window assertion.
+	var listCount atomic.Int32
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
+		if r.Method == "GET" && r.URL.Path == "/api/v1/flags" {
+			listCount.Add(1)
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	fc.client.environment = "production"
+	fc.environment = "production"
 
 	// First attempt fails and sets a backoff window.
 	_ = fc.runtime.ensureInit(context.Background())
-	countAfterFirst := requestCount
+	countAfterFirst := listCount.Load()
 
 	// Extend the backoff window to well into the future.
 	fc.runtime.connectMu.Lock()
@@ -4320,25 +3757,18 @@ func TestFlagsRuntime_EnsureInit_BackoffWindow(t *testing.T) {
 	// Second attempt must return an error without hitting the network.
 	err := fc.runtime.ensureInit(context.Background())
 	assert.Error(t, err)
-	assert.Equal(t, countAfterFirst, requestCount, "no network call during backoff window")
+	assert.Equal(t, countAfterFirst, listCount.Load(), "no network call during backoff window")
 	assert.False(t, fc.runtime.connected)
 }
 
 func TestFlagsRuntime_EnsureInit_SuccessAfterBackoff(t *testing.T) {
-	// Both the flags-client and app-client share the same test server URL.
-	// We distinguish endpoints by path:
-	//   POST /api/v1/contexts/bulk  — registerServiceContext (always succeed)
-	//   POST /api/v1/flags/bulk     — flushFlagBuffer (fail first call)
-	//   GET  /api/v1/flags          — fetchAllFlags (fail first call)
 	var flagsBulkCalls, flagsListCalls atomic.Int32
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		switch {
 		case r.Method == "POST" && strings.Contains(r.URL.Path, "/contexts/bulk"):
-			// registerServiceContext — always succeed.
 			w.WriteHeader(http.StatusOK)
 		case r.Method == "POST" && strings.Contains(r.URL.Path, "/flags/bulk"):
-			// flushFlagBuffer — fail first, succeed after.
 			if flagsBulkCalls.Add(1) == 1 {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -4346,7 +3776,6 @@ func TestFlagsRuntime_EnsureInit_SuccessAfterBackoff(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{}`))
 		default:
-			// fetchAllFlags — fail first, succeed after.
 			if flagsListCalls.Add(1) == 1 {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -4356,6 +3785,7 @@ func TestFlagsRuntime_EnsureInit_SuccessAfterBackoff(t *testing.T) {
 		}
 	}))
 	fc.client.environment = "production"
+	fc.environment = "production"
 	fc.runtime.flagBuffer.add("feature_flag", "BOOLEAN", false, "svc", "production")
 
 	// First attempt: flags-bulk 500 → buffer retained; list-flags 500 → error returned.
@@ -4416,6 +3846,7 @@ func TestFlagsRuntime_WSSubscribedOnce(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
 	fc.client.environment = "production"
+	fc.environment = "production"
 
 	// First attempt fails.
 	_ = fc.runtime.ensureInit(context.Background())
@@ -4440,4 +3871,125 @@ func TestFlagsRuntime_WSSubscribedOnce(t *testing.T) {
 
 	fc.Disconnect(context.Background())
 	fc.client.stopWS()
+}
+
+// ========== Standalone NewFlagsClient ==========
+
+func TestNewFlagsClient_Standalone_CRUD(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/api/v1/flags/feature-x" {
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sampleFlagResponseJSON("feature-x", "Feature X", "BOOLEAN")))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	fc, err := NewFlagsClient(
+		Config{APIKey: "sk_test", Environment: "test", Service: "svc", DisableTelemetry: true},
+		withBaseURLOverride(server.URL),
+	)
+	require.NoError(t, err)
+	require.Nil(t, fc.client, "standalone client has no parent")
+	assert.Equal(t, "test", fc.environment)
+	assert.Equal(t, "svc", fc.service)
+
+	flag, err := fc.Get(context.Background(), "feature-x")
+	require.NoError(t, err)
+	assert.Equal(t, "feature-x", flag.ID)
+}
+
+func TestNewFlagsClient_Standalone_ConfigError(t *testing.T) {
+	// Missing API key should error in resolveConfig.
+	_, err := NewFlagsClient(Config{Environment: "test"})
+	assert.Error(t, err)
+}
+
+func TestNewFlagsClient_Standalone_EnsureWS_Own(t *testing.T) {
+	fc, err := NewFlagsClient(
+		Config{APIKey: "sk_test", Environment: "test", Service: "svc", DisableTelemetry: true},
+		withBaseURLOverride("https://app.smplkit.com"),
+	)
+	require.NoError(t, err)
+
+	// Standalone ensureWS builds and owns its own socket.
+	ws1 := fc.ensureWS()
+	ws2 := fc.ensureWS()
+	assert.Same(t, ws1, ws2)
+	require.NotNil(t, fc.ownWS)
+
+	ws1.stop()
+}
+
+// newFlagsClient must build its own context buffer when the contexts seam is nil.
+func TestNewFlagsClient_WiredNilContexts(t *testing.T) {
+	c := newTestParentClient("https://app.smplkit.com", &http.Client{}, nil)
+	fc := newFlagsClient(c, nil, nil, nil, nil)
+	require.NotNil(t, fc.runtime)
+	require.NotNil(t, fc.runtime.contextBuffer, "runtime must have a fresh context buffer when contexts seam is nil")
+}
+
+// evaluateHandle records metrics on cache miss, cache hit, and not-found paths
+// when a metrics reporter is wired.
+func TestFlagsRuntime_EvaluateHandle_Metrics(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	metrics := newMetricsReporter(http.DefaultClient, "https://app.smplkit.com", "test", "svc", time.Hour)
+	t.Cleanup(metrics.Close)
+	fc.metrics = metrics
+
+	fc.runtime.connected = true
+	fc.runtime.mu.Lock()
+	fc.runtime.environment = "production"
+	fc.runtime.flagStore = map[string]map[string]interface{}{
+		"feature": {"default": "val", "environments": map[string]interface{}{}},
+	}
+	fc.runtime.mu.Unlock()
+
+	// Cache miss → compute → record.
+	v1 := fc.runtime.evaluateHandle(context.Background(), "feature", "dflt", nil)
+	assert.Equal(t, "val", v1)
+	// Cache hit → record hit + evaluation.
+	v2 := fc.runtime.evaluateHandle(context.Background(), "feature", "dflt", nil)
+	assert.Equal(t, "val", v2)
+	// Not found → cache default + record evaluation.
+	v3 := fc.runtime.evaluateHandle(context.Background(), "missing", "fallback", nil)
+	assert.Equal(t, "fallback", v3)
+}
+
+func TestNewFlagsClient_Standalone_LiveEvaluate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		switch {
+		case r.Method == "POST" && strings.Contains(r.URL.Path, "/contexts/bulk"):
+			w.WriteHeader(http.StatusOK)
+		case r.Method == "POST" && strings.Contains(r.URL.Path, "/flags/bulk"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":[{"id":"feature","type":"flag","attributes":{"id":"feature","name":"Feature","type":"BOOLEAN","default":true,"environments":{}}}]}`))
+		}
+	}))
+	defer server.Close()
+
+	fc, err := NewFlagsClient(
+		Config{APIKey: "sk_test", Environment: "test", Service: "svc", DisableTelemetry: true},
+		withBaseURLOverride(server.URL),
+	)
+	require.NoError(t, err)
+
+	// Pre-inject a sharedWebSocket so the first live use does not open a real socket.
+	fc.ownWS = &sharedWebSocket{
+		listeners: make(map[string][]eventCallback),
+		closeCh:   make(chan struct{}),
+		wsDone:    make(chan struct{}),
+	}
+
+	handle := fc.BooleanFlag("feature", false)
+	result := handle.Get(context.Background())
+	assert.Equal(t, true, result)
+
+	fc.Disconnect(context.Background())
 }

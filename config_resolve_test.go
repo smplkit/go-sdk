@@ -86,7 +86,7 @@ func TestParseBool_FalseValues(t *testing.T) {
 func TestParseBool_Invalid(t *testing.T) {
 	_, err := parseBool("maybe", "debug")
 	require.Error(t, err)
-	var smplErr *SmplError
+	var smplErr *Error
 	require.ErrorAs(t, err, &smplErr)
 	assert.Contains(t, smplErr.Message, "maybe")
 	assert.Contains(t, smplErr.Message, "debug")
@@ -222,7 +222,7 @@ func TestResolveConfig_MissingProfileError(t *testing.T) {
 
 	_, err := resolveConfig(Config{Profile: "nonexistent", Environment: "test", Service: "svc"})
 	require.Error(t, err)
-	var smplErr *SmplError
+	var smplErr *Error
 	require.ErrorAs(t, err, &smplErr)
 	assert.Contains(t, smplErr.Message, "Profile [nonexistent] not found")
 }
@@ -264,7 +264,7 @@ func TestResolveConfig_EmptyValueTreatedAsUnset(t *testing.T) {
 
 	_, err := resolveConfig(Config{})
 	require.Error(t, err) // No API key found.
-	var smplErr *SmplError
+	var smplErr *Error
 	require.ErrorAs(t, err, &smplErr)
 	assert.Contains(t, smplErr.Message, "No API key provided")
 }
@@ -319,6 +319,10 @@ func TestResolveConfig_ConfigStructOverridesEnv(t *testing.T) {
 		Service:     "struct-svc",
 		BaseDomain:  "struct.io",
 		Scheme:      "https",
+		// Debug and DisableTelemetry exercise the explicit-struct boolean
+		// override branches (the env layer left both false).
+		Debug:            true,
+		DisableTelemetry: true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "sk_struct", rc.apiKey)
@@ -326,6 +330,8 @@ func TestResolveConfig_ConfigStructOverridesEnv(t *testing.T) {
 	assert.Equal(t, "struct-svc", rc.service)
 	assert.Equal(t, "struct.io", rc.baseDomain)
 	assert.Equal(t, "https", rc.scheme)
+	assert.True(t, rc.debug)
+	assert.True(t, rc.disableTelemetry)
 }
 
 // ---------------------------------------------------------------------------
@@ -341,7 +347,7 @@ func TestResolveConfig_MissingAPIKeyError(t *testing.T) {
 
 	_, err := resolveConfig(Config{Environment: "test", Service: "svc"})
 	require.Error(t, err)
-	var smplErr *SmplError
+	var smplErr *Error
 	require.ErrorAs(t, err, &smplErr)
 	assert.Contains(t, smplErr.Message, "No API key provided")
 	assert.Contains(t, smplErr.Message, "SMPLKIT_API_KEY")
@@ -355,7 +361,7 @@ func TestResolveConfig_MissingEnvironmentError(t *testing.T) {
 
 	_, err := resolveConfig(Config{APIKey: "sk_test", Service: "svc"})
 	require.Error(t, err)
-	var smplErr *SmplError
+	var smplErr *Error
 	require.ErrorAs(t, err, &smplErr)
 	assert.Contains(t, smplErr.Message, "No environment provided")
 }
@@ -367,7 +373,7 @@ func TestResolveConfig_MissingServiceError(t *testing.T) {
 
 	_, err := resolveConfig(Config{APIKey: "sk_test", Environment: "test"})
 	require.Error(t, err)
-	var smplErr *SmplError
+	var smplErr *Error
 	require.ErrorAs(t, err, &smplErr)
 	assert.Contains(t, smplErr.Message, "No service provided")
 }
@@ -478,6 +484,90 @@ func TestResolveConfig_ProfileStructOverridesEnv(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "structprofile", rc.profile)
 	assert.Equal(t, "sk_struct", rc.apiKey)
+}
+
+// ---------------------------------------------------------------------------
+// resolveConfig — profile "common" skips the named-profile lookup
+// ---------------------------------------------------------------------------
+
+func TestResolveConfig_CommonProfileSkipsNamedLookup(t *testing.T) {
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("SMPLKIT_ENVIRONMENT", "")
+	t.Setenv("SMPLKIT_SERVICE", "")
+	t.Setenv("SMPLKIT_BASE_DOMAIN", "")
+	t.Setenv("SMPLKIT_SCHEME", "")
+	t.Setenv("SMPLKIT_PROFILE", "")
+	t.Setenv("SMPLKIT_DEBUG", "")
+	t.Setenv("SMPLKIT_DISABLE_TELEMETRY", "")
+
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	// Profile "common" applies the [common] section once and skips the
+	// named-profile branch entirely (profile != "common" is false).
+	writeConfig(t, dir, "[common]\napi_key = sk_common\nenvironment = test\nservice = svc\nbase_domain = common.io\n")
+
+	rc, err := resolveConfig(Config{Profile: "common"})
+	require.NoError(t, err)
+	assert.Equal(t, "common", rc.profile)
+	assert.Equal(t, "sk_common", rc.apiKey)
+	assert.Equal(t, "common.io", rc.baseDomain)
+}
+
+// ---------------------------------------------------------------------------
+// resolveStandaloneConfig — requires only an API key, no env / service
+// ---------------------------------------------------------------------------
+
+func TestResolveStandaloneConfig_APIKeyOnly(t *testing.T) {
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("SMPLKIT_ENVIRONMENT", "")
+	t.Setenv("SMPLKIT_SERVICE", "")
+	t.Setenv("SMPLKIT_PROFILE", "")
+	t.Setenv("HOME", t.TempDir())
+
+	// Neither environment nor service supplied — standalone resolution
+	// tolerates that and succeeds as long as the api key is present.
+	rc, err := resolveStandaloneConfig(Config{APIKey: "sk_standalone"})
+	require.NoError(t, err)
+	assert.Equal(t, "sk_standalone", rc.apiKey)
+	assert.Empty(t, rc.environment)
+	assert.Empty(t, rc.service)
+}
+
+func TestResolveStandaloneConfig_MissingAPIKeyError(t *testing.T) {
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("SMPLKIT_PROFILE", "")
+	t.Setenv("HOME", t.TempDir())
+
+	_, err := resolveStandaloneConfig(Config{})
+	require.Error(t, err)
+	var smplErr *Error
+	require.ErrorAs(t, err, &smplErr)
+	assert.Contains(t, smplErr.Message, "No API key provided")
+}
+
+func TestResolveStandaloneConfig_ExtraHeadersAndProfileError(t *testing.T) {
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("SMPLKIT_PROFILE", "")
+	t.Setenv("HOME", t.TempDir())
+
+	// Extra headers flow through to the resolved config.
+	rc, err := resolveStandaloneConfig(Config{
+		APIKey:       "sk_x",
+		ExtraHeaders: map[string]string{"X-Tenant": "acme"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "acme", rc.extraHeaders["X-Tenant"])
+
+	// A missing named profile surfaces from resolveConfigLayers even on the
+	// standalone path (it shares resolveConfigLayers).
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	writeConfig(t, dir, "[staging]\napi_key = sk_staging\n")
+	_, err = resolveStandaloneConfig(Config{Profile: "ghost"})
+	require.Error(t, err)
+	var smplErr *Error
+	require.ErrorAs(t, err, &smplErr)
+	assert.Contains(t, smplErr.Message, "Profile [ghost] not found")
 }
 
 // ---------------------------------------------------------------------------

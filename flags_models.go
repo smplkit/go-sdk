@@ -27,9 +27,9 @@ type Flag struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
-	// client is the back-reference to the management surface that owns
+	// client is the back-reference to the fused FlagsClient that owns
 	// the create/update/delete logic for this active-record model.
-	client *FlagsManagement
+	client *FlagsClient
 }
 
 // FlagValue represents a named value in a flag's value set.
@@ -71,9 +71,7 @@ func (f *Flag) Save(ctx context.Context) error {
 	return f.client.updateFlag(ctx, f)
 }
 
-// Delete removes the flag from the server. Equivalent to
-// mgmt.Flags().Delete(ctx, f.ID) — provided as a convenience on the
-// active-record model (rule 3 of the cross-SDK overhaul).
+// Delete removes this flag from the server.
 func (f *Flag) Delete(ctx context.Context) error {
 	if f.client == nil || f.ID == "" {
 		return &Error{Message: "flag was constructed without a client or id; cannot delete"}

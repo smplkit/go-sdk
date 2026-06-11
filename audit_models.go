@@ -99,6 +99,11 @@ type AuditEvent struct {
 	// ActorLabel is a human-readable label for the actor (e.g. an email
 	// address or API key name). Empty when not supplied.
 	ActorLabel string
+	// Category is a free-form bucket label for the event (e.g. "auth",
+	// "billing", "config-change"). Stored exactly as supplied; drives the
+	// audit log's category filter and the categories discovery listing
+	// (client.Audit().Categories()). Empty when not supplied.
+	Category string
 	// Data is the free-form per-event payload defined by the customer.
 	Data map[string]interface{}
 	// IdempotencyKey is the customer-supplied dedupe key. Empty when
@@ -150,6 +155,12 @@ type CreateEventInput struct {
 	// ActorLabel is a human-readable label for the actor (e.g. an email
 	// address or API key name).
 	ActorLabel string
+	// Category is an optional free-form bucket label for the event (e.g.
+	// "auth", "billing", "config-change"). Stored exactly as supplied;
+	// powers the audit log's category filter and the categories discovery
+	// listing (client.Audit().Categories()). Omit it to leave the event
+	// uncategorized.
+	Category string
 	// Data is free-form contextual JSON. To record a resource snapshot,
 	// nest it inside Data — the smplkit internal convention is
 	// Data["snapshot"], but the shape is unconstrained.
@@ -188,8 +199,10 @@ type ListEventsInput struct {
 	// OccurredAtRange filters by occurred_at using the platform's range
 	// syntax (e.g. "[2026-01-01T00:00:00Z,*)" — ADR-014).
 	OccurredAtRange string
-	// Search performs a case-insensitive substring match against
-	// resource_id.
+	// Search performs a case-insensitive substring match against resource_id
+	// or description. A search filter must be scoped — combine it with
+	// occurred_at_range, or with both resource_type and resource_id — or the
+	// request is rejected.
 	Search string
 	// PageSize is items per page. Zero defers to the server default.
 	PageSize int
@@ -300,6 +313,47 @@ type ListEventTypesInput struct {
 type EventTypeListPage struct {
 	// EventTypes is the slice of event types on this page.
 	EventTypes []AuditEventType
+	// Pagination describes the page boundaries and totals (if requested).
+	Pagination Pagination
+}
+
+// AuditCategory is a distinct category value seen for the account.
+//
+// Same shape as AuditResourceType and AuditEventType — ID and Category are
+// the same value, surfaced as the JSON:API resource id (ADR-014 "key as
+// id"). The duplication keeps SDK consumers from having to dig into the ID
+// field when populating filter UI controls; pick whichever name reads better
+// in context.
+type AuditCategory struct {
+	// ID is the category value, surfaced as the JSON:API resource id.
+	ID string
+	// Category is the same value as ID; provided for readability.
+	Category string
+}
+
+// ListCategoriesInput is the filter + pagination input for AuditCategories.List.
+type ListCategoriesInput struct {
+	// Environments scopes results to the given environment keys (e.g.
+	// "production", "staging"). When omitted or empty, results are scoped
+	// to your single accessible environment. The reserved value "smplkit"
+	// selects platform change events that smplkit records about your own
+	// resources (flags, configuration, and so on); these are not tied to a
+	// deployment environment and are readable regardless of which
+	// environments you manage. Multiple values are sent as a single
+	// comma-separated filter[environment].
+	Environments []string
+	// PageNumber is the 1-based page index. Zero defers to the server default.
+	PageNumber int
+	// PageSize is items per page. Zero defers to the server default.
+	PageSize int
+	// MetaTotal asks the server to populate total / total_pages.
+	MetaTotal bool
+}
+
+// CategoryListPage is one page of category values.
+type CategoryListPage struct {
+	// Categories is the slice of categories on this page.
+	Categories []AuditCategory
 	// Pagination describes the page boundaries and totals (if requested).
 	Pagination Pagination
 }

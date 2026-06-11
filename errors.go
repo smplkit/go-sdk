@@ -36,10 +36,6 @@ type ApiErrorDetail struct {
 	Meta map[string]any `json:"meta,omitempty"`
 }
 
-// ErrorDetail is an alias for ApiErrorDetail kept for backward
-// compatibility. New code should use ApiErrorDetail.
-type ErrorDetail = ApiErrorDetail
-
 // Error is the base error type for all smplkit SDK errors. The flat
 // hierarchy mirrors the Python SDK: ConnectionError, TimeoutError,
 // NotFoundError, ConflictError, and ValidationError are direct subtypes.
@@ -165,39 +161,20 @@ func (e *ValidationError) Error() string { return e.Base.Error() }
 // Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
 func (e *ValidationError) Unwrap() error { return &e.Base }
 
-// ─── Backward-compatibility aliases ──────────────────────────────────────────
+// NotInstalledError is raised when a logging operation is attempted before
+// Install.
 //
-// The original error types had a SmplXxxError name to match the Python
-// SmplError convention. The cross-SDK overhaul drops the prefix, but we
-// keep the old names as deprecated aliases so customer code that imported
-// the old names continues to compile while they migrate.
+// Smpl Logging hooks into your application's logging framework, so it stays
+// opt-in: its live surface requires an explicit LoggingClient.Install first.
+// Config and flags connect lazily on first live use and never raise this.
+type NotInstalledError struct {
+	// Base is the embedded base Error carrying the HTTP status, message,
+	// raw response body, and any parsed JSON:API error details.
+	Base Error
+}
 
-// SmplError is a deprecated alias for Error.
-//
-// Deprecated: Use Error.
-type SmplError = Error
+// Error implements the error interface.
+func (e *NotInstalledError) Error() string { return e.Base.Error() }
 
-// SmplConnectionError is a deprecated alias for ConnectionError.
-//
-// Deprecated: Use ConnectionError.
-type SmplConnectionError = ConnectionError
-
-// SmplTimeoutError is a deprecated alias for TimeoutError.
-//
-// Deprecated: Use TimeoutError.
-type SmplTimeoutError = TimeoutError
-
-// SmplNotFoundError is a deprecated alias for NotFoundError.
-//
-// Deprecated: Use NotFoundError.
-type SmplNotFoundError = NotFoundError
-
-// SmplConflictError is a deprecated alias for ConflictError.
-//
-// Deprecated: Use ConflictError.
-type SmplConflictError = ConflictError
-
-// SmplValidationError is a deprecated alias for ValidationError.
-//
-// Deprecated: Use ValidationError.
-type SmplValidationError = ValidationError
+// Unwrap returns the embedded Error so errors.Is/errors.As walk the chain.
+func (e *NotInstalledError) Unwrap() error { return &e.Base }

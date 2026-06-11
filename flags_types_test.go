@@ -55,6 +55,23 @@ func TestNewContext_NilAttrs(t *testing.T) {
 	assert.Empty(t, ctx.Attributes)
 }
 
+func TestNewContext_EmptyType_Panics(t *testing.T) {
+	assert.PanicsWithValue(t, "smplkit: Context type must be a non-empty string", func() {
+		smplkit.NewContext("", "u1", nil)
+	})
+}
+
+func TestNewContext_EmptyKey_Panics(t *testing.T) {
+	assert.Panics(t, func() {
+		smplkit.NewContext("user", "", nil)
+	})
+}
+
+func TestContext_CompositeID(t *testing.T) {
+	ctx := smplkit.NewContext("user", "user-123", nil)
+	assert.Equal(t, "user:user-123", ctx.CompositeID())
+}
+
 func TestRule_SingleCondition(t *testing.T) {
 	rule := smplkit.NewRule("Enable for enterprise").
 		When("user.plan", "==", "enterprise").

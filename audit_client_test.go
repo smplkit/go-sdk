@@ -242,8 +242,8 @@ func TestClient_AuditAccessors(t *testing.T) {
 }
 
 // The runtime audit client stamps X-Smplkit-Environment from the SDK's
-// configured environment on every call (ADR-055), while the shared
-// management forwarder-CRUD client does not.
+// configured environment on every call (ADR-055), while the account-wide
+// forwarder-CRUD client does not.
 func TestClient_RuntimeAudit_InjectsEnvironmentHeader(t *testing.T) {
 	gotEnv := make(chan string, 4)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -280,10 +280,10 @@ func TestClient_RuntimeAudit_InjectsEnvironmentHeader(t *testing.T) {
 	}
 }
 
-// The management forwarder-CRUD surface must NOT carry the environment
-// header — enablement is per-forwarder via the environments map, and the
-// management plane operates account-wide.
-func TestClient_ManagementAudit_OmitsEnvironmentHeader(t *testing.T) {
+// The forwarder-CRUD surface must NOT carry the environment header —
+// enablement is per-forwarder via the environments map, and forwarder CRUD
+// operates account-wide.
+func TestClient_ForwarderAudit_OmitsEnvironmentHeader(t *testing.T) {
 	gotEnv := make(chan string, 4)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -306,16 +306,16 @@ func TestClient_ManagementAudit_OmitsEnvironmentHeader(t *testing.T) {
 	}
 	defer c.Close()
 
-	if _, err := c.Manage().Audit().Forwarders().List(context.Background(), ListForwardersInput{}); err != nil {
+	if _, err := c.Audit().Forwarders().List(context.Background(), ListForwardersInput{}); err != nil {
 		t.Fatalf("Forwarders.List: %v", err)
 	}
 	select {
 	case env := <-gotEnv:
 		if env != "" {
-			t.Fatalf("expected no X-Smplkit-Environment on management call, got %q", env)
+			t.Fatalf("expected no X-Smplkit-Environment on forwarder call, got %q", env)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("server never received the management audit request")
+		t.Fatal("server never received the forwarder audit request")
 	}
 }
 
@@ -358,6 +358,159 @@ func TestClient_RuntimeAudit_ExtraHeaderEnvironmentWins(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// NewAuditClient — standalone construction
+// ---------------------------------------------------------------------------
+
+// NewAuditClient builds its own gen clients; the runtime surface stamps the
+// configured environment header while the forwarder surface does not. This
+// exercises every editor closure (env, SDK headers, extra headers) on both
+// the runtime and forwarder transports.
+func TestNewAuditClient_StandaloneSurface(t *testing.T) {
+	type capture struct {
+		env       string
+		accept    string
+		userAgent string
+		extra     string
+	}
+	captured := make(chan capture, 8)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured <- capture{
+			env:       r.Header.Get("X-Smplkit-Environment"),
+			accept:    r.Header.Get("Accept"),
+			userAgent: r.Header.Get("User-Agent"),
+			extra:     r.Header.Get("X-Custom"),
+		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":1,"size":1000}}}`))
+	}))
+	defer srv.Close()
+
+	ac, err := NewAuditClient(Config{
+		APIKey:           "sk_api_test",
+		Environment:      "production",
+		Service:          "test",
+		DisableTelemetry: true,
+		ExtraHeaders:     map[string]string{"X-Custom": "hi"},
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewAuditClient: %v", err)
+	}
+	defer ac.Close()
+
+	// Accessors are all non-nil.
+	if ac.Events() == nil || ac.ResourceTypes() == nil || ac.EventTypes() == nil ||
+		ac.Categories() == nil || ac.Forwarders() == nil {
+		t.Fatal("expected all AuditClient accessors to be non-nil")
+	}
+
+	// Runtime call carries the environment header + SDK + extra headers.
+	if _, err := ac.ResourceTypes().List(context.Background(), ListResourceTypesInput{}); err != nil {
+		t.Fatalf("ResourceTypes.List: %v", err)
+	}
+	select {
+	case c := <-captured:
+		if c.env != "production" {
+			t.Errorf("expected runtime env header=production, got %q", c.env)
+		}
+		if !strings.Contains(c.accept, "application/vnd.api+json") {
+			t.Errorf("expected Accept header, got %q", c.accept)
+		}
+		if c.userAgent != userAgent {
+			t.Errorf("expected User-Agent=%q, got %q", userAgent, c.userAgent)
+		}
+		if c.extra != "hi" {
+			t.Errorf("expected X-Custom=hi extra header, got %q", c.extra)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server never received the runtime audit request")
+	}
+
+	// Forwarder call carries SDK + extra headers but NOT the environment header.
+	if _, err := ac.Forwarders().List(context.Background(), ListForwardersInput{}); err != nil {
+		t.Fatalf("Forwarders.List: %v", err)
+	}
+	select {
+	case c := <-captured:
+		if c.env != "" {
+			t.Errorf("expected no env header on forwarder call, got %q", c.env)
+		}
+		if c.extra != "hi" {
+			t.Errorf("expected X-Custom=hi extra header on forwarder call, got %q", c.extra)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server never received the forwarder audit request")
+	}
+}
+
+// NewAuditClient surfaces config-resolution errors (here: a missing API key
+// with a non-default profile so the local ~/.smplkit default profile can't
+// satisfy it).
+func TestNewAuditClient_ConfigError(t *testing.T) {
+	_, err := NewAuditClient(Config{
+		Profile:     "definitely-not-a-real-profile",
+		Environment: "production",
+		Service:     "test",
+	})
+	if err == nil {
+		t.Fatal("expected config-resolution error from missing API key")
+	}
+}
+
+// NewAuditClient honors a caller-supplied *http.Client (its transport is
+// wrapped with the auth transport rather than replaced), so requests still
+// reach the server and authenticate.
+func TestNewAuditClient_CustomHTTPClient(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"pagination":{"page":1,"size":1000}}}`))
+	}))
+	defer srv.Close()
+
+	ac, err := NewAuditClient(Config{
+		APIKey:      "sk_api_test",
+		Environment: "production",
+		Service:     "test",
+	}, withBaseURLOverride(srv.URL), WithHTTPClient(&http.Client{}))
+	if err != nil {
+		t.Fatalf("NewAuditClient: %v", err)
+	}
+	defer ac.Close()
+	if _, err := ac.Categories().List(context.Background(), ListCategoriesInput{}); err != nil {
+		t.Fatalf("Categories.List: %v", err)
+	}
+}
+
+// Close on a standalone AuditClient drains the buffer and is safe to call.
+func TestNewAuditClient_Close(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+	ac, err := NewAuditClient(Config{
+		APIKey:      "sk_api_test",
+		Environment: "production",
+		Service:     "test",
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewAuditClient: %v", err)
+	}
+	if err := ac.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+// Close is a no-op (returns nil) when the events sub-client is absent — the
+// nil-guard branch in AuditClient.Close.
+func TestAuditClient_Close_NilEvents(t *testing.T) {
+	ac := &AuditClient{}
+	if err := ac.Close(); err != nil {
+		t.Fatalf("Close on empty AuditClient: %v", err)
+	}
+}
+
 // Event.Environment is read-only and surfaced from the read path.
 func TestEventFromResource_PopulatesEnvironment(t *testing.T) {
 	env := "production"
@@ -374,6 +527,41 @@ func TestEventFromResource_PopulatesEnvironment(t *testing.T) {
 	got := eventFromResource(res)
 	if got.Environment != "production" {
 		t.Fatalf("expected Environment=production, got %q", got.Environment)
+	}
+}
+
+// eventFromResource surfaces Category from the read path.
+func TestEventFromResource_PopulatesCategory(t *testing.T) {
+	cat := "billing"
+	idStr := "11111111-2222-3333-4444-555555555555"
+	res := genaudit.EventResource{
+		Id: &idStr,
+		Attributes: genaudit.Event{
+			EventType:    "invoice.paid",
+			ResourceType: "invoice",
+			ResourceId:   "inv-1",
+			Category:     &cat,
+		},
+	}
+	got := eventFromResource(res)
+	if got.Category != "billing" {
+		t.Fatalf("expected Category=billing, got %q", got.Category)
+	}
+}
+
+// eventFromResource leaves the id zero-valued when the wire omits it (nil Id
+// branch).
+func TestEventFromResource_NilID(t *testing.T) {
+	res := genaudit.EventResource{
+		Attributes: genaudit.Event{
+			EventType:    "user.created",
+			ResourceType: "user",
+			ResourceId:   "u-1",
+		},
+	}
+	got := eventFromResource(res)
+	if got.ID != uuid.Nil {
+		t.Fatalf("expected zero ID when wire omits it, got %s", got.ID)
 	}
 }
 
@@ -422,12 +610,39 @@ func TestAuditEvents_Create_AllOptionalFields(t *testing.T) {
 		ResourceType:   "invoice",
 		ResourceID:     "inv-1",
 		OccurredAt:     &occurred,
+		Category:       "billing",
 		Data:           map[string]interface{}{"snapshot": map[string]interface{}{"total_cents": 4900}, "req_id": "abc"},
 		IdempotencyKey: "k-1",
 	}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	events.Flush(2 * time.Second)
+}
+
+// Record threads the optional Category onto the wire when non-empty.
+func TestAuditEvents_Record_PassesCategory(t *testing.T) {
+	captured := make(chan string, 1)
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		captured <- string(b)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1","category":"billing"}}}`))
+	})
+	defer cleanup()
+	if err := events.Record(CreateEventInput{
+		EventType:    "invoice.paid",
+		ResourceType: "invoice",
+		ResourceID:   "inv-1",
+		Category:     "billing",
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	events.Flush(2 * time.Second)
+	body := <-captured
+	if !strings.Contains(body, `"category":"billing"`) {
+		t.Errorf("expected category in body, got: %s", body)
+	}
 }
 
 // Record passes customer-supplied actor attribution straight onto the
@@ -833,6 +1048,23 @@ func TestAuditEvents_List_LinksWithExtraQuery(t *testing.T) {
 	}
 }
 
+// List with nil links leaves NextCursor empty (the body.Links == nil branch).
+func TestAuditEvents_List_NilLinks(t *testing.T) {
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
+	})
+	defer cleanup()
+	page, err := events.List(context.Background(), ListEventsInput{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if page.NextCursor != "" {
+		t.Fatalf("expected empty NextCursor with no links, got %q", page.NextCursor)
+	}
+}
+
 func TestAuditEvents_Get_EmptyBody(t *testing.T) {
 	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -941,6 +1173,47 @@ func TestAuditEventBuffer_RetriesTransient(t *testing.T) {
 	}
 	if attempts.Load() < 2 {
 		t.Fatalf("expected retry to succeed; got attempts=%d", attempts.Load())
+	}
+}
+
+// handleOutcome treats a nil *resp (transport error → status 0) as a
+// retryable outcome: drainOnce passes status=0 alongside the error, and the
+// item is requeued rather than dropped. Covers the "err != nil, status 0"
+// path through handleOutcome and the requeue branch in drainOnce.
+func TestAuditEventBuffer_TransportErrorRequeues(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	url := srv.URL
+	srv.Close() // every POST now fails at the transport layer.
+	gen, _ := genaudit.NewClient(url)
+	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
+	buf := newAuditEventBufferStopped(wrapped)
+	buf.maxAttempts = 2
+	buf.initialBack = 20 * time.Millisecond
+	buf.watermark = 1
+	buf.flushEvery = 20 * time.Millisecond
+	go buf.run()
+	defer buf.close(2 * time.Second)
+
+	body := genaudit.EventRequest{
+		Data: genaudit.EventResource{Attributes: genaudit.Event{EventType: "x", ResourceType: "x", ResourceId: "1"}},
+	}
+	buf.enqueue(body, "")
+	// Give the worker time to exhaust both attempts and drop the item.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		buf.mu.Lock()
+		empty := len(buf.queue) == 0 && buf.inFlight == 0
+		buf.mu.Unlock()
+		if empty {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	buf.mu.Lock()
+	remaining := len(buf.queue)
+	buf.mu.Unlock()
+	if remaining != 0 {
+		t.Fatalf("expected the item to be dropped after max attempts, %d remain", remaining)
 	}
 }
 
