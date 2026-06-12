@@ -5,10 +5,10 @@ package smplkit
 // pages mean fewer round trips during startup and refresh.
 const fetchAllPageSize = 1000
 
-// ListOption configures a paginated list call. Pass options to any
-// Management list method to request a specific page or page size:
+// ListOption configures a paginated list call. Pass options to any list
+// method to request a specific page or page size:
 //
-//	loggers, err := mgmt.Loggers().List(ctx, smplkit.WithPageSize(50))
+//	loggers, err := client.Logging().Loggers().List(ctx, smplkit.WithPageSize(50))
 //
 // Omit all options to let the server apply its defaults (page 1, page
 // size 1000). The wrapper does not loop on the caller's behalf — see

@@ -16,7 +16,7 @@ import (
 // FlagsClient is the Smpl Flags client.
 //
 // One client exposes the full surface, reachable as client.Flags()
-// or constructed directly via NewFlagsClient. The management surface
+// or constructed directly via NewFlagsClient. The CRUD surface
 // (NewBooleanFlag / NewStringFlag / NewNumberFlag / NewJsonFlag, Get /
 // List / Delete, and the flag-declaration discovery buffer) is pure
 // CRUD. The live surface (BooleanFlag / StringFlag / NumberFlag /
@@ -519,26 +519,57 @@ func (c *FlagsClient) fetchFlagsPage(ctx context.Context, pageNumber, pageSize i
 }
 
 // BooleanFlag returns a typed handle for a boolean flag.
+//
+// The id is the identifier of the flag to evaluate. The defaultValue is
+// returned by the handle's Get when the flag is unknown or no
+// environment override or rule applies. Connects lazily on first use.
+//
+// Returns a *BooleanFlagHandle whose Get evaluates against the live cache.
 func (c *FlagsClient) BooleanFlag(key string, defaultValue bool) *BooleanFlagHandle {
 	return c.runtime.BooleanFlag(key, defaultValue)
 }
 
 // StringFlag returns a typed handle for a string flag.
+//
+// The id is the identifier of the flag to evaluate. The defaultValue is
+// returned by the handle's Get when the flag is unknown or no
+// environment override or rule applies. Connects lazily on first use.
+//
+// Returns a *StringFlagHandle whose Get evaluates against the live cache.
 func (c *FlagsClient) StringFlag(key string, defaultValue string) *StringFlagHandle {
 	return c.runtime.StringFlag(key, defaultValue)
 }
 
 // NumberFlag returns a typed handle for a numeric flag.
+//
+// The id is the identifier of the flag to evaluate. The defaultValue is
+// returned by the handle's Get when the flag is unknown or no
+// environment override or rule applies. Connects lazily on first use.
+//
+// Returns a *NumberFlagHandle whose Get evaluates against the live cache.
 func (c *FlagsClient) NumberFlag(key string, defaultValue float64) *NumberFlagHandle {
 	return c.runtime.NumberFlag(key, defaultValue)
 }
 
 // JsonFlag returns a typed handle for a JSON flag.
+//
+// The id is the identifier of the flag to evaluate. The defaultValue is
+// returned by the handle's Get when the flag is unknown or no
+// environment override or rule applies. Connects lazily on first use.
+//
+// Returns a *JsonFlagHandle whose Get evaluates against the live cache.
 func (c *FlagsClient) JsonFlag(key string, defaultValue map[string]interface{}) *JsonFlagHandle {
 	return c.runtime.JsonFlag(key, defaultValue)
 }
 
-// SetContextProvider registers a function that provides evaluation contexts.
+// SetContextProvider registers a function that supplies evaluation
+// contexts.
+//
+// The fn receives a context.Context and returns a []Context. The
+// returned slice supplies the evaluation contexts that targeting rules
+// are evaluated against. It is invoked during evaluation on the typed-
+// handle Get path whenever no contexts are passed explicitly to Get,
+// providing the ambient contexts in their place.
 func (c *FlagsClient) SetContextProvider(fn func(ctx context.Context) []Context) {
 	c.runtime.SetContextProvider(fn)
 }
@@ -574,7 +605,20 @@ func (c *FlagsClient) OnChangeKey(key string, cb func(*FlagChangeEvent)) {
 	c.runtime.OnChangeKey(key, cb)
 }
 
-// Evaluate evaluates a flag with the given environment and contexts.
+// Evaluate evaluates a flag against an explicit environment and contexts
+// and returns the raw resolved value.
+//
+// The key is the identifier of the flag to evaluate. The environment is
+// the environment name whose overrides and rules are applied. The
+// contexts are the Context entities that targeting rules are evaluated
+// against. The returned interface{} is the resolved value, untyped (nil
+// when the flag is unknown or cannot be resolved).
+//
+// This is the untyped, explicit-environment counterpart to the typed
+// handle Get path (BooleanFlag/StringFlag/NumberFlag/JsonFlag and their
+// Get): those resolve the environment from client configuration, coerce
+// the result to a Go type, and fall back to a supplied default, whereas
+// Evaluate names the environment directly and returns the value as-is.
 func (c *FlagsClient) Evaluate(ctx context.Context, key string, environment string, contexts []Context) interface{} {
 	return c.runtime.Evaluate(ctx, key, environment, contexts)
 }
@@ -605,7 +649,17 @@ func (c *FlagsClient) flushContexts(ctx context.Context, batch []map[string]inte
 // Management surface: CRUD (no live connection)
 // ------------------------------------------------------------------
 
-// NewBooleanFlag returns a new unsaved boolean Flag. Call Save() to persist.
+// NewBooleanFlag returns a new unsaved boolean Flag.
+//
+// The id is a stable flag identifier, unique per account. The
+// defaultValue is served when no environment override or rule applies.
+//
+// Options:
+//   - WithFlagName sets a human-readable display name; when omitted it
+//     defaults to a title-cased form of id.
+//   - WithFlagDescription sets an optional free-text description.
+//
+// Returns a new unsaved Flag; call Save to persist.
 func (c *FlagsClient) NewBooleanFlag(id string, defaultValue bool, opts ...FlagOption) *Flag {
 	boolValues := []FlagValue{{Name: "True", Value: true}, {Name: "False", Value: false}}
 	f := &Flag{
@@ -623,7 +677,19 @@ func (c *FlagsClient) NewBooleanFlag(id string, defaultValue bool, opts ...FlagO
 	return f
 }
 
-// NewStringFlag returns a new unsaved string Flag. Call Save() to persist.
+// NewStringFlag returns a new unsaved string Flag.
+//
+// The id is a stable flag identifier, unique per account. The
+// defaultValue is served when no environment override or rule applies.
+//
+// Options:
+//   - WithFlagName sets a human-readable display name; when omitted it
+//     defaults to a title-cased form of id.
+//   - WithFlagDescription sets an optional free-text description.
+//   - WithFlagValues sets an optional list of allowed values constraining
+//     what the flag may serve; when omitted, the flag is unconstrained.
+//
+// Returns a new unsaved Flag; call Save to persist.
 func (c *FlagsClient) NewStringFlag(id string, defaultValue string, opts ...FlagOption) *Flag {
 	f := &Flag{
 		ID:           id,
@@ -639,7 +705,19 @@ func (c *FlagsClient) NewStringFlag(id string, defaultValue string, opts ...Flag
 	return f
 }
 
-// NewNumberFlag returns a new unsaved numeric Flag. Call Save() to persist.
+// NewNumberFlag returns a new unsaved numeric Flag.
+//
+// The id is a stable flag identifier, unique per account. The
+// defaultValue is served when no environment override or rule applies.
+//
+// Options:
+//   - WithFlagName sets a human-readable display name; when omitted it
+//     defaults to a title-cased form of id.
+//   - WithFlagDescription sets an optional free-text description.
+//   - WithFlagValues sets an optional list of allowed values constraining
+//     what the flag may serve; when omitted, the flag is unconstrained.
+//
+// Returns a new unsaved Flag; call Save to persist.
 func (c *FlagsClient) NewNumberFlag(id string, defaultValue float64, opts ...FlagOption) *Flag {
 	f := &Flag{
 		ID:           id,
@@ -655,7 +733,19 @@ func (c *FlagsClient) NewNumberFlag(id string, defaultValue float64, opts ...Fla
 	return f
 }
 
-// NewJsonFlag returns a new unsaved JSON Flag. Call Save() to persist.
+// NewJsonFlag returns a new unsaved JSON Flag.
+//
+// The id is a stable flag identifier, unique per account. The
+// defaultValue is served when no environment override or rule applies.
+//
+// Options:
+//   - WithFlagName sets a human-readable display name; when omitted it
+//     defaults to a title-cased form of id.
+//   - WithFlagDescription sets an optional free-text description.
+//   - WithFlagValues sets an optional list of allowed values constraining
+//     what the flag may serve; when omitted, the flag is unconstrained.
+//
+// Returns a new unsaved Flag; call Save to persist.
 func (c *FlagsClient) NewJsonFlag(id string, defaultValue map[string]interface{}, opts ...FlagOption) *Flag {
 	f := &Flag{
 		ID:           id,
@@ -672,6 +762,10 @@ func (c *FlagsClient) NewJsonFlag(id string, defaultValue map[string]interface{}
 }
 
 // Get fetches the editable Flag resource by id.
+//
+// The id is the identifier of the flag to fetch. The returned *Flag is
+// ready to mutate and Save. Returns a *NotFoundError when no flag with
+// that id exists for the account.
 func (c *FlagsClient) Get(ctx context.Context, id string) (*Flag, error) {
 	resp, err := c.generated.GetFlag(ctx, id)
 	if err != nil {
@@ -703,6 +797,12 @@ func (c *FlagsClient) Get(ctx context.Context, id string) (*Flag, error) {
 // 1000). Use [WithPageNumber] / [WithPageSize] to walk additional
 // pages. The wrapper does not loop — callers that want every flag
 // should iterate until a short page is returned.
+//
+// Options:
+//   - WithPageNumber sets the 1-based page index to fetch; when omitted,
+//     the server default applies.
+//   - WithPageSize sets the number of flags per page; when omitted, the
+//     server default applies.
 func (c *FlagsClient) List(ctx context.Context, opts ...ListOption) ([]*Flag, error) {
 	o := resolveListOptions(opts)
 	params := &genflags.ListFlagsParams{
@@ -738,6 +838,9 @@ func (c *FlagsClient) List(ctx context.Context, opts ...ListOption) ([]*Flag, er
 }
 
 // Delete deletes a flag by id.
+//
+// The id is the identifier of the flag to delete. Returns a
+// *NotFoundError when no flag with that id exists for the account.
 func (c *FlagsClient) Delete(ctx context.Context, id string) error {
 	resp, err := c.generated.DeleteFlag(ctx, id)
 	if err != nil {

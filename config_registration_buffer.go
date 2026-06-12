@@ -28,10 +28,9 @@ type configBufferMeta struct {
 	description string
 }
 
-// configRegistrationBuffer mirrors Python's _ConfigRegistrationBuffer:
-// per-config metadata kept across flushes so post-flush deltas
-// re-attribute correctly, plus permanent (configID, itemKey) dedupe so
-// already-sent items never re-send. Thread-safe.
+// configRegistrationBuffer keeps per-config metadata across flushes so
+// post-flush deltas re-attribute correctly, plus permanent (configID,
+// itemKey) dedupe so already-sent items never re-send. Thread-safe.
 type configRegistrationBuffer struct {
 	mu        sync.Mutex
 	pending   map[string]*configBufferEntry // ordered insertion is not guaranteed; bulk endpoint doesn't require order

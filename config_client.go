@@ -48,7 +48,7 @@ type configChangeListener struct {
 //	proxy, _ := config.Subscribe(ctx, "billing")
 //	v, _ := proxy.Get("max_seats")
 //
-// The management surface (New / Get / List / Delete and discovery) is pure
+// The CRUD surface (New / Get / List / Delete and discovery) is pure
 // CRUD. The live surface (Subscribe / GetValue / Bind / OnChange / Refresh)
 // connects lazily on first use — the first call flushes discovery, fetches
 // and resolves all configs into the local cache, and opens the live-updates
@@ -58,7 +58,7 @@ type ConfigClient struct {
 	generated genconfig.ClientInterface
 
 	// buffer holds pending config / item declarations for bulk-discovery
-	// upload. Owned by this client (no management delegation).
+	// upload. Owned by this client.
 	buffer *configRegistrationBuffer
 
 	// Runtime / standalone configuration mirrored from the parent (or
@@ -164,7 +164,7 @@ func (c *ConfigClient) ensureWS() *sharedWebSocket {
 }
 
 // ------------------------------------------------------------------
-// Management surface: CRUD (no live connection)
+// CRUD surface (no live connection)
 // ------------------------------------------------------------------
 
 // New returns a new unsaved ConfigEntry. Call ConfigEntry.Save to persist.
@@ -310,10 +310,18 @@ func (c *ConfigClient) updateConfig(ctx context.Context, cfg *ConfigEntry) error
 }
 
 // ------------------------------------------------------------------
-// Management surface: discovery buffer (owned directly)
+// CRUD surface: discovery buffer (owned directly)
 // ------------------------------------------------------------------
 
 // RegisterConfig queues a configuration declaration for bulk-discovery upload.
+//
+// The declaration is buffered and sent in the background; it surfaces the
+// config in the smplkit console even if no values are set yet. configID is
+// the config identifier (slug) being declared. service is the name of the
+// service declaring the config. environment is the environment the
+// declaration is scoped to. parent is an optional parent config id this
+// config inherits from. name is an optional display name. description is an
+// optional human-readable description.
 func (c *ConfigClient) RegisterConfig(configID, service, environment, parent, name, description string) {
 	c.buffer.declare(configID, configBufferMeta{
 		service:     service,
@@ -327,7 +335,15 @@ func (c *ConfigClient) RegisterConfig(configID, service, environment, parent, na
 	}
 }
 
-// RegisterConfigItem queues a config item declaration. RegisterConfig must run first.
+// RegisterConfigItem queues a config item declaration. RegisterConfig must
+// run first.
+//
+// The declaration is buffered and sent in the background, surfacing the item
+// (with its type and default) in the smplkit console. configID is the config
+// identifier (slug) the item belongs to. itemKey is the key of the item
+// within the config. itemType is the item value type — one of "STRING",
+// "NUMBER", "BOOLEAN", or "JSON". defaultVal is the in-code default value for
+// the item. description is an optional human-readable description.
 func (c *ConfigClient) RegisterConfigItem(configID, itemKey, itemType string, defaultVal interface{}, description string) {
 	c.buffer.addItem(configID, itemKey, itemType, defaultVal, description)
 	if c.buffer.pendingCount() >= configRegistrationFlushSize {
@@ -340,12 +356,11 @@ func (c *ConfigClient) PendingCount() int {
 	return c.buffer.pendingCount()
 }
 
-// Flush POSTs pending declarations to /api/v1/configs/bulk.
+// Flush sends any queued config and item declarations to the server.
 //
-// Per ADR-024 §2.9, bulk registration always lands rows as managed=false
-// and is plan-limit-exempt — failures here never propagate to customer
-// code. Drained entries are not requeued; the SDK will re-observe on the
-// next process start.
+// Discovery is best-effort — failures here never propagate to your code.
+// Drained entries are not requeued; the SDK re-observes them on the next
+// process start.
 func (c *ConfigClient) Flush(ctx context.Context) error {
 	batch := c.buffer.drain()
 	if len(batch) == 0 {

@@ -17,11 +17,11 @@ import (
 )
 
 // loggerBatchFlushSize is the number of buffered logger sources that
-// triggers a background flush. Mirrors Python's _LOGGER_BATCH_FLUSH_SIZE.
+// triggers a background flush.
 const loggerBatchFlushSize = 50
 
 // notInstalledMessage is the error text for live operations attempted
-// before Install. Mirrors Python's _NOT_INSTALLED_MESSAGE.
+// before Install.
 const notInstalledMessage = "Smpl Logging live operations require install() first — this opens a live " +
 	"connection to your running service and hooks into your application's " +
 	"logging framework. Call client.Logging().Install() before " +
@@ -36,8 +36,8 @@ const notInstalledMessage = "Smpl Logging live operations require install() firs
 // config, flags, audit, and jobs clients expose their full surface from
 // one class:
 //
-//   - Management surface — works immediately, no Install required.
-//     Two sub-clients (the audit pattern):
+//   - CRUD surface — works without Install.
+//     Two sub-clients:
 //   - client.Logging().Loggers() — logger CRUD + discovery: New / List /
 //     Get / Delete plus Register / Flush / FlushSync / PendingCount.
 //   - client.Logging().LogGroups() — log-group CRUD: New / List / Get /
@@ -81,7 +81,7 @@ type LoggingClient struct {
 	wsMu  sync.Mutex
 	ownWS *sharedWebSocket
 
-	// Management sub-clients (the audit pattern).
+	// CRUD sub-clients.
 	loggers   *LoggersClient
 	logGroups *LogGroupsClient
 

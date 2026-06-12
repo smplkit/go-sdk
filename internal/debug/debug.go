@@ -35,6 +35,13 @@ func Enable() {
 	debugEnabled = true
 }
 
+// SetEnabled sets the debug-output state explicitly. Used by tests to restore
+// the process-global flag after a Config{Debug: true} client is constructed,
+// so debug output does not leak into unrelated tests.
+func SetEnabled(v bool) {
+	debugEnabled = v
+}
+
 // IsEnabled reports whether debug output is currently enabled.
 func IsEnabled() bool { return debugEnabled }
 

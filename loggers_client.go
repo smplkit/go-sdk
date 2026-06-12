@@ -26,9 +26,11 @@ type LoggersClient struct {
 
 // New returns a new unsaved Logger. Call logger.Save(ctx) to persist.
 //
-// The display name defaults to id and managed defaults to true (every
-// customer using the management API to create a logger is doing so to
-// manage it).
+// id is the identifier for the logger (its normalized name); the display
+// name defaults to id. managed defaults to true (WithLoggerManaged
+// overrides it): when true, smplkit controls this logger's level at
+// runtime; set false to register the logger for visibility without taking
+// over its level.
 func (m *LoggersClient) New(id string, opts ...LoggerOption) *Logger {
 	l := &Logger{
 		ID:           id,
@@ -43,13 +45,24 @@ func (m *LoggersClient) New(id string, opts ...LoggerOption) *Logger {
 	return l
 }
 
-// Register buffers logger sources for registration; optionally flushes
-// immediately. Sources are coalesced into the shared discovery buffer.
+// Register queues one or more logger sources for registration with the
+// server. Sources are buffered locally and coalesced into the shared
+// discovery buffer, then sent in a batch.
+//
+// sources are the logger sources to queue. flush, when true, sends the
+// buffered batch immediately instead of waiting for it to fill.
 func (m *LoggersClient) Register(ctx context.Context, sources []LoggerSource, flush bool) error {
 	for _, src := range sources {
-		level := ""
+		resolved := ""
 		if src.ResolvedLevel != nil {
-			level = string(*src.ResolvedLevel)
+			resolved = string(*src.ResolvedLevel)
+		}
+		// The explicit (configured) level defaults to the resolved level when
+		// the caller did not set one, so an inherited source still registers a
+		// usable level.
+		explicit := resolved
+		if src.Level != nil {
+			explicit = string(*src.Level)
 		}
 		service := ""
 		if src.Service != nil {
@@ -59,7 +72,7 @@ func (m *LoggersClient) Register(ctx context.Context, sources []LoggerSource, fl
 		if src.Environment != nil {
 			environment = *src.Environment
 		}
-		m.buffer.add(NormalizeLoggerName(src.ID), level, level, service, environment)
+		m.buffer.add(NormalizeLoggerName(src.ID), explicit, resolved, service, environment)
 	}
 	if flush {
 		return m.Flush(ctx)
@@ -131,7 +144,8 @@ func (m *LoggersClient) PendingCount() int {
 	return m.buffer.pendingCount()
 }
 
-// Get fetches the editable Logger resource by id.
+// Get fetches the editable Logger resource by id. It returns a
+// *NotFoundError when no logger with that id exists.
 func (m *LoggersClient) Get(ctx context.Context, id string) (*Logger, error) {
 	resp, err := m.gen.GetLogger(ctx, id)
 	if err != nil {
@@ -232,6 +246,10 @@ func (m *LoggersClient) RegisterSources(ctx context.Context, sources []LoggerSou
 			rl := string(*s.ResolvedLevel)
 			item.ResolvedLevel = &rl
 		}
+		if s.Level != nil {
+			lv := string(*s.Level)
+			item.Level = &lv
+		}
 		items[i] = item
 	}
 	reqBody := genlogging.LoggerBulkRequest{Loggers: items}
@@ -301,7 +319,8 @@ func (m *LogGroupsClient) New(id string, opts ...LogGroupOption) *LogGroup {
 	return g
 }
 
-// Get fetches the editable LogGroup resource by id.
+// Get fetches the editable LogGroup resource by id. It returns a
+// *NotFoundError when no log group with that id exists.
 func (m *LogGroupsClient) Get(ctx context.Context, id string) (*LogGroup, error) {
 	groups, err := m.List(ctx)
 	if err != nil {

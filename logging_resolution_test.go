@@ -455,11 +455,31 @@ func TestLogger_ClearAllEnvironmentLevels(t *testing.T) {
 
 func TestLogGroup_SetClearLevel(t *testing.T) {
 	g := &LogGroup{}
-	g.SetLevel(LogLevelWarn)
+	g.SetLevel(LogLevelWarn, "")
 	require.NotNil(t, g.Level)
 	assert.Equal(t, LogLevelWarn, *g.Level)
-	g.ClearLevel()
+	g.ClearLevel("")
 	assert.Nil(t, g.Level)
+}
+
+func TestLogGroup_SetClearBaseLevel(t *testing.T) {
+	g := &LogGroup{}
+	g.SetBaseLevel(LogLevelWarn)
+	require.NotNil(t, g.Level)
+	assert.Equal(t, LogLevelWarn, *g.Level)
+	g.ClearBaseLevel()
+	assert.Nil(t, g.Level)
+}
+
+func TestLogGroup_SetClearLevel_Environment(t *testing.T) {
+	g := &LogGroup{}
+	g.SetLevel(LogLevelDebug, "staging")
+	envData, ok := g.Environments["staging"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, string(LogLevelDebug), envData["level"])
+	g.ClearLevel("staging")
+	_, present := g.Environments["staging"]
+	assert.False(t, present)
 }
 
 func TestLogGroup_SetEnvironmentLevel_NilEnvironments(t *testing.T) {

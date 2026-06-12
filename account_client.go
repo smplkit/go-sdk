@@ -74,6 +74,9 @@ type SettingsClient struct {
 }
 
 // Get retrieves the current account settings.
+//
+// Returns an AccountSettings active record; mutate its fields and call
+// Save(ctx) to persist the changes.
 func (m *SettingsClient) Get(ctx context.Context) (*AccountSettings, error) {
 	resp, err := m.appClient.GetAccountSettings(ctx)
 	if err != nil {

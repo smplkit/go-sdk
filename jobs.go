@@ -1,11 +1,10 @@
 // Package smplkit — Smpl Jobs SDK client (client.Jobs() on SmplClient, or
 // standalone JobsClient).
 //
-// Unlike Config/Flags/Logging, Jobs installs no in-process machinery — no
-// environment registration, no WebSocket, no logger monkey-patching. It is a
-// product you *use*, not infrastructure you *install*, so it has no
-// runtime/management split: a single JobsClient exposes the full surface,
-// reachable two ways:
+// Smpl Jobs runs an HTTP call on a schedule — a 5-field cron expression, a
+// one-off datetime, or "now" — and records the history of each fire: the
+// request sent, the response received, timing, and outcome. It is reachable
+// two ways:
 //
 //	client.Jobs().* on SmplClient
 //	directly — NewJobsClient(...) — for callers that only need jobs.
@@ -14,9 +13,6 @@
 // call Save(ctx) (create when new, full-replace update when it already
 // exists) or Delete(ctx). Runs are read-only views; run actions live on
 // client.Jobs().Runs().
-//
-// Every call delegates HTTP to the auto-generated jobs client; this wrapper
-// only shapes models and raises SDK exceptions.
 package smplkit
 
 import (
@@ -84,9 +80,15 @@ type RunsClient struct {
 // New returns an unsaved Job bound to this client. Call (*Job).Save(ctx)
 // to create it.
 //
-// id is the caller-supplied unique identifier for the job. Unique within
+// id is the caller-supplied unique identifier for the job — unique within
 // the account and immutable; the service returns 409 if another live job
-// already uses this id.
+// already uses this id. name is the human-readable name. schedule is when
+// the job runs: a 5-field cron expression evaluated in UTC (recurring), an
+// ISO-8601 datetime (a one-off run at that instant), or the literal "now"
+// (run once, as soon as possible) — a datetime or "now" job disables itself
+// after it fires. configuration is the HTTP request the job sends each time
+// it fires. The remaining fields — description, enabled, and concurrency
+// policy — are set via the WithJob* options.
 func (j *JobsClient) New(
 	id string,
 	name string,
@@ -123,8 +125,9 @@ func WithJobDescription(description string) JobOption {
 	return func(job *Job) { job.Description = &description }
 }
 
-// WithJobConcurrencyPolicy overrides the default concurrency policy
-// ("ALLOW").
+// WithJobConcurrencyPolicy overrides how overlapping runs are handled.
+// "ALLOW" (the default and only value today) permits a new run to start
+// while a previous one is still in flight.
 func WithJobConcurrencyPolicy(policy string) JobOption {
 	return func(job *Job) { job.ConcurrencyPolicy = policy }
 }
@@ -153,7 +156,7 @@ func (job *Job) Save(ctx context.Context) error {
 	return nil
 }
 
-// Delete soft-deletes this job on the server.
+// Delete removes this job on the server.
 func (job *Job) Delete(ctx context.Context) error {
 	if job.client == nil || job.ID == "" {
 		return &Error{Message: "job was constructed without a client or id; cannot delete"}
@@ -182,7 +185,7 @@ func (job *Job) apply(other *Job) {
 // ---------------------------------------------------------------------------
 
 // List returns the jobs for the authenticated account. Offset pagination
-// via PageNumber / PageSize (ADR-014).
+// via PageNumber / PageSize.
 func (j *JobsClient) List(ctx context.Context, input ListJobsInput) ([]*Job, error) {
 	params := &genjobs.ListJobsParams{}
 	if input.Enabled != nil {
@@ -222,7 +225,7 @@ func (j *JobsClient) Get(ctx context.Context, id string) (*Job, error) {
 	return jobFromResource(resp.ApplicationvndApiJSON200.Data, j), nil
 }
 
-// Delete soft-deletes a job by id.
+// Delete removes a job by id.
 func (j *JobsClient) Delete(ctx context.Context, id string) error {
 	resp, err := j.gen.DeleteJobWithResponse(ctx, id)
 	if err != nil {
@@ -265,8 +268,8 @@ func (j *JobsClient) Usage(ctx context.Context) (*Usage, error) {
 // ---------------------------------------------------------------------------
 
 // List returns runs for the authenticated account, newest first. Cursor
-// paginated (ADR-014): pass PageSize and the After cursor from the prior
-// page. Pass Job to scope to a single job's history.
+// paginated: pass PageSize and the After cursor from the prior page. Pass
+// Job to scope to a single job's history.
 func (r *RunsClient) List(ctx context.Context, input ListRunsInput) ([]*Run, error) {
 	params := &genjobs.ListRunsParams{}
 	if input.Job != "" {
@@ -440,7 +443,7 @@ func httpConfigToWire(h HttpConfig) genjobs.JobHttpConfiguration {
 		Url: h.URL,
 	}
 	if h.Method != "" {
-		m := h.Method
+		m := genjobs.JobHttpConfigurationMethod(h.Method)
 		out.Method = &m
 	}
 	if h.SuccessStatus != "" {
@@ -478,7 +481,7 @@ func httpConfigFromWire(h genjobs.JobHttpConfiguration) HttpConfig {
 		URL: h.Url,
 	}
 	if h.Method != nil {
-		out.Method = *h.Method
+		out.Method = JobHttpMethod(*h.Method)
 	}
 	if h.SuccessStatus != nil {
 		out.SuccessStatus = *h.SuccessStatus

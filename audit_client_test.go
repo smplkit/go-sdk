@@ -1154,7 +1154,13 @@ func TestAuditEventBuffer_RetriesTransient(t *testing.T) {
 	}
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
 
-	buf := newAuditEventBuffer(wrapped)
+	// Start the worker via the stopped-then-start path with a tiny retry
+	// backoff so the second attempt fires promptly and deterministically even
+	// under heavy -race load (avoiding a missed-deadline flake and a leaked
+	// worker that would otherwise retry a closed server after teardown).
+	buf := newAuditEventBufferStopped(wrapped)
+	buf.initialBack = 5 * time.Millisecond
+	go buf.run()
 	defer buf.close(2 * time.Second)
 
 	body := genaudit.EventRequest{
@@ -1169,7 +1175,7 @@ func TestAuditEventBuffer_RetriesTransient(t *testing.T) {
 		if attempts.Load() >= 2 {
 			break
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 	if attempts.Load() < 2 {
 		t.Fatalf("expected retry to succeed; got attempts=%d", attempts.Load())

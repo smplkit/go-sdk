@@ -87,8 +87,7 @@ func (l *Logger) Delete(ctx context.Context) error {
 
 // SetBaseLevel sets the logger's base level (no environment scoping).
 //
-// Deprecated: Use SetLevel(level, "") for the unified per-env verb that
-// mirrors the Python SDK's set_level(level, *, environment=None).
+// Deprecated: Use SetLevel(level, "") for the unified per-environment verb.
 func (l *Logger) SetBaseLevel(level LogLevel) {
 	l.Level = &level
 }
@@ -201,13 +200,17 @@ func (g *LogGroup) Delete(ctx context.Context) error {
 	return g.client.Delete(ctx, g.ID)
 }
 
-// SetLevel sets the base log level. Call Save to persist.
-func (g *LogGroup) SetLevel(level LogLevel) {
+// SetBaseLevel sets the log group's base level (no environment scoping).
+//
+// Deprecated: Use SetLevel(level, "") for the unified per-environment verb.
+func (g *LogGroup) SetBaseLevel(level LogLevel) {
 	g.Level = &level
 }
 
-// ClearLevel clears the base log level. Call Save to persist.
-func (g *LogGroup) ClearLevel() {
+// ClearBaseLevel clears the log group's base level.
+//
+// Deprecated: Use ClearLevel("") for the unified per-env verb.
+func (g *LogGroup) ClearBaseLevel() {
 	g.Level = nil
 }
 
@@ -259,12 +262,18 @@ func (g *LogGroup) apply(other *LogGroup) {
 	g.UpdatedAt = other.UpdatedAt
 }
 
-// LoggerSource describes a logger observed in a remote service process.
-// Used with LoggersClient.RegisterSources to seed source discovery data
-// (e.g. for sample-data loading or cross-service migration) without running
-// the actual service.
+// LoggerSource describes a logger to register via
+// client.Logging().Loggers().Register (and RegisterSources).
+//
+// Used both for buffered runtime discovery — the SDK queues sources as its
+// adapters discover loggers — and for explicit registration from setup code
+// that already knows the (service, environment) the loggers belong to, e.g.
+// sample-data loading or cross-service migration without running the actual
+// service process.
 type LoggerSource struct {
-	// ID is the normalized logger name (e.g. "sqlalchemy.engine").
+	// ID is the logger name (e.g. "sqlalchemy.engine"). It is normalized to
+	// lowercase with slashes and colons replaced by dots before being sent
+	// to the API.
 	ID string
 	// Service overrides the client's own service name.
 	// Nil means use the client's service.
@@ -272,8 +281,11 @@ type LoggerSource struct {
 	// Environment overrides the client's own environment.
 	// Nil means use the client's environment.
 	Environment *string
-	// ResolvedLevel is the effective log level observed in the process.
+	// ResolvedLevel is the effective log level observed for this source.
 	ResolvedLevel *LogLevel
+	// Level is the explicit (configured) log level, when it differs from
+	// ResolvedLevel. Nil when the level is inherited.
+	Level *LogLevel
 }
 
 // LoggerSourceOption configures a LoggerSource.
@@ -292,6 +304,12 @@ func WithLoggerSourceEnvironment(env string) LoggerSourceOption {
 // WithLoggerSourceResolvedLevel sets the effective log level for the source.
 func WithLoggerSourceResolvedLevel(level LogLevel) LoggerSourceOption {
 	return func(s *LoggerSource) { s.ResolvedLevel = &level }
+}
+
+// WithLoggerSourceLevel sets the explicit (configured) log level for the
+// source. Leave it unset when the level is inherited.
+func WithLoggerSourceLevel(level LogLevel) LoggerSourceOption {
+	return func(s *LoggerSource) { s.Level = &level }
 }
 
 // NewLoggerSource creates a LoggerSource with the given logger ID and options.

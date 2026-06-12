@@ -15,8 +15,8 @@ type AccountSettings struct {
 	client *SettingsClient
 }
 
-// EnvironmentOrder returns the canonical ordering of STANDARD environments.
-// Returns nil if not set.
+// EnvironmentOrder returns the canonical ordering of STANDARD environments,
+// or nil when no order has been set.
 func (s *AccountSettings) EnvironmentOrder() []string {
 	raw, ok := s.Raw["environment_order"]
 	if !ok || raw == nil {
@@ -40,6 +40,8 @@ func (s *AccountSettings) EnvironmentOrder() []string {
 }
 
 // SetEnvironmentOrder sets the canonical ordering of STANDARD environments.
+// order is the environment identifiers in the desired order. Call Save(ctx)
+// to persist.
 func (s *AccountSettings) SetEnvironmentOrder(order []string) {
 	if s.Raw == nil {
 		s.Raw = make(map[string]interface{})

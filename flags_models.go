@@ -79,9 +79,14 @@ func (f *Flag) Delete(ctx context.Context) error {
 	return f.client.Delete(ctx, f.ID)
 }
 
-// AddRule appends a rule to the specified environment. The builtRule must
-// include an "environment" key (use NewRule(...).Environment("env").Build()).
-// Call Save(ctx) to persist.
+// AddRule appends a rule to the specified environment. Call Save(ctx) to
+// persist.
+//
+// The builtRule is the map produced by
+// Rule(..., environment).When(...).Serve(...) (in Go, the fluent
+// NewRule(...).Environment("env").When(...).Serve(...).Build() chain); it
+// must include an "environment" key naming the target environment.
+// Returns an error when the built rule has no "environment" key.
 func (f *Flag) AddRule(builtRule map[string]interface{}) error {
 	envKey, ok := builtRule["environment"].(string)
 	if !ok || envKey == "" {
@@ -110,8 +115,13 @@ func (f *Flag) AddRule(builtRule map[string]interface{}) error {
 	return nil
 }
 
-// SetEnvironmentEnabled sets the enabled flag for an environment.
-// Call Save(ctx) to persist.
+// SetEnvironmentEnabled sets whether rule evaluation is enabled for the
+// environment named by envKey to the given enabled value. Call Save(ctx)
+// to persist.
+//
+// This is a retained, single-environment verb layered on the unified
+// per-env verbs EnableRules / DisableRules; pass an empty environment to
+// those to apply the change across every configured environment.
 func (f *Flag) SetEnvironmentEnabled(envKey string, enabled bool) {
 	envs := copyEnvMap(f.Environments)
 	envData, ok := envs[envKey].(map[string]interface{})
@@ -125,8 +135,13 @@ func (f *Flag) SetEnvironmentEnabled(envKey string, enabled bool) {
 	f.Environments = envs
 }
 
-// SetEnvironmentDefault sets the environment-specific default value.
-// Call Save(ctx) to persist.
+// SetEnvironmentDefault sets the default value served in the environment
+// named by envKey to defaultVal, used when no rule matches there. Call
+// Save(ctx) to persist.
+//
+// This is a retained, single-environment verb layered on the unified
+// SetDefault verb; SetDefault with an empty environment sets the
+// flag-level base default instead.
 func (f *Flag) SetEnvironmentDefault(envKey string, defaultVal interface{}) {
 	envs := copyEnvMap(f.Environments)
 	envData, ok := envs[envKey].(map[string]interface{})
@@ -140,8 +155,11 @@ func (f *Flag) SetEnvironmentDefault(envKey string, defaultVal interface{}) {
 	f.Environments = envs
 }
 
-// ClearRules removes all rules for the specified environment.
-// Call Save(ctx) to persist.
+// ClearRules removes all rules for the environment named by envKey. Call
+// Save(ctx) to persist.
+//
+// This is a retained, single-environment verb; the unified ClearRulesAll
+// verb clears rules across every configured environment instead.
 func (f *Flag) ClearRules(envKey string) {
 	envs := copyEnvMap(f.Environments)
 	if envData, ok := envs[envKey].(map[string]interface{}); ok {

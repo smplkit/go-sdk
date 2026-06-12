@@ -324,6 +324,12 @@ type BooleanFlagHandle struct {
 }
 
 // Get evaluates the flag and returns a typed boolean value.
+//
+// The variadic contexts are optional Context entities to evaluate
+// targeting rules against; when omitted, the ambient request context (if
+// any) is used. Returns the evaluated boolean value, or this flag's
+// default when no environment override or rule applies, or when the
+// evaluated value is not a bool.
 func (h *BooleanFlagHandle) Get(ctx context.Context, contexts ...Context) bool {
 	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
 	if b, ok := value.(bool); ok {
@@ -338,6 +344,12 @@ type StringFlagHandle struct {
 }
 
 // Get evaluates the flag and returns a typed string value.
+//
+// The variadic contexts are optional Context entities to evaluate
+// targeting rules against; when omitted, the ambient request context (if
+// any) is used. Returns the evaluated string value, or this flag's
+// default when no environment override or rule applies, or when the
+// evaluated value is not a string.
 func (h *StringFlagHandle) Get(ctx context.Context, contexts ...Context) string {
 	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
 	if s, ok := value.(string); ok {
@@ -352,6 +364,12 @@ type NumberFlagHandle struct {
 }
 
 // Get evaluates the flag and returns a typed float64 value.
+//
+// The variadic contexts are optional Context entities to evaluate
+// targeting rules against; when omitted, the ambient request context (if
+// any) is used. Returns the evaluated numeric value, or this flag's
+// default when no environment override or rule applies, or when the
+// evaluated value is not a numeric type.
 func (h *NumberFlagHandle) Get(ctx context.Context, contexts ...Context) float64 {
 	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
 	switch n := value.(type) {
@@ -371,6 +389,12 @@ type JsonFlagHandle struct {
 }
 
 // Get evaluates the flag and returns a typed map value.
+//
+// The variadic contexts are optional Context entities to evaluate
+// targeting rules against; when omitted, the ambient request context (if
+// any) is used. Returns the evaluated JSON object, or this flag's
+// default when no environment override or rule applies, or when the
+// evaluated value is not a map.
 func (h *JsonFlagHandle) Get(ctx context.Context, contexts ...Context) map[string]interface{} {
 	value := h.runtime.evaluateHandle(ctx, h.key, h.defaultVal, contexts)
 	if m, ok := value.(map[string]interface{}); ok {

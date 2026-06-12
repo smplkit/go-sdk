@@ -15,10 +15,10 @@ import (
 
 // AuditClient is the Smpl Audit client.
 //
-// Audit installs no in-process machinery, so it has no runtime/management
-// split: one AuditClient exposes the full surface — event recording and
-// reads, distinct-value discovery, and SIEM forwarder CRUD — reachable as
-// client.Audit() or constructed directly via NewAuditClient.
+// Audit installs no in-process machinery, so a single client exposes the
+// full surface — event recording and reads, distinct-value discovery, and
+// SIEM forwarder CRUD — reachable as client.Audit() or constructed directly
+// via NewAuditClient.
 //
 // Namespaces: Events (Record/Flush/List/Get), ResourceTypes, EventTypes,
 // Categories (discovery), and Forwarders (CRUD).
@@ -34,7 +34,7 @@ type AuditClient struct {
 
 // AuditEvents handles event recording, listing, and retrieval. Writes are
 // fire-and-forget by default and return as soon as the event is enqueued
-// onto the in-process buffer (ADR-047 §2.6).
+// onto the in-process buffer.
 type AuditEvents struct {
 	gen    *genaudit.ClientWithResponses
 	buffer *auditEventBuffer
@@ -102,9 +102,9 @@ func newAuditClient(runtimeGen, forwarderGen *genaudit.ClientWithResponses) *Aud
 
 // NewAuditClient builds a standalone Smpl Audit client.
 //
-// Audit installs no in-process machinery, so it has no runtime/management
-// split: the returned AuditClient exposes the full surface — event recording
-// and reads, distinct-value discovery, and SIEM forwarder CRUD.
+// Audit installs no in-process machinery, so a single client exposes the
+// full surface — event recording and reads, distinct-value discovery, and
+// SIEM forwarder CRUD.
 //
 // The environment-scoped surface (Events, ResourceTypes, EventTypes) sends
 // cfg.Environment as the X-Smplkit-Environment header (ADR-055). The
@@ -343,9 +343,9 @@ func (e *AuditEvents) close() {
 
 // List returns one page of distinct resource-type slugs seen in the account.
 //
-// Backed by a maintain-by-write side table (ADR-047 §2.5), so the
-// response time is independent of event volume. Sorted alphabetically;
-// offset pagination via PageNumber / PageSize (ADR-014).
+// Response time is independent of how many years of events the account has
+// accumulated. Sorted alphabetically; offset pagination via PageNumber /
+// PageSize.
 func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesInput) (*ResourceTypeListPage, error) {
 	params := &genaudit.ListResourceTypesParams{}
 	if env := joinEnvironments(input.Environments); env != "" {
@@ -377,6 +377,7 @@ func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesI
 		page.ResourceTypes = append(page.ResourceTypes, AuditResourceType{
 			ID:           r.Id,
 			ResourceType: r.Attributes.ResourceType,
+			CreatedAt:    r.Attributes.CreatedAt,
 		})
 	}
 	return page, nil
@@ -421,6 +422,7 @@ func (et *AuditEventTypes) List(ctx context.Context, input ListEventTypesInput) 
 		page.EventTypes = append(page.EventTypes, AuditEventType{
 			ID:        r.Id,
 			EventType: r.Attributes.EventType,
+			CreatedAt: r.Attributes.CreatedAt,
 		})
 	}
 	return page, nil
@@ -428,10 +430,9 @@ func (et *AuditEventTypes) List(ctx context.Context, input ListEventTypesInput) 
 
 // List returns one page of distinct category values seen in the account.
 //
-// Backed by a maintain-by-write side table (ADR-047 §2.5), so the response
-// time is independent of how many years of events the account has
+// Response time is independent of how many years of events the account has
 // accumulated. Sorted alphabetically; offset pagination via PageNumber /
-// PageSize (ADR-014).
+// PageSize.
 func (cat *AuditCategories) List(ctx context.Context, input ListCategoriesInput) (*CategoryListPage, error) {
 	params := &genaudit.ListCategoriesParams{}
 	if env := joinEnvironments(input.Environments); env != "" {
@@ -461,8 +462,9 @@ func (cat *AuditCategories) List(ctx context.Context, input ListCategoriesInput)
 	}
 	for _, r := range body.Data {
 		page.Categories = append(page.Categories, AuditCategory{
-			ID:       r.Id,
-			Category: r.Attributes.Category,
+			ID:        r.Id,
+			Category:  r.Attributes.Category,
+			CreatedAt: r.Attributes.CreatedAt,
 		})
 	}
 	return page, nil

@@ -10,10 +10,9 @@ import (
 // AuditForwarders manages SIEM streaming destinations for the
 // authenticated account. Accessed via client.Audit().Forwarders().
 //
-// Forwarders are part of the single unified audit surface — there is no
-// runtime/management split for audit. Forwarder CRUD is account-wide and
-// not environment-scoped; per-environment enablement lives in each
-// forwarder's Environments map.
+// Forwarder CRUD is part of the single unified audit surface. It is
+// account-wide and not environment-scoped; per-environment enablement
+// lives in each forwarder's Environments map.
 type AuditForwarders struct {
 	gen *genaudit.ClientWithResponses
 }
@@ -26,8 +25,10 @@ type AuditForwarders struct {
 // (*Forwarder).Save(ctx) to persist.
 //
 // id is the caller-supplied forwarder key — required at create time
-// (the audit service does not auto-generate it). Use a stable,
-// human-readable identifier (e.g. "splunk-prod"); the key is what
+// (the audit service does not auto-generate it). It is unique within the
+// account and immutable for the lifetime of the forwarder; the audit
+// service returns 409 if another live forwarder already uses it. Use a
+// stable, human-readable identifier (e.g. "splunk-prod"); the key is what
 // appears in every URL and audit-log line for this forwarder.
 func (f *AuditForwarders) New(
 	id string,
@@ -54,8 +55,8 @@ func (f *AuditForwarders) New(
 type ForwarderOption func(*Forwarder)
 
 // WithForwarderEnvironments sets the per-environment override map that
-// drives enablement (ADR-055). A forwarder delivers in an environment
-// only when that environment's entry has Enabled=true; each entry may
+// drives enablement. A forwarder delivers in an environment only when
+// that environment's entry has Enabled=true; each entry may
 // carry an optional HttpConfiguration override (nil inherits the base
 // configuration). Every referenced environment must exist and be managed
 // for the account. Without this option the forwarder is created enabled
@@ -104,8 +105,8 @@ func WithForwardSmplkitEvents(forward bool) ForwarderOption {
 // behavior keyed on CreatedAt: nil → create (POST), set → full-replace
 // update (PUT). After the call, every field is refreshed from the
 // server response (including CreatedAt, UpdatedAt, Version). Header
-// values must be plaintext: reads return them redacted, so a
-// "<redacted>" round-tripped through Save would persist that literal.
+// values are returned plaintext on reads, so a Get → mutate → Save
+// round-trip preserves them.
 func (fwd *Forwarder) Save(ctx context.Context) error {
 	if fwd.client == nil {
 		return &Error{Message: "forwarder was constructed without a client; cannot save"}
@@ -155,7 +156,7 @@ func (fwd *Forwarder) validateTransform() error {
 	return nil
 }
 
-// Delete soft-deletes this forwarder on the server.
+// Delete removes this forwarder on the server.
 func (fwd *Forwarder) Delete(ctx context.Context) error {
 	if fwd.client == nil || fwd.ID == "" {
 		return &Error{Message: "forwarder was constructed without a client or id; cannot delete"}
@@ -237,7 +238,7 @@ func (fwd *Forwarder) apply(other *Forwarder) {
 // ---------------------------------------------------------------------------
 
 // List returns one page of forwarders. Offset pagination via PageNumber /
-// PageSize (ADR-014).
+// PageSize.
 func (f *AuditForwarders) List(ctx context.Context, input ListForwardersInput) (*ListForwardersPage, error) {
 	params := &genaudit.ListForwardersParams{}
 	if input.ForwarderType != "" {
@@ -286,7 +287,7 @@ func (f *AuditForwarders) Get(ctx context.Context, forwarderID string) (*Forward
 	return &out, nil
 }
 
-// Delete soft-deletes a forwarder.
+// Delete removes a forwarder by id.
 func (f *AuditForwarders) Delete(ctx context.Context, forwarderID string) error {
 	resp, err := f.gen.DeleteForwarderWithResponse(ctx, forwarderID)
 	if err != nil {
@@ -348,7 +349,7 @@ func (f *AuditForwarders) update(ctx context.Context, fwd *Forwarder) (*Forwarde
 func forwarderAttributes(fwd *Forwarder) genaudit.Forwarder {
 	attrs := genaudit.Forwarder{
 		Name:          fwd.Name,
-		ForwarderType: fwd.ForwarderType,
+		ForwarderType: genaudit.ForwarderType(fwd.ForwarderType),
 		Configuration: httpConfigurationToWire(fwd.Configuration),
 	}
 	if len(fwd.Environments) > 0 {
@@ -369,7 +370,7 @@ func forwarderAttributes(fwd *Forwarder) genaudit.Forwarder {
 		attrs.Transform = fwd.Transform
 	}
 	if fwd.TransformType != nil {
-		tt := *fwd.TransformType
+		tt := genaudit.ForwarderTransformType(*fwd.TransformType)
 		attrs.TransformType = &tt
 	}
 	if fwd.ForwardSmplkitEvents != nil {
@@ -442,7 +443,7 @@ func httpConfigurationToWire(h HttpConfiguration) genaudit.HttpConfiguration {
 		Url: h.URL,
 	}
 	if h.Method != "" {
-		m := h.Method
+		m := genaudit.HttpConfigurationMethod(h.Method)
 		out.Method = &m
 	}
 	if h.SuccessStatus != "" {
@@ -477,15 +478,18 @@ func forwarderFromResource(r genaudit.ForwarderResource, client *AuditForwarders
 		ID:                   id,
 		Name:                 a.Name,
 		Description:          a.Description,
-		ForwarderType:        a.ForwarderType,
+		ForwarderType:        ForwarderType(a.ForwarderType),
 		Configuration:        httpConfigurationFromWire(a.Configuration),
-		TransformType:        a.TransformType,
 		ForwardSmplkitEvents: a.ForwardSmplkitEvents,
 		CreatedAt:            a.CreatedAt,
 		UpdatedAt:            a.UpdatedAt,
 		DeletedAt:            a.DeletedAt,
 		Version:              a.Version,
 		client:               client,
+	}
+	if a.TransformType != nil {
+		tt := ForwarderTransformType(*a.TransformType)
+		out.TransformType = &tt
 	}
 	// The base `enabled` is server-pinned false; round-trip whatever the
 	// server returned (always false) without assuming a default of true.
@@ -513,7 +517,7 @@ func httpConfigurationFromWire(h genaudit.HttpConfiguration) HttpConfiguration {
 		URL: h.Url,
 	}
 	if h.Method != nil {
-		out.Method = *h.Method
+		out.Method = HttpMethod(*h.Method)
 	}
 	if h.SuccessStatus != nil {
 		out.SuccessStatus = *h.SuccessStatus

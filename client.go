@@ -316,7 +316,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	// account-wide gen client.
 	c.audit = newAuditClient(genAuditRuntimeClient, genAuditClient)
 	c.audit.client = c
-	// Jobs has no runtime/management split — reuse the shared jobs transport
+	// Jobs is account-global — reuse the shared jobs transport
 	// (single connection pool) so client.Jobs() is one-stop.
 	c.jobs = newJobsClient(genJobsClient)
 
@@ -342,7 +342,7 @@ func (c *SmplClient) Flags() *FlagsClient { return c.flags }
 // Logging returns the sub-client for the Smpl Logging service.
 func (c *SmplClient) Logging() *LoggingClient { return c.logging }
 
-// Audit returns the sub-client for the Smpl Audit service (ADR-047).
+// Audit returns the sub-client for the Smpl Audit service.
 //
 // Use client.Audit().Events().Create(...) to record an event; the call is
 // fire-and-forget — the SDK buffers the event in memory and a background

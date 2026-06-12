@@ -729,12 +729,16 @@ func TestLoggers_RegisterSources(t *testing.T) {
 		_, _ = w.Write([]byte(`{"registered":2}`))
 	}))
 	sources := []smplkit.LoggerSource{
-		smplkit.NewLoggerSource("a.logger", smplkit.WithLoggerSourceService("svc"), smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelDebug)),
+		smplkit.NewLoggerSource("a.logger", smplkit.WithLoggerSourceService("svc"), smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelDebug), smplkit.WithLoggerSourceLevel(smplkit.LogLevelWarn)),
 		smplkit.NewLoggerSource("b.logger", smplkit.WithLoggerSourceEnvironment("prod")),
 	}
 	require.NoError(t, client.Logging().Loggers().RegisterSources(context.Background(), sources))
 	loggers := body["loggers"].([]interface{})
 	require.Len(t, loggers, 2)
+	// The explicit (configured) level is sent distinct from resolved_level.
+	first := loggers[0].(map[string]interface{})
+	assert.Equal(t, string(smplkit.LogLevelWarn), first["level"])
+	assert.Equal(t, string(smplkit.LogLevelDebug), first["resolved_level"])
 }
 
 func TestLoggers_RegisterSources_Empty(t *testing.T) {
@@ -787,6 +791,29 @@ func TestLoggers_Register_BufferedThenFlush(t *testing.T) {
 	require.NoError(t, loggers.Flush(context.Background()))
 	assert.Equal(t, 0, loggers.PendingCount())
 	assert.Contains(t, string(bulkBody), "acme.app")
+}
+
+func TestLoggers_Register_ExplicitLevel(t *testing.T) {
+	var bulkBody []byte
+	client := newLoggingTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/loggers/bulk" {
+			bulkBody, _ = io.ReadAll(r.Body)
+			_, _ = w.Write([]byte(`{"registered":1}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	loggers := client.Logging().Loggers()
+	require.NoError(t, loggers.Register(context.Background(), []smplkit.LoggerSource{
+		smplkit.NewLoggerSource("acme.app",
+			smplkit.WithLoggerSourceResolvedLevel(smplkit.LogLevelInfo),
+			smplkit.WithLoggerSourceLevel(smplkit.LogLevelWarn)),
+	}, true))
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(bulkBody, &body))
+	first := body["loggers"].([]interface{})[0].(map[string]interface{})
+	assert.Equal(t, string(smplkit.LogLevelWarn), first["level"])
+	assert.Equal(t, string(smplkit.LogLevelInfo), first["resolved_level"])
 }
 
 func TestLoggers_Register_FlushImmediately(t *testing.T) {

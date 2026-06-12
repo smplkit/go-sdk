@@ -14,14 +14,14 @@ type ErrorSource struct {
 }
 
 // ApiErrorDetail holds a single JSON:API error object as surfaced by the
-// smplkit platform's JSON:API responses. Mirrors Python's ApiErrorDetail.
+// smplkit platform's JSON:API responses.
 type ApiErrorDetail struct {
 	// Status is the HTTP status code as a string (e.g. "404").
 	Status string `json:"status,omitempty"`
 	// Code is an application-specific machine-readable error code (e.g.
-	// "environment_unmanaged"). Per JSON:API §7 and ADR-014, smplkit
-	// sets this on every error so callers can branch without
-	// string-matching the human Detail field.
+	// "environment_unmanaged"). Per JSON:API §7, smplkit sets this on
+	// every error so callers can branch without string-matching the
+	// human Detail field.
 	Code string `json:"code,omitempty"`
 	// Title is a short, human-readable summary (e.g. "Not Found").
 	Title string `json:"title,omitempty"`
@@ -36,9 +36,9 @@ type ApiErrorDetail struct {
 	Meta map[string]any `json:"meta,omitempty"`
 }
 
-// Error is the base error type for all smplkit SDK errors. The flat
-// hierarchy mirrors the Python SDK: ConnectionError, TimeoutError,
-// NotFoundError, ConflictError, and ValidationError are direct subtypes.
+// Error is the base error type for all smplkit SDK errors. The hierarchy
+// is flat: ConnectionError, TimeoutError, NotFoundError, ConflictError,
+// and ValidationError are direct subtypes.
 //
 // To match any SDK error use errors.As against *Error:
 //

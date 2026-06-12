@@ -4,24 +4,21 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	genaudit "github.com/smplkit/go-sdk/v3/internal/generated/audit"
 )
 
 // ForwarderType is a SIEM streaming destination type. The audit
 // service rejects any value outside the constants below with a 400.
-// See ADR-047 §2.12.
-type ForwarderType = genaudit.ForwarderType
+type ForwarderType string
 
 // Supported ForwarderType values, alphabetical by wire constant.
 const (
-	ForwarderTypeDatadog   = genaudit.Datadog
-	ForwarderTypeElastic   = genaudit.Elastic
-	ForwarderTypeHoneycomb = genaudit.Honeycomb
-	ForwarderTypeHTTP      = genaudit.Http
-	ForwarderTypeNewRelic  = genaudit.NewRelic
-	ForwarderTypeSplunkHEC = genaudit.SplunkHec
-	ForwarderTypeSumoLogic = genaudit.SumoLogic
+	ForwarderTypeDatadog   ForwarderType = "datadog"
+	ForwarderTypeElastic   ForwarderType = "elastic"
+	ForwarderTypeHoneycomb ForwarderType = "honeycomb"
+	ForwarderTypeHTTP      ForwarderType = "http"
+	ForwarderTypeNewRelic  ForwarderType = "new_relic"
+	ForwarderTypeSplunkHEC ForwarderType = "splunk_hec"
+	ForwarderTypeSumoLogic ForwarderType = "sumo_logic"
 )
 
 // ForwarderTypes enumerates every supported ForwarderType value. Useful
@@ -39,15 +36,15 @@ var ForwarderTypes = []ForwarderType{
 // HttpMethod is the HTTP verb a forwarder uses when delivering an
 // event. The audit service rejects any value outside the constants
 // below with a 400.
-type HttpMethod = genaudit.HttpConfigurationMethod
+type HttpMethod string
 
 // Supported HttpMethod values, alphabetical.
 const (
-	HttpMethodDelete = genaudit.HttpConfigurationMethodDELETE
-	HttpMethodGet    = genaudit.HttpConfigurationMethodGET
-	HttpMethodPatch  = genaudit.HttpConfigurationMethodPATCH
-	HttpMethodPost   = genaudit.HttpConfigurationMethodPOST
-	HttpMethodPut    = genaudit.HttpConfigurationMethodPUT
+	HttpMethodDelete HttpMethod = "DELETE"
+	HttpMethodGet    HttpMethod = "GET"
+	HttpMethodPatch  HttpMethod = "PATCH"
+	HttpMethodPost   HttpMethod = "POST"
+	HttpMethodPut    HttpMethod = "PUT"
 )
 
 // HttpMethods enumerates every supported HttpMethod value.
@@ -62,18 +59,18 @@ var HttpMethods = []HttpMethod{
 // ForwarderTransformType identifies the engine used to evaluate a
 // forwarder's transform expression. Currently only JSONATA is
 // supported; additional engines may join later.
-type ForwarderTransformType = genaudit.ForwarderTransformType
+type ForwarderTransformType string
 
 // Supported ForwarderTransformType values.
 const (
-	ForwarderTransformTypeJSONata = genaudit.JSONATA
+	ForwarderTransformTypeJSONata ForwarderTransformType = "JSONATA"
 )
 
-// AuditEvent is the public-facing representation of an audit event.
+// AuditEvent represents an audit event returned by the audit service.
 //
-// ADR-047 §2.3.1. The SDK exposes flat-named fields rather than the
-// nested JSON:API attribute object — the wrapper takes care of the
-// envelope on both create and read.
+// The SDK exposes flat-named fields rather than the nested JSON:API
+// attribute object — the wrapper takes care of the envelope on both
+// create and read.
 type AuditEvent struct {
 	// ID is the server-assigned UUID for this event.
 	ID uuid.UUID
@@ -165,7 +162,10 @@ type CreateEventInput struct {
 	// nest it inside Data — the smplkit internal convention is
 	// Data["snapshot"], but the shape is unconstrained.
 	Data map[string]interface{}
-	// IdempotencyKey is an optional customer-supplied dedupe key.
+	// IdempotencyKey is an optional customer-supplied dedupe key. When
+	// omitted, the server derives one from the event content (account_id
+	// + event_type + resource_type + resource_id + occurred_at + actor_*
+	// + data).
 	IdempotencyKey string
 	// DoNotForward suppresses SIEM forwarder execution for this event.
 	// The event itself is still recorded; the forwarder loop records a
@@ -197,7 +197,7 @@ type ListEventsInput struct {
 	// stored on the event — any identifier scheme works.
 	ActorID string
 	// OccurredAtRange filters by occurred_at using the platform's range
-	// syntax (e.g. "[2026-01-01T00:00:00Z,*)" — ADR-014).
+	// syntax (e.g. "[2026-01-01T00:00:00Z,*)").
 	OccurredAtRange string
 	// Search performs a case-insensitive substring match against resource_id
 	// or description. A search filter must be scoped — combine it with
@@ -227,9 +227,9 @@ type ListEventsPage struct {
 // ---------------------------------------------------------------------------
 
 // Pagination is the offset-pagination meta block returned on every standard
-// list response (ADR-014). Page and Size always reflect the parameters that
-// served the response. Total and TotalPages are populated only when the
-// request set MetaTotal=true.
+// list response. Page and Size always reflect the parameters that served the
+// response. Total and TotalPages are populated only when the request set
+// MetaTotal=true.
 type Pagination struct {
 	// Page is the 1-based page number that served the response.
 	Page int
@@ -250,6 +250,9 @@ type AuditResourceType struct {
 	// ResourceType is the same slug as ID; both fields are populated
 	// for clarity.
 	ResourceType string
+	// CreatedAt is the earliest sighting of this resource_type for the
+	// account.
+	CreatedAt time.Time
 }
 
 // ListResourceTypesInput is the pagination input for AuditResourceTypes.List.
@@ -285,6 +288,11 @@ type AuditEventType struct {
 	ID string
 	// EventType is the same slug as ID; both fields are populated for clarity.
 	EventType string
+	// CreatedAt is the earliest sighting of this event_type for the account.
+	// When the parent List call filtered by ResourceType, this is the first
+	// sighting of that specific (event_type, resource_type) pair rather than
+	// the event_type overall.
+	CreatedAt time.Time
 }
 
 // ListEventTypesInput is the filter + pagination input for AuditEventTypes.List.
@@ -320,15 +328,16 @@ type EventTypeListPage struct {
 // AuditCategory is a distinct category value seen for the account.
 //
 // Same shape as AuditResourceType and AuditEventType — ID and Category are
-// the same value, surfaced as the JSON:API resource id (ADR-014 "key as
-// id"). The duplication keeps SDK consumers from having to dig into the ID
-// field when populating filter UI controls; pick whichever name reads better
-// in context.
+// the same value, surfaced as the JSON:API resource id. The duplication keeps
+// SDK consumers from having to dig into the ID field when populating filter UI
+// controls; pick whichever name reads better in context.
 type AuditCategory struct {
 	// ID is the category value, surfaced as the JSON:API resource id.
 	ID string
 	// Category is the same value as ID; provided for readability.
 	Category string
+	// CreatedAt is the earliest sighting of this category for the account.
+	CreatedAt time.Time
 }
 
 // ListCategoriesInput is the filter + pagination input for AuditCategories.List.
@@ -359,7 +368,7 @@ type CategoryListPage struct {
 }
 
 // ---------------------------------------------------------------------------
-// Forwarders (SIEM streaming — management plane)
+// Forwarders (SIEM streaming)
 // ---------------------------------------------------------------------------
 
 // HttpHeader is a single name/value HTTP header on a forwarder
@@ -367,8 +376,9 @@ type CategoryListPage struct {
 type HttpHeader struct {
 	// Name is the header name (e.g. "Authorization", "DD-API-KEY").
 	Name string
-	// Value is the header value, plaintext on writes. The audit service
-	// encrypts values at rest; reads return them as "<redacted>".
+	// Value is the header value. Supply it plaintext on writes; reads
+	// return it plaintext too, so a Get → mutate → Save round-trip
+	// preserves header values without re-entering secrets.
 	Value string
 }
 
@@ -384,8 +394,8 @@ type HttpConfiguration struct {
 	// URL is the destination the audit service POSTs each event to.
 	URL string
 	// Headers are attached to every outbound request. Values carry
-	// credentials and are encrypted at rest server-side; reads return
-	// them redacted.
+	// credentials; supply them plaintext on writes. Reads return them
+	// plaintext too, so a Get → mutate → Save round-trip preserves them.
 	Headers []HttpHeader
 	// SuccessStatus is the response status the destination must return
 	// for delivery to count as success — an exact code ("200", "204")
@@ -418,22 +428,23 @@ type ForwarderEnvironment struct {
 	// configuration that fully replaces the forwarder's base
 	// Configuration for this environment. Nil (the default) inherits the
 	// base configuration. As with the base configuration, header values
-	// are plaintext on writes and returned redacted on reads — re-supply
-	// real values before Save.
+	// are plaintext on both writes and reads, so a Get → mutate → Save
+	// round-trip preserves them.
 	Configuration *HttpConfiguration
 }
 
 // Forwarder is a SIEM streaming destination configured on the
 // customer's account. Active-record style: mutate fields directly and
-// call Save(ctx) to persist, or Delete(ctx) to remove. Headers in
-// Configuration.Headers are always returned redacted on reads — re-
-// supply the real values before calling Save (the SDK does not cache
-// them client-side).
+// call Save(ctx) to persist, or Delete(ctx) to remove. Header values in
+// Configuration.Headers are returned plaintext on reads, so a Get →
+// mutate → Save round-trip preserves them.
 type Forwarder struct {
 	// ID is the caller-supplied key for this forwarder. Required at
-	// create time (the audit service does not auto-generate it). Empty
-	// string until Save has run for an unsaved instance constructed
-	// without an id.
+	// create time (the audit service does not auto-generate it); unique
+	// within the account and immutable for the lifetime of the forwarder.
+	// The audit service returns 409 if another live forwarder already uses
+	// this id. Empty string until Save has run for an unsaved instance
+	// constructed without an id.
 	ID string
 	// Name is the display name. Free-form.
 	Name string
@@ -442,8 +453,8 @@ type Forwarder struct {
 	// ForwarderType is the destination type — see ForwarderType.
 	ForwarderType ForwarderType
 	// Enabled is read-only and always false. The base enablement is
-	// pinned off (ADR-055); whether a forwarder actually delivers is
-	// decided per environment via Environments. Mutating this field has
+	// pinned off; whether a forwarder actually delivers is decided per
+	// environment via Environments. Mutating this field has
 	// no effect on the server — the wrapper does not send it. It is kept
 	// so reads round-trip the server value.
 	Enabled bool
@@ -486,7 +497,7 @@ type Forwarder struct {
 	CreatedAt *time.Time
 	// UpdatedAt is when this forwarder was last mutated.
 	UpdatedAt *time.Time
-	// DeletedAt is the soft-delete timestamp. Nil for live forwarders.
+	// DeletedAt is when the forwarder was deleted. Nil for live forwarders.
 	DeletedAt *time.Time
 	// Version is a monotonic counter bumped on every server-side write.
 	Version *int
@@ -513,7 +524,7 @@ type ListForwardersInput struct {
 // ListForwardersPage is one page of forwarders.
 type ListForwardersPage struct {
 	// Forwarders is the slice of forwarders on this page, each bound
-	// to the management client so Save / Delete work directly.
+	// to its forwarders client so Save / Delete work directly.
 	Forwarders []Forwarder
 	// Pagination describes the page boundaries and totals (if
 	// requested via MetaTotal).

@@ -111,6 +111,13 @@ type EnvironmentsClient struct {
 }
 
 // New returns an unsaved Environment. Call env.Save(ctx) to persist.
+//
+// id is a stable, human-readable identifier, e.g. "production". name is
+// the display name shown in the Console. The options refine the
+// environment: WithEnvironmentColor sets the accent color as a Color or
+// CSS hex string (defaults to no color), and WithEnvironmentClassification
+// controls whether the environment participates in the standard
+// environment ordering (defaults to STANDARD).
 func (m *EnvironmentsClient) New(id string, name string, opts ...EnvironmentOption) *Environment {
 	e := &Environment{
 		ID:             id,
@@ -160,7 +167,9 @@ func (m *EnvironmentsClient) List(ctx context.Context, opts ...ListOption) ([]*E
 	return envs, nil
 }
 
-// Get retrieves a single environment by ID.
+// Get retrieves a single environment by ID. id is the identifier of the
+// environment to fetch. Returns a NotFoundError when no environment with
+// that id exists.
 func (m *EnvironmentsClient) Get(ctx context.Context, id string) (*Environment, error) {
 	resp, err := m.appClient.GetEnvironment(ctx, id)
 	if err != nil {
@@ -183,7 +192,8 @@ func (m *EnvironmentsClient) Get(ctx context.Context, id string) (*Environment, 
 	return resourceToEnvironment(result.Data, m), nil
 }
 
-// Delete removes an environment by ID.
+// Delete removes an environment by ID. id is the identifier of the
+// environment to delete.
 func (m *EnvironmentsClient) Delete(ctx context.Context, id string) error {
 	resp, err := m.appClient.DeleteEnvironment(ctx, id, nil)
 	if err != nil {
@@ -311,6 +321,9 @@ type ServicesClient struct {
 }
 
 // New returns an unsaved Service. Call svc.Save(ctx) to persist.
+//
+// id is a stable, human-readable identifier for the service. name is the
+// display name shown in the Console.
 func (m *ServicesClient) New(id string, name string) *Service {
 	return &Service{
 		ID:     id,
@@ -355,7 +368,9 @@ func (m *ServicesClient) List(ctx context.Context, opts ...ListOption) ([]*Servi
 	return svcs, nil
 }
 
-// Get retrieves a single service by ID.
+// Get retrieves a single service by ID. id is the identifier of the
+// service to fetch. Returns a NotFoundError when no service with that id
+// exists.
 func (m *ServicesClient) Get(ctx context.Context, id string) (*Service, error) {
 	resp, err := m.appClient.GetService(ctx, id)
 	if err != nil {
@@ -378,7 +393,8 @@ func (m *ServicesClient) Get(ctx context.Context, id string) (*Service, error) {
 	return resourceToService(result.Data, m), nil
 }
 
-// Delete removes a service by ID.
+// Delete removes a service by ID. id is the identifier of the service to
+// delete.
 func (m *ServicesClient) Delete(ctx context.Context, id string) error {
 	resp, err := m.appClient.DeleteService(ctx, id)
 	if err != nil {
@@ -496,7 +512,12 @@ type ContextTypesClient struct {
 }
 
 // New returns an unsaved ContextType. Call ct.Save(ctx) to persist.
-// If no name option is provided the ID is used as the display name.
+//
+// id is a stable, human-readable identifier, e.g. "user". If no
+// WithContextTypeName option is provided the ID is used as the display
+// name. A new context type starts with no declared known-attribute slots;
+// declare them via AddAttribute, each keyed by attribute name with a
+// metadata map per slot, before saving.
 func (m *ContextTypesClient) New(id string, opts ...ContextTypeOption) *ContextType {
 	ct := &ContextType{
 		ID:         id,
@@ -546,7 +567,9 @@ func (m *ContextTypesClient) List(ctx context.Context, opts ...ListOption) ([]*C
 	return types, nil
 }
 
-// Get retrieves a single context type by ID.
+// Get retrieves a single context type by ID. id is the identifier of the
+// context type to fetch. Returns a NotFoundError when no context type with
+// that id exists.
 func (m *ContextTypesClient) Get(ctx context.Context, id string) (*ContextType, error) {
 	resp, err := m.appClient.GetContextType(ctx, id)
 	if err != nil {
@@ -564,7 +587,8 @@ func (m *ContextTypesClient) Get(ctx context.Context, id string) (*ContextType, 
 	return parseContextTypeFromBody(body, m)
 }
 
-// Delete removes a context type by ID.
+// Delete removes a context type by ID. id is the identifier of the context
+// type to delete.
 func (m *ContextTypesClient) Delete(ctx context.Context, id string) error {
 	resp, err := m.appClient.DeleteContextType(ctx, id)
 	if err != nil {
@@ -698,8 +722,12 @@ type ContextsClient struct {
 }
 
 // Register buffers contexts for registration with the server.
-// By default contexts are queued for background flush; use WithContextFlush()
-// to perform an immediate synchronous flush after queuing.
+//
+// contexts are the contexts to buffer for registration. Buffered contexts
+// are sent in batches: a background flush kicks in once enough have
+// accumulated, and any remainder is sent on the next explicit flush. Pass
+// WithContextFlush() to send everything buffered right away with an
+// immediate synchronous flush after queuing.
 func (m *ContextsClient) Register(ctx context.Context, contexts []Context, opts ...ContextsRegisterOption) error {
 	o := &contextsRegisterOpts{}
 	for _, opt := range opts {
@@ -753,8 +781,9 @@ func (m *ContextsClient) flushBatch(ctx context.Context, batch []map[string]inte
 
 // List returns one page of context instances of the given context type.
 //
-// Without options the server applies its defaults (page 1, page size
-// 1000). Use [WithPageNumber] / [WithPageSize] to walk additional pages.
+// contextType is the context type to list, e.g. "user". Without options
+// the server applies its defaults (page 1, page size 1000). Use
+// [WithPageNumber] / [WithPageSize] to walk additional pages.
 func (m *ContextsClient) List(ctx context.Context, contextType string, opts ...ListOption) ([]*ContextEntity, error) {
 	o := resolveListOptions(opts)
 	params := &genapp.ListContextsParams{
@@ -799,6 +828,11 @@ func (m *ContextsClient) List(ctx context.Context, contextType string, opts ...L
 //
 //	client.Platform().Contexts().Get(ctx, "user:usr_123")
 //	client.Platform().Contexts().Get(ctx, "user", "usr_123")
+//
+// parts identifies the context: pass one argument carrying the composite
+// "type:key" id, or two arguments giving the type and key separately. Any
+// other number of arguments is an error. Returns a NotFoundError when no
+// context with that id exists.
 func (m *ContextsClient) Get(ctx context.Context, parts ...string) (*ContextEntity, error) {
 	composite, err := resolveContextID(parts)
 	if err != nil {
@@ -858,6 +892,10 @@ func (m *ContextsClient) saveEntity(ctx context.Context, ce *ContextEntity) erro
 
 // Delete removes a context by its composite "type:key" id, or by separate type
 // and key arguments.
+//
+// parts identifies the context: pass one argument carrying the composite
+// "type:key" id, or two arguments giving the type and key separately. Any
+// other number of arguments is an error.
 func (m *ContextsClient) Delete(ctx context.Context, parts ...string) error {
 	composite, err := resolveContextID(parts)
 	if err != nil {

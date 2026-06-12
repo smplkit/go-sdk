@@ -190,10 +190,19 @@ func defaultDialWS(wsURL string) (*websocket.Conn, error) {
 	return conn, err
 }
 
+// wsLaunch starts the background connect/reconnect loop for a socket. It is a
+// package-level seam: production launches the real run() goroutine. The unit
+// test suite replaces it (in TestMain) with a no-op so that no test dials the
+// network or leaks a reconnect goroutine — the socket is still fully
+// constructed (listener registration and connection status behave normally),
+// and stop() still completes. The dedicated WebSocket test drives run() and
+// connect() directly to exercise the real machinery against a mocked server.
+var wsLaunch = func(ws *sharedWebSocket) { go ws.run() }
+
 // start launches the background WebSocket goroutine.
 func (ws *sharedWebSocket) start() {
 	debug.Debug("websocket", "starting WebSocket connection")
-	go ws.run()
+	wsLaunch(ws)
 }
 
 // stop closes the WebSocket connection and waits for the goroutine to exit.

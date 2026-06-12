@@ -66,6 +66,20 @@ func TestEnable_SetsDebugEnabled(t *testing.T) {
 	}
 }
 
+func TestSetEnabled_SetsDebugEnabled(t *testing.T) {
+	orig := debugEnabled
+	defer func() { debugEnabled = orig }()
+
+	SetEnabled(true)
+	if !debugEnabled || !IsEnabled() {
+		t.Error("SetEnabled(true) did not enable debug output")
+	}
+	SetEnabled(false)
+	if debugEnabled || IsEnabled() {
+		t.Error("SetEnabled(false) did not disable debug output")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // IsEnabled — reports the cached state
 // ---------------------------------------------------------------------------

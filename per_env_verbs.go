@@ -2,16 +2,15 @@ package smplkit
 
 import "fmt"
 
-// This file adds the per-environment unified verbs (rule 7 of the
-// cross-SDK overhaul). Each verb takes an `environment` string where:
+// This file adds the per-environment unified verbs. Each verb takes an
+// `environment` string where:
 //
 //   - empty string ("") targets the base/flag-level value
 //   - non-empty value scopes the operation to that environment
 //
-// Mirrors the Python pattern `set_default(value, *, environment=None)`
-// where None scopes to the base. Go has no kwargs, so we use the empty
-// string convention — it's clean, mirrors the intent, and avoids the
-// need for an extra Option type just to disambiguate one parameter.
+// The empty-string convention keeps each verb to a single positional
+// argument, avoiding an extra Option type just to disambiguate one
+// parameter.
 //
 // The pre-existing verb set (SetEnvironmentEnabled, SetEnvironmentDefault,
 // ClearRules) is retained for backward compatibility but is now layered
@@ -21,7 +20,7 @@ import "fmt"
 
 // SetDefault sets the default served value. environment="" updates the
 // flag-level base default; environment="production" sets the per-env
-// default. Mirrors Python's flag.set_default(value, *, environment=None).
+// default.
 //
 // Call Flag.Save(ctx) to persist.
 func (f *Flag) SetDefault(value interface{}, environment string) {
@@ -33,13 +32,13 @@ func (f *Flag) SetDefault(value interface{}, environment string) {
 }
 
 // ClearDefault clears the per-environment default override on the named
-// environment. environment must be non-empty (mirrors Python's
-// `clear_default(*, environment)` which makes the kwarg required).
+// environment. environment must be non-empty; an empty environment is a
+// no-op.
 //
 // Call Flag.Save(ctx) to persist.
 func (f *Flag) ClearDefault(environment string) {
 	if environment == "" {
-		return // no-op; matches Python's "must be set" semantics
+		return // no-op; an empty environment is treated as "not set"
 	}
 	envs := copyEnvMap(f.Environments)
 	if envData, ok := envs[environment].(map[string]interface{}); ok {
@@ -52,7 +51,7 @@ func (f *Flag) ClearDefault(environment string) {
 
 // EnableRules enables rule evaluation. environment="" enables rules in
 // every environment configured on this flag; non-empty scopes to that
-// single environment. Mirrors Python's enable_rules(*, environment=None).
+// single environment.
 func (f *Flag) EnableRules(environment string) {
 	if environment == "" {
 		envs := copyEnvMap(f.Environments)
@@ -88,8 +87,7 @@ func (f *Flag) DisableRules(environment string) {
 }
 
 // ClearRulesAll clears rules in every environment configured on this flag.
-// Mirrors Python's clear_rules(*, environment=None) with environment=None.
-// For a single-environment clear, use the existing ClearRules(envKey).
+// For a single-environment clear, use ClearRules(envKey).
 func (f *Flag) ClearRulesAll() {
 	envs := copyEnvMap(f.Environments)
 	for k := range envs {
@@ -103,7 +101,7 @@ func (f *Flag) ClearRulesAll() {
 }
 
 // AddValue appends a constrained value to the flag's value set. Returns
-// f for chaining. Mirrors Python's flag.add_value.
+// f for chaining.
 func (f *Flag) AddValue(name string, value interface{}) *Flag {
 	if f.Values == nil {
 		empty := []FlagValue{}
@@ -152,8 +150,7 @@ func fmtEqual(a, b interface{}) bool {
 // ── Logger per-environment unified verbs ───────────────────────────────────
 
 // SetLevel sets the level. environment="" updates the logger's base level;
-// non-empty scopes to that environment. Mirrors Python's
-// logger.set_level(level, *, environment=None).
+// non-empty scopes to that environment.
 func (l *Logger) SetLevel(level LogLevel, environment string) {
 	if environment == "" {
 		l.Level = &level
@@ -164,7 +161,7 @@ func (l *Logger) SetLevel(level LogLevel, environment string) {
 
 // ClearLevel clears the level. environment="" clears the logger's base
 // level (causing it to inherit from its parent); non-empty clears the
-// per-env override. Mirrors Python's clear_level(*, environment=None).
+// per-env override.
 func (l *Logger) ClearLevel(environment string) {
 	if environment == "" {
 		l.Level = nil
@@ -173,25 +170,59 @@ func (l *Logger) ClearLevel(environment string) {
 	l.ClearEnvironmentLevel(environment)
 }
 
+// ── LogGroup per-environment unified verbs ─────────────────────────────────
+
+// SetLevel sets the level. environment="" updates the log group's base level;
+// non-empty scopes to that environment.
+//
+// Call LogGroup.Save(ctx) to persist.
+func (g *LogGroup) SetLevel(level LogLevel, environment string) {
+	if environment == "" {
+		g.Level = &level
+		return
+	}
+	g.SetEnvironmentLevel(environment, level)
+}
+
+// ClearLevel clears the level. environment="" clears the log group's base
+// level (causing it to inherit from its parent); non-empty clears the
+// per-env override.
+//
+// Call LogGroup.Save(ctx) to persist.
+func (g *LogGroup) ClearLevel(environment string) {
+	if environment == "" {
+		g.Level = nil
+		return
+	}
+	g.ClearEnvironmentLevel(environment)
+}
+
 // ── ConfigEntry per-environment unified verbs ──────────────────────────────
 
 // SetString sets a string item. environment="" updates the base item;
-// non-empty scopes to that environment.
+// non-empty scopes the value to that environment as an override. Call
+// Save(ctx) to persist.
 func (c *ConfigEntry) SetString(name, value, environment string) {
 	c.setItem(name, value, environment)
 }
 
-// SetNumber sets a numeric item.
+// SetNumber sets a numeric item. environment="" updates the base item;
+// non-empty scopes the value to that environment as an override. Call
+// Save(ctx) to persist.
 func (c *ConfigEntry) SetNumber(name string, value float64, environment string) {
 	c.setItem(name, value, environment)
 }
 
-// SetBoolean sets a boolean item.
+// SetBoolean sets a boolean item. environment="" updates the base item;
+// non-empty scopes the value to that environment as an override. Call
+// Save(ctx) to persist.
 func (c *ConfigEntry) SetBoolean(name string, value bool, environment string) {
 	c.setItem(name, value, environment)
 }
 
-// SetJSON sets a JSON item.
+// SetJSON sets a JSON item. environment="" updates the base item; non-empty
+// scopes the value to that environment as an override. Call Save(ctx) to
+// persist.
 func (c *ConfigEntry) SetJSON(name string, value interface{}, environment string) {
 	c.setItem(name, value, environment)
 }

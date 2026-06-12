@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Config represents a configuration resource from the smplkit platform.
+// ConfigEntry represents a configuration resource from the smplkit platform.
 type ConfigEntry struct {
 	// ID is the config identifier (e.g. "user_service").
 	ID string
@@ -123,8 +123,7 @@ func (lc *LiveConfig) Value() map[string]interface{} {
 }
 
 // Get returns a single resolved value by key. The second return is false
-// if the key is absent. Mirrors Python's `proxy[key]` / `proxy.get(key)`
-// dict-like access.
+// if the key is absent.
 func (lc *LiveConfig) Get(key string) (interface{}, bool) {
 	if lc.client.configCache == nil {
 		return nil, false

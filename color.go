@@ -10,8 +10,7 @@ import (
 var hexRegex = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
 
 // Color is a CSS hex color string. It is immutable: construct a fresh Color
-// via NewColor or NewColorRGB to change a value. Mirrors the Python SDK's
-// Color type (rule 8 of the cross-SDK overhaul).
+// via NewColor or NewColorRGB to change a value.
 //
 // The constructors validate their inputs at the SDK boundary so customer
 // mistakes surface at the call site rather than as a server 400 later.

@@ -422,6 +422,7 @@ func TestNewClient_ResolutionOrder_ServiceBeforeAPIKey(t *testing.T) {
 func TestNewClient_DebugFieldEnablesDebugOutput(t *testing.T) {
 	// Ensure SMPLKIT_DEBUG is unset so we can observe the Config.Debug field alone.
 	t.Setenv("SMPLKIT_DEBUG", "")
+	t.Cleanup(func() { smplkit.SetDebugEnabled(false) })
 
 	client, err := smplkit.NewClient(smplkit.Config{
 		APIKey:           "sk_test_key",
@@ -437,6 +438,7 @@ func TestNewClient_DebugFieldEnablesDebugOutput(t *testing.T) {
 
 func TestNewClient_DebugFromConfigFile(t *testing.T) {
 	t.Setenv("SMPLKIT_DEBUG", "")
+	t.Cleanup(func() { smplkit.SetDebugEnabled(false) })
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, ".smplkit")
 	err := os.WriteFile(configPath, []byte("[default]\napi_key = sk_api_file\ndebug = true\n"), 0o600)

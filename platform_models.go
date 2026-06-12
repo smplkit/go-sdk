@@ -40,13 +40,9 @@ type Environment struct {
 	client *EnvironmentsClient
 }
 
-// TypedColor returns the environment's display color as a typed Color
-// value, or a zero Color if no color is set on this environment.
-//
-// Mirrors Python's Environment.color property which returns a Color
-// instance. The wire transports a hex string; the SDK wraps it at the
-// boundary. A malformed hex string on the wire returns the zero Color
-// rather than surfacing a validation error on read.
+// TypedColor returns the environment's display color as a typed Color,
+// or the zero Color when no color is set or the stored value is not a
+// valid hex string. Reading the color never surfaces a validation error.
 func (e *Environment) TypedColor() Color {
 	if e.Color == nil || *e.Color == "" {
 		return Color{}
@@ -174,8 +170,12 @@ type ContextType struct {
 	client *ContextTypesClient
 }
 
-// AddAttribute adds a known-attribute slot with the given metadata.
-// Local; call Save(ctx) to persist.
+// AddAttribute adds a known-attribute slot. Local-only; call Save(ctx)
+// to persist.
+//
+// name is the attribute name to declare on this context type. meta is
+// optional metadata stored for the attribute slot; when omitted the slot
+// is declared with empty metadata.
 func (ct *ContextType) AddAttribute(name string, meta ...map[string]interface{}) {
 	if ct.Attributes == nil {
 		ct.Attributes = make(map[string]map[string]interface{})
@@ -191,12 +191,20 @@ func (ct *ContextType) AddAttribute(name string, meta ...map[string]interface{})
 	}
 }
 
-// RemoveAttribute removes a known-attribute slot. Local; call Save(ctx) to persist.
+// RemoveAttribute removes a known-attribute slot. Local-only; call
+// Save(ctx) to persist.
+//
+// name is the attribute to remove; this is a no-op when the attribute is
+// not declared on this context type.
 func (ct *ContextType) RemoveAttribute(name string) {
 	delete(ct.Attributes, name)
 }
 
-// UpdateAttribute replaces a known-attribute slot's metadata. Local; call Save(ctx).
+// UpdateAttribute replaces a known-attribute slot's metadata. Local-only;
+// call Save(ctx) to persist.
+//
+// name is the attribute name whose metadata to replace. meta is the new
+// metadata for the attribute slot, replacing any existing metadata.
 func (ct *ContextType) UpdateAttribute(name string, meta map[string]interface{}) {
 	if ct.Attributes == nil {
 		ct.Attributes = make(map[string]map[string]interface{})
@@ -243,8 +251,9 @@ func (ct *ContextType) apply(other *ContextType) {
 // Save(ctx) to persist; call Delete(ctx) to remove.
 //
 // The builder-style Context (in flags_types.go) remains the canonical
-// input type for flag evaluation; this struct is the management-side
-// read/write model with a back-reference to its parent client.
+// input type for flag evaluation; this struct is the read/write model
+// returned by Contexts().List / Get, with a back-reference to its
+// parent client.
 type ContextEntity struct {
 	// ContextType is the context type key (e.g. "user").
 	ContextType string

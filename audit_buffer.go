@@ -11,7 +11,7 @@ import (
 )
 
 // auditEventBuffer is a bounded in-memory queue + worker goroutine for
-// fire-and-forget audit emits. ADR-047 §2.6.
+// fire-and-forget audit emits.
 //
 // enqueue returns immediately. The worker drains the queue on either a
 // periodic tick or once depth crosses the high-water mark, retries

@@ -1,19 +1,16 @@
 package smplkit
 
 // This file defines the read-only / frozen value types that the SDK
-// surfaces from runtime caches and management read-back paths. The
+// surfaces from runtime caches and CRUD read-back paths. The
 // types are immutable in spirit and (where the language allows) in
 // practice: their fields are unexported and only getter methods are
 // provided, so customer code that grabs one of these types cannot
 // silently mutate SDK-internal state.
 //
-// Mirrors rule 5 of the Python SDK overhaul (PR #127): "Read-only
-// contracts are enforced, not aspirational."
+// The read-only contract is enforced, not aspirational.
 
 // FlagRule is a single targeting rule on a Flag. Frozen — author rules
 // via the smplkit.Rule fluent builder and pass through Flag.AddRule.
-//
-// Mirrors Python's smplkit.flags.models.FlagRule.
 type FlagRule struct {
 	logic       map[string]interface{}
 	value       interface{}
@@ -50,8 +47,6 @@ func (r FlagRule) Description() string { return r.description }
 // FlagEnvironment is the per-environment configuration on a Flag. Frozen.
 // Mutate via Flag.AddRule / Flag.EnableRules / Flag.DisableRules /
 // Flag.SetDefault / Flag.ClearRules with environment scoping.
-//
-// Mirrors Python's smplkit.flags.models.FlagEnvironment.
 type FlagEnvironment struct {
 	enabled  bool
 	default_ interface{}
@@ -82,8 +77,6 @@ func (e FlagEnvironment) Rules() []FlagRule {
 
 // LoggerEnvironment is the per-environment configuration on a Logger or
 // LogGroup — currently just an optional level override. Frozen.
-//
-// Mirrors Python's smplkit.logging.models.LoggerEnvironment.
 type LoggerEnvironment struct {
 	level *LogLevel
 }
@@ -108,11 +101,12 @@ func (e LoggerEnvironment) Level() *LogLevel {
 	return &cp
 }
 
-// ConfigEnvironment is the per-environment configuration on a Config.
-// Frozen — mutate via Config.SetString / SetNumber / SetBoolean / SetJSON
-// / Remove with an environment kwarg.
+// ConfigEnvironment is the per-environment value overrides on a ConfigEntry.
+// Frozen — mutate via ConfigEntry.SetString / SetNumber / SetBoolean /
+// SetJSON / Remove with an environment argument.
 //
-// Mirrors Python's smplkit.config.models.ConfigEnvironment.
+// An override stores only the raw value; the declared type and description
+// come from the base item.
 type ConfigEnvironment struct {
 	values map[string]interface{}
 }

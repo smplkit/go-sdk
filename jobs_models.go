@@ -2,13 +2,11 @@ package smplkit
 
 import (
 	"time"
-
-	genjobs "github.com/smplkit/go-sdk/v3/internal/generated/jobs"
 )
 
 // JobHttpMethod is the HTTP verb a job uses when it fires. The jobs
 // service rejects any value outside the constants below with a 400.
-type JobHttpMethod = genjobs.JobHttpConfigurationMethod
+type JobHttpMethod string
 
 // Supported JobHttpMethod values, alphabetical.
 const (
@@ -30,8 +28,8 @@ type HttpConfig struct {
 	// URL is the absolute http:// or https:// destination the job calls.
 	URL string
 	// Headers are attached to every run's request. Values carry
-	// credentials and are encrypted at rest server-side; reads return
-	// them as plaintext.
+	// credentials; supply them plaintext on writes. Reads return them
+	// plaintext too, so a Get → mutate → Save round-trip preserves them.
 	Headers []HttpHeader
 	// Body is the request body sent on each run. Nil sends an empty body
 	// (suitable for a connectivity ping). Sent verbatim — pair with a
@@ -82,7 +80,8 @@ type Job struct {
 	// Configuration is the HTTP request the job performs when it fires.
 	Configuration HttpConfig
 	// ConcurrencyPolicy is how overlapping runs are handled. "ALLOW" (the
-	// only value today) permits them.
+	// default and only value today) permits a new run to start while a
+	// previous one is still in flight.
 	ConcurrencyPolicy string
 	// NextRunAt is the next scheduled fire time. Nil once a one-off job
 	// has fired.
@@ -91,7 +90,7 @@ type Job struct {
 	CreatedAt *time.Time
 	// UpdatedAt is when the job was last modified.
 	UpdatedAt *time.Time
-	// DeletedAt is the soft-delete timestamp. Nil for live jobs.
+	// DeletedAt is when the job was deleted. Nil for live jobs.
 	DeletedAt *time.Time
 	// Version is a monotonic counter incremented on every update,
 	// starting at 1.

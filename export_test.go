@@ -10,6 +10,11 @@ import (
 // debug facility.
 var IsDebugEnabled = debug.IsEnabled
 
+// SetDebugEnabled sets the process-global debug-output flag. Tests that
+// construct a Config{Debug: true} client use it (via t.Cleanup) to restore the
+// flag so debug output does not leak into unrelated tests.
+var SetDebugEnabled = debug.SetEnabled
+
 // CheckStatusForTest exposes checkStatus for use in external tests.
 var CheckStatusForTest = checkStatus
 

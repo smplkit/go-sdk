@@ -15,8 +15,7 @@ package smplkit
 // accessor below converts and returns a typed snapshot.
 
 // TypedEnvironments returns a typed, read-only view of per-environment
-// configuration on a Flag. Mirrors Python's flag.environments property
-// returning dict[str, FlagEnvironment].
+// configuration on a Flag.
 //
 // The returned map is a defensive copy; mutating it has no effect on
 // the underlying flag. Mutate the flag via SetDefault / EnableRules /

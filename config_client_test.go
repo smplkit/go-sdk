@@ -1218,6 +1218,7 @@ func TestNewConfigClient_Standalone_ResolveError(t *testing.T) {
 
 func TestNewConfigClient_Standalone_DebugEnables(t *testing.T) {
 	// Config.Debug=true takes the debug.Enable() branch in NewConfigClient.
+	t.Cleanup(func() { smplkit.SetDebugEnabled(false) })
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data":[]}`))
