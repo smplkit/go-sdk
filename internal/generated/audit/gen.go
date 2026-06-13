@@ -400,7 +400,7 @@ type Event struct {
 	// DoNotForward When `true`, the event is recorded but not delivered to any forwarder, and no delivery log entries are created for it.
 	DoNotForward *bool `json:"do_not_forward,omitempty"`
 
-	// Environment The environment the event occurred in. Always present on read. Resolved when the event is recorded — from a single-environment credential, or the `X-Smplkit-Environment` header for multi-environment credentials — and never set on the request body. The same content recorded in two environments produces two distinct events.
+	// Environment The environment the event occurred in. On write, optionally names the target environment: omit it and a single-environment credential implies it (a multi-environment credential must name it), and a named environment must be one the caller may access. Always present on read as the resolved environment. The same content recorded in two environments produces two distinct events.
 	Environment *string `json:"environment,omitempty"`
 
 	// EventType What happened, e.g. `user.created`. Any non-empty string.
@@ -647,6 +647,9 @@ type EventTypeResource struct {
 // A request that violates these rules is rejected at mint time with
 // `400 Bad Request`.
 type Export struct {
+	// Environment The single environment the export is scoped to. Omit it and a single-environment credential implies it (a multi-environment credential must name it), and a named environment must be one the caller may access. An export always covers exactly one environment.
+	Environment *string `json:"environment,omitempty"`
+
 	// ExpiresAt When the signed URL stops being valid (ISO-8601 UTC). Open the URL well before this time — the signed token is stateless, so a single mint cannot be 'refreshed'; mint a new export if the URL has expired.
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
@@ -1172,6 +1175,12 @@ type ResourceTypeResource struct {
 	Type *string `json:"type,omitempty"`
 }
 
+// RetryFailedDeliveriesRequest Inputs to the retry-failed-deliveries action.
+type RetryFailedDeliveriesRequest struct {
+	// Environment The single environment whose failed deliveries are re-attempted. Omit it and a single-environment credential implies it (a multi-environment credential must name it), and a named environment must be one the caller may access. The action always targets exactly one environment.
+	Environment *string `json:"environment,omitempty"`
+}
+
 // RetryFailedDeliveriesSummary Counts returned by the retry-failed-deliveries action.
 type RetryFailedDeliveriesSummary struct {
 	// Attempted Number of failed deliveries that were re-attempted.
@@ -1380,11 +1389,13 @@ type ListForwardersParamsSort string
 
 // ListForwarderDeliveriesParams defines parameters for ListForwarderDeliveries.
 type ListForwarderDeliveriesParams struct {
-	FilterStatus    *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
-	FilterCreatedAt *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
-	FilterEvent     *string `form:"filter[event],omitempty" json:"filter[event],omitempty"`
-	PageSize        *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
-	PageAfter       *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+	// FilterEnvironment Comma-separated list of environment keys to scope deliveries to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects deliveries of platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.
+	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
+	FilterStatus      *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
+	FilterCreatedAt   *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
+	FilterEvent       *string `form:"filter[event],omitempty" json:"filter[event],omitempty"`
+	PageSize          *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
+	PageAfter         *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 
 	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`.
 	Sort *ListForwarderDeliveriesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
@@ -1443,6 +1454,9 @@ type CreateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderCreateReques
 
 // UpdateForwarderApplicationVndAPIPlusJSONRequestBody defines body for UpdateForwarder for application/vnd.api+json ContentType.
 type UpdateForwarderApplicationVndAPIPlusJSONRequestBody = ForwarderRequest
+
+// RetryFailedForwarderDeliveriesJSONRequestBody defines body for RetryFailedForwarderDeliveries for application/json ContentType.
+type RetryFailedForwarderDeliveriesJSONRequestBody = RetryFailedDeliveriesRequest
 
 // ExecuteTestForwarderJSONRequestBody defines body for ExecuteTestForwarder for application/json ContentType.
 type ExecuteTestForwarderJSONRequestBody = TestForwarderRequest
@@ -1575,8 +1589,10 @@ type ClientInterface interface {
 
 	UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Context, forwarderId string, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RetryFailedForwarderDeliveries request
-	RetryFailedForwarderDeliveries(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// RetryFailedForwarderDeliveriesWithBody request with any body
+	RetryFailedForwarderDeliveriesWithBody(ctx context.Context, forwarderId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RetryFailedForwarderDeliveries(ctx context.Context, forwarderId string, body RetryFailedForwarderDeliveriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListForwarderDeliveries request
 	ListForwarderDeliveries(ctx context.Context, forwarderId string, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1836,8 +1852,20 @@ func (c *Client) UpdateForwarderWithApplicationVndAPIPlusJSONBody(ctx context.Co
 	return c.Client.Do(req)
 }
 
-func (c *Client) RetryFailedForwarderDeliveries(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRetryFailedForwarderDeliveriesRequest(c.Server, forwarderId)
+func (c *Client) RetryFailedForwarderDeliveriesWithBody(ctx context.Context, forwarderId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRetryFailedForwarderDeliveriesRequestWithBody(c.Server, forwarderId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RetryFailedForwarderDeliveries(ctx context.Context, forwarderId string, body RetryFailedForwarderDeliveriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRetryFailedForwarderDeliveriesRequest(c.Server, forwarderId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2879,8 +2907,19 @@ func NewUpdateForwarderRequestWithBody(server string, forwarderId string, conten
 	return req, nil
 }
 
-// NewRetryFailedForwarderDeliveriesRequest generates requests for RetryFailedForwarderDeliveries
-func NewRetryFailedForwarderDeliveriesRequest(server string, forwarderId string) (*http.Request, error) {
+// NewRetryFailedForwarderDeliveriesRequest calls the generic RetryFailedForwarderDeliveries builder with application/json body
+func NewRetryFailedForwarderDeliveriesRequest(server string, forwarderId string, body RetryFailedForwarderDeliveriesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRetryFailedForwarderDeliveriesRequestWithBody(server, forwarderId, "application/json", bodyReader)
+}
+
+// NewRetryFailedForwarderDeliveriesRequestWithBody generates requests for RetryFailedForwarderDeliveries with any type of body
+func NewRetryFailedForwarderDeliveriesRequestWithBody(server string, forwarderId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -2905,10 +2944,12 @@ func NewRetryFailedForwarderDeliveriesRequest(server string, forwarderId string)
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -2947,6 +2988,18 @@ func NewListForwarderDeliveriesRequest(server string, forwarderId string, params
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
+
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
 
 		if params.FilterStatus != nil {
 
@@ -3401,8 +3454,10 @@ type ClientWithResponsesInterface interface {
 
 	UpdateForwarderWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, forwarderId string, body UpdateForwarderApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateForwarderResponse, error)
 
-	// RetryFailedForwarderDeliveriesWithResponse request
-	RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error)
+	// RetryFailedForwarderDeliveriesWithBodyWithResponse request with any body
+	RetryFailedForwarderDeliveriesWithBodyWithResponse(ctx context.Context, forwarderId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error)
+
+	RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, body RetryFailedForwarderDeliveriesJSONRequestBody, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error)
 
 	// ListForwarderDeliveriesWithResponse request
 	ListForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, params *ListForwarderDeliveriesParams, reqEditors ...RequestEditorFn) (*ListForwarderDeliveriesResponse, error)
@@ -3872,9 +3927,9 @@ func (r UpdateForwarderResponse) ContentType() string {
 }
 
 type RetryFailedForwarderDeliveriesResponse struct {
-	Body                     []byte
-	HTTPResponse             *http.Response
-	ApplicationvndApiJSON200 *RetryFailedDeliveriesSummary
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RetryFailedDeliveriesSummary
 }
 
 // Status returns HTTPResponse.Status
@@ -4226,9 +4281,17 @@ func (c *ClientWithResponses) UpdateForwarderWithApplicationVndAPIPlusJSONBodyWi
 	return ParseUpdateForwarderResponse(rsp)
 }
 
-// RetryFailedForwarderDeliveriesWithResponse request returning *RetryFailedForwarderDeliveriesResponse
-func (c *ClientWithResponses) RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error) {
-	rsp, err := c.RetryFailedForwarderDeliveries(ctx, forwarderId, reqEditors...)
+// RetryFailedForwarderDeliveriesWithBodyWithResponse request with arbitrary body returning *RetryFailedForwarderDeliveriesResponse
+func (c *ClientWithResponses) RetryFailedForwarderDeliveriesWithBodyWithResponse(ctx context.Context, forwarderId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error) {
+	rsp, err := c.RetryFailedForwarderDeliveriesWithBody(ctx, forwarderId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRetryFailedForwarderDeliveriesResponse(rsp)
+}
+
+func (c *ClientWithResponses) RetryFailedForwarderDeliveriesWithResponse(ctx context.Context, forwarderId string, body RetryFailedForwarderDeliveriesJSONRequestBody, reqEditors ...RequestEditorFn) (*RetryFailedForwarderDeliveriesResponse, error) {
+	rsp, err := c.RetryFailedForwarderDeliveries(ctx, forwarderId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -4684,7 +4747,7 @@ func ParseRetryFailedForwarderDeliveriesResponse(rsp *http.Response) (*RetryFail
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.ApplicationvndApiJSON200 = &dest
+		response.JSON200 = &dest
 
 	}
 
