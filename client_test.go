@@ -53,6 +53,10 @@ func TestClient_WaitUntilReady_TimeoutWhenWSNeverConnects(t *testing.T) {
 	err = client.WaitUntilReady(context.Background(), 50*time.Millisecond)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "timed out")
+	// WaitUntilReady's doc promises a TimeoutError on WebSocket timeout; the
+	// error must be matchable via errors.As so callers can branch on it.
+	var timeoutErr *smplkit.TimeoutError
+	require.True(t, errors.As(err, &timeoutErr), "expected *TimeoutError, got %T: %v", err, err)
 }
 
 func TestClient_WaitUntilReady_EagerConnectError(t *testing.T) {

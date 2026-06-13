@@ -2,6 +2,7 @@ package smplkit
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -207,6 +208,11 @@ func TestWS_WaitConnected_TimeoutAndCancel(t *testing.T) {
 	err := ws.waitConnected(context.Background(), 10*time.Millisecond)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "timed out")
+	// The timeout path must yield a typed *TimeoutError so callers (and
+	// SmplClient.WaitUntilReady) can match it via errors.As, matching the
+	// canonical Python hierarchy.
+	var timeoutErr *TimeoutError
+	require.True(t, errors.As(err, &timeoutErr), "expected *TimeoutError, got %T: %v", err, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

@@ -151,7 +151,9 @@ func (ws *sharedWebSocket) setStatus(s string) {
 
 // waitConnected blocks until the WebSocket reaches its first "connected"
 // state, the context is canceled, or the timeout elapses. It returns
-// nil on connect, ctx.Err() on cancellation, or a timeout error.
+// nil on connect, ctx.Err() on cancellation, or a *TimeoutError on
+// timeout (matchable via errors.As, consistent with the rest of the
+// error hierarchy and with SmplClient.WaitUntilReady's contract).
 //
 // Callers use this to avoid the race where they immediately trigger a
 // write whose broadcast event arrives at the server before the WS
@@ -175,7 +177,9 @@ func (ws *sharedWebSocket) waitConnected(ctx context.Context, timeout time.Durat
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-timeoutCh:
-		return fmt.Errorf("smplkit: timed out waiting for WebSocket connection after %s", timeout)
+		return &TimeoutError{
+			Base: Error{Message: fmt.Sprintf("smplkit: timed out waiting for WebSocket connection after %s", timeout)},
+		}
 	}
 }
 
