@@ -12,7 +12,7 @@
           "Events"
         ],
         "summary": "Record Event",
-        "description": "Record an audit event for this account.\n\nThe event is stamped with the environment it occurred in: a\nsingle-environment credential implies it; a multi-environment or\nunrestricted credential must send the `X-Smplkit-Environment` header.\nThe resolved environment must exist and be managed for the account.\n\nReturns `201 Created` on first write, `200 OK` if the request was a\nduplicate (matched by `Idempotency-Key` or a key derived from the\nevent's content). The same content recorded in two environments\nproduces two distinct events.\n\n`resource_type` values beginning with `smpl.` are reserved for events\nthat smplkit emits about its own resources and cannot be used here.",
+        "description": "Record an audit event for this account.\n\nThe event is stamped with the environment it occurred in. Name the target\nenvironment in the request body's `environment` field; omit it and a\nsingle-environment credential implies it, while a multi-environment or\nunrestricted credential must name it. The named environment must be one\nthe caller may access and must exist and be managed for the account.\n\nReturns `201 Created` on first write, `200 OK` if the request was a\nduplicate (matched by `Idempotency-Key` or a key derived from the\nevent's content). The same content recorded in two environments\nproduces two distinct events.\n\n`resource_type` values beginning with `smpl.` are reserved for events\nthat smplkit emits about its own resources and cannot be used here.",
         "operationId": "record_event",
         "security": [
           {
@@ -363,7 +363,7 @@
           "Events"
         ],
         "summary": "Get Event",
-        "description": "Retrieve a single audit event by id.\n\nAuthorized against the caller's permitted environment set: the event\nis returned only if its environment is one the caller may access,\notherwise `404` (the same response as a non-existent id, so existence\nnever leaks across environments). The `X-Smplkit-Environment` header is\nignored here \u2014 a single-object lookup names the object by id, it does\nnot resolve an ambient environment.",
+        "description": "Retrieve a single audit event by id.\n\nAuthorized against the caller's permitted environment set: the event\nis returned only if its environment is one the caller may access,\notherwise `404` (the same response as a non-existent id, so existence\nnever leaks across environments). A single-object lookup names the\nobject by id; it does not resolve a target environment.",
         "operationId": "get_event",
         "security": [
           {
@@ -439,7 +439,7 @@
           "Exports"
         ],
         "summary": "Create Export",
-        "description": "Mint a short-lived signed URL to stream an events download.\n\nThe request body specifies `format` (`CSV` or `JSONL`) and any\nsubset of the event filters accepted by `GET /api/v1/events`. The\nresponse returns the signed URL plus its expiry (30 seconds from\nmint). Open the URL in a browser to stream the file to disk; no\n`Authorization` header is required at download time.\n\nFilter rules match `GET /api/v1/events`: `filter[resource_id]`\nrequires `filter[resource_type]`; `filter[search]` requires either\n`filter[occurred_at]` or `filter[resource_type]` +\n`filter[resource_id]`. Violations are rejected here at mint time.\n\nReads are allowed on lapsed subscriptions per the smplcore\nconvention \u2014 same gate as the events list.",
+        "description": "Mint a short-lived signed URL to stream an events download.\n\nThe request body specifies `format` (`CSV` or `JSONL`) and any\nsubset of the event filters accepted by `GET /api/v1/events`. An\nexport is scoped to a single environment: name it in the body's\n`environment` field, or omit it and a single-environment credential\nimplies it (a multi-environment credential must name it). The\nresponse returns the signed URL plus its expiry (30 seconds from\nmint). Open the URL in a browser to stream the file to disk; no\n`Authorization` header is required at download time.\n\nFilter rules match `GET /api/v1/events`: `filter[resource_id]`\nrequires `filter[resource_type]`; `filter[search]` requires either\n`filter[occurred_at]` or `filter[resource_type]` +\n`filter[resource_id]`. Violations are rejected here at mint time.\n\nReads are allowed on lapsed subscriptions per the smplcore\nconvention \u2014 same gate as the events list.",
         "operationId": "create_export",
         "requestBody": {
           "content": {
@@ -827,7 +827,7 @@
           "Forwarders"
         ],
         "summary": "List Forwarder Deliveries",
-        "description": "List delivery log entries for a forwarder.\n\nScoped to the resolved environment \u2014 only that environment's deliveries\nfor the forwarder are shown. Default sort is `-created_at` (newest\nfirst). Filter by `status` (`SUCCEEDED` or `FAILED`, case-insensitive),\nby `event`, or by a `created_at` range using interval notation\n(e.g. `[2026-01-01T00:00:00Z,*)`).",
+        "description": "List delivery log entries for a forwarder.\n\nScoped by environment. Pass `filter[environment]` as a comma-separated\nlist of environment keys to restrict results to that subset of the\nenvironments you can access; omit it to cover every environment you can\naccess. Default sort is `-created_at` (newest first). Filter by `status`\n(`SUCCEEDED` or `FAILED`, case-insensitive), by `event`, or by a\n`created_at` range using interval notation (e.g.\n`[2026-01-01T00:00:00Z,*)`).",
         "operationId": "list_forwarder_deliveries",
         "security": [
           {
@@ -843,6 +843,24 @@
               "type": "string",
               "title": "Forwarder Id"
             }
+          },
+          {
+            "name": "filter[environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of environment keys to scope deliveries to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects deliveries of platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402.",
+              "title": "Filter[Environment]"
+            },
+            "description": "Comma-separated list of environment keys to scope deliveries to (e.g. `production,staging`). When omitted, results cover every environment you can access. The reserved value `smplkit` selects deliveries of platform change events smplkit records about your own resources; it is included by default when your plan grants change history, and requesting it explicitly without that entitlement returns 402."
           },
           {
             "name": "filter[status]",
@@ -1010,7 +1028,7 @@
           "Forwarders"
         ],
         "summary": "Retry Failed Forwarder Deliveries",
-        "description": "Retry every failed delivery for this forwarder in the resolved environment.\n\nScoped to the resolved environment (a single-environment credential\nimplies it; otherwise send the `X-Smplkit-Environment` header): only\nthat environment's failed deliveries are re-attempted, each using the\nforwarder's effective configuration for that environment and the\noriginal event. Returns the counts.",
+        "description": "Retry every failed delivery for this forwarder in the target environment.\n\nTargets a single environment: name it in the request body's `environment`\nfield, or omit it and a single-environment credential implies it (a\nmulti-environment credential must name it). Only that environment's failed\ndeliveries are re-attempted, each using the forwarder's effective\nconfiguration for that environment and the original event. Returns the\ncounts.",
         "operationId": "retry_failed_forwarder_deliveries",
         "security": [
           {
@@ -1028,11 +1046,21 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryFailedDeliveriesRequest",
+                "default": {}
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/vnd.api+json": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RetryFailedDeliveriesSummary"
                 }
@@ -1648,8 +1676,7 @@
               }
             ],
             "title": "Environment",
-            "description": "The environment the event occurred in. Always present on read. Resolved when the event is recorded \u2014 from a single-environment credential, or the `X-Smplkit-Environment` header for multi-environment credentials \u2014 and never set on the request body. The same content recorded in two environments produces two distinct events.",
-            "readOnly": true
+            "description": "The environment the event occurred in. On write, optionally names the target environment: omit it and a single-environment credential implies it (a multi-environment credential must name it), and a named environment must be one the caller may access. Always present on read as the resolved environment. The same content recorded in two environments produces two distinct events."
           },
           "created_at": {
             "anyOf": [
@@ -2186,6 +2213,18 @@
             ],
             "title": "Format",
             "description": "Output format for the download. `CSV` writes one row per event with the event payload (`data`) serialized as a JSON-encoded cell. `JSONL` writes one JSON object per line with `data` preserved as a nested object."
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "The single environment the export is scoped to. Omit it and a single-environment credential implies it (a multi-environment credential must name it), and a named environment must be one the caller may access. An export always covers exactly one environment."
           },
           "filter[occurred_at]": {
             "anyOf": [
@@ -3547,6 +3586,26 @@
           "id": "smpl.flag",
           "type": "resource_type"
         }
+      },
+      "RetryFailedDeliveriesRequest": {
+        "properties": {
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "The single environment whose failed deliveries are re-attempted. Omit it and a single-environment credential implies it (a multi-environment credential must name it), and a named environment must be one the caller may access. The action always targets exactly one environment."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RetryFailedDeliveriesRequest",
+        "description": "Inputs to the retry-failed-deliveries action."
       },
       "RetryFailedDeliveriesSummary": {
         "properties": {
