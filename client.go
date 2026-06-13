@@ -215,26 +215,12 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 		loggingHeaderEditor,
 	)
 
-	// Build the generated audit clients. The runtime audit surface
-	// (events record / list / get, resource-type / event-type discovery)
-	// is environment-scoped (ADR-055): the audit service resolves the
-	// environment from the X-Smplkit-Environment request header. We stamp
-	// it once at the client level from the SDK's configured runtime
-	// environment so every runtime call carries it; a caller-supplied
-	// extra-header of the same name still wins because extraHeaders is
-	// applied after this editor.
-	//
-	// The forwarder-CRUD surface is NOT environment-scoped — it operates
-	// account-wide and per-forwarder enablement lives in the forwarder's
-	// `environments` map — so it gets its own gen client (genAuditClient
-	// below) with no environment header.
-	auditEnvironment := rc.environment
-	auditEnvEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
-		if auditEnvironment != "" {
-			req.Header.Set("X-Smplkit-Environment", auditEnvironment)
-		}
-		return nil
-	})
+	// Build the generated audit client. Environment scoping is body-driven
+	// (ADR-055): the configured environment is stamped onto the event request
+	// body when recording and supplied as the default filter[environment] on
+	// the read / discovery surfaces — it no longer rides on a request header,
+	// so a single transport backs the whole audit surface (runtime reads /
+	// writes and account-wide forwarder CRUD alike).
 	auditExtraEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		for k, v := range extraHeaders {
 			req.Header.Set(k, v)
@@ -246,19 +232,6 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
-	// Editor order matters: env header first, then SDK headers, then
-	// caller extra headers (which therefore win on any collision).
-	genAuditRuntimeRaw, _ := genaudit.NewClient(auditURL,
-		genaudit.WithHTTPClient(httpClient),
-		auditEnvEditor,
-		auditHeaderEditor,
-		auditExtraEditor,
-	)
-	genAuditRuntimeClient := &genaudit.ClientWithResponses{ClientInterface: genAuditRuntimeRaw}
-
-	// Forwarder audit client — same SDK + extra-header editors, but no
-	// environment header (forwarder CRUD is account-wide; per-environment
-	// enablement lives in the forwarder's `environments` map).
 	genAuditRaw, _ := genaudit.NewClient(auditURL,
 		genaudit.WithHTTPClient(httpClient),
 		auditHeaderEditor,
@@ -318,10 +291,11 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	// transport and WebSocket. The two management sub-clients live at
 	// client.Logging().Loggers() / client.Logging().LogGroups().
 	c.logging = newLoggingClient(c, genLoggingClient, c.metrics)
-	// Audit's full surface on one client; the runtime gen client carries the
-	// configured environment as X-Smplkit-Environment; forwarder CRUD uses the
-	// account-wide gen client.
-	c.audit = newAuditClient(genAuditRuntimeClient, genAuditClient)
+	// Audit's full surface on one client; environment scoping is body-driven
+	// (ADR-055) — the configured environment is stamped on the event body and
+	// defaulted onto filter[environment] for reads, so one gen client backs the
+	// whole surface.
+	c.audit = newAuditClient(genAuditClient, rc.environment)
 	c.audit.client = c
 	// Jobs is account-global — reuse the shared jobs transport
 	// (single connection pool) so client.Jobs() is one-stop.

@@ -111,9 +111,9 @@ type AuditEvent struct {
 	DoNotForward bool
 	// Environment is the environment the event was recorded in. Read-only
 	// and always present on reads — the audit service resolves it when the
-	// event is recorded (from a single-environment credential, or from the
-	// runtime SDK's configured environment, which the SDK sends on every
-	// recording call). Never set on the recording request body.
+	// event is recorded, either from a single-environment credential or from
+	// the environment the SDK stamps onto the recording request body (the
+	// runtime SDK's configured environment, when set).
 	Environment string
 }
 

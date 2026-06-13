@@ -323,7 +323,7 @@ func newTestAuditClient(t *testing.T, handler http.HandlerFunc) (*AuditClient, f
 		t.Fatalf("genaudit.NewClient: %v", err)
 	}
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	c := newAuditClient(wrapped, wrapped)
+	c := newAuditClient(wrapped, "")
 	cleanup := func() {
 		_ = c.Close()
 		srv.Close()
@@ -358,35 +358,38 @@ func TestAuditEvents_Record_PassesDoNotForward(t *testing.T) {
 	}
 }
 
-// newAuditClient wires every sub-client off the supplied gen clients; assert
-// the wiring matches the documented field assignments.
+// newAuditClient wires every sub-client off a single gen client and threads the
+// configured environment onto the body-driven surfaces (Events + discovery) but
+// not onto account-wide forwarder CRUD (ADR-055); assert that wiring.
 func TestNewAuditClient_WiresSubClients(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
-	rt, _ := genaudit.NewClient(srv.URL)
-	fw, _ := genaudit.NewClient(srv.URL)
-	runtimeGen := &genaudit.ClientWithResponses{ClientInterface: rt}
-	forwarderGen := &genaudit.ClientWithResponses{ClientInterface: fw}
-	c := newAuditClient(runtimeGen, forwarderGen)
+	g, _ := genaudit.NewClient(srv.URL)
+	gen := &genaudit.ClientWithResponses{ClientInterface: g}
+	c := newAuditClient(gen, "production")
 	defer c.Close()
 
 	if c.Events() == nil || c.ResourceTypes() == nil || c.EventTypes() == nil ||
 		c.Categories() == nil || c.Forwarders() == nil {
 		t.Fatal("expected all sub-clients wired")
 	}
-	// Runtime surface uses the runtime gen client; forwarders use the
-	// forwarder gen client.
-	if c.gen != runtimeGen {
-		t.Error("expected AuditClient.gen to be the runtime gen client")
+	// One transport backs the whole surface — every sub-client shares it.
+	if c.gen != gen {
+		t.Error("expected AuditClient.gen to be the shared gen client")
 	}
-	if c.Forwarders().gen != forwarderGen {
-		t.Error("expected Forwarders to use the forwarder gen client")
+	if c.Forwarders().gen != gen || c.Events().gen != gen ||
+		c.ResourceTypes().gen != gen || c.EventTypes().gen != gen ||
+		c.Categories().gen != gen {
+		t.Error("expected every sub-client to use the shared gen client")
 	}
-	if c.ResourceTypes().gen != runtimeGen || c.EventTypes().gen != runtimeGen ||
-		c.Categories().gen != runtimeGen {
-		t.Error("expected discovery sub-clients to use the runtime gen client")
+	// The configured environment is threaded onto the body-driven surfaces
+	// (Events + discovery), the default for filter[environment] and the
+	// recording body. Forwarder CRUD is account-wide and carries no environment.
+	if c.Events().environment != "production" || c.ResourceTypes().environment != "production" ||
+		c.EventTypes().environment != "production" || c.Categories().environment != "production" {
+		t.Error("expected configured environment threaded onto Events + discovery sub-clients")
 	}
 }
 

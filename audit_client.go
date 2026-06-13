@@ -35,24 +35,41 @@ type AuditClient struct {
 // AuditEvents handles event recording, listing, and retrieval. Writes are
 // fire-and-forget by default and return as soon as the event is enqueued
 // onto the in-process buffer.
+//
+// environment is the SDK's configured runtime environment (empty when
+// unset). It is stamped onto the event request body when recording and
+// supplied as the default filter[environment] on List (ADR-055).
 type AuditEvents struct {
-	gen    *genaudit.ClientWithResponses
-	buffer *auditEventBuffer
+	gen         *genaudit.ClientWithResponses
+	buffer      *auditEventBuffer
+	environment string
 }
 
 // AuditResourceTypes lists the distinct resource-type slugs seen in the account.
+//
+// environment is the SDK's configured runtime environment (empty when unset);
+// it scopes the listing as the default filter[environment] (ADR-055).
 type AuditResourceTypes struct {
-	gen *genaudit.ClientWithResponses
+	gen         *genaudit.ClientWithResponses
+	environment string
 }
 
 // AuditEventTypes lists the distinct event type slugs seen in the account.
+//
+// environment is the SDK's configured runtime environment (empty when unset);
+// it scopes the listing as the default filter[environment] (ADR-055).
 type AuditEventTypes struct {
-	gen *genaudit.ClientWithResponses
+	gen         *genaudit.ClientWithResponses
+	environment string
 }
 
 // AuditCategories lists the distinct category values seen in the account.
+//
+// environment is the SDK's configured runtime environment (empty when unset);
+// it scopes the listing as the default filter[environment] (ADR-055).
 type AuditCategories struct {
-	gen *genaudit.ClientWithResponses
+	gen         *genaudit.ClientWithResponses
+	environment string
 }
 
 // Events returns the events sub-client.
@@ -80,23 +97,24 @@ func (a *AuditClient) Forwarders() *AuditForwarders {
 	return a.forwarders
 }
 
-// newAuditClient assembles an AuditClient from two generated audit clients.
+// newAuditClient assembles an AuditClient from a single generated audit client.
 //
-// runtimeGen carries the X-Smplkit-Environment header and backs the
-// environment-scoped surface (Events, ResourceTypes, EventTypes — ADR-055).
-// forwarderGen has no environment header and backs forwarder CRUD, which is
-// account-wide (per-forwarder enablement lives in the forwarder's
-// environments map). The top-level SmplClient wires this in and sets the
-// optional client back-reference itself.
-func newAuditClient(runtimeGen, forwarderGen *genaudit.ClientWithResponses) *AuditClient {
-	events := &AuditEvents{gen: runtimeGen, buffer: newAuditEventBuffer(runtimeGen)}
+// Environment scoping is body-driven (ADR-055): the configured environment is
+// stamped onto the event request body when recording and supplied as the
+// default filter[environment] on the read / discovery surfaces (Events.List,
+// ResourceTypes, EventTypes, Categories). Forwarder CRUD is account-wide and
+// environment-agnostic, so it carries no environment. One transport backs the
+// whole surface. The top-level SmplClient wires this in and sets the optional
+// client back-reference itself.
+func newAuditClient(gen *genaudit.ClientWithResponses, environment string) *AuditClient {
+	events := &AuditEvents{gen: gen, buffer: newAuditEventBuffer(gen), environment: environment}
 	return &AuditClient{
-		gen:           runtimeGen,
+		gen:           gen,
 		events:        events,
-		resourceTypes: &AuditResourceTypes{gen: runtimeGen},
-		eventTypes:    &AuditEventTypes{gen: runtimeGen},
-		categories:    &AuditCategories{gen: runtimeGen},
-		forwarders:    &AuditForwarders{gen: forwarderGen},
+		resourceTypes: &AuditResourceTypes{gen: gen, environment: environment},
+		eventTypes:    &AuditEventTypes{gen: gen, environment: environment},
+		categories:    &AuditCategories{gen: gen, environment: environment},
+		forwarders:    &AuditForwarders{gen: gen},
 	}
 }
 
@@ -106,12 +124,13 @@ func newAuditClient(runtimeGen, forwarderGen *genaudit.ClientWithResponses) *Aud
 // full surface — event recording and reads, distinct-value discovery, and
 // SIEM forwarder CRUD.
 //
-// The environment-scoped surface (Events, ResourceTypes, EventTypes) sends
-// cfg.Environment as the X-Smplkit-Environment header (ADR-055). The
-// forwarder-CRUD surface is account-wide and is not environment-scoped, so
-// it uses a separate transport with no environment header. Config is
-// resolved from cfg merged with SMPLKIT_* environment variables and the
-// ~/.smplkit profile.
+// Environment scoping is body-driven (ADR-055): cfg.Environment is stamped
+// onto the event request body when recording and supplied as the default
+// filter[environment] on the read / discovery surfaces (Events.List,
+// ResourceTypes, EventTypes, Categories). It no longer rides on a request
+// header, so a single transport backs the whole surface, forwarder CRUD
+// included. Config is resolved from cfg merged with SMPLKIT_* environment
+// variables and the ~/.smplkit profile.
 //
 // Call Close when done to release the underlying HTTP resources and drain
 // the in-memory event buffer.
@@ -141,18 +160,6 @@ func NewAuditClient(cfg Config, opts ...ClientOption) (*AuditClient, error) {
 	// Capture extra headers once; the editor closures below close over it.
 	extraHeaders := rc.extraHeaders
 
-	// The runtime audit surface is environment-scoped (ADR-055): the audit
-	// service resolves the environment from the X-Smplkit-Environment request
-	// header. We stamp it once from the configured runtime environment so
-	// every runtime call carries it; a caller-supplied extra-header of the
-	// same name still wins because extraHeaders is applied after this editor.
-	auditEnvironment := rc.environment
-	auditEnvEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
-		if auditEnvironment != "" {
-			req.Header.Set("X-Smplkit-Environment", auditEnvironment)
-		}
-		return nil
-	})
 	auditHeaderEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
@@ -165,27 +172,14 @@ func NewAuditClient(cfg Config, opts ...ClientOption) (*AuditClient, error) {
 		return nil
 	})
 
-	// Editor order matters: env header first, then SDK headers, then caller
-	// extra headers (which therefore win on any collision).
-	runtimeRaw, _ := genaudit.NewClient(auditURL,
-		genaudit.WithHTTPClient(httpClient),
-		auditEnvEditor,
-		auditHeaderEditor,
-		auditExtraEditor,
-	)
-	runtimeGen := &genaudit.ClientWithResponses{ClientInterface: runtimeRaw}
-
-	// Forwarder-CRUD client — same SDK + extra-header editors, but no
-	// environment header (forwarder CRUD is account-wide; per-environment
-	// enablement lives in the forwarder's environments map).
-	forwarderRaw, _ := genaudit.NewClient(auditURL,
+	auditRaw, _ := genaudit.NewClient(auditURL,
 		genaudit.WithHTTPClient(httpClient),
 		auditHeaderEditor,
 		auditExtraEditor,
 	)
-	forwarderGen := &genaudit.ClientWithResponses{ClientInterface: forwarderRaw}
+	auditGen := &genaudit.ClientWithResponses{ClientInterface: auditRaw}
 
-	return newAuditClient(runtimeGen, forwarderGen), nil
+	return newAuditClient(auditGen, rc.environment), nil
 }
 
 // Close drains the in-memory event buffer, blocking until it empties or the
@@ -245,6 +239,14 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 		dnf := true
 		attrs.DoNotForward = &dnf
 	}
+	// Stamp the SDK's configured environment onto the event body — the
+	// body-driven replacement for the old X-Smplkit-Environment header
+	// (ADR-055). Omitted when unset so a single-environment credential
+	// resolves it server-side.
+	if e.environment != "" {
+		env := e.environment
+		attrs.Environment = &env
+	}
 
 	body := genaudit.EventRequest{
 		Data: genaudit.EventResource{
@@ -269,7 +271,7 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 // the previous page's NextCursor as PageAfter to walk subsequent pages.
 func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEventsPage, error) {
 	params := &genaudit.ListEventsParams{}
-	if env := joinEnvironments(input.Environments); env != "" {
+	if env := resolveEnvironmentFilter(input.Environments, e.environment); env != "" {
 		params.FilterEnvironment = &env
 	}
 	if input.EventType != "" {
@@ -357,7 +359,7 @@ func (e *AuditEvents) close() {
 // PageSize.
 func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesInput) (*ResourceTypeListPage, error) {
 	params := &genaudit.ListResourceTypesParams{}
-	if env := joinEnvironments(input.Environments); env != "" {
+	if env := resolveEnvironmentFilter(input.Environments, rt.environment); env != "" {
 		params.FilterEnvironment = &env
 	}
 	if input.PageNumber > 0 {
@@ -399,7 +401,7 @@ func (rt *AuditResourceTypes) List(ctx context.Context, input ListResourceTypesI
 // type. Sorted alphabetically; offset pagination via PageNumber / PageSize.
 func (et *AuditEventTypes) List(ctx context.Context, input ListEventTypesInput) (*EventTypeListPage, error) {
 	params := &genaudit.ListEventTypesParams{}
-	if env := joinEnvironments(input.Environments); env != "" {
+	if env := resolveEnvironmentFilter(input.Environments, et.environment); env != "" {
 		params.FilterEnvironment = &env
 	}
 	if input.FilterResourceType != "" {
@@ -444,7 +446,7 @@ func (et *AuditEventTypes) List(ctx context.Context, input ListEventTypesInput) 
 // PageSize.
 func (cat *AuditCategories) List(ctx context.Context, input ListCategoriesInput) (*CategoryListPage, error) {
 	params := &genaudit.ListCategoriesParams{}
-	if env := joinEnvironments(input.Environments); env != "" {
+	if env := resolveEnvironmentFilter(input.Environments, cat.environment); env != "" {
 		params.FilterEnvironment = &env
 	}
 	if input.PageNumber > 0 {
@@ -538,11 +540,24 @@ func eventFromResource(r genaudit.EventResource) AuditEvent {
 	return out
 }
 
+// resolveEnvironmentFilter resolves the filter[environment] value for an audit
+// read / discovery surface. An explicit environments list always wins (it is
+// comma-joined); otherwise the client's configured environment scopes the read
+// — the body-driven replacement for the old X-Smplkit-Environment header, which
+// previously scoped every read to the configured environment (ADR-055). With no
+// explicit list and no configured environment it returns "" so the parameter is
+// omitted and the credential's own scoping applies server-side.
+func resolveEnvironmentFilter(environments []string, configured string) string {
+	if joined := joinEnvironments(environments); joined != "" {
+		return joined
+	}
+	return configured
+}
+
 // joinEnvironments comma-joins the requested environment keys into the
 // single filter[environment] value the audit read endpoints accept.
 // Empty/whitespace-only entries are dropped; a nil or all-empty slice
-// yields "" so the caller omits the parameter entirely (preserving the
-// pre-existing single-environment scoping).
+// yields "" so the caller falls back to the configured-environment default.
 func joinEnvironments(envs []string) string {
 	if len(envs) == 0 {
 		return ""

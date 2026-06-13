@@ -290,14 +290,24 @@ func TestClient_AuditAccessors(t *testing.T) {
 	}
 }
 
-// The runtime audit client stamps X-Smplkit-Environment from the SDK's
-// configured environment on every call (ADR-055), while the account-wide
-// forwarder-CRUD client does not.
-func TestClient_RuntimeAudit_InjectsEnvironmentHeader(t *testing.T) {
-	gotEnv := make(chan string, 4)
+// The runtime audit read surface scopes reads with the SDK's configured
+// environment as the default filter[environment] (ADR-055, body-driven) — and
+// never as the retired X-Smplkit-Environment request header.
+func TestClient_RuntimeAudit_ListDefaultsEnvironmentFilter(t *testing.T) {
+	type capture struct {
+		envHeader string
+		envFilter string
+		present   bool
+	}
+	got := make(chan capture, 4)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, present := r.URL.Query()["filter[environment]"]
 		select {
-		case gotEnv <- r.Header.Get("X-Smplkit-Environment"):
+		case got <- capture{
+			envHeader: r.Header.Get("X-Smplkit-Environment"),
+			envFilter: r.URL.Query().Get("filter[environment]"),
+			present:   present,
+		}:
 		default:
 		}
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -320,23 +330,121 @@ func TestClient_RuntimeAudit_InjectsEnvironmentHeader(t *testing.T) {
 		t.Fatalf("List: %v", err)
 	}
 	select {
-	case env := <-gotEnv:
-		if env != "production" {
-			t.Fatalf("expected X-Smplkit-Environment=production on runtime call, got %q", env)
+	case g := <-got:
+		if g.envHeader != "" {
+			t.Errorf("expected no X-Smplkit-Environment header, got %q", g.envHeader)
+		}
+		if !g.present || g.envFilter != "production" {
+			t.Errorf("expected filter[environment]=production, got %q (present=%v)", g.envFilter, g.present)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("server never received the runtime audit request")
 	}
 }
 
-// The forwarder-CRUD surface must NOT carry the environment header —
-// enablement is per-forwarder via the environments map, and forwarder CRUD
-// operates account-wide.
-func TestClient_ForwarderAudit_OmitsEnvironmentHeader(t *testing.T) {
-	gotEnv := make(chan string, 4)
+// An explicit Environments list on a read overrides the configured-environment
+// default for filter[environment].
+func TestClient_RuntimeAudit_ListExplicitEnvironmentsOverride(t *testing.T) {
+	got := make(chan string, 4)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
-		case gotEnv <- r.Header.Get("X-Smplkit-Environment"):
+		case got <- r.URL.Query().Get("filter[environment]"):
+		default:
+		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(Config{
+		APIKey:      "sk_api_test",
+		Environment: "production",
+		Service:     "test",
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer c.Close()
+
+	if _, err := c.Audit().Events().List(context.Background(), ListEventsInput{
+		Environments: []string{"staging", "smplkit"},
+	}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	select {
+	case env := <-got:
+		if env != "staging,smplkit" {
+			t.Fatalf("expected explicit filter[environment]=staging,smplkit to win, got %q", env)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server never received the runtime audit request")
+	}
+}
+
+// Record stamps the SDK's configured environment onto the event request body
+// (ADR-055) — not the retired X-Smplkit-Environment header.
+func TestClient_RuntimeAudit_RecordStampsEnvironmentBody(t *testing.T) {
+	type capture struct {
+		envHeader string
+		body      string
+	}
+	got := make(chan capture, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		select {
+		case got <- capture{envHeader: r.Header.Get("X-Smplkit-Environment"), body: string(b)}:
+		default:
+		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1"}}}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(Config{
+		APIKey:      "sk_api_test",
+		Environment: "production",
+		Service:     "test",
+	}, withBaseURLOverride(srv.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer c.Close()
+
+	if err := c.Audit().Events().Record(CreateEventInput{
+		EventType:    "user.created",
+		ResourceType: "user",
+		ResourceID:   "u-1",
+		Flush:        true,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	select {
+	case g := <-got:
+		if g.envHeader != "" {
+			t.Errorf("expected no X-Smplkit-Environment header, got %q", g.envHeader)
+		}
+		if !strings.Contains(g.body, `"environment":"production"`) {
+			t.Errorf("expected environment stamped on body, got: %s", g.body)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server never received the record request")
+	}
+}
+
+// The forwarder-CRUD surface is account-wide: it carries neither the retired
+// environment header nor a filter[environment] query param.
+func TestClient_ForwarderAudit_NoEnvironment(t *testing.T) {
+	type capture struct {
+		envHeader string
+		present   bool
+	}
+	got := make(chan capture, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, present := r.URL.Query()["filter[environment]"]
+		select {
+		case got <- capture{envHeader: r.Header.Get("X-Smplkit-Environment"), present: present}:
 		default:
 		}
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -359,51 +467,15 @@ func TestClient_ForwarderAudit_OmitsEnvironmentHeader(t *testing.T) {
 		t.Fatalf("Forwarders.List: %v", err)
 	}
 	select {
-	case env := <-gotEnv:
-		if env != "" {
-			t.Fatalf("expected no X-Smplkit-Environment on forwarder call, got %q", env)
+	case g := <-got:
+		if g.envHeader != "" {
+			t.Errorf("expected no X-Smplkit-Environment header on forwarder call, got %q", g.envHeader)
+		}
+		if g.present {
+			t.Error("expected no filter[environment] on forwarder call")
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("server never received the forwarder audit request")
-	}
-}
-
-// A caller-supplied X-Smplkit-Environment extra header wins over the
-// SDK-configured environment on runtime audit calls (explicit override).
-func TestClient_RuntimeAudit_ExtraHeaderEnvironmentWins(t *testing.T) {
-	gotEnv := make(chan string, 4)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case gotEnv <- r.Header.Get("X-Smplkit-Environment"):
-		default:
-		}
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
-	}))
-	defer srv.Close()
-
-	c, err := NewClient(Config{
-		APIKey:       "sk_api_test",
-		Environment:  "production",
-		Service:      "test",
-		ExtraHeaders: map[string]string{"X-Smplkit-Environment": "staging"},
-	}, withBaseURLOverride(srv.URL))
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	defer c.Close()
-
-	if _, err := c.Audit().Events().List(context.Background(), ListEventsInput{}); err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	select {
-	case env := <-gotEnv:
-		if env != "staging" {
-			t.Fatalf("expected explicit extra-header env=staging to win, got %q", env)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("server never received the runtime audit request")
 	}
 }
 
@@ -411,21 +483,28 @@ func TestClient_RuntimeAudit_ExtraHeaderEnvironmentWins(t *testing.T) {
 // NewAuditClient — standalone construction
 // ---------------------------------------------------------------------------
 
-// NewAuditClient builds its own gen clients; the runtime surface stamps the
-// configured environment header while the forwarder surface does not. This
-// exercises every editor closure (env, SDK headers, extra headers) on both
-// the runtime and forwarder transports.
+// NewAuditClient builds a single gen client backing the whole surface. The
+// read / discovery surface defaults filter[environment] to the configured
+// environment (body-driven, ADR-055) while account-wide forwarder CRUD carries
+// none; neither carries the retired X-Smplkit-Environment header. This exercises
+// every editor closure (SDK headers, extra headers) and the environment
+// threading on both surfaces.
 func TestNewAuditClient_StandaloneSurface(t *testing.T) {
 	type capture struct {
 		env       string
+		envFilter string
+		present   bool
 		accept    string
 		userAgent string
 		extra     string
 	}
 	captured := make(chan capture, 8)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, present := r.URL.Query()["filter[environment]"]
 		captured <- capture{
 			env:       r.Header.Get("X-Smplkit-Environment"),
+			envFilter: r.URL.Query().Get("filter[environment]"),
+			present:   present,
 			accept:    r.Header.Get("Accept"),
 			userAgent: r.Header.Get("User-Agent"),
 			extra:     r.Header.Get("X-Custom"),
@@ -454,14 +533,18 @@ func TestNewAuditClient_StandaloneSurface(t *testing.T) {
 		t.Fatal("expected all AuditClient accessors to be non-nil")
 	}
 
-	// Runtime call carries the environment header + SDK + extra headers.
+	// Discovery call defaults filter[environment] to the configured environment
+	// + SDK + extra headers, and carries no X-Smplkit-Environment header.
 	if _, err := ac.ResourceTypes().List(context.Background(), ListResourceTypesInput{}); err != nil {
 		t.Fatalf("ResourceTypes.List: %v", err)
 	}
 	select {
 	case c := <-captured:
-		if c.env != "production" {
-			t.Errorf("expected runtime env header=production, got %q", c.env)
+		if c.env != "" {
+			t.Errorf("expected no X-Smplkit-Environment header, got %q", c.env)
+		}
+		if !c.present || c.envFilter != "production" {
+			t.Errorf("expected filter[environment]=production, got %q (present=%v)", c.envFilter, c.present)
 		}
 		if !strings.Contains(c.accept, "application/vnd.api+json") {
 			t.Errorf("expected Accept header, got %q", c.accept)
@@ -473,10 +556,11 @@ func TestNewAuditClient_StandaloneSurface(t *testing.T) {
 			t.Errorf("expected X-Custom=hi extra header, got %q", c.extra)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("server never received the runtime audit request")
+		t.Fatal("server never received the discovery audit request")
 	}
 
-	// Forwarder call carries SDK + extra headers but NOT the environment header.
+	// Forwarder call carries SDK + extra headers but neither the environment
+	// header nor a filter[environment] query param.
 	if _, err := ac.Forwarders().List(context.Background(), ListForwardersInput{}); err != nil {
 		t.Fatalf("Forwarders.List: %v", err)
 	}
@@ -484,6 +568,9 @@ func TestNewAuditClient_StandaloneSurface(t *testing.T) {
 	case c := <-captured:
 		if c.env != "" {
 			t.Errorf("expected no env header on forwarder call, got %q", c.env)
+		}
+		if c.present {
+			t.Error("expected no filter[environment] on forwarder call")
 		}
 		if c.extra != "hi" {
 			t.Errorf("expected X-Custom=hi extra header on forwarder call, got %q", c.extra)
