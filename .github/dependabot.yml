@@ -22,6 +22,29 @@ updates:
       prefix: "fix"
       include: "scope"
     open-pull-requests-limit: 10
+    # SDK floor protection. gomod supports no `versioning-strategy`, and
+    # Go's Minimal Version Selection makes every `require` a customer-facing
+    # floor (the consumer's build resolves to the MAX of their version and
+    # ours). Freeze the runtime-reachable direct deps so Dependabot cannot
+    # raise the floor we publish. `update-types` ignores suppress only
+    # scheduled VERSION updates — Dependabot SECURITY updates still flow,
+    # so CVEs in these libraries (e.g. the HTTP runtime) still surface.
+    # testify is intentionally NOT frozen: it's the test framework, its
+    # floor is immaterial to real consumers, and keeping it current is
+    # beneficial. When adding a new customer-facing dep, add it here too.
+    ignore:
+      - dependency-name: "github.com/oapi-codegen/runtime"
+        update-types:
+          ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "github.com/diegoholiveira/jsonlogic/v3"
+        update-types:
+          ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "github.com/gorilla/websocket"
+        update-types:
+          ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "github.com/google/uuid"
+        update-types:
+          ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]
     groups:
       gomod:
         update-types:
