@@ -115,6 +115,14 @@ func NewFlagsClient(cfg Config, opts ...ClientOption) (*FlagsClient, error) {
 	flagsURL := serviceURL(optCfg, "flags", rc)
 	appURL := serviceURL(optCfg, "app", rc)
 
+	// Extra headers first, then SDK headers (so SDK-owned headers win on a collision).
+	extraHeaders := rc.extraHeaders
+	extraEditor := func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	}
 	headerEditor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
@@ -122,10 +130,12 @@ func NewFlagsClient(cfg Config, opts ...ClientOption) (*FlagsClient, error) {
 	}
 	genFlags, _ := genflags.NewClient(flagsURL,
 		genflags.WithHTTPClient(httpClient),
+		genflags.WithRequestEditorFn(extraEditor),
 		genflags.WithRequestEditorFn(headerEditor),
 	)
 	genApp, _ := genapp.NewClient(appURL,
 		genapp.WithHTTPClient(httpClient),
+		genapp.WithRequestEditorFn(extraEditor),
 		genapp.WithRequestEditorFn(headerEditor),
 	)
 
@@ -923,6 +933,52 @@ func (c *FlagsClient) RegisterFlag(id, flagType string, defaultVal interface{}) 
 	}
 }
 
+// FlagRegisterOption configures a batch Register call. Use WithFlagFlush.
+type FlagRegisterOption func(*flagRegisterOpts)
+
+type flagRegisterOpts struct {
+	flush bool
+}
+
+// WithFlagFlush makes Register flush all buffered declarations immediately
+// rather than waiting for the batch threshold or the next periodic flush.
+func WithFlagFlush() FlagRegisterOption {
+	return func(o *flagRegisterOpts) { o.flush = true }
+}
+
+// Register buffers one or more flag declarations for bulk-discovery upload.
+//
+// Each declaration's Service and Environment default to the client's resolved
+// values when left empty. Declarations stay buffered and are sent on the next
+// flush — automatic once the buffer reaches its batch threshold, or on the
+// first live call — unless WithFlagFlush is passed, which sends everything
+// buffered immediately. Items remain in the buffer until the POST succeeds, so
+// a failed flush is retried by the next Flush call.
+func (c *FlagsClient) Register(ctx context.Context, declarations []FlagDeclaration, opts ...FlagRegisterOption) {
+	o := &flagRegisterOpts{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	for _, d := range declarations {
+		service := d.Service
+		if service == "" {
+			service = c.service
+		}
+		environment := d.Environment
+		if environment == "" {
+			environment = c.environment
+		}
+		c.runtime.flagBuffer.add(d.ID, string(d.Type), d.Default, service, environment)
+	}
+	if o.flush {
+		c.Flush(ctx)
+		return
+	}
+	if c.runtime.flagBuffer.pendingCount() >= flagRegistrationThreshold {
+		go c.runtime.flushFlagBuffer(context.Background())
+	}
+}
+
 // Flush POSTs pending declarations to the flags bulk endpoint.
 //
 // Items remain in the buffer until the request succeeds, so a flush
@@ -931,6 +987,12 @@ func (c *FlagsClient) RegisterFlag(id, flagType string, defaultVal interface{}) 
 // flush on close).
 func (c *FlagsClient) Flush(ctx context.Context) {
 	c.runtime.flushFlagBuffer(ctx)
+}
+
+// FlushSync flushes pending flag declarations synchronously. It is an alias of
+// Flush, mirroring LoggersClient.FlushSync for the periodic-flush path.
+func (c *FlagsClient) FlushSync(ctx context.Context) {
+	c.Flush(ctx)
 }
 
 // PendingCount returns the number of pending flag declarations awaiting flush.

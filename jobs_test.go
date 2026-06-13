@@ -210,8 +210,7 @@ func TestNewJobsClient_Standalone(t *testing.T) {
 	}
 }
 
-// NewJobsClient surfaces the missing-API-key error from
-// resolveStandaloneConfig.
+// NewJobsClient surfaces the missing-API-key error from resolveConfig.
 func TestNewJobsClient_MissingAPIKey(t *testing.T) {
 	t.Setenv("SMPLKIT_API_KEY", "")
 	t.Setenv("HOME", t.TempDir())

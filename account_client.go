@@ -48,7 +48,7 @@ func newAccountClient(appClient genapp.ClientInterface) *AccountClient {
 // NewAccountClient creates a standalone Smpl Account client that resolves and
 // owns its own app transport.
 func NewAccountClient(cfg Config, opts ...ClientOption) (*AccountClient, error) {
-	rc, err := resolveStandaloneConfig(cfg)
+	rc, err := resolveConfig(cfg)
 	if err != nil {
 		return nil, err
 	}

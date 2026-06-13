@@ -200,12 +200,14 @@ func (a *AuditClient) Close() error {
 	return nil
 }
 
-// Record enqueues an audit event for asynchronous delivery.
+// Record enqueues an audit event for delivery.
 //
-// Returns nil immediately. The buffer worker handles the actual POST
-// and retries on transient failures. ResourceType beginning with
-// "smpl." is rejected by the server with 403 — that namespace is
-// reserved for smplkit-emitted events.
+// By default it returns nil immediately and the buffer worker handles the
+// actual POST, retrying on transient failures. Set input.Flush to block until
+// the event has drained (or input.FlushTimeout elapses) before returning —
+// useful when the caller needs the event durable before continuing.
+// ResourceType beginning with "smpl." is rejected by the server with 403 —
+// that namespace is reserved for smplkit-emitted events.
 func (e *AuditEvents) Record(input CreateEventInput) error {
 	if input.EventType == "" || input.ResourceType == "" || input.ResourceID == "" {
 		return errors.New("audit Record requires EventType, ResourceType, and ResourceID")
@@ -250,6 +252,13 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 		},
 	}
 	e.buffer.enqueue(body, input.IdempotencyKey)
+	if input.Flush {
+		timeout := input.FlushTimeout
+		if timeout == 0 {
+			timeout = auditDefaultFlushTimeout
+		}
+		e.buffer.flush(timeout)
+	}
 	return nil
 }
 

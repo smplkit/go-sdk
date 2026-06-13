@@ -5,6 +5,38 @@ import (
 	"time"
 )
 
+// ItemType is the declared value type of a config item. It constrains the
+// JSON shape of the item's value and of every per-environment override of
+// the same key. Mirrors the flag-side FlagType enum.
+type ItemType string
+
+// Supported ItemType values, alphabetical by wire constant.
+const (
+	// ItemTypeBoolean represents a boolean config item.
+	ItemTypeBoolean ItemType = "BOOLEAN"
+	// ItemTypeJSON represents a JSON config item.
+	ItemTypeJSON ItemType = "JSON"
+	// ItemTypeNumber represents a numeric config item.
+	ItemTypeNumber ItemType = "NUMBER"
+	// ItemTypeString represents a string config item.
+	ItemTypeString ItemType = "STRING"
+)
+
+// ConfigItem is a single typed item within a ConfigEntry. Pass one to
+// ConfigEntry.Set to write (or replace) an item with full control over its
+// declared type and description; the SetString / SetNumber / SetBoolean /
+// SetJSON convenience setters build a ConfigItem for you.
+type ConfigItem struct {
+	// Name is the item key within its config.
+	Name string
+	// Value is the item's value.
+	Value interface{}
+	// Type is the declared value type (STRING, NUMBER, BOOLEAN, or JSON).
+	Type ItemType
+	// Description is an optional human-readable description.
+	Description string
+}
+
 // ConfigEntry represents a configuration resource from the smplkit platform.
 type ConfigEntry struct {
 	// ID is the config identifier (e.g. "user_service").
@@ -15,7 +47,7 @@ type ConfigEntry struct {
 	Description *string
 	// Parent is the parent config ID, or nil for root configs.
 	Parent *string
-	// Items holds the base configuration values.
+	// Items holds the base configuration values as a flat {key: value} map.
 	Items map[string]interface{}
 	// Environments maps environment names to their value overrides.
 	Environments map[string]map[string]interface{}
@@ -24,9 +56,35 @@ type ConfigEntry struct {
 	// UpdatedAt is the last-modified timestamp.
 	UpdatedAt *time.Time
 
+	// itemsRaw retains the full typed shape of each base item
+	// ({key: {value, type, description}}) parsed from the wire or written by
+	// a setter, so the declared type and description survive a get-mutate-put
+	// round-trip rather than being re-inferred. Surfaced via ItemsRaw().
+	itemsRaw map[string]map[string]interface{}
+
 	// client is the back-reference to the fused ConfigClient that owns
 	// the create/update/delete logic for this active-record model.
 	client *ConfigClient
+}
+
+// ItemsRaw returns the full typed view of the base items as a read-only deep
+// copy: {key: {"value": ..., "type": "STRING"|"NUMBER"|"BOOLEAN"|"JSON",
+// "description": ...}}. The "description" key is present only when the item
+// carries one. Unlike Items (which exposes resolved values only), this view
+// preserves each item's declared type and description.
+func (c *ConfigEntry) ItemsRaw() map[string]map[string]interface{} {
+	if c.itemsRaw == nil {
+		return nil
+	}
+	out := make(map[string]map[string]interface{}, len(c.itemsRaw))
+	for k, raw := range c.itemsRaw {
+		cp := make(map[string]interface{}, len(raw))
+		for ik, iv := range raw {
+			cp[ik] = iv
+		}
+		out[k] = cp
+	}
+	return out
 }
 
 // ConfigOption configures an unsaved Config returned by ConfigClient.New.
@@ -85,6 +143,7 @@ func (c *ConfigEntry) apply(other *ConfigEntry) {
 	c.Parent = other.Parent
 	c.Items = other.Items
 	c.Environments = other.Environments
+	c.itemsRaw = other.itemsRaw
 	c.CreatedAt = other.CreatedAt
 	c.UpdatedAt = other.UpdatedAt
 }

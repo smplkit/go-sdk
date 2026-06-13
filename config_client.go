@@ -133,12 +133,20 @@ func NewConfigClient(cfg Config, opts ...ClientOption) (*ConfigClient, error) {
 	httpClient.Transport = &authTransport{token: rc.apiKey, base: base}
 	configURL := serviceURL(optCfg, "config", rc)
 	appURL := serviceURL(optCfg, "app", rc)
+	// Extra headers first, then SDK headers (so SDK-owned headers win on a collision).
+	extraHeaders := rc.extraHeaders
+	extraEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	})
 	headerEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
 		return nil
 	})
-	gen, _ := genconfig.NewClient(configURL, genconfig.WithHTTPClient(httpClient), headerEditor)
+	gen, _ := genconfig.NewClient(configURL, genconfig.WithHTTPClient(httpClient), extraEditor, headerEditor)
 	return &ConfigClient{
 		generated:   gen,
 		buffer:      newConfigRegistrationBuffer(),
@@ -264,7 +272,7 @@ func (c *ConfigClient) Delete(ctx context.Context, id string) error {
 // createConfig creates the config on the server and updates the local
 // instance. Called from ConfigEntry.Save when CreatedAt is nil.
 func (c *ConfigClient) createConfig(ctx context.Context, cfg *ConfigEntry) error {
-	reqBody := buildConfigCreateRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+	reqBody := buildConfigCreateRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.itemsRaw, cfg.Environments)
 	resp, err := c.generated.CreateConfigWithApplicationVndAPIPlusJSONBody(ctx, reqBody)
 	if err != nil {
 		return classifyError(err)
@@ -288,7 +296,7 @@ func (c *ConfigClient) createConfig(ctx context.Context, cfg *ConfigEntry) error
 // updateConfig updates the config on the server and updates the local
 // instance. Called from ConfigEntry.Save when CreatedAt is set.
 func (c *ConfigClient) updateConfig(ctx context.Context, cfg *ConfigEntry) error {
-	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.Environments)
+	reqBody := buildConfigRequest(cfg.ID, cfg.Name, cfg.Description, cfg.Parent, cfg.Items, cfg.itemsRaw, cfg.Environments)
 	resp, err := c.generated.UpdateConfigWithApplicationVndAPIPlusJSONBody(ctx, cfg.ID, reqBody)
 	if err != nil {
 		return classifyError(err)
@@ -800,12 +808,14 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *ConfigEntry 
 	if r.Id != nil {
 		id = *r.Id
 	}
+	rawItems := derefMap(attrs.Items)
 	return &ConfigEntry{
 		ID:           id,
 		Name:         attrs.Name,
 		Description:  attrs.Description,
 		Parent:       attrs.Parent,
-		Items:        extractItemValues(derefMap(attrs.Items)),
+		Items:        extractItemValues(rawItems),
+		itemsRaw:     toItemsRaw(rawItems),
 		Environments: derefEnvs(attrs.Environments),
 		CreatedAt:    attrs.CreatedAt,
 		UpdatedAt:    attrs.UpdatedAt,
@@ -813,25 +823,42 @@ func resourceToConfig(r genconfig.ConfigResource, c *ConfigClient) *ConfigEntry 
 	}
 }
 
+// toItemsRaw narrows the deref'd item map (each value already a typed
+// {value, type, description} sub-map) into the typed itemsRaw shape.
+func toItemsRaw(items map[string]interface{}) map[string]map[string]interface{} {
+	if items == nil {
+		return nil
+	}
+	out := make(map[string]map[string]interface{}, len(items))
+	for k, v := range items {
+		if m, ok := v.(map[string]interface{}); ok {
+			out[k] = m
+		} else {
+			out[k] = map[string]interface{}{"value": v}
+		}
+	}
+	return out
+}
+
 // buildConfigAttributes constructs the Config attribute payload shared
 // by the create and update envelopes.
-func buildConfigAttributes(name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.Config {
+func buildConfigAttributes(name string, desc, parent *string, items map[string]interface{}, itemsRaw map[string]map[string]interface{}, envs map[string]map[string]interface{}) genconfig.Config {
 	return genconfig.Config{
 		Name:         name,
 		Description:  desc,
 		Parent:       parent,
-		Items:        refMap(wrapItemValues(items)),
+		Items:        buildItemDefs(items, itemsRaw),
 		Environments: refEnvs(envs),
 	}
 }
 
 // buildConfigRequest constructs a ConfigRequest envelope used for updates.
-func buildConfigRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigRequest {
+func buildConfigRequest(id, name string, desc, parent *string, items map[string]interface{}, itemsRaw map[string]map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigRequest {
 	return genconfig.ConfigRequest{
 		Data: genconfig.ConfigResource{
 			Id:         &id,
 			Type:       genconfig.ConfigResourceTypeConfig,
-			Attributes: buildConfigAttributes(name, desc, parent, items, envs),
+			Attributes: buildConfigAttributes(name, desc, parent, items, itemsRaw, envs),
 		},
 	}
 }
@@ -839,36 +866,61 @@ func buildConfigRequest(id, name string, desc, parent *string, items map[string]
 // buildConfigCreateRequest constructs a ConfigCreateRequest envelope.
 // The create envelope requires a non-nullable string id (vs the update
 // envelope, which optionally echoes the id).
-func buildConfigCreateRequest(id, name string, desc, parent *string, items map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigCreateRequest {
+func buildConfigCreateRequest(id, name string, desc, parent *string, items map[string]interface{}, itemsRaw map[string]map[string]interface{}, envs map[string]map[string]interface{}) genconfig.ConfigCreateRequest {
 	return genconfig.ConfigCreateRequest{
 		Data: genconfig.ConfigCreateResource{
 			Id:         id,
 			Type:       genconfig.ConfigCreateResourceTypeConfig,
-			Attributes: buildConfigAttributes(name, desc, parent, items, envs),
+			Attributes: buildConfigAttributes(name, desc, parent, items, itemsRaw, envs),
 		},
 	}
 }
 
+// derefMap converts the generated item-definition map into the typed
+// in-memory shape, retaining each item's declared type and description so a
+// get-mutate-put preserves them rather than re-inferring.
 func derefMap(m *map[string]genconfig.ConfigItemDefinition) map[string]interface{} {
 	if m == nil {
 		return nil
 	}
 	result := make(map[string]interface{}, len(*m))
 	for k, v := range *m {
-		result[k] = map[string]interface{}{"value": v.Value}
+		inner := map[string]interface{}{"value": v.Value}
+		if v.Type != nil {
+			inner["type"] = string(*v.Type)
+		}
+		if v.Description != nil {
+			inner["description"] = *v.Description
+		}
+		result[k] = inner
 	}
 	return result
 }
 
-func refMap(m map[string]interface{}) *map[string]genconfig.ConfigItemDefinition {
-	if m == nil {
+// buildItemDefs builds the generated item-definition map for the wire. The
+// value comes from the flat items map (authoritative); the declared type and
+// description come from the retained typed shape (itemsRaw) when present,
+// falling back to inferring the type from the value otherwise.
+func buildItemDefs(items map[string]interface{}, itemsRaw map[string]map[string]interface{}) *map[string]genconfig.ConfigItemDefinition {
+	if items == nil {
 		return nil
 	}
-	result := make(map[string]genconfig.ConfigItemDefinition, len(m))
-	for k, v := range m {
-		inner := v.(map[string]interface{})
-		t := genconfig.ConfigItemDefinitionType(inner["type"].(string))
-		result[k] = genconfig.ConfigItemDefinition{Value: inner["value"], Type: &t}
+	result := make(map[string]genconfig.ConfigItemDefinition, len(items))
+	for k, v := range items {
+		def := genconfig.ConfigItemDefinition{Value: v}
+		typeStr := valueToItemType(v)
+		if raw, ok := itemsRaw[k]; ok {
+			if t, ok := raw["type"].(string); ok && t != "" {
+				typeStr = t
+			}
+			if d, ok := raw["description"].(string); ok && d != "" {
+				dd := d
+				def.Description = &dd
+			}
+		}
+		t := genconfig.ConfigItemDefinitionType(typeStr)
+		def.Type = &t
+		result[k] = def
 	}
 	return &result
 }
@@ -907,23 +959,6 @@ func extractItemValues(items map[string]interface{}) map[string]interface{} {
 			}
 		}
 		result[k] = v
-	}
-	return result
-}
-
-func wrapItemValues(items map[string]interface{}) map[string]interface{} {
-	if items == nil {
-		return nil
-	}
-	result := make(map[string]interface{}, len(items))
-	for k, v := range items {
-		result[k] = map[string]interface{}{
-			"value": v,
-			// Infer the wire type from the value so management updates
-			// against a config the runtime client already registered
-			// don't trip the server's "type changed" guard.
-			"type": valueToItemType(v),
-		}
 	}
 	return result
 }

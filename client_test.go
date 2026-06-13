@@ -335,14 +335,16 @@ func TestNewClient_DefaultSectionWithoutApiKey(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestNewClient_MissingEnvironment(t *testing.T) {
+func TestNewClient_EnvironmentOptional(t *testing.T) {
+	// Environment is optional — the top-level client constructs with just an
+	// api key and the server derives the environment from it.
 	t.Setenv("SMPLKIT_ENVIRONMENT", "")
+	t.Setenv("SMPLKIT_SERVICE", "")
 	t.Setenv("HOME", t.TempDir())
-	_, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", DisableTelemetry: true})
-	require.Error(t, err)
-	var smplErr *smplkit.Error
-	require.True(t, errors.As(err, &smplErr))
-	assert.Contains(t, smplErr.Message, "No environment provided")
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", DisableTelemetry: true})
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	assert.Equal(t, "", client.Environment())
 }
 
 func TestNewClient_EnvironmentFromEnvVar(t *testing.T) {
@@ -370,15 +372,14 @@ func TestClient_Service(t *testing.T) {
 	assert.Equal(t, "api-service", client.Service())
 }
 
-func TestNewClient_MissingService(t *testing.T) {
+func TestNewClient_ServiceOptional(t *testing.T) {
+	// Service is optional — an audit/jobs-only customer supplies neither
+	// environment nor service.
 	t.Setenv("SMPLKIT_SERVICE", "")
-	_, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", DisableTelemetry: true})
-	require.Error(t, err)
-	var smplErr *smplkit.Error
-	require.True(t, errors.As(err, &smplErr))
-	assert.Contains(t, smplErr.Message, "No service provided")
-	assert.Contains(t, smplErr.Message, "Config.Service")
-	assert.Contains(t, smplErr.Message, "SMPLKIT_SERVICE")
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", Environment: "test", DisableTelemetry: true})
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	assert.Equal(t, "", client.Service())
 }
 
 func TestClient_ServiceFromEnvVar(t *testing.T) {
@@ -395,28 +396,30 @@ func TestNewClient_ServiceExplicitTakesPrecedenceOverEnv(t *testing.T) {
 	assert.Equal(t, "explicit-service", client.Service())
 }
 
-func TestNewClient_ResolutionOrder_EnvironmentBeforeService(t *testing.T) {
-	// If environment is missing, error should mention environment, not service.
+func TestNewClient_EnvAndServiceBothOptional(t *testing.T) {
+	// With only an api key, the top-level client constructs and both
+	// environment and service resolve empty (derived server-side).
 	t.Setenv("SMPLKIT_ENVIRONMENT", "")
 	t.Setenv("SMPLKIT_SERVICE", "")
 	t.Setenv("HOME", t.TempDir())
-	_, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", DisableTelemetry: true})
-	require.Error(t, err)
-	var smplErr *smplkit.Error
-	require.True(t, errors.As(err, &smplErr))
-	assert.Contains(t, smplErr.Message, "No environment provided")
+	client, err := smplkit.NewClient(smplkit.Config{APIKey: "sk_test_key", DisableTelemetry: true})
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	assert.Equal(t, "", client.Environment())
+	assert.Equal(t, "", client.Service())
 }
 
-func TestNewClient_ResolutionOrder_ServiceBeforeAPIKey(t *testing.T) {
-	// If service is missing but environment is present, error should mention service.
+func TestNewClient_MissingAPIKeyError(t *testing.T) {
+	// The api key remains the only required field; clear every source of one.
 	t.Setenv("SMPLKIT_SERVICE", "")
 	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("SMPLKIT_PROFILE", "")
 	t.Setenv("HOME", t.TempDir())
 	_, err := smplkit.NewClient(smplkit.Config{Environment: "test", DisableTelemetry: true})
 	require.Error(t, err)
 	var smplErr *smplkit.Error
 	require.True(t, errors.As(err, &smplErr))
-	assert.Contains(t, smplErr.Message, "No service provided")
+	assert.Contains(t, smplErr.Message, "No API key provided")
 }
 
 func TestNewClient_DebugFieldEnablesDebugOutput(t *testing.T) {

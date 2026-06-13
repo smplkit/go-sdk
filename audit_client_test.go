@@ -68,6 +68,55 @@ func TestAuditEvents_Create_FireAndForget(t *testing.T) {
 	}
 }
 
+func TestAuditEvents_Record_InlineFlush(t *testing.T) {
+	var posts atomic.Int32
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
+		posts.Add(1)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1"}}}`))
+	})
+	defer cleanup()
+
+	// Flush:true blocks until the event is durable — no separate Flush call.
+	if err := events.Record(CreateEventInput{
+		EventType:    "user.created",
+		ResourceType: "user",
+		ResourceID:   "u-1",
+		Flush:        true,
+		FlushTimeout: 2 * time.Second,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if posts.Load() < 1 {
+		t.Fatal("inline flush should have delivered the event before Record returned")
+	}
+}
+
+func TestAuditEvents_Record_InlineFlush_DefaultTimeout(t *testing.T) {
+	var posts atomic.Int32
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
+		posts.Add(1)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1"}}}`))
+	})
+	defer cleanup()
+
+	// FlushTimeout left zero → the 5s default applies (exercises that branch).
+	if err := events.Record(CreateEventInput{
+		EventType:    "user.created",
+		ResourceType: "user",
+		ResourceID:   "u-2",
+		Flush:        true,
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if posts.Load() < 1 {
+		t.Fatal("inline flush with default timeout should have delivered the event")
+	}
+}
+
 func TestAuditEvents_Create_RequiresFields(t *testing.T) {
 	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)

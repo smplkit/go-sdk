@@ -261,6 +261,77 @@ func TestConfigEntry_Remove_BaseAndEnv(t *testing.T) {
 	noEnv.Remove("name", "staging")
 }
 
+func TestConfigEntry_SetX_WithDescription_ItemsRaw(t *testing.T) {
+	c := &smplkit.ConfigEntry{}
+
+	c.SetString("name", "service-a", "", smplkit.WithItemDescription("the service name"))
+	c.SetNumber("retries", 3, "")
+	c.SetBoolean("enabled", true, "", smplkit.WithItemDescription("feature toggle"))
+	c.SetJSON("flags", map[string]interface{}{"x": 1}, "")
+
+	raw := c.ItemsRaw()
+	require.NotNil(t, raw)
+
+	// String item carries value, type, and description.
+	assert.Equal(t, "service-a", raw["name"]["value"])
+	assert.Equal(t, "STRING", raw["name"]["type"])
+	assert.Equal(t, "the service name", raw["name"]["description"])
+
+	// Numeric item with no description omits the description key.
+	assert.Equal(t, float64(3), raw["retries"]["value"])
+	assert.Equal(t, "NUMBER", raw["retries"]["type"])
+	_, hasDesc := raw["retries"]["description"]
+	assert.False(t, hasDesc)
+
+	assert.Equal(t, "BOOLEAN", raw["enabled"]["type"])
+	assert.Equal(t, "feature toggle", raw["enabled"]["description"])
+	assert.Equal(t, "JSON", raw["flags"]["type"])
+
+	// ItemsRaw is a deep copy — mutating it does not affect the entry.
+	raw["name"]["value"] = "tampered"
+	assert.Equal(t, "service-a", c.ItemsRaw()["name"]["value"])
+}
+
+func TestConfigEntry_ItemsRaw_NilWhenNoItems(t *testing.T) {
+	c := &smplkit.ConfigEntry{}
+	assert.Nil(t, c.ItemsRaw())
+}
+
+func TestConfigEntry_Set_GenericConfigItem(t *testing.T) {
+	c := &smplkit.ConfigEntry{}
+
+	// Base item carries the ConfigItem's declared type and description.
+	c.Set(smplkit.ConfigItem{
+		Name:        "tier",
+		Value:       "enterprise",
+		Type:        smplkit.ItemTypeString,
+		Description: "billing tier",
+	}, "")
+	assert.Equal(t, "enterprise", c.Items["tier"])
+	raw := c.ItemsRaw()
+	assert.Equal(t, "STRING", raw["tier"]["type"])
+	assert.Equal(t, "billing tier", raw["tier"]["description"])
+
+	// A per-environment override stores only the raw value; type/description
+	// are ignored (they come from the base item).
+	c.Set(smplkit.ConfigItem{
+		Name:        "tier",
+		Value:       "pro",
+		Type:        smplkit.ItemTypeJSON,
+		Description: "ignored for env override",
+	}, "production")
+	assert.Equal(t, "pro", c.Environments["production"]["tier"])
+	_, hasType := c.Environments["production"]["tier"].(map[string]interface{})
+	assert.False(t, hasType, "env override is a flat raw value, not a typed envelope")
+}
+
+func TestItemType_Constants(t *testing.T) {
+	assert.Equal(t, smplkit.ItemType("STRING"), smplkit.ItemTypeString)
+	assert.Equal(t, smplkit.ItemType("NUMBER"), smplkit.ItemTypeNumber)
+	assert.Equal(t, smplkit.ItemType("BOOLEAN"), smplkit.ItemTypeBoolean)
+	assert.Equal(t, smplkit.ItemType("JSON"), smplkit.ItemTypeJSON)
+}
+
 func TestFlag_AddRule_RejectsEmptyEnvironment(t *testing.T) {
 	// Rule built without Environment() — AddRule must reject so the
 	// boundary check holds even if customers skip the builder kwarg.

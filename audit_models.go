@@ -171,6 +171,15 @@ type CreateEventInput struct {
 	// The event itself is still recorded; the forwarder loop records a
 	// "skipped_do_not_forward" delivery row for each enabled forwarder.
 	DoNotForward bool
+	// Flush, when true, makes Record block until this event has been durably
+	// delivered (or FlushTimeout elapses) before returning, instead of the
+	// fire-and-forget default. Use it when the caller needs the event durable
+	// before continuing — CLI tools, in-test assertions, and any flow about to
+	// exit the process. Leave it false on the request-handling hot path.
+	Flush bool
+	// FlushTimeout bounds the blocking flush when Flush is true. Zero means the
+	// default of 5 seconds. Ignored when Flush is false.
+	FlushTimeout time.Duration
 }
 
 // ListEventsInput passes filters and pagination to AuditEvents.List.

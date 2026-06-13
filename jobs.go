@@ -52,7 +52,7 @@ func newJobsClient(gen *genjobs.ClientWithResponses) *JobsClient {
 // its own jobs transport. Jobs is account-global and never
 // environment-scoped, so it needs no environment/service config.
 func NewJobsClient(cfg Config, opts ...ClientOption) (*JobsClient, error) {
-	rc, err := resolveStandaloneConfig(cfg)
+	rc, err := resolveConfig(cfg)
 	if err != nil {
 		return nil, err
 	}

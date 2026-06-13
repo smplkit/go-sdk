@@ -2586,6 +2586,100 @@ func TestFlagsClient_Flush(t *testing.T) {
 	assert.Equal(t, 0, fc.PendingCount(), "buffer committed after successful flush")
 }
 
+func TestFlagsClient_Register_BatchBuffers(t *testing.T) {
+	fc, _ := newTestFlagsClient(t, nil)
+	assert.Equal(t, 0, fc.PendingCount())
+	fc.Register(context.Background(), []FlagDeclaration{
+		{ID: "alpha", Type: FlagTypeBoolean, Default: true},
+		{ID: "beta", Type: FlagTypeString, Default: "x"},
+	})
+	assert.Equal(t, 2, fc.PendingCount())
+}
+
+func TestFlagsClient_Register_FlushOptionSendsImmediately(t *testing.T) {
+	var captured []genflags.FlagBulkItem
+	var bulkCalls atomic.Int32
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/flags/bulk") {
+			bulkCalls.Add(1)
+			body, _ := io.ReadAll(r.Body)
+			var req genflags.FlagBulkRequest
+			_ = json.Unmarshal(body, &req)
+			captured = req.Flags
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Mix an explicit service/environment with declarations that inherit the
+	// client's resolved values (environment="test", service="test-service").
+	fc.Register(context.Background(), []FlagDeclaration{
+		{ID: "inherits", Type: FlagTypeBoolean, Default: true},
+		{ID: "explicit", Type: FlagTypeNumeric, Default: 1, Service: "custom-svc", Environment: "staging"},
+	}, WithFlagFlush())
+
+	assert.Equal(t, int32(1), bulkCalls.Load(), "WithFlagFlush sends immediately")
+	assert.Equal(t, 0, fc.PendingCount(), "buffer committed after flush")
+
+	byID := map[string]genflags.FlagBulkItem{}
+	for _, item := range captured {
+		byID[item.Id] = item
+	}
+	require.Contains(t, byID, "inherits")
+	require.Contains(t, byID, "explicit")
+	require.NotNil(t, byID["inherits"].Service)
+	assert.Equal(t, "test-service", *byID["inherits"].Service)
+	assert.Equal(t, "test", *byID["inherits"].Environment)
+	assert.Equal(t, "custom-svc", *byID["explicit"].Service)
+	assert.Equal(t, "staging", *byID["explicit"].Environment)
+}
+
+func TestFlagsClient_Register_ThresholdFlush(t *testing.T) {
+	var bulkCalls atomic.Int32
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/flags/bulk") {
+			bulkCalls.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	decls := make([]FlagDeclaration, 0, flagRegistrationThreshold)
+	for i := 0; i < flagRegistrationThreshold; i++ {
+		decls = append(decls, FlagDeclaration{
+			ID:      "reg-" + string(rune('a'+i%26)) + string(rune('0'+i/26)),
+			Type:    FlagTypeBoolean,
+			Default: true,
+		})
+	}
+	// No WithFlagFlush — crossing the batch threshold fires a background flush.
+	fc.Register(context.Background(), decls)
+	time.Sleep(50 * time.Millisecond)
+	assert.GreaterOrEqual(t, bulkCalls.Load(), int32(1), "threshold flush should fire")
+}
+
+func TestFlagsClient_FlushSync(t *testing.T) {
+	var bulkCalls atomic.Int32
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/flags/bulk") {
+			bulkCalls.Add(1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	fc.Register(context.Background(), []FlagDeclaration{{ID: "sync-flag", Type: FlagTypeBoolean, Default: false}})
+	fc.FlushSync(context.Background())
+	assert.Equal(t, int32(1), bulkCalls.Load())
+	assert.Equal(t, 0, fc.PendingCount())
+}
+
 // ---------- SetEnvironmentEnabled ----------
 
 func TestSetEnvironmentEnabled(t *testing.T) {
@@ -3902,7 +3996,11 @@ func TestNewFlagsClient_Standalone_CRUD(t *testing.T) {
 }
 
 func TestNewFlagsClient_Standalone_ConfigError(t *testing.T) {
-	// Missing API key should error in resolveConfig.
+	// Missing API key should error in resolveConfig (environment and service
+	// are optional, so clear every source of an api key).
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("SMPLKIT_PROFILE", "")
+	t.Setenv("HOME", t.TempDir())
 	_, err := NewFlagsClient(Config{Environment: "test"})
 	assert.Error(t, err)
 }

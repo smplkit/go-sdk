@@ -1206,8 +1206,9 @@ func TestNewConfigClient_Standalone_CRUD(t *testing.T) {
 }
 
 func TestNewConfigClient_Standalone_ResolveError(t *testing.T) {
-	// resolveConfig requires environment + service + apikey; omit the api key
-	// (and clear env vars so nothing leaks in) to exercise the error path.
+	// resolveConfig requires an api key (environment + service are optional);
+	// omit the api key (and clear env vars so nothing leaks in) to exercise
+	// the error path.
 	t.Setenv("SMPLKIT_API_KEY", "")
 	t.Setenv("SMPLKIT_PROFILE", "")
 	t.Setenv("HOME", t.TempDir())

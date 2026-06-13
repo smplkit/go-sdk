@@ -33,6 +33,26 @@ func TestDerefMap_WrapsValues(t *testing.T) {
 	assert.Equal(t, &v, inner["value"])
 }
 
+func TestToItemsRaw_NonMapValue(t *testing.T) {
+	// Defensive branch: a bare (non-map) value is wrapped as {value: v}.
+	out := toItemsRaw(map[string]interface{}{"k": "bare"})
+	require.Contains(t, out, "k")
+	assert.Equal(t, "bare", out["k"]["value"])
+}
+
+func TestDerefMap_RetainsTypeAndDescription(t *testing.T) {
+	v := "info"
+	typ := genconfig.ConfigItemDefinitionType("STRING")
+	desc := "log verbosity"
+	m := map[string]genconfig.ConfigItemDefinition{
+		"log_level": {Value: &v, Type: &typ, Description: &desc},
+	}
+	result := derefMap(&m)
+	inner := result["log_level"].(map[string]interface{})
+	assert.Equal(t, "STRING", inner["type"])
+	assert.Equal(t, "log verbosity", inner["description"])
+}
+
 func TestDerefEnvs_Nil(t *testing.T) {
 	result := derefEnvs(nil)
 	assert.Nil(t, result)
@@ -77,6 +97,7 @@ func TestBuildConfigRequest_RoundTrips(t *testing.T) {
 	parent := "p"
 	req := buildConfigRequest("svc", "Svc", &desc, &parent,
 		map[string]interface{}{"k": "v"},
+		map[string]map[string]interface{}{"k": {"value": "v", "type": "STRING", "description": "the k item"}},
 		map[string]map[string]interface{}{"prod": {"k": "w"}},
 	)
 	require.NotNil(t, req.Data.Id)
@@ -85,10 +106,16 @@ func TestBuildConfigRequest_RoundTrips(t *testing.T) {
 	assert.Equal(t, "Svc", req.Data.Attributes.Name)
 	require.NotNil(t, req.Data.Attributes.Items)
 	require.NotNil(t, req.Data.Attributes.Environments)
+	// The retained type + description survive serialization.
+	def := (*req.Data.Attributes.Items)["k"]
+	require.NotNil(t, def.Type)
+	assert.Equal(t, genconfig.ConfigItemDefinitionType("STRING"), *def.Type)
+	require.NotNil(t, def.Description)
+	assert.Equal(t, "the k item", *def.Description)
 }
 
 func TestBuildConfigCreateRequest_RoundTrips(t *testing.T) {
-	req := buildConfigCreateRequest("svc", "Svc", nil, nil, nil, nil)
+	req := buildConfigCreateRequest("svc", "Svc", nil, nil, nil, nil, nil)
 	assert.Equal(t, "svc", req.Data.Id)
 	assert.Equal(t, genconfig.ConfigCreateResourceTypeConfig, req.Data.Type)
 	assert.Equal(t, "Svc", req.Data.Attributes.Name)
@@ -905,23 +932,28 @@ func TestFetchAllConfigs_ListError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// ---------- refMap ----------
+// ---------- buildItemDefs ----------
 
-func TestRefMap_Nil(t *testing.T) {
-	result := refMap(nil)
+func TestBuildItemDefs_Nil(t *testing.T) {
+	result := buildItemDefs(nil, nil)
 	assert.Nil(t, result)
 }
 
-func TestRefMap_WrapsTypedItems(t *testing.T) {
-	m := map[string]interface{}{
-		"log_level": map[string]interface{}{"value": "info", "type": "STRING"},
+func TestBuildItemDefs_RetainsTypeAndDescription(t *testing.T) {
+	// A JSON item whose value happens to be a plain string proves retention
+	// beats inference: inference would call it STRING, the retained type wins.
+	items := map[string]interface{}{"payload": "raw-string"}
+	itemsRaw := map[string]map[string]interface{}{
+		"payload": {"value": "raw-string", "type": "JSON", "description": "json blob"},
 	}
-	result := refMap(m)
+	result := buildItemDefs(items, itemsRaw)
 	require.NotNil(t, result)
-	def := (*result)["log_level"]
+	def := (*result)["payload"]
 	require.NotNil(t, def.Type)
-	assert.Equal(t, genconfig.ConfigItemDefinitionType("STRING"), *def.Type)
-	assert.Equal(t, "info", def.Value)
+	assert.Equal(t, genconfig.ConfigItemDefinitionType("JSON"), *def.Type)
+	require.NotNil(t, def.Description)
+	assert.Equal(t, "json blob", *def.Description)
+	assert.Equal(t, "raw-string", def.Value)
 }
 
 // ---------- refEnvs ----------
@@ -941,23 +973,20 @@ func TestRefEnvs_PassThrough(t *testing.T) {
 	assert.Equal(t, true, (*result)["production"]["debug"])
 }
 
-// ---------- wrapItemValues ----------
+// ---------- buildItemDefs type inference ----------
 
-func TestWrapItemValues_Nil(t *testing.T) {
-	result := wrapItemValues(nil)
-	assert.Nil(t, result)
-}
-
-func TestWrapItemValues_InfersTypes(t *testing.T) {
+func TestBuildItemDefs_InfersTypeWhenNoRaw(t *testing.T) {
 	items := map[string]interface{}{
 		"name":    "Acme",
 		"count":   5,
 		"enabled": true,
 	}
-	result := wrapItemValues(items)
-	assert.Equal(t, "STRING", result["name"].(map[string]interface{})["type"])
-	assert.Equal(t, "NUMBER", result["count"].(map[string]interface{})["type"])
-	assert.Equal(t, "BOOLEAN", result["enabled"].(map[string]interface{})["type"])
+	result := buildItemDefs(items, nil)
+	require.NotNil(t, result)
+	assert.Equal(t, genconfig.ConfigItemDefinitionType("STRING"), *(*result)["name"].Type)
+	assert.Equal(t, genconfig.ConfigItemDefinitionType("NUMBER"), *(*result)["count"].Type)
+	assert.Equal(t, genconfig.ConfigItemDefinitionType("BOOLEAN"), *(*result)["enabled"].Type)
+	assert.Equal(t, "Acme", (*result)["name"].Value)
 }
 
 // ---------- ConfigOption builders ----------

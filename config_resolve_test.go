@@ -335,7 +335,7 @@ func TestResolveConfig_ConfigStructOverridesEnv(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// resolveConfig — required field errors
+// resolveConfig — only the api key is required; environment / service optional
 // ---------------------------------------------------------------------------
 
 func TestResolveConfig_MissingAPIKeyError(t *testing.T) {
@@ -354,28 +354,32 @@ func TestResolveConfig_MissingAPIKeyError(t *testing.T) {
 	assert.Contains(t, smplErr.Message, "[default]")
 }
 
-func TestResolveConfig_MissingEnvironmentError(t *testing.T) {
+func TestResolveConfig_EnvironmentOptional(t *testing.T) {
+	t.Setenv("SMPLKIT_API_KEY", "")
 	t.Setenv("SMPLKIT_ENVIRONMENT", "")
-	t.Setenv("SMPLKIT_PROFILE", "")
-	t.Setenv("HOME", t.TempDir())
-
-	_, err := resolveConfig(Config{APIKey: "sk_test", Service: "svc"})
-	require.Error(t, err)
-	var smplErr *Error
-	require.ErrorAs(t, err, &smplErr)
-	assert.Contains(t, smplErr.Message, "No environment provided")
-}
-
-func TestResolveConfig_MissingServiceError(t *testing.T) {
 	t.Setenv("SMPLKIT_SERVICE", "")
 	t.Setenv("SMPLKIT_PROFILE", "")
 	t.Setenv("HOME", t.TempDir())
 
-	_, err := resolveConfig(Config{APIKey: "sk_test", Environment: "test"})
-	require.Error(t, err)
-	var smplErr *Error
-	require.ErrorAs(t, err, &smplErr)
-	assert.Contains(t, smplErr.Message, "No service provided")
+	// Environment is optional — the server derives it from the api key.
+	rc, err := resolveConfig(Config{APIKey: "sk_test", Service: "svc"})
+	require.NoError(t, err)
+	assert.Empty(t, rc.environment)
+	assert.Equal(t, "svc", rc.service)
+}
+
+func TestResolveConfig_ServiceOptional(t *testing.T) {
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("SMPLKIT_ENVIRONMENT", "")
+	t.Setenv("SMPLKIT_SERVICE", "")
+	t.Setenv("SMPLKIT_PROFILE", "")
+	t.Setenv("HOME", t.TempDir())
+
+	// Service is optional — an audit/jobs-only customer supplies neither.
+	rc, err := resolveConfig(Config{APIKey: "sk_test", Environment: "test"})
+	require.NoError(t, err)
+	assert.Equal(t, "test", rc.environment)
+	assert.Empty(t, rc.service)
 }
 
 // ---------------------------------------------------------------------------
@@ -514,56 +518,55 @@ func TestResolveConfig_CommonProfileSkipsNamedLookup(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// resolveStandaloneConfig — requires only an API key, no env / service
+// resolveConfig — api-key-only path (env / service omitted entirely)
 // ---------------------------------------------------------------------------
 
-func TestResolveStandaloneConfig_APIKeyOnly(t *testing.T) {
+func TestResolveConfig_APIKeyOnly(t *testing.T) {
 	t.Setenv("SMPLKIT_API_KEY", "")
 	t.Setenv("SMPLKIT_ENVIRONMENT", "")
 	t.Setenv("SMPLKIT_SERVICE", "")
 	t.Setenv("SMPLKIT_PROFILE", "")
 	t.Setenv("HOME", t.TempDir())
 
-	// Neither environment nor service supplied — standalone resolution
-	// tolerates that and succeeds as long as the api key is present.
-	rc, err := resolveStandaloneConfig(Config{APIKey: "sk_standalone"})
+	// Neither environment nor service supplied — resolution tolerates that
+	// and succeeds as long as the api key is present.
+	rc, err := resolveConfig(Config{APIKey: "sk_standalone"})
 	require.NoError(t, err)
 	assert.Equal(t, "sk_standalone", rc.apiKey)
 	assert.Empty(t, rc.environment)
 	assert.Empty(t, rc.service)
 }
 
-func TestResolveStandaloneConfig_MissingAPIKeyError(t *testing.T) {
+func TestResolveConfig_MissingAPIKeyNoEnvServiceError(t *testing.T) {
 	t.Setenv("SMPLKIT_API_KEY", "")
 	t.Setenv("SMPLKIT_PROFILE", "")
 	t.Setenv("HOME", t.TempDir())
 
-	_, err := resolveStandaloneConfig(Config{})
+	_, err := resolveConfig(Config{})
 	require.Error(t, err)
 	var smplErr *Error
 	require.ErrorAs(t, err, &smplErr)
 	assert.Contains(t, smplErr.Message, "No API key provided")
 }
 
-func TestResolveStandaloneConfig_ExtraHeadersAndProfileError(t *testing.T) {
+func TestResolveConfig_ExtraHeadersAndProfileError(t *testing.T) {
 	t.Setenv("SMPLKIT_API_KEY", "")
 	t.Setenv("SMPLKIT_PROFILE", "")
 	t.Setenv("HOME", t.TempDir())
 
 	// Extra headers flow through to the resolved config.
-	rc, err := resolveStandaloneConfig(Config{
+	rc, err := resolveConfig(Config{
 		APIKey:       "sk_x",
 		ExtraHeaders: map[string]string{"X-Tenant": "acme"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "acme", rc.extraHeaders["X-Tenant"])
 
-	// A missing named profile surfaces from resolveConfigLayers even on the
-	// standalone path (it shares resolveConfigLayers).
+	// A missing named profile surfaces from resolveConfigLayers.
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	writeConfig(t, dir, "[staging]\napi_key = sk_staging\n")
-	_, err = resolveStandaloneConfig(Config{Profile: "ghost"})
+	_, err = resolveConfig(Config{Profile: "ghost"})
 	require.Error(t, err)
 	var smplErr *Error
 	require.ErrorAs(t, err, &smplErr)

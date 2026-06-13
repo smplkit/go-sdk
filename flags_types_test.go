@@ -128,20 +128,69 @@ func TestRule_ContainsOperator(t *testing.T) {
 	assert.Equal(t, "beta", operands[0])
 }
 
+func TestRule_When_OpEnum(t *testing.T) {
+	rule := smplkit.NewRule("enterprise").
+		Environment("staging").
+		When("user.plan", smplkit.OpEQ, "enterprise").
+		Serve(true).
+		Build()
+	logic := rule["logic"].(map[string]interface{})
+	assert.Contains(t, logic, "==")
+	assert.Equal(t, "staging", rule["environment"])
+}
+
+func TestRule_WhenLogic_RawJSONLogic(t *testing.T) {
+	// A raw OR predicate the (var, op, value) form can't express.
+	expr := map[string]interface{}{
+		"or": []interface{}{
+			map[string]interface{}{"==": []interface{}{map[string]interface{}{"var": "user.plan"}, "enterprise"}},
+			map[string]interface{}{">": []interface{}{map[string]interface{}{"var": "user.seats"}, 100}},
+		},
+	}
+	rule := smplkit.NewRule("either").
+		Environment("production").
+		WhenLogic(expr).
+		Serve("premium").
+		Build()
+	assert.Equal(t, expr, rule["logic"])
+}
+
+func TestRule_WhenLogic_MultipleConditionsAreANDed(t *testing.T) {
+	rule := smplkit.NewRule("combo").
+		When("user.plan", smplkit.OpEQ, "enterprise").
+		WhenLogic(map[string]interface{}{"!": map[string]interface{}{"var": "user.suspended"}}).
+		Serve(true).
+		Build()
+	logic := rule["logic"].(map[string]interface{})
+	conds := logic["and"].([]interface{})
+	assert.Len(t, conds, 2)
+}
+
+func TestOp_Constants(t *testing.T) {
+	assert.Equal(t, smplkit.Op("contains"), smplkit.OpContains)
+	assert.Equal(t, smplkit.Op("=="), smplkit.OpEQ)
+	assert.Equal(t, smplkit.Op("!="), smplkit.OpNEQ)
+	assert.Equal(t, smplkit.Op(">"), smplkit.OpGT)
+	assert.Equal(t, smplkit.Op(">="), smplkit.OpGTE)
+	assert.Equal(t, smplkit.Op("<"), smplkit.OpLT)
+	assert.Equal(t, smplkit.Op("<="), smplkit.OpLTE)
+	assert.Equal(t, smplkit.Op("in"), smplkit.OpIN)
+}
+
 func TestRule_NumericOperators(t *testing.T) {
 	tests := []struct {
-		op string
+		op smplkit.Op
 	}{
-		{">"}, {"<"}, {">="}, {"<="}, {"!="}, {"in"},
+		{smplkit.OpGT}, {smplkit.OpLT}, {smplkit.OpGTE}, {smplkit.OpLTE}, {smplkit.OpNEQ}, {smplkit.OpIN},
 	}
 	for _, tt := range tests {
-		t.Run(tt.op, func(t *testing.T) {
+		t.Run(string(tt.op), func(t *testing.T) {
 			rule := smplkit.NewRule("test").
 				When("user.age", tt.op, 18).
 				Serve(true).
 				Build()
 			logic := rule["logic"].(map[string]interface{})
-			assert.Contains(t, logic, tt.op)
+			assert.Contains(t, logic, string(tt.op))
 		})
 	}
 }

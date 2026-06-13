@@ -72,7 +72,7 @@ func newPlatformClient(appClient genapp.ClientInterface, buf *contextRegistratio
 // Construction has zero side effects: no service registration, no metrics, no
 // websocket — just CRUD against the app service.
 func NewPlatformClient(cfg Config, opts ...ClientOption) (*PlatformClient, error) {
-	rc, err := resolveStandaloneConfig(cfg)
+	rc, err := resolveConfig(cfg)
 	if err != nil {
 		return nil, err
 	}

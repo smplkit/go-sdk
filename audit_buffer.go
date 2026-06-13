@@ -50,12 +50,15 @@ type pendingAuditEvent struct {
 }
 
 const (
-	auditMaxBufferSize  = 1000
-	auditWatermark      = 50
-	auditFlushInterval  = 5 * time.Second
-	auditMaxAttempts    = 5
-	auditInitialBackoff = 250 * time.Millisecond
-	auditMaxBackoff     = 8 * time.Second
+	auditMaxBufferSize = 1000
+	auditWatermark     = 50
+	auditFlushInterval = 5 * time.Second
+	// auditDefaultFlushTimeout bounds an inline Record(Flush:true) when the
+	// caller leaves FlushTimeout zero.
+	auditDefaultFlushTimeout = 5 * time.Second
+	auditMaxAttempts         = 5
+	auditInitialBackoff      = 250 * time.Millisecond
+	auditMaxBackoff          = 8 * time.Second
 )
 
 func newAuditEventBuffer(gen *genaudit.ClientWithResponses) *auditEventBuffer {

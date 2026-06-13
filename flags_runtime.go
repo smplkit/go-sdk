@@ -459,6 +459,17 @@ func (rt *FlagsRuntime) SetContextProvider(fn func(ctx context.Context) []Contex
 	rt.providerMu.Unlock()
 }
 
+// ambientContexts returns the contexts stashed via the owning SmplClient's
+// SetContext, or nil when this runtime has no parent client (standalone) or
+// none are active. It is the fallback ambient source consulted during
+// evaluation after an explicit context and a context provider.
+func (rt *FlagsRuntime) ambientContexts() []Context {
+	if rt.flagsClient != nil && rt.flagsClient.client != nil {
+		return rt.flagsClient.client.getAmbientContexts()
+	}
+	return nil
+}
+
 // ensureInit initializes the runtime on first use, with backoff retry on failure.
 // On success it sets connected=true. On failure it records a backoff window and
 // returns an error so callers fall back to handle defaults.
@@ -696,6 +707,11 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 			if rt.contextBuffer.pendingCount() >= contextBatchFlushSize {
 				go rt.flagsClient.flushContexts(context.Background(), rt.contextBuffer.drain())
 			}
+		} else if ambient := rt.ambientContexts(); len(ambient) > 0 {
+			// Fall back to the top-level SmplClient.SetContext stash. It is
+			// already registered with the platform by SetContext, so we only
+			// read it here for evaluation.
+			evalDict = contextsToEvalDict(ambient)
 		} else {
 			evalDict = map[string]interface{}{}
 		}

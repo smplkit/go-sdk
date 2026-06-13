@@ -62,43 +62,18 @@ type resolvedConfig struct {
 	extraHeaders     map[string]string
 }
 
-// resolveConfig merges configuration from four layers and validates the
-// fields a full runtime client requires (environment, service, api key).
-// 1. Defaults
-// 2. Config file (~/.smplkit) [common] + selected profile
-// 3. Environment variables
-// 4. Explicit Config struct fields
+// resolveConfig merges configuration from four layers and validates that an
+// api key was resolved.
+//
+// Only the api key is required. Environment and service are optional: when
+// absent the SDK sends no environment/service signal and the server derives
+// the environment from the api key, so an audit/jobs-only customer needs
+// neither. They are still resolved (and used) when supplied.
+//  1. Defaults
+//  2. Config file (~/.smplkit) [common] + selected profile
+//  3. Environment variables
+//  4. Explicit Config struct fields
 func resolveConfig(cfg Config) (*resolvedConfig, error) {
-	rc, err := resolveConfigLayers(cfg)
-	if err != nil {
-		return nil, err
-	}
-	if rc.environment == "" {
-		return nil, &Error{
-			Message: "No environment provided. Set one of:\n" +
-				"  1. Set Config.Environment\n" +
-				"  2. Set the SMPLKIT_ENVIRONMENT environment variable\n" +
-				"  3. Add environment to your ~/.smplkit profile",
-		}
-	}
-	if rc.service == "" {
-		return nil, &Error{
-			Message: "No service provided. Set one of:\n" +
-				"  1. Set Config.Service\n" +
-				"  2. Set the SMPLKIT_SERVICE environment variable\n" +
-				"  3. Add service to your ~/.smplkit profile",
-		}
-	}
-	if err := rc.requireAPIKey(); err != nil {
-		return nil, err
-	}
-	return rc, nil
-}
-
-// resolveStandaloneConfig merges the same four layers as resolveConfig but
-// only requires an api key — the standalone platform, account, and jobs
-// clients perform pure account-wide CRUD and need no environment or service.
-func resolveStandaloneConfig(cfg Config) (*resolvedConfig, error) {
 	rc, err := resolveConfigLayers(cfg)
 	if err != nil {
 		return nil, err

@@ -238,6 +238,11 @@ func TestNewFlagsClient_Standalone_External(t *testing.T) {
 }
 
 func TestNewFlagsClient_Standalone_ConfigError_External(t *testing.T) {
+	// Only the api key is required; clear every source of one to exercise the
+	// resolve-error path.
+	t.Setenv("SMPLKIT_API_KEY", "")
+	t.Setenv("SMPLKIT_PROFILE", "")
+	t.Setenv("HOME", t.TempDir())
 	_, err := smplkit.NewFlagsClient(smplkit.Config{Environment: "test"})
 	assert.Error(t, err)
 }

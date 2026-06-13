@@ -51,6 +51,13 @@ type SmplClient struct {
 	// Contexts() and shared with the flags runtime's auto-registration path.
 	contextBuf *contextRegistrationBuffer
 
+	// ambientContexts is the per-client evaluation context stashed by
+	// SetContext, guarded by ambientMu. The flags runtime reads it as a
+	// fallback ambient source when no explicit contexts and no context
+	// provider are supplied.
+	ambientMu       sync.RWMutex
+	ambientContexts []Context
+
 	metrics *metricsReporter
 
 	wsMu sync.Mutex

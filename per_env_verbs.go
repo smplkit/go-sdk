@@ -199,32 +199,67 @@ func (g *LogGroup) ClearLevel(environment string) {
 
 // ── ConfigEntry per-environment unified verbs ──────────────────────────────
 
+// ItemOption configures a config item setter (SetString / SetNumber /
+// SetBoolean / SetJSON). Use WithItemDescription.
+type ItemOption func(*itemOpts)
+
+type itemOpts struct {
+	description string
+}
+
+// WithItemDescription attaches a human-readable description to a config item.
+// Ignored when setting a per-environment override (overrides store the raw
+// value only; the declared type and description come from the base item).
+func WithItemDescription(description string) ItemOption {
+	return func(o *itemOpts) { o.description = description }
+}
+
+func resolveItemOpts(opts []ItemOption) itemOpts {
+	var o itemOpts
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
+// Set writes (or replaces) an item from a ConfigItem. environment="" updates
+// the base item, carrying the item's declared type and description; a
+// non-empty environment stores only the raw value as an override on that
+// environment (the type and description come from the base item, so the
+// ConfigItem's Type and Description are ignored). Call Save(ctx) to persist.
+func (c *ConfigEntry) Set(item ConfigItem, environment string) {
+	c.setItemTyped(item.Name, item.Value, item.Type, item.Description, environment)
+}
+
 // SetString sets a string item. environment="" updates the base item;
-// non-empty scopes the value to that environment as an override. Call
+// non-empty scopes the value to that environment as an override. Pass
+// WithItemDescription to attach a description (base item only). Call
 // Save(ctx) to persist.
-func (c *ConfigEntry) SetString(name, value, environment string) {
-	c.setItem(name, value, environment)
+func (c *ConfigEntry) SetString(name, value, environment string, opts ...ItemOption) {
+	c.setItemTyped(name, value, ItemTypeString, resolveItemOpts(opts).description, environment)
 }
 
 // SetNumber sets a numeric item. environment="" updates the base item;
-// non-empty scopes the value to that environment as an override. Call
+// non-empty scopes the value to that environment as an override. Pass
+// WithItemDescription to attach a description (base item only). Call
 // Save(ctx) to persist.
-func (c *ConfigEntry) SetNumber(name string, value float64, environment string) {
-	c.setItem(name, value, environment)
+func (c *ConfigEntry) SetNumber(name string, value float64, environment string, opts ...ItemOption) {
+	c.setItemTyped(name, value, ItemTypeNumber, resolveItemOpts(opts).description, environment)
 }
 
 // SetBoolean sets a boolean item. environment="" updates the base item;
-// non-empty scopes the value to that environment as an override. Call
+// non-empty scopes the value to that environment as an override. Pass
+// WithItemDescription to attach a description (base item only). Call
 // Save(ctx) to persist.
-func (c *ConfigEntry) SetBoolean(name string, value bool, environment string) {
-	c.setItem(name, value, environment)
+func (c *ConfigEntry) SetBoolean(name string, value bool, environment string, opts ...ItemOption) {
+	c.setItemTyped(name, value, ItemTypeBoolean, resolveItemOpts(opts).description, environment)
 }
 
 // SetJSON sets a JSON item. environment="" updates the base item; non-empty
-// scopes the value to that environment as an override. Call Save(ctx) to
-// persist.
-func (c *ConfigEntry) SetJSON(name string, value interface{}, environment string) {
-	c.setItem(name, value, environment)
+// scopes the value to that environment as an override. Pass WithItemDescription
+// to attach a description (base item only). Call Save(ctx) to persist.
+func (c *ConfigEntry) SetJSON(name string, value interface{}, environment string, opts ...ItemOption) {
+	c.setItemTyped(name, value, ItemTypeJSON, resolveItemOpts(opts).description, environment)
 }
 
 // Remove removes an item. environment="" removes from base; non-empty
@@ -233,6 +268,9 @@ func (c *ConfigEntry) Remove(name, environment string) {
 	if environment == "" {
 		if c.Items != nil {
 			delete(c.Items, name)
+		}
+		if c.itemsRaw != nil {
+			delete(c.itemsRaw, name)
 		}
 		return
 	}
@@ -246,16 +284,26 @@ func (c *ConfigEntry) Remove(name, environment string) {
 	delete(env, name)
 }
 
-// setItem writes a per-env item directly into the flat env map. The
-// wire shape (per ADR-024 §2.4) and the in-memory shape are both flat
-// — {env: {key: rawValue}} — so setItem writes the value at that
-// position without any "values" envelope.
-func (c *ConfigEntry) setItem(name string, value interface{}, environment string) {
+// setItemTyped writes an item into the flat value map and, for the base
+// config, retains the full typed shape ({value, type, description}) in
+// itemsRaw so the declared type and description survive a get-mutate-put.
+// A per-environment override (environment != "") stores only the raw value:
+// the wire shape and the in-memory shape are both flat ({env: {key: rawValue}})
+// per ADR-024 §2.4, and the type/description come from the base item.
+func (c *ConfigEntry) setItemTyped(name string, value interface{}, itemType ItemType, description, environment string) {
 	if environment == "" {
 		if c.Items == nil {
 			c.Items = make(map[string]interface{})
 		}
 		c.Items[name] = value
+		if c.itemsRaw == nil {
+			c.itemsRaw = make(map[string]map[string]interface{})
+		}
+		raw := map[string]interface{}{"value": value, "type": string(itemType)}
+		if description != "" {
+			raw["description"] = description
+		}
+		c.itemsRaw[name] = raw
 		return
 	}
 	if c.Environments == nil {

@@ -22,6 +22,52 @@ const (
 	FlagTypeString FlagType = "STRING"
 )
 
+// Op is a comparison operator accepted by Rule.When.
+//
+// Prefer the Op constants (OpEQ, OpContains, …) over raw operator strings so
+// the IDE can validate calls. Op is a string type, so a raw operator literal
+// (for example "==" or "contains") is still accepted for backward
+// compatibility.
+type Op string
+
+// Supported Op values, alphabetical by name.
+const (
+	// OpContains matches when the value is contained in the variable
+	// (JSON Logic "in" with reversed operands).
+	OpContains Op = "contains"
+	// OpEQ matches when the variable equals the value.
+	OpEQ Op = "=="
+	// OpGT matches when the variable is greater than the value.
+	OpGT Op = ">"
+	// OpGTE matches when the variable is greater than or equal to the value.
+	OpGTE Op = ">="
+	// OpIN matches when the variable is contained in the value.
+	OpIN Op = "in"
+	// OpLT matches when the variable is less than the value.
+	OpLT Op = "<"
+	// OpLTE matches when the variable is less than or equal to the value.
+	OpLTE Op = "<="
+	// OpNEQ matches when the variable does not equal the value.
+	OpNEQ Op = "!="
+)
+
+// FlagDeclaration describes a flag for buffered bulk registration. Pass one
+// or more to FlagsClient.Register to queue them for discovery upload.
+type FlagDeclaration struct {
+	// ID is the stable flag identifier the declaration registers.
+	ID string
+	// Type is the flag value type (BOOLEAN, STRING, NUMERIC, or JSON).
+	Type FlagType
+	// Default is the in-code default value registered for the flag.
+	Default interface{}
+	// Service is the originating service name. When empty, the client fills it
+	// from the owning SmplClient's resolved service.
+	Service string
+	// Environment is the target environment. When empty, the client fills it
+	// from the owning SmplClient's resolved environment.
+	Environment string
+}
+
 // Context represents a typed evaluation context entity.
 //
 // Each Context identifies an entity (user, account, device, etc.) by type
@@ -138,21 +184,37 @@ func (r *Rule) Environment(envKey string) *Rule {
 	return r
 }
 
-// When adds a condition. Multiple calls are AND'd.
-// Supported operators: ==, !=, >, <, >=, <=, in, contains.
-func (r *Rule) When(variable, op string, value interface{}) *Rule {
+// When adds a simple comparison condition. Multiple When / WhenLogic calls
+// are AND'd at the top level.
+//
+// op accepts an Op constant (preferred, e.g. OpEQ) or a raw operator string
+// (e.g. "==", "contains"), since Op is a string type. Supported operators:
+// ==, !=, >, <, >=, <=, in, contains.
+//
+// For predicates this convenience form can't express — OR, nested AND/OR,
+// if, etc. — use WhenLogic with a raw JSON Logic expression.
+func (r *Rule) When(variable string, op Op, value interface{}) *Rule {
 	var condition map[string]interface{}
-	if op == "contains" {
+	if op == OpContains {
 		// JSON Logic "in" with reversed operands: value in var
 		condition = map[string]interface{}{
 			"in": []interface{}{value, map[string]interface{}{"var": variable}},
 		}
 	} else {
 		condition = map[string]interface{}{
-			op: []interface{}{map[string]interface{}{"var": variable}, value},
+			string(op): []interface{}{map[string]interface{}{"var": variable}, value},
 		}
 	}
 	r.conditions = append(r.conditions, condition)
+	return r
+}
+
+// WhenLogic adds a raw JSON Logic predicate as a condition. Use this escape
+// hatch for expressions When can't build — OR, nested AND/OR, if, and so on.
+// Multiple When / WhenLogic calls are AND'd at the top level. See
+// https://jsonlogic.com/ for the expression grammar.
+func (r *Rule) WhenLogic(expr map[string]interface{}) *Rule {
+	r.conditions = append(r.conditions, expr)
 	return r
 }
 

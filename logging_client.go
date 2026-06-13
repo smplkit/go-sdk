@@ -173,6 +173,14 @@ func NewLoggingClient(cfg Config, opts ...ClientOption) (*LoggingClient, error) 
 	logURL := serviceURL(optCfg, "logging", rc)
 	appURL := serviceURL(optCfg, "app", rc)
 
+	// Extra headers first, then SDK headers (so SDK-owned headers win on a collision).
+	extraHeaders := rc.extraHeaders
+	extraEditor := func(_ context.Context, req *http.Request) error {
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+		return nil
+	}
 	headerEditor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
 		req.Header.Set("User-Agent", userAgent)
@@ -180,6 +188,7 @@ func NewLoggingClient(cfg Config, opts ...ClientOption) (*LoggingClient, error) 
 	}
 	genLogging, _ := genlogging.NewClient(logURL,
 		genlogging.WithHTTPClient(httpClient),
+		genlogging.WithRequestEditorFn(extraEditor),
 		genlogging.WithRequestEditorFn(headerEditor),
 	)
 
