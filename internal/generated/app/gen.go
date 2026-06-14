@@ -2450,6 +2450,9 @@ type PlanDefinition struct {
 	// Limits Map of limit key to the cap that applies on this plan. `-1` indicates an unlimited cap.
 	Limits map[string]int `json:"limits"`
 
+	// OverageRates For metered products only: map of metered limit key to the per-unit overage price in micro-USD ($0.000001) charged for each unit beyond the plan's included allotment. A rate of `0` means the plan stops at its allotment with no overage. Omitted for products that are not metered.
+	OverageRates *map[string]int `json:"overage_rates,omitempty"`
+
 	// PriceMonthlyCents Monthly list price in cents. `0` for free plans.
 	PriceMonthlyCents int `json:"price_monthly_cents"`
 }
@@ -2489,6 +2492,9 @@ type Product struct {
 
 	// Limits Map of limit key to limit definition for this product.
 	Limits map[string]LimitDefinition `json:"limits"`
+
+	// MeteredLimits Limit keys on this product that are metered: each includes a monthly allotment in the plan price and bills per unit beyond it at the plan's `overage_rates` rate, rather than capping hard. Empty for products with no metered limits.
+	MeteredLimits *[]string `json:"metered_limits,omitempty"`
 
 	// Plans Map of plan key to plan definition for this product.
 	Plans map[string]PlanDefinition `json:"plans"`

@@ -11143,6 +11143,15 @@
             "type": "object",
             "title": "Limits",
             "description": "Map of limit key to the cap that applies on this plan. `-1` indicates an unlimited cap."
+          },
+          "overage_rates": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "nullable": true,
+            "title": "Overage Rates",
+            "description": "For metered products only: map of metered limit key to the per-unit overage price in micro-USD ($0.000001) charged for each unit beyond the plan's included allotment. A rate of `0` means the plan stops at its allotment with no overage. Omitted for products that are not metered."
           }
         },
         "type": "object",
@@ -11248,6 +11257,14 @@
             "type": "object",
             "title": "Limits",
             "description": "Map of limit key to limit definition for this product."
+          },
+          "metered_limits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Metered Limits",
+            "description": "Limit keys on this product that are metered: each includes a monthly allotment in the plan price and bills per unit beyond it at the plan's `overage_rates` rate, rather than capping hard. Empty for products with no metered limits."
           },
           "plans": {
             "additionalProperties": {
