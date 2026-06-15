@@ -2478,9 +2478,6 @@ type PlanResourceType string
 
 // Product A smplkit product, with its plans, metered limits, and marketing copy.
 type Product struct {
-	// ComingSoon When `true`, the product is listed but not yet available for subscription.
-	ComingSoon *bool `json:"coming_soon,omitempty"`
-
 	// Description Long-form product description.
 	Description string `json:"description"`
 

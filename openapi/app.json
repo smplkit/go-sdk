@@ -6427,7 +6427,7 @@
           "Products"
         ],
         "summary": "List Products",
-        "description": "Return all flag-enabled products with their plans, limits, and\nmarketing content.\n\nDefault sort is `display_name` ascending.",
+        "description": "Return all products with their plans, limits, and marketing content.\n\nDefault sort is `display_name` ascending.",
         "operationId": "list_products",
         "parameters": [
           {
@@ -11244,12 +11244,6 @@
             "title": "Features",
             "description": "Bullet-list feature highlights for the product."
           },
-          "coming_soon": {
-            "type": "boolean",
-            "title": "Coming Soon",
-            "description": "When `true`, the product is listed but not yet available for subscription.",
-            "default": false
-          },
           "limits": {
             "additionalProperties": {
               "$ref": "#/components/schemas/LimitDefinition"
@@ -11333,7 +11327,6 @@
         "description": "JSON:API resource envelope for a product catalog entry.",
         "example": {
           "attributes": {
-            "coming_soon": false,
             "description": "Feature flag management",
             "display_name": "Smpl Flags",
             "features": [
