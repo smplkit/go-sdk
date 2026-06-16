@@ -1252,7 +1252,7 @@ type TestForwarderResponse struct {
 
 // UsageAttributes Usage counter for a single metered limit.
 type UsageAttributes struct {
-	// LimitKey Identifier of the metered limit, e.g. `audit.events_per_month`.
+	// LimitKey Identifier of the metered limit, e.g. `audit.included_events_per_month`.
 	LimitKey string `json:"limit_key"`
 
 	// Period Period the counter covers. `current` is the only supported value.
