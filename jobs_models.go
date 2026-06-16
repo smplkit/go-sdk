@@ -164,6 +164,9 @@ type Usage struct {
 type ListJobsInput struct {
 	// Enabled filters by enabled/disabled state. Nil returns both.
 	Enabled *bool
+	// Recurring filters by schedule cadence: true returns only recurring
+	// (cron) jobs, false only one-off (datetime / now) jobs. Nil returns both.
+	Recurring *bool
 	// PageNumber is the 1-based page index. Zero defers to the server
 	// default (page 1).
 	PageNumber int

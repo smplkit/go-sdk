@@ -273,7 +273,8 @@ func TestJobs_Lifecycle(t *testing.T) {
 	}
 
 	disabled := false
-	jobs, err := j.List(ctx, ListJobsInput{Enabled: &disabled, PageNumber: 1, PageSize: 10})
+	recurring := true
+	jobs, err := j.List(ctx, ListJobsInput{Enabled: &disabled, Recurring: &recurring, PageNumber: 1, PageSize: 10})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

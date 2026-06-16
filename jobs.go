@@ -191,6 +191,9 @@ func (j *JobsClient) List(ctx context.Context, input ListJobsInput) ([]*Job, err
 	if input.Enabled != nil {
 		params.FilterEnabled = input.Enabled
 	}
+	if input.Recurring != nil {
+		params.FilterRecurring = input.Recurring
+	}
 	if input.PageNumber > 0 {
 		params.PageNumber = &input.PageNumber
 	}
