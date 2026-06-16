@@ -502,6 +502,8 @@ type ListJobsParams struct {
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	FilterJob *string `form:"filter[job],omitempty" json:"filter[job],omitempty"`
+
+	// PageSize Number of runs per page. Optional; defaults to `50` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
 	PageSize  *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter *string `form:"page[after],omitempty" json:"page[after],omitempty"`
 }

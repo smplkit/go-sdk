@@ -317,8 +317,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Number of runs per page. Optional; defaults to `50` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
               "title": "Page[Size]"
-            }
+            },
+            "description": "Number of runs per page. Optional; defaults to `50` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
           },
           {
             "name": "page[after]",
