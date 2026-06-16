@@ -172,6 +172,102 @@ func (e RunTrigger) Valid() bool {
 	}
 }
 
+// Defines values for ListJobsParamsSort.
+const (
+	CreatedAt      ListJobsParamsSort = "created_at"
+	Enabled        ListJobsParamsSort = "enabled"
+	MinusCreatedAt ListJobsParamsSort = "-created_at"
+	MinusEnabled   ListJobsParamsSort = "-enabled"
+	MinusName      ListJobsParamsSort = "-name"
+	MinusNextRunAt ListJobsParamsSort = "-next_run_at"
+	MinusUpdatedAt ListJobsParamsSort = "-updated_at"
+	Name           ListJobsParamsSort = "name"
+	NextRunAt      ListJobsParamsSort = "next_run_at"
+	UpdatedAt      ListJobsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListJobsParamsSort enum.
+func (e ListJobsParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case Enabled:
+		return true
+	case MinusCreatedAt:
+		return true
+	case MinusEnabled:
+		return true
+	case MinusName:
+		return true
+	case MinusNextRunAt:
+		return true
+	case MinusUpdatedAt:
+		return true
+	case Name:
+		return true
+	case NextRunAt:
+		return true
+	case UpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRunsParamsSort.
+const (
+	ListRunsParamsSortCreatedAt            ListRunsParamsSort = "created_at"
+	ListRunsParamsSortFinishedAt           ListRunsParamsSort = "finished_at"
+	ListRunsParamsSortJob                  ListRunsParamsSort = "job"
+	ListRunsParamsSortMinusCreatedAt       ListRunsParamsSort = "-created_at"
+	ListRunsParamsSortMinusFinishedAt      ListRunsParamsSort = "-finished_at"
+	ListRunsParamsSortMinusJob             ListRunsParamsSort = "-job"
+	ListRunsParamsSortMinusScheduledFor    ListRunsParamsSort = "-scheduled_for"
+	ListRunsParamsSortMinusStartedAt       ListRunsParamsSort = "-started_at"
+	ListRunsParamsSortMinusStatus          ListRunsParamsSort = "-status"
+	ListRunsParamsSortMinusTotalDurationMs ListRunsParamsSort = "-total_duration_ms"
+	ListRunsParamsSortScheduledFor         ListRunsParamsSort = "scheduled_for"
+	ListRunsParamsSortStartedAt            ListRunsParamsSort = "started_at"
+	ListRunsParamsSortStatus               ListRunsParamsSort = "status"
+	ListRunsParamsSortTotalDurationMs      ListRunsParamsSort = "total_duration_ms"
+)
+
+// Valid indicates whether the value is a known member of the ListRunsParamsSort enum.
+func (e ListRunsParamsSort) Valid() bool {
+	switch e {
+	case ListRunsParamsSortCreatedAt:
+		return true
+	case ListRunsParamsSortFinishedAt:
+		return true
+	case ListRunsParamsSortJob:
+		return true
+	case ListRunsParamsSortMinusCreatedAt:
+		return true
+	case ListRunsParamsSortMinusFinishedAt:
+		return true
+	case ListRunsParamsSortMinusJob:
+		return true
+	case ListRunsParamsSortMinusScheduledFor:
+		return true
+	case ListRunsParamsSortMinusStartedAt:
+		return true
+	case ListRunsParamsSortMinusStatus:
+		return true
+	case ListRunsParamsSortMinusTotalDurationMs:
+		return true
+	case ListRunsParamsSortScheduledFor:
+		return true
+	case ListRunsParamsSortStartedAt:
+		return true
+	case ListRunsParamsSortStatus:
+		return true
+	case ListRunsParamsSortTotalDurationMs:
+		return true
+	default:
+		return false
+	}
+}
+
 // HttpHeader A single HTTP header attached to an outbound request.
 //
 // Header values are encrypted at the application layer before
@@ -493,6 +589,12 @@ type ListJobsParams struct {
 	FilterEnabled   *bool `form:"filter[enabled],omitempty" json:"filter[enabled],omitempty"`
 	FilterRecurring *bool `form:"filter[recurring],omitempty" json:"filter[recurring],omitempty"`
 
+	// FilterName Case-insensitive substring match on the job `name` (matches when the name contains the given text).
+	FilterName *string `form:"filter[name],omitempty" json:"filter[name],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `enabled`, `-enabled`, `name`, `-name`, `next_run_at`, `-next_run_at`, `updated_at`, `-updated_at`.
+	Sort *ListJobsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
 	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
 	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
 
@@ -503,14 +605,38 @@ type ListJobsParams struct {
 	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
 }
 
+// ListJobsParamsSort defines parameters for ListJobs.
+type ListJobsParamsSort string
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	FilterJob *string `form:"filter[job],omitempty" json:"filter[job],omitempty"`
 
+	// FilterStatus Restrict to runs in the given lifecycle state. One of `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELED`, or a comma-separated list of them to match any (e.g. `SUCCEEDED,FAILED`).
+	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
+
+	// FilterCreatedAt Restrict to runs whose `created_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.
+	FilterCreatedAt *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
+
+	// FilterStartedAt Restrict to runs whose `started_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.
+	FilterStartedAt *string `form:"filter[started_at],omitempty" json:"filter[started_at],omitempty"`
+
+	// FilterFinishedAt Restrict to runs whose `finished_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.
+	FilterFinishedAt *string `form:"filter[finished_at],omitempty" json:"filter[finished_at],omitempty"`
+
+	// FilterScheduledFor Restrict to runs whose `scheduled_for` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.
+	FilterScheduledFor *string `form:"filter[scheduled_for],omitempty" json:"filter[scheduled_for],omitempty"`
+
 	// PageSize Number of runs per page. Optional; defaults to `50` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
 	PageSize  *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter *string `form:"page[after],omitempty" json:"page[after],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `finished_at`, `-finished_at`, `job`, `-job`, `scheduled_for`, `-scheduled_for`, `started_at`, `-started_at`, `status`, `-status`, `total_duration_ms`, `-total_duration_ms`.
+	Sort *ListRunsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 }
+
+// ListRunsParamsSort defines parameters for ListRuns.
+type ListRunsParamsSort string
 
 // GetUsageParams defines parameters for GetUsage.
 type GetUsageParams struct {
@@ -842,6 +968,30 @@ func NewListJobsRequest(server string, params *ListJobsParams) (*http.Request, e
 
 		}
 
+		if params.FilterName != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[name]", *params.FilterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.PageNumber != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -1121,6 +1271,66 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 
 		}
 
+		if params.FilterStatus != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[status]", *params.FilterStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterCreatedAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[created_at]", *params.FilterCreatedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterStartedAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[started_at]", *params.FilterStartedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterFinishedAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[finished_at]", *params.FilterFinishedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterScheduledFor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[scheduled_for]", *params.FilterScheduledFor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.PageSize != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -1136,6 +1346,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 		if params.PageAfter != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[after]", *params.PageAfter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

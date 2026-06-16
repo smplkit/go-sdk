@@ -47,7 +47,7 @@
           "Jobs"
         ],
         "summary": "List Jobs",
-        "description": "List this account's jobs, newest first.",
+        "description": "List this account's jobs.\n\nDefault sort is `name` ascending. Sort by `name`, `created_at`,\n`updated_at`, `next_run_at`, or `enabled`, ascending or descending (prefix\n`-` for descending). Filter with `filter[enabled]`, `filter[recurring]`,\nand `filter[name]` (case-insensitive substring match on the name); filters\ncompose with AND.",
         "operationId": "list_jobs",
         "security": [
           {
@@ -86,6 +86,48 @@
               ],
               "title": "Filter[Recurring]"
             }
+          },
+          {
+            "name": "filter[name]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match on the job `name` (matches when the name contains the given text).",
+              "title": "Filter[Name]"
+            },
+            "description": "Case-insensitive substring match on the job `name` (matches when the name contains the given text)."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `enabled`, `-enabled`, `name`, `-name`, `next_run_at`, `-next_run_at`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "enabled",
+                "-enabled",
+                "name",
+                "-name",
+                "next_run_at",
+                "-next_run_at",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "name",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `enabled`, `-enabled`, `name`, `-name`, `next_run_at`, `-next_run_at`, `updated_at`, `-updated_at`."
           },
           {
             "name": "page[number]",
@@ -295,7 +337,7 @@
           "Runs"
         ],
         "summary": "List Runs",
-        "description": "List runs for this account, newest first (cursor paginated).\n\nUse `filter[job]={id}` for a single job's run history.",
+        "description": "List runs for this account (cursor paginated).\n\nDefault sort is `-created_at` (newest first). Sort by `created_at`,\n`started_at`, `finished_at`, `scheduled_for`, `status`, `job`, or\n`total_duration_ms`, ascending or descending (prefix `-` for descending).\nKeep the same `sort` value across paginated requests so the cursor stays\nconsistent. Runs that have not reached the relevant lifecycle point\n(`started_at`, `finished_at`, `scheduled_for`, `total_duration_ms` unset)\nsort to the end regardless of direction.\n\nFilters compose with AND:\n\n- `filter[job]={id}` \u2014 a single job's run history.\n- `filter[status]` \u2014 one state or a comma-separated list (any-of).\n- `filter[created_at]` / `filter[started_at]` / `filter[finished_at]` /\n  `filter[scheduled_for]` \u2014 half-open `[start,end)` date ranges (see each\n  parameter for the interval syntax).",
         "operationId": "list_runs",
         "security": [
           {
@@ -318,6 +360,96 @@
               ],
               "title": "Filter[Job]"
             }
+          },
+          {
+            "name": "filter[status]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to runs in the given lifecycle state. One of `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELED`, or a comma-separated list of them to match any (e.g. `SUCCEEDED,FAILED`).",
+              "title": "Filter[Status]"
+            },
+            "description": "Restrict to runs in the given lifecycle state. One of `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELED`, or a comma-separated list of them to match any (e.g. `SUCCEEDED,FAILED`)."
+          },
+          {
+            "name": "filter[created_at]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to runs whose `created_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.",
+              "title": "Filter[Created At]"
+            },
+            "description": "Restrict to runs whose `created_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward."
+          },
+          {
+            "name": "filter[started_at]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to runs whose `started_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.",
+              "title": "Filter[Started At]"
+            },
+            "description": "Restrict to runs whose `started_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward."
+          },
+          {
+            "name": "filter[finished_at]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to runs whose `finished_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.",
+              "title": "Filter[Finished At]"
+            },
+            "description": "Restrict to runs whose `finished_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward."
+          },
+          {
+            "name": "filter[scheduled_for]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to runs whose `scheduled_for` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.",
+              "title": "Filter[Scheduled For]"
+            },
+            "description": "Restrict to runs whose `scheduled_for` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward."
           },
           {
             "name": "page[size]",
@@ -353,6 +485,34 @@
               ],
               "title": "Page[After]"
             }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `finished_at`, `-finished_at`, `job`, `-job`, `scheduled_for`, `-scheduled_for`, `started_at`, `-started_at`, `status`, `-status`, `total_duration_ms`, `-total_duration_ms`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "finished_at",
+                "-finished_at",
+                "job",
+                "-job",
+                "scheduled_for",
+                "-scheduled_for",
+                "started_at",
+                "-started_at",
+                "status",
+                "-status",
+                "total_duration_ms",
+                "-total_duration_ms"
+              ],
+              "default": "-created_at",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `-created_at`. Allowed values: `created_at`, `-created_at`, `finished_at`, `-finished_at`, `job`, `-job`, `scheduled_for`, `-scheduled_for`, `started_at`, `-started_at`, `status`, `-status`, `total_duration_ms`, `-total_duration_ms`."
           }
         ],
         "responses": {
