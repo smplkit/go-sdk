@@ -72,6 +72,22 @@
             }
           },
           {
+            "name": "filter[recurring]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter[Recurring]"
+            }
+          },
+          {
             "name": "page[number]",
             "in": "query",
             "required": false,
@@ -599,6 +615,13 @@
             ],
             "title": "Next Run At",
             "description": "The next scheduled fire time. `null` once a one-off job has fired.",
+            "readOnly": true
+          },
+          "recurring": {
+            "type": "boolean",
+            "title": "Recurring",
+            "description": "Whether the job runs on a repeating schedule. `true` for a cron schedule; `false` for a one-off datetime or `now` schedule, which runs a single time. Derived from `schedule`.",
+            "default": false,
             "readOnly": true
           },
           "created_at": {

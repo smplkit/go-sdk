@@ -219,6 +219,9 @@ type Job struct {
 	// NextRunAt The next scheduled fire time. `null` once a one-off job has fired.
 	NextRunAt *time.Time `json:"next_run_at,omitempty"`
 
+	// Recurring Whether the job runs on a repeating schedule. `true` for a cron schedule; `false` for a one-off datetime or `now` schedule, which runs a single time. Derived from `schedule`.
+	Recurring *bool `json:"recurring,omitempty"`
+
 	// Schedule When the job runs. One of: an ISO-8601 datetime (a one-off run at that instant), a 5-field cron expression evaluated in **UTC** (recurring), or the literal `now` (run once, as soon as possible). A datetime or `now` job disables itself after it fires.
 	Schedule string `json:"schedule"`
 
@@ -487,7 +490,8 @@ type hTTPBearerContextKey string
 
 // ListJobsParams defines parameters for ListJobs.
 type ListJobsParams struct {
-	FilterEnabled *bool `form:"filter[enabled],omitempty" json:"filter[enabled],omitempty"`
+	FilterEnabled   *bool `form:"filter[enabled],omitempty" json:"filter[enabled],omitempty"`
+	FilterRecurring *bool `form:"filter[recurring],omitempty" json:"filter[recurring],omitempty"`
 
 	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
 	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
@@ -817,6 +821,18 @@ func NewListJobsRequest(server string, params *ListJobsParams) (*http.Request, e
 		if params.FilterEnabled != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[enabled]", *params.FilterEnabled, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterRecurring != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[recurring]", *params.FilterRecurring, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
