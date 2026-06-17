@@ -286,7 +286,11 @@ type HttpHeader struct {
 // Job A scheduled unit of work: an HTTP request run on a schedule.
 //
 // The job is the definition; each time it fires the service records a run
-// capturing the request, response, timing, and outcome.
+// capturing the request, response, timing, and outcome. A job is enabled per
+// environment: set `environments[<env>].enabled` to schedule runs there. A
+// recurring (cron) job may be enabled in several environments at once and
+// fires once per enabled environment; a one-off (`now` or future datetime)
+// job runs a single time in the environment it was created in.
 type Job struct {
 	// ConcurrencyPolicy How overlapping runs are handled. `ALLOW` (the only value today) permits them.
 	ConcurrencyPolicy *JobConcurrencyPolicy `json:"concurrency_policy,omitempty"`
@@ -306,8 +310,11 @@ type Job struct {
 	// Description Free-text description for the job.
 	Description *string `json:"description,omitempty"`
 
-	// Enabled Whether the job is scheduling runs. Set to `false` to pause without deleting.
+	// Enabled Whether the job is enabled in at least one environment. Read-only roll-up of `environments[*].enabled`; set enablement per environment via `environments`.
 	Enabled *bool `json:"enabled,omitempty"`
+
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job schedules runs in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A job with no entry for an environment is disabled there. For a recurring job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
+	Environments *map[string]JobEnvironment `json:"environments,omitempty"`
 
 	// Name Human-readable name for the job.
 	Name string `json:"name"`
@@ -348,7 +355,11 @@ type JobCreateResource struct {
 	// Attributes A scheduled unit of work: an HTTP request run on a schedule.
 	//
 	// The job is the definition; each time it fires the service records a run
-	// capturing the request, response, timing, and outcome.
+	// capturing the request, response, timing, and outcome. A job is enabled per
+	// environment: set `environments[<env>].enabled` to schedule runs there. A
+	// recurring (cron) job may be enabled in several environments at once and
+	// fires once per enabled environment; a one-off (`now` or future datetime)
+	// job runs a single time in the environment it was created in.
 	Attributes Job `json:"attributes"`
 
 	// Id Client-supplied resource id.
@@ -358,6 +369,18 @@ type JobCreateResource struct {
 
 // JobCreateResourceType defines model for JobCreateResource.Type.
 type JobCreateResourceType string
+
+// JobEnvironment Per-environment override for a job's enablement and configuration.
+type JobEnvironment struct {
+	// Configuration HTTP request a job performs when it fires.
+	//
+	// Extends the shared forwarder configuration with the two fields a scheduled
+	// job needs beyond a forwarder.
+	Configuration *JobHttpConfiguration `json:"configuration,omitempty"`
+
+	// Enabled Whether the job schedules runs in this environment. A job runs in an environment only via this field; it is disabled in every environment by default.
+	Enabled *bool `json:"enabled,omitempty"`
+}
 
 // JobHttpConfiguration HTTP request a job performs when it fires.
 //
@@ -411,7 +434,11 @@ type JobResource struct {
 	// Attributes A scheduled unit of work: an HTTP request run on a schedule.
 	//
 	// The job is the definition; each time it fires the service records a run
-	// capturing the request, response, timing, and outcome.
+	// capturing the request, response, timing, and outcome. A job is enabled per
+	// environment: set `environments[<env>].enabled` to schedule runs there. A
+	// recurring (cron) job may be enabled in several environments at once and
+	// fires once per enabled environment; a one-off (`now` or future datetime)
+	// job runs a single time in the environment it was created in.
 	Attributes Job     `json:"attributes"`
 	Id         *string `json:"id,omitempty"`
 	Type       *string `json:"type,omitempty"`
@@ -458,6 +485,9 @@ type PaginationMeta struct {
 type Run struct {
 	// CreatedAt When the run was enqueued (became `PENDING`).
 	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// Environment The environment this run executed in. A scheduled run inherits the firing job-environment; a manual run is created in the environment you name with the `X-Smplkit-Environment` header; a rerun copies its source run's environment.
+	Environment string `json:"environment"`
 
 	// Error Free-text failure detail, if any.
 	Error *string `json:"error,omitempty"`
@@ -614,6 +644,9 @@ type ListRunsParams struct {
 
 	// FilterStatus Restrict to runs in the given lifecycle state. One of `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELED`, or a comma-separated list of them to match any (e.g. `SUCCEEDED,FAILED`).
 	FilterStatus *string `form:"filter[status],omitempty" json:"filter[status],omitempty"`
+
+	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access.
+	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
 
 	// FilterCreatedAt Restrict to runs whose `created_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.
 	FilterCreatedAt *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
@@ -1274,6 +1307,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 		if params.FilterStatus != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[status]", *params.FilterStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

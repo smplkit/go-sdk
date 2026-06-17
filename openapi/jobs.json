@@ -12,7 +12,7 @@
           "Jobs"
         ],
         "summary": "Create Job",
-        "description": "Create a job for this account.\n\nThe caller supplies the job's id as `data.id`. Ids are unique\nwithin an account and immutable. An enabled job begins scheduling\nimmediately.",
+        "description": "Create a job for this account.\n\nThe caller supplies the job's id as `data.id`. Ids are unique within an\naccount and immutable. A recurring job supplies `environments` to choose\nwhere it runs and begins scheduling immediately in each enabled\nenvironment. A one-off job is created in the environment named by the\n`X-Smplkit-Environment` header (implied when the credential is scoped to a\nsingle environment).",
         "operationId": "create_job",
         "security": [
           {
@@ -47,7 +47,7 @@
           "Jobs"
         ],
         "summary": "List Jobs",
-        "description": "List this account's jobs.\n\nDefault sort is `name` ascending. Sort by `name`, `created_at`,\n`updated_at`, `next_run_at`, or `enabled`, ascending or descending (prefix\n`-` for descending). Filter with `filter[enabled]`, `filter[recurring]`,\nand `filter[name]` (case-insensitive substring match on the name); filters\ncompose with AND.",
+        "description": "List this account's jobs.\n\nDefault sort is `name` ascending. Sort by `name`, `created_at`,\n`updated_at`, `next_run_at`, or `enabled`, ascending or descending (prefix\n`-` for descending). Filter with `filter[enabled]` (enabled in at least one\nenvironment), `filter[recurring]`, and `filter[name]` (case-insensitive\nsubstring match on the name); filters compose with AND. A scoped caller\nsees each job's `environments` map narrowed to the environments it may\naccess.",
         "operationId": "list_jobs",
         "security": [
           {
@@ -222,7 +222,7 @@
           "Jobs"
         ],
         "summary": "Update Job",
-        "description": "Replace an existing job. Every writable field is overwritten.\n\nEnabling a paused job is a `PUT` with `enabled: true`; pausing is\n`enabled: false`. Editing the schedule recomputes the next fire time.",
+        "description": "Replace an existing job. Every writable field is overwritten.\n\nSet enablement per environment via the `environments` map (a recurring\njob), or by recreating a one-off job in the desired environment. Editing\nthe schedule recomputes the next fire time; changing only which\nenvironments are enabled preserves the existing cadence.",
         "operationId": "update_job",
         "security": [
           {
@@ -299,7 +299,7 @@
           "Jobs"
         ],
         "summary": "Run Job Now",
-        "description": "Trigger one immediate run of the job (a `MANUAL` run).\n\nThe job's schedule and enabled state are untouched. The run is enqueued and\nexecuted by the worker; if the account is over its run allotment the run\nwill fail with reason `QUOTA_EXCEEDED` rather than being rejected here.",
+        "description": "Trigger one immediate run of the job (a `MANUAL` run).\n\nThe job's schedule and enabled state are untouched. The run executes in the\nenvironment named by the `X-Smplkit-Environment` header; when the job is\nenabled in exactly one environment that environment is used, and a\nsingle-environment credential implies it. The run executes the job's\neffective configuration for that environment. It is enqueued and executed\nby the worker; if the account is over its run allotment the run will fail\nwith reason `QUOTA_EXCEEDED` rather than being rejected here.",
         "operationId": "run_job_now",
         "security": [
           {
@@ -337,7 +337,7 @@
           "Runs"
         ],
         "summary": "List Runs",
-        "description": "List runs for this account (cursor paginated).\n\nDefault sort is `-created_at` (newest first). Sort by `created_at`,\n`started_at`, `finished_at`, `scheduled_for`, `status`, `job`, or\n`total_duration_ms`, ascending or descending (prefix `-` for descending).\nKeep the same `sort` value across paginated requests so the cursor stays\nconsistent. Runs that have not reached the relevant lifecycle point\n(`started_at`, `finished_at`, `scheduled_for`, `total_duration_ms` unset)\nsort to the end regardless of direction.\n\nFilters compose with AND:\n\n- `filter[job]={id}` \u2014 a single job's run history.\n- `filter[status]` \u2014 one state or a comma-separated list (any-of).\n- `filter[created_at]` / `filter[started_at]` / `filter[finished_at]` /\n  `filter[scheduled_for]` \u2014 half-open `[start,end)` date ranges (see each\n  parameter for the interval syntax).",
+        "description": "List runs for this account (cursor paginated).\n\nDefault sort is `-created_at` (newest first). Sort by `created_at`,\n`started_at`, `finished_at`, `scheduled_for`, `status`, `job`, or\n`total_duration_ms`, ascending or descending (prefix `-` for descending).\nKeep the same `sort` value across paginated requests so the cursor stays\nconsistent. Runs that have not reached the relevant lifecycle point\n(`started_at`, `finished_at`, `scheduled_for`, `total_duration_ms` unset)\nsort to the end regardless of direction.\n\nFilters compose with AND:\n\n- `filter[job]={id}` \u2014 a single job's run history.\n- `filter[status]` \u2014 one state or a comma-separated list (any-of).\n- `filter[environment]` \u2014 one environment key or a comma-separated list\n  (any-of); omitted covers every environment you can access.\n- `filter[created_at]` / `filter[started_at]` / `filter[finished_at]` /\n  `filter[scheduled_for]` \u2014 half-open `[start,end)` date ranges (see each\n  parameter for the interval syntax).",
         "operationId": "list_runs",
         "security": [
           {
@@ -378,6 +378,24 @@
               "title": "Filter[Status]"
             },
             "description": "Restrict to runs in the given lifecycle state. One of `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELED`, or a comma-separated list of them to match any (e.g. `SUCCEEDED,FAILED`)."
+          },
+          {
+            "name": "filter[environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access.",
+              "title": "Filter[Environment]"
+            },
+            "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access."
           },
           {
             "name": "filter[created_at]",
@@ -735,10 +753,17 @@
             "description": "Free-text description for the job."
           },
           "enabled": {
-            "type": "boolean",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Enabled",
-            "description": "Whether the job is scheduling runs. Set to `false` to pause without deleting.",
-            "default": true
+            "description": "Whether the job is enabled in at least one environment. Read-only roll-up of `environments[*].enabled`; set enablement per environment via `environments`.",
+            "readOnly": true
           },
           "type": {
             "type": "string",
@@ -755,6 +780,14 @@
           "configuration": {
             "$ref": "#/components/schemas/JobHttpConfiguration",
             "description": "The HTTP request to perform, including method, url, headers, body, and timeout."
+          },
+          "environments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JobEnvironment"
+            },
+            "type": "object",
+            "title": "Environments",
+            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job schedules runs in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A job with no entry for an environment is disabled there. For a recurring job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically \u2014 name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account."
           },
           "concurrency_policy": {
             "type": "string",
@@ -853,7 +886,7 @@
           "configuration"
         ],
         "title": "Job",
-        "description": "A scheduled unit of work: an HTTP request run on a schedule.\n\nThe job is the definition; each time it fires the service records a run\ncapturing the request, response, timing, and outcome."
+        "description": "A scheduled unit of work: an HTTP request run on a schedule.\n\nThe job is the definition; each time it fires the service records a run\ncapturing the request, response, timing, and outcome. A job is enabled per\nenvironment: set `environments[<env>].enabled` to schedule runs there. A\nrecurring (cron) job may be enabled in several environments at once and\nfires once per enabled environment; a one-off (`now` or future datetime)\njob runs a single time in the environment it was created in."
       },
       "JobCreateRequest": {
         "properties": {
@@ -910,7 +943,28 @@
               "url": "https://api.example.com/cache/warm"
             },
             "description": "Warms the product cache every night at 02:00 UTC.",
-            "enabled": true,
+            "environments": {
+              "production": {
+                "enabled": true
+              },
+              "staging": {
+                "configuration": {
+                  "body": "{\"scope\":\"all\"}",
+                  "headers": [
+                    {
+                      "name": "Authorization",
+                      "value": "Bearer staging"
+                    }
+                  ],
+                  "method": "POST",
+                  "success_status": "2xx",
+                  "timeout": 30,
+                  "tls_verify": true,
+                  "url": "https://staging.example.com/cache/warm"
+                },
+                "enabled": true
+              }
+            },
             "name": "Nightly cache warm",
             "schedule": "0 2 * * *",
             "type": "http"
@@ -918,6 +972,30 @@
           "id": "nightly-cache-warm",
           "type": "job"
         }
+      },
+      "JobEnvironment": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether the job schedules runs in this environment. A job runs in an environment only via this field; it is disabled in every environment by default.",
+            "default": false
+          },
+          "configuration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobHttpConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-environment HTTP request override. Omit to inherit the job's base `configuration`. When present, it fully replaces the base configuration for runs in this environment."
+          }
+        },
+        "type": "object",
+        "title": "JobEnvironment",
+        "description": "Per-environment override for a job's enablement and configuration."
       },
       "JobHttpConfiguration": {
         "properties": {
@@ -1084,7 +1162,28 @@
               "url": "https://api.example.com/cache/warm"
             },
             "description": "Warms the product cache every night at 02:00 UTC.",
-            "enabled": true,
+            "environments": {
+              "production": {
+                "enabled": true
+              },
+              "staging": {
+                "configuration": {
+                  "body": "{\"scope\":\"all\"}",
+                  "headers": [
+                    {
+                      "name": "Authorization",
+                      "value": "Bearer staging"
+                    }
+                  ],
+                  "method": "POST",
+                  "success_status": "2xx",
+                  "timeout": 30,
+                  "tls_verify": true,
+                  "url": "https://staging.example.com/cache/warm"
+                },
+                "enabled": true
+              }
+            },
             "name": "Nightly cache warm",
             "schedule": "0 2 * * *",
             "type": "http"
@@ -1182,6 +1281,11 @@
             ],
             "title": "Job Version",
             "description": "The job's version at the time the run executed."
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment",
+            "description": "The environment this run executed in. A scheduled run inherits the firing job-environment; a manual run is created in the environment you name with the `X-Smplkit-Environment` header; a rerun copies its source run's environment."
           },
           "trigger": {
             "type": "string",
@@ -1368,6 +1472,7 @@
         "type": "object",
         "required": [
           "job",
+          "environment",
           "trigger",
           "status"
         ],
@@ -1463,6 +1568,7 @@
         "example": {
           "attributes": {
             "created_at": "2026-06-05T02:00:00Z",
+            "environment": "production",
             "finished_at": "2026-06-05T02:00:00.430Z",
             "job": "nightly-cache-warm",
             "job_version": 3,
