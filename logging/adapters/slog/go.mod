@@ -1,6 +1,6 @@
 module github.com/smplkit/go-sdk/logging/adapters/slog
 
-go 1.24.0
+go 1.24.3
 
 require (
 	github.com/smplkit/go-sdk/v3 v3.0.0
