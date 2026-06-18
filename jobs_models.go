@@ -217,6 +217,9 @@ type ListJobsInput struct {
 	// Recurring filters by schedule cadence: true returns only recurring
 	// (cron) jobs, false only one-off (datetime / now) jobs. Nil returns both.
 	Recurring *bool
+	// Name filters to jobs whose name contains this text (case-insensitive).
+	// Nil returns all.
+	Name *string
 	// PageNumber is the 1-based page index. Zero defers to the server
 	// default (page 1).
 	PageNumber int
