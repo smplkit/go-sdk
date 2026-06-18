@@ -1,6 +1,6 @@
 //go:build ignore
 
-// Demonstrates the smplkit SDK for Smpl Jobs.
+// Demonstrates the smplkit management SDK for Smpl Jobs.
 //
 // Prerequisites:
 //   - go get github.com/smplkit/go-sdk/v3
@@ -15,147 +15,170 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
+const (
+	recurringJobID = "showcase-recurring"
+	oneoffJobID    = "showcase-oneoff"
+)
+
 func main() {
 	ctx := context.Background()
 
-	// Jobs has no runtime/management split — one client. Here we use the
-	// standalone JobsClient; the same surface is also reachable as
-	// client.Jobs() on a SmplClient.
+	// the standalone jobs client; the same surface is also reachable as
+	// client.Jobs() on a SmplClient
 	jobs, err := smplkit.NewJobsClient(smplkit.Config{})
 	fatalIfErr("create jobs client", err)
 
-	jobID := "showcase-mgmt-" + randomHexJobs(4)
+	setupJobsShowcase(ctx, jobs)
+	defer cleanupJobsShowcase(ctx, jobs)
 
-	// tear-down: never leave the showcase job behind, even on failure
-	defer func() {
-		err := jobs.Delete(ctx, jobID)
-		var notFound *smplkit.NotFoundError
-		if err != nil && !errors.As(err, &notFound) {
-			fatalIfErr("jobs.Delete (teardown)", err)
-		}
-	}()
-
-	// create a job
-	authHeader := "Bearer s3cr3t"
+	// create a recurring job, enabled in production with a development override
 	body := `{"scope": "all"}`
-	job := jobs.New(
-		jobID,
-		"Nightly cache warm",
-		"0 2 * * *", // 5-field cron, UTC
-		smplkit.HttpConfig{
-			Method:  smplkit.JobHttpMethodPost,
-			URL:     "https://api.example.com/cache/warm",
-			Headers: []smplkit.HttpHeader{{Name: "Authorization", Value: authHeader}},
-			Body:    &body,
-			Timeout: 30,
-		},
-		smplkit.WithJobEnabled(false),
-		smplkit.WithJobDescription("Warms the product cache every night at 02:00 UTC."),
-	)
-	fatalIfErr("jobs.Save", job.Save(ctx))
+	job := jobs.New(recurringJobID, "Nightly cache warm", "0 2 * * *", smplkit.HttpConfig{
+		Method:  smplkit.JobHttpMethodPost,
+		URL:     "https://httpbin.org/post",
+		Headers: []smplkit.HttpHeader{{Name: "Authorization", Value: "Bearer s3cr3t"}},
+		Body:    &body,
+		Timeout: 30,
+	}, smplkit.WithJobDescription("Warms the product cache every night at 02:00 UTC."))
+	devBody := `{"scope": "all"}`
+	job.SetConfiguration(smplkit.HttpConfig{
+		Method:  smplkit.JobHttpMethodPost,
+		URL:     "https://development.example.com/cache/warm",
+		Headers: []smplkit.HttpHeader{{Name: "Authorization", Value: "Bearer development-s3cr3t"}},
+		Body:    &devBody,
+	}, "development")
+	job.SetEnabled(false, "development")
+	job.SetEnabled(true, "production")
+	fatalIfErr("save recurring job", job.Save(ctx))
 	if job.Version == nil || *job.Version != 1 {
 		fatalIfErr("assertion", fmt.Errorf("expected version 1, got %v", job.Version))
 	}
-	fmt.Printf("Created job %q (v%d)\n", job.ID, *job.Version)
+	if job.IsEnabled("development") {
+		fatalIfErr("assertion", fmt.Errorf("expected development disabled"))
+	}
+	if !job.IsEnabled("production") {
+		fatalIfErr("assertion", fmt.Errorf("expected production enabled"))
+	}
+	fmt.Printf("Created recurring job %q (v%d)\n", job.ID, *job.Version)
 
 	// get a job
-	fetched, err := jobs.Get(ctx, jobID)
-	fatalIfErr("jobs.Get", err)
-	if fetched.Configuration.URL != "https://api.example.com/cache/warm" {
-		fatalIfErr("assertion", fmt.Errorf("fetched job url mismatch: %s", fetched.Configuration.URL))
+	fetched, err := jobs.Get(ctx, recurringJobID)
+	fatalIfErr("get recurring job", err)
+	if fetched.IsEnabled("development") {
+		fatalIfErr("assertion", fmt.Errorf("expected development disabled on fetch"))
 	}
-	fmt.Printf("Fetched job %q\n", jobID)
+	if !fetched.IsEnabled("production") {
+		fatalIfErr("assertion", fmt.Errorf("expected production enabled on fetch"))
+	}
+	if fetched.GetConfiguration("development").URL != "https://development.example.com/cache/warm" {
+		fatalIfErr("assertion", fmt.Errorf("dev config url mismatch: %s", fetched.GetConfiguration("development").URL))
+	}
+	fmt.Printf("Fetched job %q\n", recurringJobID)
 
 	// list jobs
-	disabled := false
-	listing, err := jobs.List(ctx, smplkit.ListJobsInput{Enabled: &disabled})
-	fatalIfErr("jobs.List", err)
-	found := false
-	for _, j := range listing {
-		if j.ID == jobID {
-			found = true
-			break
-		}
+	listing, err := jobs.List(ctx, smplkit.ListJobsInput{})
+	fatalIfErr("list jobs", err)
+	if !containsJob(listing, recurringJobID) {
+		fatalIfErr("assertion", fmt.Errorf("job %s not found in listing", recurringJobID))
 	}
-	if !found {
-		fatalIfErr("assertion", fmt.Errorf("job %s not found in listing", jobID))
-	}
-	fmt.Printf("Found job %q and in the listing\n", jobID)
+	fmt.Printf("Found job %q in the listing\n", recurringJobID)
 
-	// update a job
+	// update a job (the schedule is environment-agnostic)
 	job.Name = "Nightly cache warm (v2)"
-	job.Schedule = "30 2 * * *"
-	job.Enabled = true
-	fatalIfErr("jobs.Save", job.Save(ctx))
-	if job.Version == nil || *job.Version != 2 || !job.Enabled {
-		fatalIfErr("assertion", fmt.Errorf("expected version 2 and enabled, got v=%v enabled=%t", job.Version, job.Enabled))
+	job.SetSchedule("30 2 * * *")
+	job.SetEnabled(true, "development")
+	fatalIfErr("update recurring job", job.Save(ctx))
+	if job.Version == nil || *job.Version != 2 || !job.IsEnabled("development") {
+		fatalIfErr("assertion", fmt.Errorf("expected v2 and development enabled, got v=%v", job.Version))
 	}
-	fmt.Printf("Updated job to v%d: schedule=%q\n", *job.Version, job.Schedule)
+	fmt.Printf("Updated job to v%d: now enabled in production and development\n", *job.Version)
 
-	// trigger an immediate run (a MANUAL run)
-	run, err := jobs.Run(ctx, jobID)
-	fatalIfErr("jobs.Run", err)
-	if run.Trigger != "MANUAL" || run.Job != jobID {
-		fatalIfErr("assertion", fmt.Errorf("expected MANUAL trigger for %s, got trigger=%s job=%s", jobID, run.Trigger, run.Job))
+	// trigger an immediate run
+	run, err := job.Trigger(ctx, "production")
+	fatalIfErr("trigger run", err)
+	if run.Trigger != "MANUAL" || run.Environment != "production" {
+		fatalIfErr("assertion", fmt.Errorf("expected MANUAL/production, got trigger=%s env=%s", run.Trigger, run.Environment))
 	}
-	fmt.Printf("Triggered run %s (trigger=%s, status=%s)\n", run.ID, run.Trigger, run.Status)
+	fmt.Printf("Triggered run %s (trigger=%s, env=%s)\n", run.ID, run.Trigger, run.Environment)
 
-	// read run history for this job, and fetch a single run
-	runs, err := jobs.Runs().List(ctx, smplkit.ListRunsInput{Job: jobID})
-	fatalIfErr("jobs.Runs.List", err)
-	seen := false
-	for _, r := range runs {
-		if r.ID == run.ID {
-			seen = true
-			break
+	// get this job's runs
+	runs, err := job.ListRuns(ctx, smplkit.ListJobRunsInput{Environment: "production"})
+	fatalIfErr("list job runs", err)
+	if !containsRun(runs, run.ID) {
+		fatalIfErr("assertion", fmt.Errorf("run %s not found in run history", run.ID))
+	}
+	fmt.Printf("Listed %d production run(s)\n", len(runs))
+
+	// get a run
+	run, err = jobs.Runs().Get(ctx, run.ID)
+	fatalIfErr("get run", err)
+	if run.Environment != "production" {
+		fatalIfErr("assertion", fmt.Errorf("expected production env, got %s", run.Environment))
+	}
+	fmt.Printf("Fetched run %s (env=%s)\n", run.ID, run.Environment)
+
+	// re-run a prior run (inherits its environment)
+	rerun, err := run.Rerun(ctx)
+	fatalIfErr("rerun", err)
+	if rerun.Trigger != "RERUN" || rerun.Environment != run.Environment {
+		fatalIfErr("assertion", fmt.Errorf("expected RERUN/%s, got trigger=%s env=%s", run.Environment, rerun.Trigger, rerun.Environment))
+	}
+	fmt.Printf("Re-ran %s -> %s (env=%s)\n", run.ID, rerun.ID, rerun.Environment)
+
+	// cancel a run (best-effort: a finished run can no longer be canceled)
+	canceled, err := rerun.Cancel(ctx)
+	if err != nil {
+		var conflict *smplkit.ConflictError
+		if errors.As(err, &conflict) {
+			fmt.Printf("Run %s already finished before it could be canceled\n", rerun.ID)
+		} else {
+			fatalIfErr("cancel run", err)
 		}
+	} else {
+		fmt.Printf("Canceled run %s -> %s\n", canceled.ID, canceled.Status)
 	}
-	if !seen {
-		fatalIfErr("assertion", fmt.Errorf("run %s not found in runs listing", run.ID))
-	}
-	got, err := jobs.Runs().Get(ctx, run.ID)
-	fatalIfErr("jobs.Runs.Get", err)
-	if got.ID != run.ID {
-		fatalIfErr("assertion", fmt.Errorf("fetched run id mismatch: %s != %s", got.ID, run.ID))
-	}
-	fmt.Printf("Listed %d run(s); fetched run %s (status=%s)\n", len(runs), got.ID, got.Status)
 
-	// re-run from a prior run, then cancel it while it's still pending
-	rerun, err := jobs.Runs().Rerun(ctx, run.ID)
-	fatalIfErr("jobs.Runs.Rerun", err)
-	if rerun.Trigger != "RERUN" || rerun.RerunOf == nil || *rerun.RerunOf != run.ID {
-		fatalIfErr("assertion", fmt.Errorf("rerun mismatch: trigger=%s rerun_of=%v", rerun.Trigger, rerun.RerunOf))
+	// create a one-off job, born in a single environment
+	oneoff := jobs.New(oneoffJobID, "One-shot reindex", "now", smplkit.HttpConfig{
+		Method: smplkit.JobHttpMethodPost,
+		URL:    "https://httpbin.org/post",
+	}, smplkit.WithJobBirthEnvironment("development"))
+	fatalIfErr("save one-off job", oneoff.Save(ctx))
+	if oneoff.Version == nil || *oneoff.Version != 1 || !oneoff.IsEnabled("development") {
+		fatalIfErr("assertion", fmt.Errorf("expected v1 and development enabled, got v=%v", oneoff.Version))
 	}
-	canceled, err := jobs.Runs().Cancel(ctx, rerun.ID)
-	fatalIfErr("jobs.Runs.Cancel", err)
-	if canceled.Status != "CANCELED" {
-		fatalIfErr("assertion", fmt.Errorf("expected CANCELED, got %s", canceled.Status))
-	}
-	fmt.Printf("Re-ran (%s) then canceled it -> %s\n", rerun.ID, canceled.Status)
+	fmt.Printf("Created one-off job %q born in development\n", oneoff.ID)
 
 	// delete a job
-	fatalIfErr("jobs.Delete", job.Delete(ctx))
+	fatalIfErr("delete recurring job", job.Delete(ctx))
 	remaining, err := jobs.List(ctx, smplkit.ListJobsInput{})
-	fatalIfErr("jobs.List", err)
-	for _, j := range remaining {
-		if j.ID == jobID {
-			fatalIfErr("assertion", fmt.Errorf("job %s still present after delete", jobID))
-		}
+	fatalIfErr("list jobs after delete", err)
+	if containsJob(remaining, recurringJobID) {
+		fatalIfErr("assertion", fmt.Errorf("job %s still present after delete", recurringJobID))
 	}
-	fmt.Printf("Deleted job %q — jobs showcase complete.\n", jobID)
+	fmt.Printf("Deleted job %q — jobs showcase complete.\n", recurringJobID)
 }
 
-func randomHexJobs(nBytes int) string {
-	buf := make([]byte, nBytes)
-	_, err := rand.Read(buf)
-	fatalIfErr("rand.Read", err)
-	return hex.EncodeToString(buf)
+func containsJob(jobs []*smplkit.Job, id string) bool {
+	for _, j := range jobs {
+		if j.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func containsRun(runs []*smplkit.Run, id string) bool {
+	for _, r := range runs {
+		if r.ID == id {
+			return true
+		}
+	}
+	return false
 }

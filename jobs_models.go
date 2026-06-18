@@ -54,11 +54,29 @@ type HttpConfig struct {
 	CaCert *string
 }
 
+// JobEnvironment is a per-environment override for a job's enablement and
+// optional configuration. A recurring job fires in a given environment only
+// when that environment has an entry in Job.Environments with Enabled=true; an
+// environment with no entry (or Enabled=false) does not fire there.
+type JobEnvironment struct {
+	// Enabled controls whether the job schedules runs in this environment.
+	// Defaults to false.
+	Enabled bool
+	// Configuration is an optional per-environment request configuration that
+	// fully replaces the job's base Configuration for this environment. Nil
+	// (the default) inherits the base configuration. As with the base
+	// configuration, header values are plaintext on both writes and reads, so
+	// a Get → mutate → Save round-trip preserves them.
+	Configuration *HttpConfig
+}
+
 // Job is a scheduled unit of work: an HTTP request run on a schedule.
 //
 // Active-record style: mutate fields directly and call Save(ctx) to
 // persist, or Delete(ctx) to remove. The Job's id is caller-supplied,
-// unique within the account, and immutable.
+// unique within the account, and immutable. A job is enabled per
+// environment via Environments: a recurring job may be enabled in several
+// environments at once; a one-off job is born in a single environment.
 type Job struct {
 	// ID is the caller-supplied unique identifier for the job. Required
 	// at create time (the jobs service does not auto-generate it) and
@@ -68,9 +86,23 @@ type Job struct {
 	Name string
 	// Description is an optional free-text description.
 	Description *string
-	// Enabled controls whether the job schedules runs. Set false to pause
-	// without deleting. Defaults to true on an unsaved Job.
+	// Enabled reports whether the job is enabled in at least one environment.
+	// Read-only roll-up of Environments[*].Enabled, derived server-side; the
+	// wrapper never sends it. Set enablement per environment via Environments
+	// / SetEnabled.
 	Enabled bool
+	// Environments holds per-environment overrides keyed by environment key
+	// (e.g. "production", "development"). A job fires in an environment only
+	// when Environments[env].Enabled is true. Each entry may carry an optional
+	// HttpConfig override; leave it nil to inherit the base Configuration. For
+	// a recurring job, supply this map to choose where it runs; a one-off job
+	// records the single environment it was created in. Every referenced
+	// environment must exist for the account.
+	Environments map[string]JobEnvironment
+	// Recurring reports whether the job runs on a repeating schedule: true for
+	// a cron schedule, false for a one-off datetime / "now" schedule. Read-only
+	// and derived server-side from Schedule. Nil on an unsaved Job.
+	Recurring *bool
 	// Type is the job type. Only "http" is supported today.
 	Type string
 	// Schedule is when the job runs: an ISO-8601 datetime (a one-off run
@@ -96,10 +128,19 @@ type Job struct {
 	// starting at 1.
 	Version *int
 
+	// birthEnvironment is creation-time only: the environment a one-off job is
+	// born in, sent as the X-Smplkit-Environment header by JobsClient.create.
+	// Ignored for a recurring job, whose environments come from Environments.
+	birthEnvironment string
+
 	client *JobsClient
 }
 
-// Run is one occurrence of a job executing (read-only).
+// Run is one occurrence of a job executing.
+//
+// Read-only apart from the Rerun / Cancel actions: a run is created and
+// driven by the jobs service, not by clients. A Run returned by the SDK is
+// bound to its runs client so run.Rerun(ctx) and run.Cancel(ctx) work.
 type Run struct {
 	// ID is the server-assigned UUID for this run.
 	ID string
@@ -107,6 +148,11 @@ type Run struct {
 	Job string
 	// JobVersion is the job's version at the time the run executed.
 	JobVersion *int
+	// Environment is the environment this run executed in. A scheduled run
+	// inherits the firing job-environment; a manual run is created in the
+	// environment named by the X-Smplkit-Environment header; a rerun copies
+	// its source run's environment.
+	Environment string
 	// Trigger is why the run exists: "SCHEDULE", "MANUAL" (Run now), or
 	// "RERUN".
 	Trigger string
@@ -141,6 +187,10 @@ type Run struct {
 	Result map[string]interface{}
 	// CreatedAt is when the run was enqueued (became PENDING).
 	CreatedAt *time.Time
+
+	// runs is the backref to the runs client, so a returned Run can Rerun /
+	// Cancel itself. Nil on a Run constructed without a client.
+	runs *RunsClient
 }
 
 // Usage is the current-period usage against the account's plan
@@ -179,6 +229,25 @@ type ListRunsInput struct {
 	// Job scopes the listing to a single job's run history. Empty returns
 	// runs across all jobs.
 	Job string
+	// Environments restricts the listing to runs stamped with any of these
+	// environment keys, sent as a single comma-separated filter[environment].
+	// Empty falls back to the client's configured environment (if any),
+	// otherwise covers every environment you can access.
+	Environments []string
+	// PageSize is runs per page. Zero defers to the server default.
+	PageSize int
+	// After is the opaque cursor returned by the previous call. Empty
+	// fetches the first page.
+	After string
+}
+
+// ListJobRunsInput passes the optional single-environment filter and cursor
+// pagination to (*Job).ListRuns.
+type ListJobRunsInput struct {
+	// Environment restricts the listing to runs stamped with this environment.
+	// Empty covers every environment you can access (subject to the client's
+	// configured environment default).
+	Environment string
 	// PageSize is runs per page. Zero defers to the server default.
 	PageSize int
 	// After is the opaque cursor returned by the previous call. Empty
