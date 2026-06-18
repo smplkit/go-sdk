@@ -54,20 +54,31 @@ type HttpConfig struct {
 	CaCert *string
 }
 
-// JobEnvironment is a per-environment override for a job's enablement and
-// optional configuration. A recurring job fires in a given environment only
-// when that environment has an entry in Job.Environments with Enabled=true; an
-// environment with no entry (or Enabled=false) does not fire there.
+// JobEnvironment is a per-environment override for a job's enablement,
+// schedule, and configuration. A recurring job fires in a given environment
+// only when that environment has an entry in Job.Environments with
+// Enabled=true; an environment with no entry (or Enabled=false) does not fire
+// there.
 type JobEnvironment struct {
 	// Enabled controls whether the job schedules runs in this environment.
 	// Defaults to false.
 	Enabled bool
+	// Schedule is an optional per-environment cron override that varies the
+	// cadence for just this environment (recurring jobs only). Empty inherits
+	// the job's base Schedule. When set, it must be a 5-field cron expression
+	// evaluated in UTC; it cannot turn a one-off job recurring or vice-versa.
+	// Settable; sent on writes only when non-empty.
+	Schedule string
 	// Configuration is an optional per-environment request configuration that
 	// fully replaces the job's base Configuration for this environment. Nil
 	// (the default) inherits the base configuration. As with the base
 	// configuration, header values are plaintext on both writes and reads, so
 	// a Get → mutate → Save round-trip preserves them.
 	Configuration *HttpConfig
+	// NextRunAt is the read-only next scheduled fire time in this environment.
+	// Nil when the environment is not enabled, or once a one-off run has fired.
+	// Populated on reads; never sent on writes.
+	NextRunAt *time.Time
 }
 
 // Job is a scheduled unit of work: an HTTP request run on a schedule.
@@ -87,9 +98,9 @@ type Job struct {
 	// Description is an optional free-text description.
 	Description *string
 	// Enabled reports whether the job is enabled in at least one environment.
-	// Read-only roll-up of Environments[*].Enabled, derived server-side; the
-	// wrapper never sends it. Set enablement per environment via Environments
-	// / SetEnabled.
+	// Read-only roll-up derived from Environments[*].Enabled (true iff any
+	// environment is enabled); the wrapper computes it locally and never sends
+	// it. Set enablement per environment via Environments / SetEnabled.
 	Enabled bool
 	// Environments holds per-environment overrides keyed by environment key
 	// (e.g. "production", "development"). A job fires in an environment only
@@ -115,9 +126,6 @@ type Job struct {
 	// default and only value today) permits a new run to start while a
 	// previous one is still in flight.
 	ConcurrencyPolicy string
-	// NextRunAt is the next scheduled fire time. Nil once a one-off job
-	// has fired.
-	NextRunAt *time.Time
 	// CreatedAt is when the job was created. Nil for an unsaved Job.
 	CreatedAt *time.Time
 	// UpdatedAt is when the job was last modified.
@@ -212,8 +220,6 @@ type Usage struct {
 
 // ListJobsInput passes filters and pagination to JobsClient.List.
 type ListJobsInput struct {
-	// Enabled filters by enabled/disabled state. Nil returns both.
-	Enabled *bool
 	// Recurring filters by schedule cadence: true returns only recurring
 	// (cron) jobs, false only one-off (datetime / now) jobs. Nil returns both.
 	Recurring *bool

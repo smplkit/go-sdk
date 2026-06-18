@@ -175,14 +175,10 @@ func (e RunTrigger) Valid() bool {
 // Defines values for ListJobsParamsSort.
 const (
 	CreatedAt      ListJobsParamsSort = "created_at"
-	Enabled        ListJobsParamsSort = "enabled"
 	MinusCreatedAt ListJobsParamsSort = "-created_at"
-	MinusEnabled   ListJobsParamsSort = "-enabled"
 	MinusName      ListJobsParamsSort = "-name"
-	MinusNextRunAt ListJobsParamsSort = "-next_run_at"
 	MinusUpdatedAt ListJobsParamsSort = "-updated_at"
 	Name           ListJobsParamsSort = "name"
-	NextRunAt      ListJobsParamsSort = "next_run_at"
 	UpdatedAt      ListJobsParamsSort = "updated_at"
 )
 
@@ -191,21 +187,13 @@ func (e ListJobsParamsSort) Valid() bool {
 	switch e {
 	case CreatedAt:
 		return true
-	case Enabled:
-		return true
 	case MinusCreatedAt:
 		return true
-	case MinusEnabled:
-		return true
 	case MinusName:
-		return true
-	case MinusNextRunAt:
 		return true
 	case MinusUpdatedAt:
 		return true
 	case Name:
-		return true
-	case NextRunAt:
 		return true
 	case UpdatedAt:
 		return true
@@ -286,11 +274,13 @@ type HttpHeader struct {
 // Job A scheduled unit of work: an HTTP request run on a schedule.
 //
 // The job is the definition; each time it fires the service records a run
-// capturing the request, response, timing, and outcome. A job is enabled per
-// environment: set `environments[<env>].enabled` to schedule runs there. A
+// capturing the request, response, timing, and outcome. A job runs per
+// environment: set `environments[<env>].enabled` to schedule runs there, and
+// optionally give that environment its own `schedule` or `configuration`. A
 // recurring (cron) job may be enabled in several environments at once and
-// fires once per enabled environment; a one-off (`now` or future datetime)
-// job runs a single time in the environment it was created in.
+// fires once per enabled environment, each on its own next-fire schedule; a
+// one-off (`now` or future datetime) job runs a single time in the environment
+// it was created in.
 type Job struct {
 	// ConcurrencyPolicy How overlapping runs are handled. `ALLOW` (the only value today) permits them.
 	ConcurrencyPolicy *JobConcurrencyPolicy `json:"concurrency_policy,omitempty"`
@@ -310,22 +300,16 @@ type Job struct {
 	// Description Free-text description for the job.
 	Description *string `json:"description,omitempty"`
 
-	// Enabled Whether the job is enabled in at least one environment. Read-only roll-up of `environments[*].enabled`; set enablement per environment via `environments`.
-	Enabled *bool `json:"enabled,omitempty"`
-
-	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job schedules runs in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A job with no entry for an environment is disabled there. For a recurring job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job schedules runs in that environment), an optional `schedule` override (a cron expression for recurring jobs; omit to inherit the base `schedule`), and an optional `configuration` override (omit to inherit the base `configuration`); it also reports the read-only `next_run_at` for that environment. A job with no entry for an environment is disabled there. For a recurring job, supply this map to choose where and how it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
 	Environments *map[string]JobEnvironment `json:"environments,omitempty"`
 
 	// Name Human-readable name for the job.
 	Name string `json:"name"`
 
-	// NextRunAt The next scheduled fire time. `null` once a one-off job has fired.
-	NextRunAt *time.Time `json:"next_run_at,omitempty"`
-
-	// Recurring Whether the job runs on a repeating schedule. `true` for a cron schedule; `false` for a one-off datetime or `now` schedule, which runs a single time. Derived from `schedule`.
+	// Recurring Whether the job runs on a repeating schedule. `true` for a cron schedule; `false` for a one-off datetime or `now` schedule, which runs a single time. Derived from the base `schedule`.
 	Recurring *bool `json:"recurring,omitempty"`
 
-	// Schedule When the job runs. One of: an ISO-8601 datetime (a one-off run at that instant), a 5-field cron expression evaluated in **UTC** (recurring), or the literal `now` (run once, as soon as possible). A datetime or `now` job disables itself after it fires.
+	// Schedule The base schedule every environment inherits unless it overrides it. One of: an ISO-8601 datetime (a one-off run at that instant), a 5-field cron expression evaluated in **UTC** (recurring), or the literal `now` (run once, as soon as possible). A datetime or `now` job disables itself after it fires.
 	Schedule string `json:"schedule"`
 
 	// Type Job type. Only `http` is supported today.
@@ -355,11 +339,13 @@ type JobCreateResource struct {
 	// Attributes A scheduled unit of work: an HTTP request run on a schedule.
 	//
 	// The job is the definition; each time it fires the service records a run
-	// capturing the request, response, timing, and outcome. A job is enabled per
-	// environment: set `environments[<env>].enabled` to schedule runs there. A
+	// capturing the request, response, timing, and outcome. A job runs per
+	// environment: set `environments[<env>].enabled` to schedule runs there, and
+	// optionally give that environment its own `schedule` or `configuration`. A
 	// recurring (cron) job may be enabled in several environments at once and
-	// fires once per enabled environment; a one-off (`now` or future datetime)
-	// job runs a single time in the environment it was created in.
+	// fires once per enabled environment, each on its own next-fire schedule; a
+	// one-off (`now` or future datetime) job runs a single time in the environment
+	// it was created in.
 	Attributes Job `json:"attributes"`
 
 	// Id Client-supplied resource id.
@@ -370,7 +356,7 @@ type JobCreateResource struct {
 // JobCreateResourceType defines model for JobCreateResource.Type.
 type JobCreateResourceType string
 
-// JobEnvironment Per-environment override for a job's enablement and configuration.
+// JobEnvironment Per-environment override for a job's enablement, schedule, and configuration.
 type JobEnvironment struct {
 	// Configuration HTTP request a job performs when it fires.
 	//
@@ -380,6 +366,12 @@ type JobEnvironment struct {
 
 	// Enabled Whether the job schedules runs in this environment. A job runs in an environment only via this field; it is disabled in every environment by default.
 	Enabled *bool `json:"enabled,omitempty"`
+
+	// NextRunAt The next scheduled fire time in this environment. `null` when the environment is not enabled, or once a one-off run has fired.
+	NextRunAt *time.Time `json:"next_run_at,omitempty"`
+
+	// Schedule Per-environment schedule override. Omit to inherit the job's base `schedule`. When present, it must be a 5-field cron expression evaluated in **UTC** (e.g. `0 3 * * *`), and is only allowed on a recurring (cron) job — it varies the cadence within that environment, it cannot turn a one-off job recurring or vice-versa.
+	Schedule *string `json:"schedule,omitempty"`
 }
 
 // JobHttpConfiguration HTTP request a job performs when it fires.
@@ -434,11 +426,13 @@ type JobResource struct {
 	// Attributes A scheduled unit of work: an HTTP request run on a schedule.
 	//
 	// The job is the definition; each time it fires the service records a run
-	// capturing the request, response, timing, and outcome. A job is enabled per
-	// environment: set `environments[<env>].enabled` to schedule runs there. A
+	// capturing the request, response, timing, and outcome. A job runs per
+	// environment: set `environments[<env>].enabled` to schedule runs there, and
+	// optionally give that environment its own `schedule` or `configuration`. A
 	// recurring (cron) job may be enabled in several environments at once and
-	// fires once per enabled environment; a one-off (`now` or future datetime)
-	// job runs a single time in the environment it was created in.
+	// fires once per enabled environment, each on its own next-fire schedule; a
+	// one-off (`now` or future datetime) job runs a single time in the environment
+	// it was created in.
 	Attributes Job     `json:"attributes"`
 	Id         *string `json:"id,omitempty"`
 	Type       *string `json:"type,omitempty"`
@@ -581,10 +575,10 @@ type RunResponse struct {
 
 // Usage Current-period usage against the account's plan allotments.
 type Usage struct {
-	// ActiveJobs Number of currently-enabled jobs.
+	// ActiveJobs Number of recurring (scheduled) jobs.
 	ActiveJobs int `json:"active_jobs"`
 
-	// ActiveJobsLimit Maximum enabled jobs the plan allows (`-1` means unlimited).
+	// ActiveJobsLimit Maximum recurring jobs the plan allows (`-1` means unlimited).
 	ActiveJobsLimit int `json:"active_jobs_limit"`
 
 	// Period The usage period this report covers, as `YYYY-MM` (UTC).
@@ -616,13 +610,12 @@ type hTTPBearerContextKey string
 
 // ListJobsParams defines parameters for ListJobs.
 type ListJobsParams struct {
-	FilterEnabled   *bool `form:"filter[enabled],omitempty" json:"filter[enabled],omitempty"`
 	FilterRecurring *bool `form:"filter[recurring],omitempty" json:"filter[recurring],omitempty"`
 
 	// FilterName Case-insensitive substring match on the job `name` (matches when the name contains the given text).
 	FilterName *string `form:"filter[name],omitempty" json:"filter[name],omitempty"`
 
-	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `enabled`, `-enabled`, `name`, `-name`, `next_run_at`, `-next_run_at`, `updated_at`, `-updated_at`.
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `name`, `-name`, `updated_at`, `-updated_at`.
 	Sort *ListJobsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
 	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
@@ -994,18 +987,6 @@ func NewListJobsRequest(server string, params *ListJobsParams) (*http.Request, e
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
-
-		if params.FilterEnabled != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[enabled]", *params.FilterEnabled, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
 
 		if params.FilterRecurring != nil {
 

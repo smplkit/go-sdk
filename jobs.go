@@ -233,15 +233,28 @@ func (job *Job) SetEnabled(enabled bool, environment string) {
 
 // IsEnabled reports whether the job is enabled.
 //
-// With environment empty, returns the roll-up (Enabled — enabled in at least
-// one environment). With environment given, returns whether the job is enabled
-// in that specific environment.
+// With environment empty, returns the roll-up — enabled in at least one
+// environment — derived locally from the Environments map (so it stays correct
+// for in-memory edits made via SetEnabled before Save). With environment given,
+// returns whether the job is enabled in that specific environment.
 func (job *Job) IsEnabled(environment string) bool {
 	if environment == "" {
-		return job.Enabled
+		return anyEnvironmentEnabled(job.Environments)
 	}
 	env, ok := job.Environments[environment]
 	return ok && env.Enabled
+}
+
+// anyEnvironmentEnabled is the base-enabled roll-up: true iff at least one
+// environment override has Enabled=true. The jobs API no longer exposes a
+// top-level enabled flag, so the wrapper derives it from the environments map.
+func anyEnvironmentEnabled(environments map[string]JobEnvironment) bool {
+	for _, env := range environments {
+		if env.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 // SetConfiguration sets this job's configuration in memory.
@@ -275,14 +288,29 @@ func (job *Job) GetConfiguration(environment string) HttpConfig {
 	return job.Configuration
 }
 
-// SetSchedule sets the job's schedule in memory.
+// SetSchedule sets the job's schedule in memory — base or per-environment.
 //
-// The schedule is environment-agnostic — a job has a single cron / datetime /
-// "now" schedule shared across every environment it runs in (each enabled
-// environment fires on the same cadence). There is no per-environment schedule,
-// so this setter takes no environment. Call Save to persist.
-func (job *Job) SetSchedule(schedule string) {
-	job.Schedule = schedule
+// Called with no environment (or an empty environment), it sets the base
+// Schedule: the cadence every environment inherits unless it overrides it.
+// Called with an environment, it sets that environment's per-environment cron
+// override on Environments, creating the override entry if it doesn't exist yet
+// (preserving any already-set Enabled / Configuration on it). A per-environment
+// schedule varies the cadence for just that environment (recurring jobs only);
+// clear it (set it back to the base cadence) to fall back to the base schedule.
+// At most one environment may be named; extra arguments are ignored. Call Save
+// to persist.
+func (job *Job) SetSchedule(schedule string, environment ...string) {
+	env := ""
+	if len(environment) > 0 {
+		env = environment[0]
+	}
+	if env == "" {
+		job.Schedule = schedule
+		return
+	}
+	override := job.environmentOverride(env)
+	override.Schedule = schedule
+	job.Environments[env] = *override
 }
 
 // Trigger starts one immediate, manual run of this job (a MANUAL run) and
@@ -326,7 +354,6 @@ func (job *Job) apply(other *Job) {
 	job.Schedule = other.Schedule
 	job.Configuration = other.Configuration
 	job.ConcurrencyPolicy = other.ConcurrencyPolicy
-	job.NextRunAt = other.NextRunAt
 	job.CreatedAt = other.CreatedAt
 	job.UpdatedAt = other.UpdatedAt
 	job.DeletedAt = other.DeletedAt
@@ -341,9 +368,6 @@ func (job *Job) apply(other *Job) {
 // via PageNumber / PageSize.
 func (j *JobsClient) List(ctx context.Context, input ListJobsInput) ([]*Job, error) {
 	params := &genjobs.ListJobsParams{}
-	if input.Enabled != nil {
-		params.FilterEnabled = input.Enabled
-	}
 	if input.Recurring != nil {
 		params.FilterRecurring = input.Recurring
 	}
@@ -632,12 +656,17 @@ func jobAttributes(job *Job) genjobs.Job {
 // jobEnvironmentsToWire converts the wrapper per-environment override map to
 // the generated model. Per-environment configuration overrides are sent as
 // full HttpConfig payloads (plaintext headers in), mirroring the base
-// configuration's round-trip semantics.
+// configuration's round-trip semantics. A per-environment Schedule override is
+// sent only when set; the read-only NextRunAt is never sent.
 func jobEnvironmentsToWire(envs map[string]JobEnvironment) map[string]genjobs.JobEnvironment {
 	out := make(map[string]genjobs.JobEnvironment, len(envs))
 	for key, env := range envs {
 		enabled := env.Enabled
 		ge := genjobs.JobEnvironment{Enabled: &enabled}
+		if env.Schedule != "" {
+			schedule := env.Schedule
+			ge.Schedule = &schedule
+		}
 		if env.Configuration != nil {
 			cfg := httpConfigToWire(*env.Configuration)
 			ge.Configuration = &cfg
@@ -648,7 +677,8 @@ func jobEnvironmentsToWire(envs map[string]JobEnvironment) map[string]genjobs.Jo
 }
 
 // jobEnvironmentsFromWire converts the generated per-environment override map
-// back into the wrapper shape.
+// back into the wrapper shape, surfacing the per-environment Schedule override
+// and the read-only NextRunAt.
 func jobEnvironmentsFromWire(envs map[string]genjobs.JobEnvironment) map[string]JobEnvironment {
 	out := make(map[string]JobEnvironment, len(envs))
 	for key, ge := range envs {
@@ -656,9 +686,15 @@ func jobEnvironmentsFromWire(envs map[string]genjobs.JobEnvironment) map[string]
 		if ge.Enabled != nil {
 			env.Enabled = *ge.Enabled
 		}
+		if ge.Schedule != nil {
+			env.Schedule = *ge.Schedule
+		}
 		if ge.Configuration != nil {
 			cfg := httpConfigFromWire(*ge.Configuration)
 			env.Configuration = &cfg
+		}
+		if ge.NextRunAt != nil {
+			env.NextRunAt = ge.NextRunAt
 		}
 		out[key] = env
 	}
@@ -771,7 +807,6 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 		Description:   a.Description,
 		Schedule:      a.Schedule,
 		Configuration: httpConfigFromWire(a.Configuration),
-		NextRunAt:     a.NextRunAt,
 		CreatedAt:     a.CreatedAt,
 		UpdatedAt:     a.UpdatedAt,
 		DeletedAt:     a.DeletedAt,
@@ -779,14 +814,13 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 		Type:          "http",
 		client:        client,
 	}
-	// The base `enabled` is a server-derived read-only roll-up; round-trip
-	// whatever the server returned without assuming a default of true.
-	if a.Enabled != nil {
-		out.Enabled = *a.Enabled
-	}
 	if a.Environments != nil {
 		out.Environments = jobEnvironmentsFromWire(*a.Environments)
 	}
+	// The base `enabled` is a read-only roll-up: enablement now lives strictly
+	// per-environment on the wire, so derive it locally as "enabled in at least
+	// one environment" rather than reading a top-level field.
+	out.Enabled = anyEnvironmentEnabled(out.Environments)
 	if a.Recurring != nil {
 		out.Recurring = a.Recurring
 	}
