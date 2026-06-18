@@ -498,10 +498,11 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 		t.Error("base configuration expected for empty / unknown environment")
 	}
 
-	// SetEnabled("") sets the read-only base roll-up; IsEnabled("") reads it.
-	job.SetEnabled(true, "")
-	if !job.IsEnabled("") {
-		t.Error("base roll-up should reflect SetEnabled(_, \"\")")
+	// SetEnabled is strictly per-environment (no base form, mirroring Python):
+	// it sets the named environment's override, not the read-only base roll-up.
+	job.SetEnabled(true, "production")
+	if !job.IsEnabled("production") {
+		t.Error("production override should reflect SetEnabled(true, \"production\")")
 	}
 
 	// SetConfiguration("") replaces the base configuration.
@@ -795,15 +796,17 @@ func TestJobs_ListQueryParams(t *testing.T) {
 	})
 	defer cleanup()
 
-	// Jobs list: enabled / recurring filters + offset pagination.
+	// Jobs list: enabled / recurring / name filters + offset pagination.
 	enabled := true
 	recurring := false
-	if _, err := j.List(ctx, ListJobsInput{Enabled: &enabled, Recurring: &recurring, PageNumber: 3, PageSize: 25}); err != nil {
+	name := "health"
+	if _, err := j.List(ctx, ListJobsInput{Enabled: &enabled, Recurring: &recurring, Name: &name, PageNumber: 3, PageSize: 25}); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	for key, want := range map[string]string{
 		"filter[enabled]":   "true",
 		"filter[recurring]": "false",
+		"filter[name]":      "health",
 		"page[number]":      "3",
 		"page[size]":        "25",
 	} {

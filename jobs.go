@@ -218,18 +218,14 @@ func (job *Job) environmentOverride(environment string) *JobEnvironment {
 	return &env
 }
 
-// SetEnabled sets this job's enablement in memory.
+// SetEnabled sets this job's enablement in a single environment, in memory.
 //
-// With environment empty, sets the base Enabled (which the server pins as a
-// read-only roll-up regardless — enablement is per-environment). With
-// environment given, sets the per-environment override's Enabled on
-// Environments, creating the override entry if it doesn't exist yet (preserving
-// any already-set Configuration on it). Call Save to persist.
+// Enablement is strictly per-environment: this sets the per-environment
+// override's Enabled on Environments, creating the override entry if it doesn't
+// exist yet (preserving any already-set Configuration on it). The base Enabled
+// is a read-only roll-up the server derives and cannot be set here. Call Save
+// to persist.
 func (job *Job) SetEnabled(enabled bool, environment string) {
-	if environment == "" {
-		job.Enabled = enabled
-		return
-	}
 	env := job.environmentOverride(environment)
 	env.Enabled = enabled
 	job.Environments[environment] = *env
@@ -350,6 +346,9 @@ func (j *JobsClient) List(ctx context.Context, input ListJobsInput) ([]*Job, err
 	}
 	if input.Recurring != nil {
 		params.FilterRecurring = input.Recurring
+	}
+	if input.Name != nil {
+		params.FilterName = input.Name
 	}
 	if input.PageNumber > 0 {
 		params.PageNumber = &input.PageNumber
