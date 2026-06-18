@@ -297,9 +297,10 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	// whole surface.
 	c.audit = newAuditClient(genAuditClient, rc.environment)
 	c.audit.client = c
-	// Jobs is account-global — reuse the shared jobs transport
-	// (single connection pool) so client.Jobs() is one-stop.
-	c.jobs = newJobsClient(genJobsClient)
+	// Jobs reuses the shared jobs transport (single connection pool) so
+	// client.Jobs() is one-stop; the configured environment defaults
+	// environment-scoped writes/reads (one-off birth, run-now, runs filter).
+	c.jobs = newJobsClient(genJobsClient, rc.environment)
 
 	prefixLen := min(10, len(rc.apiKey))
 	maskedKey := rc.apiKey[:prefixLen] + "..."

@@ -40,17 +40,31 @@ import (
 type JobsClient struct {
 	gen  *genjobs.ClientWithResponses
 	runs *RunsClient
+	// environment is the SDK's configured environment (empty when unset). It
+	// defaults the one-off birth env on create, the run-now env header, and
+	// the filter[environment] scope on Runs().List.
+	environment string
 }
 
 // newJobsClient wires a JobsClient (and its Runs sub-client) onto a pre-built
-// jobs transport (the wired path used by SmplClient).
-func newJobsClient(gen *genjobs.ClientWithResponses) *JobsClient {
-	return &JobsClient{gen: gen, runs: &RunsClient{gen: gen}}
+// jobs transport (the wired path used by SmplClient). The environment scopes
+// environment-aware writes/reads (one-off birth, run-now, runs filter).
+func newJobsClient(gen *genjobs.ClientWithResponses, environment string) *JobsClient {
+	return &JobsClient{
+		gen:         gen,
+		runs:        &RunsClient{gen: gen, environment: environment},
+		environment: environment,
+	}
 }
 
 // NewJobsClient creates a standalone Smpl Jobs client that resolves and owns
-// its own jobs transport. Jobs is account-global and never
-// environment-scoped, so it needs no environment/service config.
+// its own jobs transport.
+//
+// cfg.Environment is the default environment for environment-scoped
+// operations — the environment a one-off job created through this client is
+// born in, the default a manual run executes in, and the default scope for
+// Runs().List. Leave it empty to leave these unset (the credential's permitted
+// environment is implied where unambiguous).
 func NewJobsClient(cfg Config, opts ...ClientOption) (*JobsClient, error) {
 	rc, err := resolveConfig(cfg)
 	if err != nil {
@@ -61,7 +75,7 @@ func NewJobsClient(cfg Config, opts ...ClientOption) (*JobsClient, error) {
 		opt(&optCfg)
 	}
 	httpClient, _ := buildGenClients(optCfg, rc)
-	return newJobsClient(buildJobsGenClient(optCfg, rc, httpClient)), nil
+	return newJobsClient(buildJobsGenClient(optCfg, rc, httpClient), rc.environment), nil
 }
 
 // Runs returns the run history and run-action sub-client.
@@ -71,6 +85,9 @@ func (j *JobsClient) Runs() *RunsClient { return j.runs }
 // the cancel / rerun run actions.
 type RunsClient struct {
 	gen *genjobs.ClientWithResponses
+	// environment is the SDK's configured environment (empty when unset); it
+	// scopes List as the default filter[environment].
+	environment string
 }
 
 // ---------------------------------------------------------------------------
@@ -87,8 +104,14 @@ type RunsClient struct {
 // ISO-8601 datetime (a one-off run at that instant), or the literal "now"
 // (run once, as soon as possible) — a datetime or "now" job disables itself
 // after it fires. configuration is the HTTP request the job sends each time
-// it fires. The remaining fields — description, enabled, and concurrency
-// policy — are set via the WithJob* options.
+// it fires.
+//
+// Enablement is per environment, not a writable base flag: pass
+// WithJobEnvironments (or call SetEnabled after construction) to choose where
+// a recurring job runs. A one-off ("now" / datetime) job is born in a single
+// environment — WithJobBirthEnvironment, defaulting to the client's configured
+// environment. The remaining fields — description and concurrency policy — are
+// set via the WithJob* options.
 func (j *JobsClient) New(
 	id string,
 	name string,
@@ -101,9 +124,9 @@ func (j *JobsClient) New(
 		Name:              name,
 		Schedule:          schedule,
 		Configuration:     configuration,
-		Enabled:           true,
 		Type:              "http",
 		ConcurrencyPolicy: "ALLOW",
+		birthEnvironment:  j.environment,
 		client:            j,
 	}
 	for _, opt := range opts {
@@ -115,9 +138,22 @@ func (j *JobsClient) New(
 // JobOption configures an unsaved Job returned by JobsClient.New.
 type JobOption func(*Job)
 
-// WithJobEnabled overrides the default Enabled=true.
-func WithJobEnabled(enabled bool) JobOption {
-	return func(job *Job) { job.Enabled = enabled }
+// WithJobEnvironments sets the per-environment override map that drives
+// enablement. A job fires in an environment only when that environment's entry
+// has Enabled=true; each entry may carry an optional HttpConfig override (nil
+// inherits the base configuration). Every referenced environment must exist for
+// the account. Without this option (and without SetEnabled), a recurring job is
+// enabled nowhere.
+func WithJobEnvironments(environments map[string]JobEnvironment) JobOption {
+	return func(job *Job) { job.Environments = environments }
+}
+
+// WithJobBirthEnvironment sets the single environment a one-off ("now" /
+// datetime) job is born in, sent as the X-Smplkit-Environment header on create.
+// Defaults to the client's configured environment. Ignored for a recurring job,
+// whose environments come from WithJobEnvironments / SetEnabled.
+func WithJobBirthEnvironment(environment string) JobOption {
+	return func(job *Job) { job.birthEnvironment = environment }
 }
 
 // WithJobDescription sets the optional free-text description.
@@ -164,11 +200,132 @@ func (job *Job) Delete(ctx context.Context) error {
 	return job.client.Delete(ctx, job.ID)
 }
 
+// environmentOverride returns the override for environment, creating an empty
+// one if absent.
+//
+// The per-environment mutators reach through here so an existing override's
+// other field is preserved when only one of Enabled / Configuration is being
+// set.
+func (job *Job) environmentOverride(environment string) *JobEnvironment {
+	if job.Environments == nil {
+		job.Environments = map[string]JobEnvironment{}
+	}
+	env, ok := job.Environments[environment]
+	if !ok {
+		env = JobEnvironment{}
+		job.Environments[environment] = env
+	}
+	return &env
+}
+
+// SetEnabled sets this job's enablement in memory.
+//
+// With environment empty, sets the base Enabled (which the server pins as a
+// read-only roll-up regardless — enablement is per-environment). With
+// environment given, sets the per-environment override's Enabled on
+// Environments, creating the override entry if it doesn't exist yet (preserving
+// any already-set Configuration on it). Call Save to persist.
+func (job *Job) SetEnabled(enabled bool, environment string) {
+	if environment == "" {
+		job.Enabled = enabled
+		return
+	}
+	env := job.environmentOverride(environment)
+	env.Enabled = enabled
+	job.Environments[environment] = *env
+}
+
+// IsEnabled reports whether the job is enabled.
+//
+// With environment empty, returns the roll-up (Enabled — enabled in at least
+// one environment). With environment given, returns whether the job is enabled
+// in that specific environment.
+func (job *Job) IsEnabled(environment string) bool {
+	if environment == "" {
+		return job.Enabled
+	}
+	env, ok := job.Environments[environment]
+	return ok && env.Enabled
+}
+
+// SetConfiguration sets this job's configuration in memory.
+//
+// With environment empty, replaces the base Configuration. With environment
+// given, sets the per-environment override's configuration on Environments,
+// creating the override entry if it doesn't exist yet (preserving any
+// already-set Enabled on it). Call Save to persist.
+func (job *Job) SetConfiguration(configuration HttpConfig, environment string) {
+	if environment == "" {
+		job.Configuration = configuration
+		return
+	}
+	env := job.environmentOverride(environment)
+	env.Configuration = &configuration
+	job.Environments[environment] = *env
+}
+
+// GetConfiguration returns the job's effective configuration.
+//
+// With environment empty, returns the base Configuration. With environment
+// given, returns that environment's configuration override when it has one,
+// else the base configuration — the request the job actually sends when it
+// fires in that environment.
+func (job *Job) GetConfiguration(environment string) HttpConfig {
+	if environment != "" {
+		if env, ok := job.Environments[environment]; ok && env.Configuration != nil {
+			return *env.Configuration
+		}
+	}
+	return job.Configuration
+}
+
+// SetSchedule sets the job's schedule in memory.
+//
+// The schedule is environment-agnostic — a job has a single cron / datetime /
+// "now" schedule shared across every environment it runs in (each enabled
+// environment fires on the same cadence). There is no per-environment schedule,
+// so this setter takes no environment. Call Save to persist.
+func (job *Job) SetSchedule(schedule string) {
+	job.Schedule = schedule
+}
+
+// Trigger starts one immediate, manual run of this job (a MANUAL run) and
+// returns it. environment is the environment the run executes in; empty
+// defaults to the client's configured environment.
+func (job *Job) Trigger(ctx context.Context, environment string) (*Run, error) {
+	if job.client == nil {
+		return nil, &Error{Message: "job was constructed without a client; cannot trigger a run"}
+	}
+	return job.client.Run(ctx, job.ID, environment)
+}
+
+// ListRuns returns this job's run history, most recent first.
+//
+// input.Environment restricts the listing to runs stamped with that single
+// environment (empty covers every environment you can access). PageSize / After
+// drive cursor pagination.
+func (job *Job) ListRuns(ctx context.Context, input ListJobRunsInput) ([]*Run, error) {
+	if job.client == nil {
+		return nil, &Error{Message: "job was constructed without a client; cannot list runs"}
+	}
+	runsInput := ListRunsInput{
+		Job:      job.ID,
+		PageSize: input.PageSize,
+		After:    input.After,
+	}
+	if input.Environment != "" {
+		runsInput.Environments = []string{input.Environment}
+	}
+	return job.client.runs.List(ctx, runsInput)
+}
+
 func (job *Job) apply(other *Job) {
 	job.ID = other.ID
 	job.Name = other.Name
 	job.Description = other.Description
 	job.Enabled = other.Enabled
+	job.Environments = other.Environments
+	job.Recurring = other.Recurring
 	job.Type = other.Type
 	job.Schedule = other.Schedule
 	job.Configuration = other.Configuration
@@ -241,15 +398,27 @@ func (j *JobsClient) Delete(ctx context.Context, id string) error {
 }
 
 // Run triggers one immediate MANUAL run of the job and returns it.
-func (j *JobsClient) Run(ctx context.Context, id string) (*Run, error) {
-	resp, err := j.gen.RunJobNowWithResponse(ctx, id)
+//
+// environment is the environment the manual run executes in; empty defaults to
+// the client's configured environment (and a single-environment credential
+// implies it). It is sent as the X-Smplkit-Environment header.
+func (j *JobsClient) Run(ctx context.Context, id string, environment string) (*Run, error) {
+	env := environment
+	if env == "" {
+		env = j.environment
+	}
+	params := &genjobs.RunJobNowParams{}
+	if env != "" {
+		params.XSmplkitEnvironment = &env
+	}
+	resp, err := j.gen.RunJobNowWithResponse(ctx, id, params)
 	if err != nil {
 		return nil, fmt.Errorf("jobs Run: %w", err)
 	}
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
 		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
-	out := runFromResource(resp.ApplicationvndApiJSON200.Data)
+	out := runFromResource(resp.ApplicationvndApiJSON200.Data, j.runs)
 	return &out, nil
 }
 
@@ -272,12 +441,16 @@ func (j *JobsClient) Usage(ctx context.Context) (*Usage, error) {
 
 // List returns runs for the authenticated account, newest first. Cursor
 // paginated: pass PageSize and the After cursor from the prior page. Pass
-// Job to scope to a single job's history.
+// Job to scope to a single job's history, and Environments to scope to one or
+// more environment keys (resolved as explicit list → client default → omitted).
 func (r *RunsClient) List(ctx context.Context, input ListRunsInput) ([]*Run, error) {
 	params := &genjobs.ListRunsParams{}
 	if input.Job != "" {
 		job := input.Job
 		params.FilterJob = &job
+	}
+	if env := resolveEnvironmentFilter(input.Environments, r.environment); env != "" {
+		params.FilterEnvironment = &env
 	}
 	if input.PageSize > 0 {
 		params.PageSize = &input.PageSize
@@ -296,7 +469,7 @@ func (r *RunsClient) List(ctx context.Context, input ListRunsInput) ([]*Run, err
 	body := resp.ApplicationvndApiJSON200
 	runs := make([]*Run, 0, len(body.Data))
 	for _, res := range body.Data {
-		run := runFromResource(res)
+		run := runFromResource(res, r)
 		runs = append(runs, &run)
 	}
 	return runs, nil
@@ -315,7 +488,7 @@ func (r *RunsClient) Get(ctx context.Context, runID string) (*Run, error) {
 	if resp.StatusCode() != 200 {
 		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
-	out := runFromResource(resp.ApplicationvndApiJSON200.Data)
+	out := runFromResource(resp.ApplicationvndApiJSON200.Data, r)
 	return &out, nil
 }
 
@@ -332,11 +505,12 @@ func (r *RunsClient) Cancel(ctx context.Context, runID string) (*Run, error) {
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
 		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
-	out := runFromResource(resp.ApplicationvndApiJSON200.Data)
+	out := runFromResource(resp.ApplicationvndApiJSON200.Data, r)
 	return &out, nil
 }
 
-// Rerun re-runs a prior run, spawning a new RERUN run.
+// Rerun re-runs a prior run, spawning a new RERUN run that inherits the source
+// run's environment.
 func (r *RunsClient) Rerun(ctx context.Context, runID string) (*Run, error) {
 	id, err := uuid.Parse(runID)
 	if err != nil {
@@ -349,8 +523,25 @@ func (r *RunsClient) Rerun(ctx context.Context, runID string) (*Run, error) {
 	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
 		return nil, checkStatus(resp.StatusCode(), resp.Body)
 	}
-	out := runFromResource(resp.ApplicationvndApiJSON200.Data)
+	out := runFromResource(resp.ApplicationvndApiJSON200.Data, r)
 	return &out, nil
+}
+
+// Rerun starts a new run that repeats this one (a RERUN), in the same
+// environment.
+func (run *Run) Rerun(ctx context.Context) (*Run, error) {
+	if run.runs == nil {
+		return nil, &Error{Message: "run was constructed without a client; cannot rerun"}
+	}
+	return run.runs.Rerun(ctx, run.ID)
+}
+
+// Cancel cancels this run if it has not finished yet.
+func (run *Run) Cancel(ctx context.Context) (*Run, error) {
+	if run.runs == nil {
+		return nil, &Error{Message: "run was constructed without a client; cannot cancel"}
+	}
+	return run.runs.Cancel(ctx, run.ID)
 }
 
 // ---------------------------------------------------------------------------
@@ -363,7 +554,14 @@ func (j *JobsClient) create(ctx context.Context, job *Job) (*Job, error) {
 	body := genjobs.CreateJobApplicationVndAPIPlusJSONRequestBody{
 		Data: jobCreateResourceFromJob(job),
 	}
-	resp, err := j.gen.CreateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, body)
+	// A one-off job is born in the environment named here (recurring jobs
+	// ignore it server-side; their environments come from the map).
+	params := &genjobs.CreateJobParams{}
+	if job.birthEnvironment != "" {
+		env := job.birthEnvironment
+		params.XSmplkitEnvironment = &env
+	}
+	resp, err := j.gen.CreateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, params, body)
 	if err != nil {
 		return nil, fmt.Errorf("jobs Create: %w", err)
 	}
@@ -385,7 +583,14 @@ func (j *JobsClient) update(ctx context.Context, job *Job) (*Job, error) {
 	body := genjobs.UpdateJobApplicationVndAPIPlusJSONRequestBody{
 		Data: jobResourceFromJob(job.ID, job),
 	}
-	resp, err := j.gen.UpdateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, job.ID, body)
+	// Name the client's configured environment on update (ignored server-side
+	// for a recurring job, whose environments come from the map).
+	params := &genjobs.UpdateJobParams{}
+	if j.environment != "" {
+		env := j.environment
+		params.XSmplkitEnvironment = &env
+	}
+	resp, err := j.gen.UpdateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, job.ID, params, body)
 	if err != nil {
 		return nil, fmt.Errorf("jobs Update: %w", err)
 	}
@@ -397,13 +602,19 @@ func (j *JobsClient) update(ctx context.Context, job *Job) (*Job, error) {
 
 // jobAttributes builds the shared Job attribute payload sent on create and
 // update.
+//
+// The base `enabled` is a server-derived read-only roll-up — the wrapper never
+// sends it. Enablement travels entirely through the `environments` map, which
+// is included only when non-empty.
 func jobAttributes(job *Job) genjobs.Job {
-	enabled := job.Enabled
 	attrs := genjobs.Job{
 		Name:          job.Name,
 		Schedule:      job.Schedule,
-		Enabled:       &enabled,
 		Configuration: httpConfigToWire(job.Configuration),
+	}
+	if len(job.Environments) > 0 {
+		envs := jobEnvironmentsToWire(job.Environments)
+		attrs.Environments = &envs
 	}
 	if job.Description != nil {
 		attrs.Description = job.Description
@@ -417,6 +628,42 @@ func jobAttributes(job *Job) genjobs.Job {
 		attrs.ConcurrencyPolicy = &cp
 	}
 	return attrs
+}
+
+// jobEnvironmentsToWire converts the wrapper per-environment override map to
+// the generated model. Per-environment configuration overrides are sent as
+// full HttpConfig payloads (plaintext headers in), mirroring the base
+// configuration's round-trip semantics.
+func jobEnvironmentsToWire(envs map[string]JobEnvironment) map[string]genjobs.JobEnvironment {
+	out := make(map[string]genjobs.JobEnvironment, len(envs))
+	for key, env := range envs {
+		enabled := env.Enabled
+		ge := genjobs.JobEnvironment{Enabled: &enabled}
+		if env.Configuration != nil {
+			cfg := httpConfigToWire(*env.Configuration)
+			ge.Configuration = &cfg
+		}
+		out[key] = ge
+	}
+	return out
+}
+
+// jobEnvironmentsFromWire converts the generated per-environment override map
+// back into the wrapper shape.
+func jobEnvironmentsFromWire(envs map[string]genjobs.JobEnvironment) map[string]JobEnvironment {
+	out := make(map[string]JobEnvironment, len(envs))
+	for key, ge := range envs {
+		env := JobEnvironment{}
+		if ge.Enabled != nil {
+			env.Enabled = *ge.Enabled
+		}
+		if ge.Configuration != nil {
+			cfg := httpConfigFromWire(*ge.Configuration)
+			env.Configuration = &cfg
+		}
+		out[key] = env
+	}
+	return out
 }
 
 func jobCreateResourceFromJob(job *Job) genjobs.JobCreateResource {
@@ -533,8 +780,16 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 		Type:          "http",
 		client:        client,
 	}
+	// The base `enabled` is a server-derived read-only roll-up; round-trip
+	// whatever the server returned without assuming a default of true.
 	if a.Enabled != nil {
 		out.Enabled = *a.Enabled
+	}
+	if a.Environments != nil {
+		out.Environments = jobEnvironmentsFromWire(*a.Environments)
+	}
+	if a.Recurring != nil {
+		out.Recurring = a.Recurring
 	}
 	if a.Type != nil {
 		out.Type = string(*a.Type)
@@ -546,12 +801,13 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 	return out
 }
 
-func runFromResource(r genjobs.RunResource) Run {
+func runFromResource(r genjobs.RunResource, runs *RunsClient) Run {
 	a := r.Attributes
 	out := Run{
 		ID:                r.Id,
 		Job:               a.Job,
 		JobVersion:        a.JobVersion,
+		Environment:       a.Environment,
 		Trigger:           string(a.Trigger),
 		ScheduledFor:      a.ScheduledFor,
 		Status:            string(a.Status),
@@ -562,6 +818,7 @@ func runFromResource(r genjobs.RunResource) Run {
 		TotalDurationMs:   a.TotalDurationMs,
 		Error:             a.Error,
 		CreatedAt:         a.CreatedAt,
+		runs:              runs,
 	}
 	if a.RerunOf != nil {
 		s := a.RerunOf.String()

@@ -61,6 +61,7 @@ audit_showcase:
 
 jobs_showcase:
 	go run examples/jobs_showcase.go \
+		examples/jobs_setup.go \
 		examples/helpers.go
 
 showcases: config_management_showcase config_runtime_showcase \
