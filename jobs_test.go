@@ -107,14 +107,15 @@ func httpCfgWire(url string) map[string]any {
 }
 
 // jobResource builds a recurring-job JSON:API resource. devEnabled drives the
-// `development` override (which carries a configuration override); prodEnabled
+// `development` override (which carries a configuration override plus a
+// per-environment schedule override and a read-only next_run_at); prodEnabled
 // drives the `production` override (which has no configuration override). The
-// base `enabled` roll-up is true when either environment is enabled.
+// base `enabled` roll-up is derived wrapper-side from the environments, so it is
+// not present on the wire.
 func jobResource(id string, created bool, version int, devEnabled, prodEnabled bool) map[string]any {
 	attrs := map[string]any{
 		"name":          "My Job",
 		"description":   "does a thing",
-		"enabled":       devEnabled || prodEnabled,
 		"recurring":     true,
 		"type":          "http",
 		"schedule":      "0 * * * *",
@@ -122,12 +123,13 @@ func jobResource(id string, created bool, version int, devEnabled, prodEnabled b
 		"environments": map[string]any{
 			"development": map[string]any{
 				"enabled":       devEnabled,
+				"schedule":      "0 3 * * *",
 				"configuration": httpCfgWire("https://development.example.com/cache/warm"),
+				"next_run_at":   "2026-06-05T03:00:00Z",
 			},
 			"production": map[string]any{"enabled": prodEnabled},
 		},
 		"concurrency_policy": "ALLOW",
-		"next_run_at":        "2026-06-05T00:00:00Z",
 		"deleted_at":         nil,
 		"version":            version,
 	}
@@ -368,9 +370,8 @@ func TestJobs_Lifecycle(t *testing.T) {
 	}
 
 	// list jobs
-	disabled := false
 	recurring := true
-	jobs, err := j.List(ctx, ListJobsInput{Enabled: &disabled, Recurring: &recurring, PageNumber: 1, PageSize: 10})
+	jobs, err := j.List(ctx, ListJobsInput{Recurring: &recurring, PageNumber: 1, PageSize: 10})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -511,10 +512,36 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 		t.Errorf("base configuration not replaced: %s", job.GetConfiguration("").URL)
 	}
 
-	// SetSchedule is environment-agnostic.
+	// SetSchedule with no environment (and with an explicit empty environment)
+	// sets the base schedule.
 	job.SetSchedule("*/5 * * * *")
 	if job.Schedule != "*/5 * * * *" {
-		t.Errorf("schedule not set: %s", job.Schedule)
+		t.Errorf("base schedule not set: %s", job.Schedule)
+	}
+	job.SetSchedule("*/10 * * * *", "")
+	if job.Schedule != "*/10 * * * *" {
+		t.Errorf("base schedule (explicit empty env) not set: %s", job.Schedule)
+	}
+
+	// SetSchedule with an environment sets a per-environment cron override,
+	// preserving the already-set Enabled on that environment's entry, and does
+	// not touch the base schedule.
+	job.SetSchedule("0 4 * * *", "production")
+	prod := job.Environments["production"]
+	if prod.Schedule != "0 4 * * *" {
+		t.Errorf("production per-env schedule not set: %q", prod.Schedule)
+	}
+	if !prod.Enabled {
+		t.Error("SetSchedule must preserve Enabled on the existing production override")
+	}
+	if job.Schedule != "*/10 * * * *" {
+		t.Errorf("per-env SetSchedule must not change the base schedule: %q", job.Schedule)
+	}
+
+	// SetSchedule on a brand-new environment creates the override entry.
+	job.SetSchedule("0 5 * * *", "qa")
+	if qa := job.Environments["qa"]; qa.Schedule != "0 5 * * *" || qa.Enabled {
+		t.Errorf("qa per-env schedule override mismatch: %+v", qa)
 	}
 }
 
@@ -540,6 +567,7 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	}, WithJobBirthEnvironment("development"))
 	job.SetConfiguration(HttpConfig{URL: "https://dev"}, "development")
 	job.SetEnabled(false, "development")
+	job.SetSchedule("0 3 * * *", "development")
 	job.SetEnabled(true, "production")
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -552,6 +580,9 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	if _, ok := attrs["enabled"]; ok {
 		t.Error("write body must NOT include the read-only base `enabled`")
 	}
+	if _, ok := attrs["next_run_at"]; ok {
+		t.Error("write body must NOT include the removed top-level `next_run_at`")
+	}
 	envs, ok := attrs["environments"].(map[string]any)
 	if !ok {
 		t.Fatalf("write body must include environments, got %v", attrs["environments"])
@@ -563,12 +594,24 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	if _, ok := dev["configuration"]; !ok {
 		t.Error("development override must carry its configuration on the wire")
 	}
+	// The per-environment schedule override is sent; the read-only next_run_at
+	// is never sent.
+	if dev["schedule"] != "0 3 * * *" {
+		t.Errorf("development per-env schedule should be on the wire, got %v", dev["schedule"])
+	}
+	if _, ok := dev["next_run_at"]; ok {
+		t.Error("read-only per-env next_run_at must never be sent on the wire")
+	}
 	prod := envs["production"].(map[string]any)
 	if prod["enabled"] != true {
 		t.Errorf("production enabled should be true, got %v", prod["enabled"])
 	}
 	if _, ok := prod["configuration"]; ok {
 		t.Error("production override has no configuration; it must be omitted")
+	}
+	// production has no schedule override; it must be omitted from the wire.
+	if _, ok := prod["schedule"]; ok {
+		t.Error("production override has no schedule; it must be omitted")
 	}
 }
 
@@ -650,12 +693,14 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"data": map[string]any{
 			"id": testJobID, "type": "job",
 			"attributes": map[string]any{
-				"name": "n", "schedule": "0 * * * *", "enabled": true, "recurring": true,
+				"name": "n", "schedule": "0 * * * *", "recurring": true,
 				"configuration": map[string]any{"url": "https://base"},
 				"environments": map[string]any{
 					"development": map[string]any{
 						"enabled":       true,
+						"schedule":      "0 3 * * *",
 						"configuration": map[string]any{"url": "https://dev", "method": "POST"},
+						"next_run_at":   "2026-06-05T03:00:00Z",
 					},
 					"production": map[string]any{"enabled": false},
 				},
@@ -667,8 +712,10 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if !job.Enabled {
-		t.Error("rollup enabled should be true")
+	// The base roll-up is derived locally from the environments (development is
+	// enabled), not read from a top-level wire field.
+	if !job.Enabled || !job.IsEnabled("") {
+		t.Error("rollup enabled should be true (derived from environments)")
 	}
 	if job.Recurring == nil || !*job.Recurring {
 		t.Errorf("recurring should be true, got %v", job.Recurring)
@@ -677,9 +724,21 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 	if !ok || !dev.Enabled || dev.Configuration == nil || dev.Configuration.URL != "https://dev" {
 		t.Errorf("development override mismatch: %+v", dev)
 	}
+	// The per-environment schedule override and read-only next_run_at surface.
+	if dev.Schedule != "0 3 * * *" {
+		t.Errorf("development per-env schedule mismatch: %q", dev.Schedule)
+	}
+	wantNext := time.Date(2026, 6, 5, 3, 0, 0, 0, time.UTC)
+	if dev.NextRunAt == nil || !dev.NextRunAt.Equal(wantNext) {
+		t.Errorf("development next_run_at mismatch: %v", dev.NextRunAt)
+	}
 	prod, ok := job.Environments["production"]
 	if !ok || prod.Enabled || prod.Configuration != nil {
 		t.Errorf("production override (no configuration) mismatch: %+v", prod)
+	}
+	// production is not enabled, so it has no per-env schedule or next_run_at.
+	if prod.Schedule != "" || prod.NextRunAt != nil {
+		t.Errorf("production override should have no schedule/next_run_at: %+v", prod)
 	}
 }
 
@@ -796,15 +855,14 @@ func TestJobs_ListQueryParams(t *testing.T) {
 	})
 	defer cleanup()
 
-	// Jobs list: enabled / recurring / name filters + offset pagination.
-	enabled := true
+	// Jobs list: recurring / name filters + offset pagination. (The
+	// `filter[enabled]` param was removed from the API and the wrapper.)
 	recurring := false
 	name := "health"
-	if _, err := j.List(ctx, ListJobsInput{Enabled: &enabled, Recurring: &recurring, Name: &name, PageNumber: 3, PageSize: 25}); err != nil {
+	if _, err := j.List(ctx, ListJobsInput{Recurring: &recurring, Name: &name, PageNumber: 3, PageSize: 25}); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	for key, want := range map[string]string{
-		"filter[enabled]":   "true",
 		"filter[recurring]": "false",
 		"filter[name]":      "health",
 		"page[number]":      "3",
@@ -814,12 +872,16 @@ func TestJobs_ListQueryParams(t *testing.T) {
 			t.Errorf("jobs list %s = %q, want %q", key, got, want)
 		}
 	}
+	// The removed enabled filter must never appear on the wire.
+	if _, ok := rec.query["filter[enabled]"]; ok {
+		t.Error("jobs list must not send the removed filter[enabled] param")
+	}
 
 	// Zero values omit the optional params entirely.
 	if _, err := j.List(ctx, ListJobsInput{}); err != nil {
 		t.Fatalf("List (defaults): %v", err)
 	}
-	for _, key := range []string{"filter[enabled]", "filter[recurring]", "page[number]", "page[size]"} {
+	for _, key := range []string{"filter[recurring]", "filter[name]", "page[number]", "page[size]"} {
 		if _, ok := rec.query[key]; ok {
 			t.Errorf("jobs list must omit %s at its zero value", key)
 		}
