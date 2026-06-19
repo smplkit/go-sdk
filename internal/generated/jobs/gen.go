@@ -37,6 +37,27 @@ func (e JobConcurrencyPolicy) Valid() bool {
 	}
 }
 
+// Defines values for JobKind.
+const (
+	Manual    JobKind = "manual"
+	OneOff    JobKind = "one_off"
+	Recurring JobKind = "recurring"
+)
+
+// Valid indicates whether the value is a known member of the JobKind enum.
+func (e JobKind) Valid() bool {
+	switch e {
+	case Manual:
+		return true
+	case OneOff:
+		return true
+	case Recurring:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for JobType.
 const (
 	Http JobType = "http"
@@ -271,16 +292,19 @@ type HttpHeader struct {
 	Value string `json:"value"`
 }
 
-// Job A scheduled unit of work: an HTTP request run on a schedule.
+// Job A unit of work: an HTTP request, run on a schedule or triggered on demand.
 //
 // The job is the definition; each time it fires the service records a run
 // capturing the request, response, timing, and outcome. A job runs per
-// environment: set `environments[<env>].enabled` to schedule runs there, and
-// optionally give that environment its own `schedule` or `configuration`. A
-// recurring (cron) job may be enabled in several environments at once and
-// fires once per enabled environment, each on its own next-fire schedule; a
-// one-off (`now` or future datetime) job runs a single time in the environment
-// it was created in.
+// environment: set `environments[<env>].enabled` to enable it there, and
+// optionally give that environment its own `schedule` or `configuration`.
+//
+// A job's `kind` follows from its `schedule`: a **recurring** (cron) job may
+// be enabled in several environments at once and fires once per enabled
+// environment, each on its own next-fire schedule; a **manual** job (no
+// schedule) is permanent and never auto-fires — it runs only when triggered;
+// a **one-off** (`now` or a future datetime) job runs a single time in the
+// environment it was created in and is then spent.
 type Job struct {
 	// ConcurrencyPolicy How overlapping runs are handled. `ALLOW` (the only value today) permits them.
 	ConcurrencyPolicy *JobConcurrencyPolicy `json:"concurrency_policy,omitempty"`
@@ -300,17 +324,17 @@ type Job struct {
 	// Description Free-text description for the job.
 	Description *string `json:"description,omitempty"`
 
-	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job schedules runs in that environment), an optional `schedule` override (a cron expression for recurring jobs; omit to inherit the base `schedule`), and an optional `configuration` override (omit to inherit the base `configuration`); it also reports the read-only `next_run_at` for that environment. A job with no entry for an environment is disabled there. For a recurring job, supply this map to choose where and how it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job is enabled — scheduled, for a recurring job, or triggerable, for a manual job — in that environment), an optional `schedule` override (a cron expression for recurring jobs; omit to inherit the base `schedule`), and an optional `configuration` override (omit to inherit the base `configuration`); it also reports the read-only `next_run_at` for that environment. A job with no entry for an environment is disabled there. For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
 	Environments *map[string]JobEnvironment `json:"environments,omitempty"`
+
+	// Kind How the job runs, derived from its base `schedule`: `recurring` for a cron schedule (fires on a repeating cadence), `manual` for no schedule (never auto-fires; runs only when triggered), or `one_off` for a `now` or datetime schedule (runs a single time, then is spent).
+	Kind *JobKind `json:"kind,omitempty"`
 
 	// Name Human-readable name for the job.
 	Name string `json:"name"`
 
-	// Recurring Whether the job runs on a repeating schedule. `true` for a cron schedule; `false` for a one-off datetime or `now` schedule, which runs a single time. Derived from the base `schedule`.
-	Recurring *bool `json:"recurring,omitempty"`
-
-	// Schedule The base schedule every environment inherits unless it overrides it. One of: an ISO-8601 datetime (a one-off run at that instant), a 5-field cron expression evaluated in **UTC** (recurring), or the literal `now` (run once, as soon as possible). A datetime or `now` job disables itself after it fires.
-	Schedule string `json:"schedule"`
+	// Schedule The base schedule every environment inherits unless it overrides it, and the field that determines the job's `kind`. Omit it (or send `null`) to create a permanent **manual** job that never auto-fires and runs only when triggered. Provide a 5-field cron expression evaluated in **UTC** for a **recurring** job, an ISO-8601 datetime for a **one-off** run at that instant, or the literal `now` for a one-off run as soon as possible. A datetime or `now` job disables itself after it fires.
+	Schedule *string `json:"schedule,omitempty"`
 
 	// Type Job type. Only `http` is supported today.
 	Type *JobType `json:"type,omitempty"`
@@ -325,6 +349,9 @@ type Job struct {
 // JobConcurrencyPolicy How overlapping runs are handled. `ALLOW` (the only value today) permits them.
 type JobConcurrencyPolicy string
 
+// JobKind How the job runs, derived from its base `schedule`: `recurring` for a cron schedule (fires on a repeating cadence), `manual` for no schedule (never auto-fires; runs only when triggered), or `one_off` for a `now` or datetime schedule (runs a single time, then is spent).
+type JobKind string
+
 // JobType Job type. Only `http` is supported today.
 type JobType string
 
@@ -336,16 +363,19 @@ type JobCreateRequest struct {
 
 // JobCreateResource JSON:API resource envelope for creating a job (id required).
 type JobCreateResource struct {
-	// Attributes A scheduled unit of work: an HTTP request run on a schedule.
+	// Attributes A unit of work: an HTTP request, run on a schedule or triggered on demand.
 	//
 	// The job is the definition; each time it fires the service records a run
 	// capturing the request, response, timing, and outcome. A job runs per
-	// environment: set `environments[<env>].enabled` to schedule runs there, and
-	// optionally give that environment its own `schedule` or `configuration`. A
-	// recurring (cron) job may be enabled in several environments at once and
-	// fires once per enabled environment, each on its own next-fire schedule; a
-	// one-off (`now` or future datetime) job runs a single time in the environment
-	// it was created in.
+	// environment: set `environments[<env>].enabled` to enable it there, and
+	// optionally give that environment its own `schedule` or `configuration`.
+	//
+	// A job's `kind` follows from its `schedule`: a **recurring** (cron) job may
+	// be enabled in several environments at once and fires once per enabled
+	// environment, each on its own next-fire schedule; a **manual** job (no
+	// schedule) is permanent and never auto-fires — it runs only when triggered;
+	// a **one-off** (`now` or a future datetime) job runs a single time in the
+	// environment it was created in and is then spent.
 	Attributes Job `json:"attributes"`
 
 	// Id Client-supplied resource id.
@@ -370,7 +400,7 @@ type JobEnvironment struct {
 	// NextRunAt The next scheduled fire time in this environment. `null` when the environment is not enabled, or once a one-off run has fired.
 	NextRunAt *time.Time `json:"next_run_at,omitempty"`
 
-	// Schedule Per-environment schedule override. Omit to inherit the job's base `schedule`. When present, it must be a 5-field cron expression evaluated in **UTC** (e.g. `0 3 * * *`), and is only allowed on a recurring (cron) job — it varies the cadence within that environment, it cannot turn a one-off job recurring or vice-versa.
+	// Schedule Per-environment schedule override. Omit to inherit the job's base `schedule`. When present, it must be a 5-field cron expression evaluated in **UTC** (e.g. `0 3 * * *`), and is only allowed on a recurring (cron) job — it varies the cadence within that environment. It cannot appear on a manual or one-off job, and cannot change a job's kind.
 	Schedule *string `json:"schedule,omitempty"`
 }
 
@@ -423,16 +453,19 @@ type JobRequest struct {
 
 // JobResource JSON:API resource envelope for a job. The caller supplies `id` on create.
 type JobResource struct {
-	// Attributes A scheduled unit of work: an HTTP request run on a schedule.
+	// Attributes A unit of work: an HTTP request, run on a schedule or triggered on demand.
 	//
 	// The job is the definition; each time it fires the service records a run
 	// capturing the request, response, timing, and outcome. A job runs per
-	// environment: set `environments[<env>].enabled` to schedule runs there, and
-	// optionally give that environment its own `schedule` or `configuration`. A
-	// recurring (cron) job may be enabled in several environments at once and
-	// fires once per enabled environment, each on its own next-fire schedule; a
-	// one-off (`now` or future datetime) job runs a single time in the environment
-	// it was created in.
+	// environment: set `environments[<env>].enabled` to enable it there, and
+	// optionally give that environment its own `schedule` or `configuration`.
+	//
+	// A job's `kind` follows from its `schedule`: a **recurring** (cron) job may
+	// be enabled in several environments at once and fires once per enabled
+	// environment, each on its own next-fire schedule; a **manual** job (no
+	// schedule) is permanent and never auto-fires — it runs only when triggered;
+	// a **one-off** (`now` or a future datetime) job runs a single time in the
+	// environment it was created in and is then spent.
 	Attributes Job     `json:"attributes"`
 	Id         *string `json:"id,omitempty"`
 	Type       *string `json:"type,omitempty"`
@@ -575,10 +608,10 @@ type RunResponse struct {
 
 // Usage Current-period usage against the account's plan allotments.
 type Usage struct {
-	// ActiveJobs Number of recurring (scheduled) jobs.
+	// ActiveJobs Number of permanent jobs (recurring and manual) counted against the plan's job limit.
 	ActiveJobs int `json:"active_jobs"`
 
-	// ActiveJobsLimit Maximum recurring jobs the plan allows (`-1` means unlimited).
+	// ActiveJobsLimit Maximum permanent jobs the plan allows (`-1` means unlimited).
 	ActiveJobsLimit int `json:"active_jobs_limit"`
 
 	// Period The usage period this report covers, as `YYYY-MM` (UTC).
@@ -610,7 +643,11 @@ type hTTPBearerContextKey string
 
 // ListJobsParams defines parameters for ListJobs.
 type ListJobsParams struct {
-	FilterRecurring *bool `form:"filter[recurring],omitempty" json:"filter[recurring],omitempty"`
+	// FilterKind Restrict to a single job kind: `recurring`, `manual`, or `one_off`. By default one-off jobs are omitted (they are transient and short-lived); request `filter[kind]=one_off` to list them.
+	FilterKind *string `form:"filter[kind],omitempty" json:"filter[kind],omitempty"`
+
+	// FilterScheduled When `true`, list only jobs that have an upcoming fire in at least one environment (a recurring job's next occurrence, or a pending future one-off) — the feed for an upcoming-runs view; this includes one-off jobs. When `false`, list only jobs with no upcoming fire.
+	FilterScheduled *bool `form:"filter[scheduled],omitempty" json:"filter[scheduled],omitempty"`
 
 	// FilterName Case-insensitive substring match on the job `name` (matches when the name contains the given text).
 	FilterName *string `form:"filter[name],omitempty" json:"filter[name],omitempty"`
@@ -988,9 +1025,21 @@ func NewListJobsRequest(server string, params *ListJobsParams) (*http.Request, e
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.FilterRecurring != nil {
+		if params.FilterKind != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[recurring]", *params.FilterRecurring, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[kind]", *params.FilterKind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterScheduled != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[scheduled]", *params.FilterScheduled, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

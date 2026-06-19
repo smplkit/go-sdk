@@ -17,6 +17,35 @@ const (
 	JobHttpMethodPut    = JobHttpMethod("PUT")
 )
 
+// JobKind is how a job runs, derived from its schedule (read-only).
+//
+//   - JobKindManual: No schedule — never auto-fires; runs only when triggered.
+//   - JobKindOneOff: A "now" or datetime schedule — runs a single time, then is
+//     spent.
+//   - JobKindRecurring: A cron schedule — fires on a repeating cadence.
+type JobKind string
+
+// JobKind values.
+const (
+	JobKindManual    = JobKind("manual")
+	JobKindOneOff    = JobKind("one_off")
+	JobKindRecurring = JobKind("recurring")
+)
+
+// RunTrigger is what started a run (read-only).
+//
+//   - RunTriggerManual: A Run / Trigger call started it on demand.
+//   - RunTriggerRerun: It repeats an earlier run.
+//   - RunTriggerSchedule: The job's schedule fired.
+type RunTrigger string
+
+// RunTrigger values.
+const (
+	RunTriggerManual   = RunTrigger("MANUAL")
+	RunTriggerRerun    = RunTrigger("RERUN")
+	RunTriggerSchedule = RunTrigger("SCHEDULE")
+)
+
 // HttpConfig is the HTTP request a job performs when it fires (the job's
 // "configuration"). It mirrors the shared HttpConfiguration used by audit
 // forwarders but adds the two fields a scheduled job needs: a request Body
@@ -55,19 +84,21 @@ type HttpConfig struct {
 }
 
 // JobEnvironment is a per-environment override for a job's enablement,
-// schedule, and configuration. A recurring job fires in a given environment
-// only when that environment has an entry in Job.Environments with
-// Enabled=true; an environment with no entry (or Enabled=false) does not fire
-// there.
+// schedule, and configuration.
+//
+// A job runs in a given environment only when that environment has an entry in
+// Job.Environments with Enabled=true (scheduled there for a recurring job,
+// triggerable there for a manual one); an environment with no entry (or
+// Enabled=false) is disabled there.
 type JobEnvironment struct {
-	// Enabled controls whether the job schedules runs in this environment.
+	// Enabled controls whether the job is enabled in this environment.
 	// Defaults to false.
 	Enabled bool
 	// Schedule is an optional per-environment cron override that varies the
 	// cadence for just this environment (recurring jobs only). Empty inherits
 	// the job's base Schedule. When set, it must be a 5-field cron expression
-	// evaluated in UTC; it cannot turn a one-off job recurring or vice-versa.
-	// Settable; sent on writes only when non-empty.
+	// evaluated in UTC; it cannot appear on a manual or one-off job, and cannot
+	// change a job's kind. Settable; sent on writes only when non-empty.
 	Schedule string
 	// Configuration is an optional per-environment request configuration that
 	// fully replaces the job's base Configuration for this environment. Nil
@@ -81,13 +112,16 @@ type JobEnvironment struct {
 	NextRunAt *time.Time
 }
 
-// Job is a scheduled unit of work: an HTTP request run on a schedule.
+// Job is a unit of work: an HTTP request, run on a schedule or triggered on
+// demand.
 //
 // Active-record style: mutate fields directly and call Save(ctx) to
 // persist, or Delete(ctx) to remove. The Job's id is caller-supplied,
 // unique within the account, and immutable. A job is enabled per
-// environment via Environments: a recurring job may be enabled in several
-// environments at once; a one-off job is born in a single environment.
+// environment via Environments. A job's Kind follows from its Schedule: a
+// recurring (cron) job may be enabled in several environments at once; a
+// manual job (no schedule) runs only when triggered; a one-off ("now" /
+// datetime) job is born in a single environment and is then spent.
 type Job struct {
 	// ID is the caller-supplied unique identifier for the job. Required
 	// at create time (the jobs service does not auto-generate it) and
@@ -110,15 +144,17 @@ type Job struct {
 	// records the single environment it was created in. Every referenced
 	// environment must exist for the account.
 	Environments map[string]JobEnvironment
-	// Recurring reports whether the job runs on a repeating schedule: true for
-	// a cron schedule, false for a one-off datetime / "now" schedule. Read-only
-	// and derived server-side from Schedule. Nil on an unsaved Job.
-	Recurring *bool
+	// Kind is how the job runs, derived server-side from Schedule (read-only):
+	// JobKindRecurring (cron), JobKindManual (no schedule), or JobKindOneOff
+	// ("now" / datetime). Nil on an unsaved Job; use IsRecurring / IsManual /
+	// IsOneOff.
+	Kind *JobKind
 	// Type is the job type. Only "http" is supported today.
 	Type string
-	// Schedule is when the job runs: an ISO-8601 datetime (a one-off run
-	// at that instant), a 5-field cron expression evaluated in UTC
-	// (recurring), or the literal "now" (run once, as soon as possible).
+	// Schedule is the base schedule every environment inherits unless it
+	// overrides it, and the field that determines the job's Kind: empty for a
+	// manual job (no schedule), a 5-field cron expression evaluated in UTC for
+	// a recurring job, or an ISO-8601 datetime / "now" for a one-off job.
 	Schedule string
 	// Configuration is the HTTP request the job performs when it fires.
 	Configuration HttpConfig
@@ -138,7 +174,8 @@ type Job struct {
 
 	// birthEnvironment is creation-time only: the environment a one-off job is
 	// born in, sent as the X-Smplkit-Environment header by JobsClient.create.
-	// Ignored for a recurring job, whose environments come from Environments.
+	// Ignored for recurring and manual jobs, whose environments come from
+	// Environments.
 	birthEnvironment string
 
 	client *JobsClient
@@ -162,7 +199,7 @@ type Run struct {
 	// its source run's environment.
 	Environment string
 	// Trigger is why the run exists: "SCHEDULE", "MANUAL" (Run now), or
-	// "RERUN".
+	// "RERUN". Raw trigger string; compare against the RunTrigger constants.
 	Trigger string
 	// RerunOf is the source run's id; set only when Trigger is "RERUN".
 	RerunOf *string
@@ -211,18 +248,23 @@ type Usage struct {
 	// RunsIncluded is the runs included in the plan this period (-1 means
 	// unlimited).
 	RunsIncluded int
-	// ActiveJobs is the number of currently-enabled jobs.
+	// ActiveJobs is the number of permanent jobs (recurring and manual)
+	// counted against the plan's job limit.
 	ActiveJobs int
-	// ActiveJobsLimit is the maximum enabled jobs the plan allows (-1
+	// ActiveJobsLimit is the maximum permanent jobs the plan allows (-1
 	// means unlimited).
 	ActiveJobsLimit int
 }
 
 // ListJobsInput passes filters and pagination to JobsClient.List.
 type ListJobsInput struct {
-	// Recurring filters by schedule cadence: true returns only recurring
-	// (cron) jobs, false only one-off (datetime / now) jobs. Nil returns both.
-	Recurring *bool
+	// Kind filters to jobs of this JobKind. Nil lists recurring and manual
+	// jobs; one-off jobs are omitted unless you pass JobKindOneOff.
+	Kind *JobKind
+	// Scheduled filters to jobs that have an upcoming fire in some environment
+	// (true) or none (false) — the feed for an upcoming-runs view, which
+	// includes one-offs. Nil does not filter on scheduling.
+	Scheduled *bool
 	// Name filters to jobs whose name contains this text (case-insensitive).
 	// Nil returns all.
 	Name *string

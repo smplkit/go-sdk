@@ -16,6 +16,7 @@ import (
 // orphans behind.
 var jobsDemoJobIDs = []string{
 	"showcase-recurring",
+	"showcase-manual",
 	"showcase-oneoff",
 }
 

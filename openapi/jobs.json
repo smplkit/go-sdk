@@ -12,7 +12,7 @@
           "Jobs"
         ],
         "summary": "Create Job",
-        "description": "Create a job for this account.\n\nThe caller supplies the job's id as `data.id`. Ids are unique within an\naccount and immutable. A recurring job supplies `environments` to choose\nwhere it runs and begins scheduling immediately in each enabled\nenvironment. A one-off job is created in the environment named by the\n`X-Smplkit-Environment` header (implied when the credential is scoped to a\nsingle environment).",
+        "description": "Create a job for this account.\n\nThe caller supplies the job's id as `data.id`. Ids are unique within an\naccount and immutable. The job's kind follows from its `schedule`: omit the\nschedule for a permanent **manual** job (triggered on demand), give a cron\nexpression for a **recurring** job, or a datetime / `now` for a **one-off**\njob. A recurring or manual job supplies `environments` to choose where it\nruns; a recurring job begins scheduling immediately in each enabled\nenvironment. A one-off job is created in the environment named by the\n`X-Smplkit-Environment` header (implied when the credential is scoped to a\nsingle environment); a `now` one-off enqueues its single run immediately.",
         "operationId": "create_job",
         "security": [
           {
@@ -67,7 +67,7 @@
           "Jobs"
         ],
         "summary": "List Jobs",
-        "description": "List this account's jobs.\n\nDefault sort is `name` ascending. Sort by `name`, `created_at`, or\n`updated_at`, ascending or descending (prefix `-` for descending). Filter\nwith `filter[recurring]` and `filter[name]` (case-insensitive substring\nmatch on the name); filters compose with AND. Each job reports its\nper-environment enablement and `next_run_at` inside its `environments` map;\na scoped caller sees that map narrowed to the environments it may access.",
+        "description": "List this account's jobs.\n\nDefault sort is `name` ascending. Sort by `name`, `created_at`, or\n`updated_at`, ascending or descending (prefix `-` for descending). By\ndefault the list omits transient one-off jobs (request `filter[kind]=one_off`\nto see them). Filter with `filter[kind]` (`recurring` / `manual` /\n`one_off`), `filter[scheduled]` (jobs with an upcoming fire in some\nenvironment \u2014 the feed for an upcoming-runs view, which includes one-offs),\nand `filter[name]` (case-insensitive substring); filters compose with AND.\nEach job reports its per-environment enablement and `next_run_at` inside its\n`environments` map; a scoped caller sees that map narrowed to the\nenvironments it may access.",
         "operationId": "list_jobs",
         "security": [
           {
@@ -76,7 +76,25 @@
         ],
         "parameters": [
           {
-            "name": "filter[recurring]",
+            "name": "filter[kind]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to a single job kind: `recurring`, `manual`, or `one_off`. By default one-off jobs are omitted (they are transient and short-lived); request `filter[kind]=one_off` to list them.",
+              "title": "Filter[Kind]"
+            },
+            "description": "Restrict to a single job kind: `recurring`, `manual`, or `one_off`. By default one-off jobs are omitted (they are transient and short-lived); request `filter[kind]=one_off` to list them."
+          },
+          {
+            "name": "filter[scheduled]",
             "in": "query",
             "required": false,
             "schema": {
@@ -88,8 +106,10 @@
                   "type": "null"
                 }
               ],
-              "title": "Filter[Recurring]"
-            }
+              "description": "When `true`, list only jobs that have an upcoming fire in at least one environment (a recurring job's next occurrence, or a pending future one-off) \u2014 the feed for an upcoming-runs view; this includes one-off jobs. When `false`, list only jobs with no upcoming fire.",
+              "title": "Filter[Scheduled]"
+            },
+            "description": "When `true`, list only jobs that have an upcoming fire in at least one environment (a recurring job's next occurrence, or a pending future one-off) \u2014 the feed for an upcoming-runs view; this includes one-off jobs. When `false`, list only jobs with no upcoming fire."
           },
           {
             "name": "filter[name]",
@@ -222,7 +242,7 @@
           "Jobs"
         ],
         "summary": "Update Job",
-        "description": "Replace an existing job. Every writable field is overwritten.\n\nSet enablement per environment via the `environments` map (a recurring\njob), or by recreating a one-off job in the desired environment. Each\nenvironment may carry its own cron `schedule` override. Editing an\nenvironment's effective schedule recomputes its next fire time; an edit that\nleaves an environment's schedule unchanged preserves its existing cadence.",
+        "description": "Replace an existing job. Every writable field is overwritten.\n\nThe job's kind is re-derived from the new `schedule` (omit it for a manual\njob). Set enablement per environment via the `environments` map (a recurring\nor manual job), or by recreating a one-off job in the desired environment.\nEach environment may carry its own cron `schedule` override (recurring jobs\nonly). Editing a recurring environment's effective schedule recomputes its\nnext fire time; an edit that leaves it unchanged preserves the existing\ncadence.",
         "operationId": "update_job",
         "security": [
           {
@@ -317,7 +337,7 @@
           "Jobs"
         ],
         "summary": "Run Job Now",
-        "description": "Trigger one immediate run of the job (a `MANUAL` run).\n\nThe job's schedule and enabled state are untouched. The run executes in the\nenvironment named by the `X-Smplkit-Environment` header; when the job is\nenabled in exactly one environment that environment is used, and a\nsingle-environment credential implies it. The run executes the job's\neffective configuration for that environment. It is enqueued and executed\nby the worker; if the account is over its run allotment the run will fail\nwith reason `QUOTA_EXCEEDED` rather than being rejected here.",
+        "description": "Trigger one immediate run of the job in a specified environment (a\n`MANUAL` run).\n\nThis is the primary execution path for a manual job and is also usable ad\nhoc for a recurring job (\"run now\"). The job's schedule and enabled state are\nuntouched. The run executes in the environment named by the\n`X-Smplkit-Environment` header; when the job is enabled in exactly one\nenvironment that environment is used, and a single-environment credential\nimplies it. The environment must be one the job is **enabled** in (409\notherwise). The run executes the job's effective configuration for that\nenvironment. It is enqueued and executed by the worker; if the account is\nover its run allotment the run will fail with reason `QUOTA_EXCEEDED` rather\nthan being rejected here.",
         "operationId": "run_job_now",
         "security": [
           {
@@ -706,7 +726,7 @@
           "Usage"
         ],
         "summary": "Get Usage",
-        "description": "Report this account's current-period usage against its plan allotments.\n\n`runs_used` is the number of runs metered so far this calendar month;\n`active_jobs` is the number of recurring (scheduled) jobs, which is what the\nplan's job limit bounds.",
+        "description": "Report this account's current-period usage against its plan allotments.\n\n`runs_used` is the number of runs metered so far this calendar month;\n`active_jobs` is the number of permanent jobs (recurring + manual), which is\nwhat the plan's job limit bounds (one-off jobs do not count).",
         "operationId": "get_usage",
         "security": [
           {
@@ -796,9 +816,16 @@
             "default": "http"
           },
           "schedule": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Schedule",
-            "description": "The base schedule every environment inherits unless it overrides it. One of: an ISO-8601 datetime (a one-off run at that instant), a 5-field cron expression evaluated in **UTC** (recurring), or the literal `now` (run once, as soon as possible). A datetime or `now` job disables itself after it fires."
+            "description": "The base schedule every environment inherits unless it overrides it, and the field that determines the job's `kind`. Omit it (or send `null`) to create a permanent **manual** job that never auto-fires and runs only when triggered. Provide a 5-field cron expression evaluated in **UTC** for a **recurring** job, an ISO-8601 datetime for a **one-off** run at that instant, or the literal `now` for a one-off run as soon as possible. A datetime or `now` job disables itself after it fires."
           },
           "configuration": {
             "$ref": "#/components/schemas/JobHttpConfiguration",
@@ -810,7 +837,7 @@
             },
             "type": "object",
             "title": "Environments",
-            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job schedules runs in that environment), an optional `schedule` override (a cron expression for recurring jobs; omit to inherit the base `schedule`), and an optional `configuration` override (omit to inherit the base `configuration`); it also reports the read-only `next_run_at` for that environment. A job with no entry for an environment is disabled there. For a recurring job, supply this map to choose where and how it runs. For a one-off job, the environment it is created in is recorded here automatically \u2014 name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account."
+            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job is enabled \u2014 scheduled, for a recurring job, or triggerable, for a manual job \u2014 in that environment), an optional `schedule` override (a cron expression for recurring jobs; omit to inherit the base `schedule`), and an optional `configuration` override (omit to inherit the base `configuration`); it also reports the read-only `next_run_at` for that environment. A job with no entry for an environment is disabled there. For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically \u2014 name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account."
           },
           "concurrency_policy": {
             "type": "string",
@@ -819,17 +846,22 @@
             "description": "How overlapping runs are handled. `ALLOW` (the only value today) permits them.",
             "default": "ALLOW"
           },
-          "recurring": {
+          "kind": {
             "anyOf": [
               {
-                "type": "boolean"
+                "type": "string",
+                "enum": [
+                  "recurring",
+                  "manual",
+                  "one_off"
+                ]
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Recurring",
-            "description": "Whether the job runs on a repeating schedule. `true` for a cron schedule; `false` for a one-off datetime or `now` schedule, which runs a single time. Derived from the base `schedule`.",
+            "title": "Kind",
+            "description": "How the job runs, derived from its base `schedule`: `recurring` for a cron schedule (fires on a repeating cadence), `manual` for no schedule (never auto-fires; runs only when triggered), or `one_off` for a `now` or datetime schedule (runs a single time, then is spent).",
             "readOnly": true
           },
           "created_at": {
@@ -891,11 +923,10 @@
         "type": "object",
         "required": [
           "name",
-          "schedule",
           "configuration"
         ],
         "title": "Job",
-        "description": "A scheduled unit of work: an HTTP request run on a schedule.\n\nThe job is the definition; each time it fires the service records a run\ncapturing the request, response, timing, and outcome. A job runs per\nenvironment: set `environments[<env>].enabled` to schedule runs there, and\noptionally give that environment its own `schedule` or `configuration`. A\nrecurring (cron) job may be enabled in several environments at once and\nfires once per enabled environment, each on its own next-fire schedule; a\none-off (`now` or future datetime) job runs a single time in the environment\nit was created in."
+        "description": "A unit of work: an HTTP request, run on a schedule or triggered on demand.\n\nThe job is the definition; each time it fires the service records a run\ncapturing the request, response, timing, and outcome. A job runs per\nenvironment: set `environments[<env>].enabled` to enable it there, and\noptionally give that environment its own `schedule` or `configuration`.\n\nA job's `kind` follows from its `schedule`: a **recurring** (cron) job may\nbe enabled in several environments at once and fires once per enabled\nenvironment, each on its own next-fire schedule; a **manual** job (no\nschedule) is permanent and never auto-fires \u2014 it runs only when triggered;\na **one-off** (`now` or a future datetime) job runs a single time in the\nenvironment it was created in and is then spent."
       },
       "JobCreateRequest": {
         "properties": {
@@ -1001,7 +1032,7 @@
               }
             ],
             "title": "Schedule",
-            "description": "Per-environment schedule override. Omit to inherit the job's base `schedule`. When present, it must be a 5-field cron expression evaluated in **UTC** (e.g. `0 3 * * *`), and is only allowed on a recurring (cron) job \u2014 it varies the cadence within that environment, it cannot turn a one-off job recurring or vice-versa."
+            "description": "Per-environment schedule override. Omit to inherit the job's base `schedule`. When present, it must be a 5-field cron expression evaluated in **UTC** (e.g. `0 3 * * *`), and is only allowed on a recurring (cron) job \u2014 it varies the cadence within that environment. It cannot appear on a manual or one-off job, and cannot change a job's kind."
           },
           "configuration": {
             "anyOf": [
@@ -1674,12 +1705,12 @@
           "active_jobs": {
             "type": "integer",
             "title": "Active Jobs",
-            "description": "Number of recurring (scheduled) jobs."
+            "description": "Number of permanent jobs (recurring and manual) counted against the plan's job limit."
           },
           "active_jobs_limit": {
             "type": "integer",
             "title": "Active Jobs Limit",
-            "description": "Maximum recurring jobs the plan allows (`-1` means unlimited)."
+            "description": "Maximum permanent jobs the plan allows (`-1` means unlimited)."
           }
         },
         "type": "object",
