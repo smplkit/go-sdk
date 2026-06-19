@@ -1,23 +1,24 @@
 // Package smplkit — Smpl Jobs SDK client (client.Jobs() on SmplClient, or
 // standalone JobsClient).
 //
-// Smpl Jobs runs an HTTP call on a schedule — a 5-field cron expression, a
-// one-off datetime, or "now" — and records the history of each fire: the
-// request sent, the response received, timing, and outcome. It is reachable
-// two ways:
+// Smpl Jobs runs an HTTP call — on a schedule (a 5-field cron expression, a
+// one-off datetime, or "now") or on demand (a manual job with no schedule) —
+// and records the history of each fire: the request sent, the response
+// received, timing, and outcome. It is reachable two ways:
 //
 //	client.Jobs().* on SmplClient
 //	directly — NewJobsClient(...) — for callers that only need jobs.
 //
-// A Job is an active record: build it with JobsClient.New, set fields, and
-// call Save(ctx) (create when new, full-replace update when it already
-// exists) or Delete(ctx). Runs are read-only views; run actions live on
-// client.Jobs().Runs().
+// A Job is an active record: build it with JobsClient.NewRecurringJob,
+// NewManualJob, or Schedule, set fields, and call Save(ctx) (create when new,
+// full-replace update when it already exists) or Delete(ctx). Runs are
+// read-only views; run actions live on client.Jobs().Runs().
 package smplkit
 
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -34,9 +35,9 @@ import (
 //		fmt.Println(job.ID)
 //	}
 //
-// The surface is active-record job CRUD (New / Get / List / Delete), the
-// run-now action (Run), usage counters (Usage), and run history plus run
-// actions (Runs).
+// The surface is active-record job CRUD (NewRecurringJob / NewManualJob /
+// Schedule / Get / List / Delete), the run-now action (Run), usage counters
+// (Usage), and run history plus run actions (Runs).
 type JobsClient struct {
 	gen  *genjobs.ClientWithResponses
 	runs *RunsClient
@@ -94,25 +95,12 @@ type RunsClient struct {
 // Job active-record surface
 // ---------------------------------------------------------------------------
 
-// New returns an unsaved Job bound to this client. Call (*Job).Save(ctx)
-// to create it.
-//
-// id is the caller-supplied unique identifier for the job — unique within
-// the account and immutable; the service returns 409 if another live job
-// already uses this id. name is the human-readable name. schedule is when
-// the job runs: a 5-field cron expression evaluated in UTC (recurring), an
-// ISO-8601 datetime (a one-off run at that instant), or the literal "now"
-// (run once, as soon as possible) — a datetime or "now" job disables itself
-// after it fires. configuration is the HTTP request the job sends each time
-// it fires.
-//
-// Enablement is per environment, not a writable base flag: pass
-// WithJobEnvironments (or call SetEnabled after construction) to choose where
-// a recurring job runs. A one-off ("now" / datetime) job is born in a single
-// environment — WithJobBirthEnvironment, defaulting to the client's configured
-// environment. The remaining fields — description and concurrency policy — are
-// set via the WithJob* options.
-func (j *JobsClient) New(
+// newJob builds an unsaved Job with the shared defaults; the three public
+// constructors (NewRecurringJob / NewManualJob / Schedule) supply the
+// kind-specific schedule and forward the caller's options. birthEnvironment
+// defaults to the client's configured environment; WithJobBirthEnvironment
+// overrides it.
+func (j *JobsClient) newJob(
 	id string,
 	name string,
 	schedule string,
@@ -135,7 +123,79 @@ func (j *JobsClient) New(
 	return job
 }
 
-// JobOption configures an unsaved Job returned by JobsClient.New.
+// NewRecurringJob returns an unsaved recurring Job bound to this client. Call
+// (*Job).Save(ctx) to create it.
+//
+// id is the caller-supplied unique identifier for the job — unique within the
+// account and immutable; the service returns 409 if another live job already
+// uses this id. name is the human-readable name. schedule is the base cadence —
+// a 5-field cron expression evaluated in UTC (e.g. "0 2 * * *") — that every
+// environment inherits unless it sets its own override. configuration is the
+// HTTP request the job sends each time it fires.
+//
+// Enablement is per environment: pass WithJobEnvironments (or call SetEnabled
+// after construction) to choose where the job is scheduled. The remaining
+// fields — description and concurrency policy — are set via the WithJob*
+// options.
+func (j *JobsClient) NewRecurringJob(
+	id string,
+	name string,
+	schedule string,
+	configuration HttpConfig,
+	opts ...JobOption,
+) *Job {
+	return j.newJob(id, name, schedule, configuration, opts...)
+}
+
+// NewManualJob returns an unsaved manual Job bound to this client. Call
+// (*Job).Save(ctx) to create it.
+//
+// A manual job has no schedule — it never auto-fires and runs only when
+// triggered via Run / (*Job).Trigger.
+//
+// id is the caller-supplied unique identifier for the job — unique within the
+// account and immutable; the service returns 409 if another live job already
+// uses this id. name is the human-readable name. configuration is the HTTP
+// request the job sends each time it runs.
+//
+// Enablement is per environment: pass WithJobEnvironments (or call SetEnabled
+// after construction) to choose where the job is triggerable. The remaining
+// fields — description and concurrency policy — are set via the WithJob*
+// options.
+func (j *JobsClient) NewManualJob(
+	id string,
+	name string,
+	configuration HttpConfig,
+	opts ...JobOption,
+) *Job {
+	return j.newJob(id, name, "", configuration, opts...)
+}
+
+// Schedule returns an unsaved one-off Job bound to this client. Call
+// (*Job).Save(ctx) to create it.
+//
+// A one-off job runs a single time at schedule and is then spent.
+//
+// id is the caller-supplied unique identifier for the job — unique within the
+// account and immutable; the service returns 409 if another live job already
+// uses this id. name is the human-readable name. schedule is the instant the
+// single run fires. configuration is the HTTP request the job sends when it
+// runs.
+//
+// The job is born in a single environment — WithJobBirthEnvironment, defaulting
+// to the client's configured environment.
+func (j *JobsClient) Schedule(
+	id string,
+	name string,
+	schedule time.Time,
+	configuration HttpConfig,
+	opts ...JobOption,
+) *Job {
+	return j.newJob(id, name, schedule.Format(time.RFC3339), configuration, opts...)
+}
+
+// JobOption configures an unsaved Job returned by JobsClient.NewRecurringJob,
+// NewManualJob, or Schedule.
 type JobOption func(*Job)
 
 // WithJobEnvironments sets the per-environment override map that drives
@@ -150,8 +210,8 @@ func WithJobEnvironments(environments map[string]JobEnvironment) JobOption {
 
 // WithJobBirthEnvironment sets the single environment a one-off ("now" /
 // datetime) job is born in, sent as the X-Smplkit-Environment header on create.
-// Defaults to the client's configured environment. Ignored for a recurring job,
-// whose environments come from WithJobEnvironments / SetEnabled.
+// Defaults to the client's configured environment. Ignored for recurring and
+// manual jobs, whose environments come from WithJobEnvironments / SetEnabled.
 func WithJobBirthEnvironment(environment string) JobOption {
 	return func(job *Job) { job.birthEnvironment = environment }
 }
@@ -257,6 +317,17 @@ func anyEnvironmentEnabled(environments map[string]JobEnvironment) bool {
 	return false
 }
 
+// IsRecurring reports whether this is a recurring (cron-scheduled) job.
+func (job *Job) IsRecurring() bool { return job.Kind != nil && *job.Kind == JobKindRecurring }
+
+// IsManual reports whether this is a manual job — no schedule; runs only when
+// triggered.
+func (job *Job) IsManual() bool { return job.Kind != nil && *job.Kind == JobKindManual }
+
+// IsOneOff reports whether this is a one-off job — a single "now" / datetime
+// run.
+func (job *Job) IsOneOff() bool { return job.Kind != nil && *job.Kind == JobKindOneOff }
+
 // SetConfiguration sets this job's configuration in memory.
 //
 // With environment empty, replaces the base Configuration. With environment
@@ -349,7 +420,7 @@ func (job *Job) apply(other *Job) {
 	job.Description = other.Description
 	job.Enabled = other.Enabled
 	job.Environments = other.Environments
-	job.Recurring = other.Recurring
+	job.Kind = other.Kind
 	job.Type = other.Type
 	job.Schedule = other.Schedule
 	job.Configuration = other.Configuration
@@ -368,8 +439,12 @@ func (job *Job) apply(other *Job) {
 // via PageNumber / PageSize.
 func (j *JobsClient) List(ctx context.Context, input ListJobsInput) ([]*Job, error) {
 	params := &genjobs.ListJobsParams{}
-	if input.Recurring != nil {
-		params.FilterRecurring = input.Recurring
+	if input.Kind != nil {
+		kind := string(*input.Kind)
+		params.FilterKind = &kind
+	}
+	if input.Scheduled != nil {
+		params.FilterScheduled = input.Scheduled
 	}
 	if input.Name != nil {
 		params.FilterName = input.Name
@@ -424,7 +499,8 @@ func (j *JobsClient) Delete(ctx context.Context, id string) error {
 //
 // environment is the environment the manual run executes in; empty defaults to
 // the client's configured environment (and a single-environment credential
-// implies it). It is sent as the X-Smplkit-Environment header.
+// implies it). The job must be enabled in the chosen environment. It is sent as
+// the X-Smplkit-Environment header.
 func (j *JobsClient) Run(ctx context.Context, id string, environment string) (*Run, error) {
 	env := environment
 	if env == "" {
@@ -577,8 +653,8 @@ func (j *JobsClient) create(ctx context.Context, job *Job) (*Job, error) {
 	body := genjobs.CreateJobApplicationVndAPIPlusJSONRequestBody{
 		Data: jobCreateResourceFromJob(job),
 	}
-	// A one-off job is born in the environment named here (recurring jobs
-	// ignore it server-side; their environments come from the map).
+	// A one-off job is born in the environment named here (recurring and manual
+	// jobs ignore it server-side; their environments come from the map).
 	params := &genjobs.CreateJobParams{}
 	if job.birthEnvironment != "" {
 		env := job.birthEnvironment
@@ -607,7 +683,7 @@ func (j *JobsClient) update(ctx context.Context, job *Job) (*Job, error) {
 		Data: jobResourceFromJob(job.ID, job),
 	}
 	// Name the client's configured environment on update (ignored server-side
-	// for a recurring job, whose environments come from the map).
+	// for recurring and manual jobs, whose environments come from the map).
 	params := &genjobs.UpdateJobParams{}
 	if j.environment != "" {
 		env := j.environment
@@ -632,8 +708,14 @@ func (j *JobsClient) update(ctx context.Context, job *Job) (*Job, error) {
 func jobAttributes(job *Job) genjobs.Job {
 	attrs := genjobs.Job{
 		Name:          job.Name,
-		Schedule:      job.Schedule,
 		Configuration: httpConfigToWire(job.Configuration),
+	}
+	// Schedule is the field that determines the job's kind: a non-empty value
+	// is a cron expression (recurring) or a datetime / "now" (one-off); an empty
+	// Schedule is omitted, creating a manual job with no schedule.
+	if job.Schedule != "" {
+		schedule := job.Schedule
+		attrs.Schedule = &schedule
 	}
 	if len(job.Environments) > 0 {
 		envs := jobEnvironmentsToWire(job.Environments)
@@ -805,7 +887,6 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 		ID:            id,
 		Name:          a.Name,
 		Description:   a.Description,
-		Schedule:      a.Schedule,
 		Configuration: httpConfigFromWire(a.Configuration),
 		CreatedAt:     a.CreatedAt,
 		UpdatedAt:     a.UpdatedAt,
@@ -814,6 +895,11 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 		Type:          "http",
 		client:        client,
 	}
+	// Schedule is optional on the wire: a manual job carries none, leaving the
+	// wrapper Schedule empty.
+	if a.Schedule != nil {
+		out.Schedule = *a.Schedule
+	}
 	if a.Environments != nil {
 		out.Environments = jobEnvironmentsFromWire(*a.Environments)
 	}
@@ -821,8 +907,9 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 	// per-environment on the wire, so derive it locally as "enabled in at least
 	// one environment" rather than reading a top-level field.
 	out.Enabled = anyEnvironmentEnabled(out.Environments)
-	if a.Recurring != nil {
-		out.Recurring = a.Recurring
+	if a.Kind != nil {
+		kind := JobKind(*a.Kind)
+		out.Kind = &kind
 	}
 	if a.Type != nil {
 		out.Type = string(*a.Type)

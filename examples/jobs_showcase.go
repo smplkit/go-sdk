@@ -17,12 +17,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	smplkit "github.com/smplkit/go-sdk/v3"
 )
 
 const (
 	recurringJobID = "showcase-recurring"
+	manualJobID    = "showcase-manual"
 	oneoffJobID    = "showcase-oneoff"
 )
 
@@ -37,15 +39,19 @@ func main() {
 	setupJobsShowcase(ctx, jobs)
 	defer cleanupJobsShowcase(ctx, jobs)
 
-	// create a recurring job, enabled in production with a development override
+	// create a recurring job: a base schedule and configuration every
+	// environment inherits, with per-environment overrides
 	body := `{"scope": "all"}`
-	job := jobs.New(recurringJobID, "Nightly cache warm", "0 2 * * *", smplkit.HttpConfig{
+	job := jobs.NewRecurringJob(recurringJobID, "Nightly cache warm", "0 2 * * *", smplkit.HttpConfig{
 		Method:  smplkit.JobHttpMethodPost,
 		URL:     "https://httpbin.org/post",
 		Headers: []smplkit.HttpHeader{{Name: "Authorization", Value: "Bearer s3cr3t"}},
 		Body:    &body,
 		Timeout: 30,
 	}, smplkit.WithJobDescription("Warms the product cache every night at 02:00 UTC."))
+	job.SetEnabled(true, "production")
+	job.SetEnabled(true, "development")
+	job.SetSchedule("0 */6 * * *", "development")
 	devBody := `{"scope": "all"}`
 	job.SetConfiguration(smplkit.HttpConfig{
 		Method:  smplkit.JobHttpMethodPost,
@@ -53,51 +59,43 @@ func main() {
 		Headers: []smplkit.HttpHeader{{Name: "Authorization", Value: "Bearer development-s3cr3t"}},
 		Body:    &devBody,
 	}, "development")
-	job.SetEnabled(false, "development")
-	job.SetEnabled(true, "production")
 	fatalIfErr("save recurring job", job.Save(ctx))
-	if job.Version == nil || *job.Version != 1 {
-		fatalIfErr("assertion", fmt.Errorf("expected version 1, got %v", job.Version))
-	}
-	if job.IsEnabled("development") {
-		fatalIfErr("assertion", fmt.Errorf("expected development disabled"))
+	if !job.IsRecurring() {
+		fatalIfErr("assertion", fmt.Errorf("expected recurring job"))
 	}
 	if !job.IsEnabled("production") {
 		fatalIfErr("assertion", fmt.Errorf("expected production enabled"))
+	}
+	if job.GetConfiguration("development").URL != "https://development.example.com/cache/warm" {
+		fatalIfErr("assertion", fmt.Errorf("dev config url mismatch: %s", job.GetConfiguration("development").URL))
 	}
 	fmt.Printf("Created recurring job %q (v%d)\n", job.ID, *job.Version)
 
 	// get a job
 	fetched, err := jobs.Get(ctx, recurringJobID)
 	fatalIfErr("get recurring job", err)
-	if fetched.IsEnabled("development") {
-		fatalIfErr("assertion", fmt.Errorf("expected development disabled on fetch"))
-	}
-	if !fetched.IsEnabled("production") {
-		fatalIfErr("assertion", fmt.Errorf("expected production enabled on fetch"))
-	}
-	if fetched.GetConfiguration("development").URL != "https://development.example.com/cache/warm" {
-		fatalIfErr("assertion", fmt.Errorf("dev config url mismatch: %s", fetched.GetConfiguration("development").URL))
+	if fetched.Environments["development"].Schedule != "0 */6 * * *" {
+		fatalIfErr("assertion", fmt.Errorf("dev schedule mismatch: %s", fetched.Environments["development"].Schedule))
 	}
 	fmt.Printf("Fetched job %q\n", recurringJobID)
 
-	// list jobs
-	listing, err := jobs.List(ctx, smplkit.ListJobsInput{})
+	// list jobs, filtered to recurring jobs
+	recurringKind := smplkit.JobKindRecurring
+	listing, err := jobs.List(ctx, smplkit.ListJobsInput{Kind: &recurringKind})
 	fatalIfErr("list jobs", err)
 	if !containsJob(listing, recurringJobID) {
 		fatalIfErr("assertion", fmt.Errorf("job %s not found in listing", recurringJobID))
 	}
 	fmt.Printf("Found job %q in the listing\n", recurringJobID)
 
-	// update a job (the schedule is environment-agnostic)
+	// update a job
 	job.Name = "Nightly cache warm (v2)"
-	job.SetSchedule("30 2 * * *")
-	job.SetEnabled(true, "development")
+	job.SetSchedule("30 2 * * *", "production")
 	fatalIfErr("update recurring job", job.Save(ctx))
-	if job.Version == nil || *job.Version != 2 || !job.IsEnabled("development") {
-		fatalIfErr("assertion", fmt.Errorf("expected v2 and development enabled, got v=%v", job.Version))
+	if job.Version == nil || *job.Version != 2 {
+		fatalIfErr("assertion", fmt.Errorf("expected version 2, got %v", job.Version))
 	}
-	fmt.Printf("Updated job to v%d: now enabled in production and development\n", *job.Version)
+	fmt.Printf("Updated job to v%d\n", *job.Version)
 
 	// trigger an immediate run
 	run, err := job.Trigger(ctx, "production")
@@ -144,16 +142,40 @@ func main() {
 		fmt.Printf("Canceled run %s -> %s\n", canceled.ID, canceled.Status)
 	}
 
-	// create a one-off job, born in a single environment
-	oneoff := jobs.New(oneoffJobID, "One-shot reindex", "now", smplkit.HttpConfig{
+	// create a manual job (no schedule, runs only when triggered)
+	manual := jobs.NewManualJob(manualJobID, "On-demand reindex", smplkit.HttpConfig{
+		Method: smplkit.JobHttpMethodPost,
+		URL:    "https://httpbin.org/post",
+	})
+	manual.SetEnabled(true, "production")
+	fatalIfErr("save manual job", manual.Save(ctx))
+	if !manual.IsManual() {
+		fatalIfErr("assertion", fmt.Errorf("expected manual job"))
+	}
+	manualRun, err := manual.Trigger(ctx, "production")
+	fatalIfErr("trigger manual run", err)
+	if manualRun.Trigger != string(smplkit.RunTriggerManual) {
+		fatalIfErr("assertion", fmt.Errorf("expected MANUAL trigger, got %s", manualRun.Trigger))
+	}
+	fmt.Printf("Created manual job %q and triggered it on demand\n", manual.ID)
+
+	// schedule a one-off job to run tomorrow
+	tomorrow := time.Now().Add(24 * time.Hour)
+	oneoff := jobs.Schedule(oneoffJobID, "One-shot reindex", tomorrow, smplkit.HttpConfig{
 		Method: smplkit.JobHttpMethodPost,
 		URL:    "https://httpbin.org/post",
 	}, smplkit.WithJobBirthEnvironment("development"))
 	fatalIfErr("save one-off job", oneoff.Save(ctx))
-	if oneoff.Version == nil || *oneoff.Version != 1 || !oneoff.IsEnabled("development") {
-		fatalIfErr("assertion", fmt.Errorf("expected v1 and development enabled, got v=%v", oneoff.Version))
+	if !oneoff.IsOneOff() {
+		fatalIfErr("assertion", fmt.Errorf("expected one-off job"))
 	}
-	fmt.Printf("Created one-off job %q born in development\n", oneoff.ID)
+	if !oneoff.IsEnabled("development") {
+		fatalIfErr("assertion", fmt.Errorf("expected development enabled"))
+	}
+	if oneoff.Environments["development"].NextRunAt == nil {
+		fatalIfErr("assertion", fmt.Errorf("expected next_run_at to be set"))
+	}
+	fmt.Printf("Created one-off job %q to run in development\n", oneoff.ID)
 
 	// delete a job
 	fatalIfErr("delete recurring job", job.Delete(ctx))

@@ -116,7 +116,7 @@ func jobResource(id string, created bool, version int, devEnabled, prodEnabled b
 	attrs := map[string]any{
 		"name":          "My Job",
 		"description":   "does a thing",
-		"recurring":     true,
+		"kind":          "recurring",
 		"type":          "http",
 		"schedule":      "0 * * * *",
 		"configuration": httpCfgWire("https://api.example.com/hook"),
@@ -321,7 +321,7 @@ func TestJobs_Lifecycle(t *testing.T) {
 	// create a recurring job, enabled in production with a development override
 	body := `{"scope": "all"}`
 	devBody := `{"scope": "all"}`
-	job := j.New(testJobID, "Nightly cache warm", "0 2 * * *", HttpConfig{
+	job := j.NewRecurringJob(testJobID, "Nightly cache warm", "0 2 * * *", HttpConfig{
 		Method:  JobHttpMethodPost,
 		URL:     "https://api.example.com/cache/warm",
 		Headers: []HttpHeader{{Name: "Authorization", Value: "Bearer s3cr3t"}},
@@ -349,8 +349,8 @@ func TestJobs_Lifecycle(t *testing.T) {
 	if job.IsEnabled("development") || !job.IsEnabled("production") {
 		t.Errorf("post-create enablement mismatch: dev=%t prod=%t", job.IsEnabled("development"), job.IsEnabled("production"))
 	}
-	if job.Recurring == nil || !*job.Recurring {
-		t.Errorf("expected recurring=true, got %v", job.Recurring)
+	if !job.IsRecurring() {
+		t.Errorf("expected recurring job, got kind=%v", job.Kind)
 	}
 
 	// get a job
@@ -369,9 +369,9 @@ func TestJobs_Lifecycle(t *testing.T) {
 		t.Errorf("prod config should fall back to base, got %s", fetched.GetConfiguration("production").URL)
 	}
 
-	// list jobs
-	recurring := true
-	jobs, err := j.List(ctx, ListJobsInput{Recurring: &recurring, PageNumber: 1, PageSize: 10})
+	// list jobs, filtered to recurring jobs
+	kind := JobKindRecurring
+	jobs, err := j.List(ctx, ListJobsInput{Kind: &kind, PageNumber: 1, PageSize: 10})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -464,7 +464,7 @@ func TestJobs_Lifecycle(t *testing.T) {
 func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 	j, cleanup := newTestJobs(t, fullHandler)
 	defer cleanup()
-	job := j.New("id", "n", "0 * * * *", HttpConfig{URL: "https://base"})
+	job := j.NewRecurringJob("id", "n", "0 * * * *", HttpConfig{URL: "https://base"})
 
 	// IsEnabled on a fresh job: rollup false, unknown env false.
 	if job.IsEnabled("") || job.IsEnabled("production") {
@@ -559,7 +559,7 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 
 	tlsVerify := false
 	caCert := "-----BEGIN CERTIFICATE-----\nPEM\n-----END CERTIFICATE-----"
-	job := j.New(testJobID, "n", "0 * * * *", HttpConfig{
+	job := j.NewRecurringJob(testJobID, "n", "0 * * * *", HttpConfig{
 		URL:           "https://base",
 		SuccessStatus: "2xx",
 		TlsVerify:     &tlsVerify,
@@ -625,7 +625,7 @@ func TestJobs_CreateNoEnvironments(t *testing.T) {
 	})
 	defer cleanup()
 
-	job := j.New(testJobID, "n", "now", HttpConfig{URL: "https://base"})
+	job := j.NewManualJob(testJobID, "n", HttpConfig{URL: "https://base"})
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -636,7 +636,8 @@ func TestJobs_CreateNoEnvironments(t *testing.T) {
 	}
 }
 
-// New defaults the birth environment to the client's configured environment.
+// Schedule defaults the birth environment to the client's configured
+// environment.
 func TestJobs_NewDefaultBirthEnvironment(t *testing.T) {
 	ctx := context.Background()
 	var rec capturedReq
@@ -645,7 +646,7 @@ func TestJobs_NewDefaultBirthEnvironment(t *testing.T) {
 	})
 	defer cleanup()
 
-	job := j.New(testJobID, "n", "now", HttpConfig{URL: "https://base"})
+	job := j.Schedule(testJobID, "n", nowForTest, HttpConfig{URL: "https://base"})
 	if job.birthEnvironment != "production" {
 		t.Errorf("birthEnvironment should default to client env, got %q", job.birthEnvironment)
 	}
@@ -674,7 +675,7 @@ func TestJobs_UpdateHeader(t *testing.T) {
 				writeJSON(w, 200, map[string]any{"data": jobResource(testJobID, true, 2, true, true)})
 			})
 			defer cleanup()
-			job := j.New(testJobID, "n", "0 * * * *", HttpConfig{URL: "https://base"})
+			job := j.NewRecurringJob(testJobID, "n", "0 * * * *", HttpConfig{URL: "https://base"})
 			job.CreatedAt = &nowForTest // force the update (PUT) branch
 			if err := job.Save(ctx); err != nil {
 				t.Fatalf("Save (update): %v", err)
@@ -685,7 +686,7 @@ func TestJobs_UpdateHeader(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Parse-from-wire: environments (with and without an override), recurring
+// Parse-from-wire: environments (with and without an override), kind
 // ---------------------------------------------------------------------------
 
 func TestJobs_ParseEnvironments(t *testing.T) {
@@ -693,7 +694,7 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"data": map[string]any{
 			"id": testJobID, "type": "job",
 			"attributes": map[string]any{
-				"name": "n", "schedule": "0 * * * *", "recurring": true,
+				"name": "n", "schedule": "0 * * * *", "kind": "recurring",
 				"configuration": map[string]any{"url": "https://base"},
 				"environments": map[string]any{
 					"development": map[string]any{
@@ -717,8 +718,8 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 	if !job.Enabled || !job.IsEnabled("") {
 		t.Error("rollup enabled should be true (derived from environments)")
 	}
-	if job.Recurring == nil || !*job.Recurring {
-		t.Errorf("recurring should be true, got %v", job.Recurring)
+	if !job.IsRecurring() {
+		t.Errorf("kind should be recurring, got %v", job.Kind)
 	}
 	dev, ok := job.Environments["development"]
 	if !ok || !dev.Enabled || dev.Configuration == nil || dev.Configuration.URL != "https://dev" {
@@ -819,7 +820,7 @@ func TestJob_ListRunsScoping(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"data": []any{}, "meta": map[string]any{"page_size": 50}})
 	})
 	defer cleanup()
-	job := j.New(testJobID, "n", "0 * * * *", HttpConfig{URL: "https://base"})
+	job := j.NewRecurringJob(testJobID, "n", "0 * * * *", HttpConfig{URL: "https://base"})
 
 	if _, err := job.ListRuns(ctx, ListJobRunsInput{Environment: "production"}); err != nil {
 		t.Fatalf("ListRuns: %v", err)
@@ -855,15 +856,18 @@ func TestJobs_ListQueryParams(t *testing.T) {
 	})
 	defer cleanup()
 
-	// Jobs list: recurring / name filters + offset pagination. (The
-	// `filter[enabled]` param was removed from the API and the wrapper.)
-	recurring := false
+	// Jobs list: kind / scheduled / name filters + offset pagination. (The
+	// dropped `filter[recurring]` and `filter[enabled]` params are never
+	// emitted.)
+	kind := JobKindManual
+	scheduled := true
 	name := "health"
-	if _, err := j.List(ctx, ListJobsInput{Recurring: &recurring, Name: &name, PageNumber: 3, PageSize: 25}); err != nil {
+	if _, err := j.List(ctx, ListJobsInput{Kind: &kind, Scheduled: &scheduled, Name: &name, PageNumber: 3, PageSize: 25}); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	for key, want := range map[string]string{
-		"filter[recurring]": "false",
+		"filter[kind]":      "manual", // JobKind serialized to its value
+		"filter[scheduled]": "true",
 		"filter[name]":      "health",
 		"page[number]":      "3",
 		"page[size]":        "25",
@@ -872,16 +876,18 @@ func TestJobs_ListQueryParams(t *testing.T) {
 			t.Errorf("jobs list %s = %q, want %q", key, got, want)
 		}
 	}
-	// The removed enabled filter must never appear on the wire.
-	if _, ok := rec.query["filter[enabled]"]; ok {
-		t.Error("jobs list must not send the removed filter[enabled] param")
+	// The dropped recurring / enabled filters must never appear on the wire.
+	for _, key := range []string{"filter[recurring]", "filter[enabled]"} {
+		if _, ok := rec.query[key]; ok {
+			t.Errorf("jobs list must not send the dropped %s param", key)
+		}
 	}
 
 	// Zero values omit the optional params entirely.
 	if _, err := j.List(ctx, ListJobsInput{}); err != nil {
 		t.Fatalf("List (defaults): %v", err)
 	}
-	for _, key := range []string{"filter[recurring]", "filter[name]", "page[number]", "page[size]"} {
+	for _, key := range []string{"filter[kind]", "filter[scheduled]", "filter[name]", "page[number]", "page[size]"} {
 		if _, ok := rec.query[key]; ok {
 			t.Errorf("jobs list must omit %s at its zero value", key)
 		}
@@ -904,6 +910,106 @@ func TestJobs_ListQueryParams(t *testing.T) {
 	}
 	if _, ok := rec.query["page[after]"]; ok {
 		t.Error("runs list must omit page[after] when no cursor is given")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Kind predicates + manual / one-off constructors
+// ---------------------------------------------------------------------------
+
+// Kind predicates reflect the server-derived kind; a job with no kind leaves it
+// nil and every predicate false.
+func TestJob_KindPredicates(t *testing.T) {
+	get := func(kind string) *Job {
+		j, cleanup := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) {
+			attrs := map[string]any{"name": "n", "configuration": map[string]any{"url": "https://x"}}
+			if kind != "" {
+				attrs["kind"] = kind
+			}
+			writeJSON(w, 200, map[string]any{"data": map[string]any{"id": "id", "type": "job", "attributes": attrs}})
+		})
+		defer cleanup()
+		job, err := j.Get(context.Background(), "id")
+		if err != nil {
+			t.Fatalf("Get(%q): %v", kind, err)
+		}
+		return job
+	}
+
+	rec := get("recurring")
+	if rec.Kind == nil || *rec.Kind != JobKindRecurring || !rec.IsRecurring() || rec.IsManual() || rec.IsOneOff() {
+		t.Errorf("recurring predicates wrong: kind=%v", rec.Kind)
+	}
+	man := get("manual")
+	if !man.IsManual() || man.IsRecurring() || man.IsOneOff() {
+		t.Errorf("manual predicates wrong: kind=%v", man.Kind)
+	}
+	off := get("one_off")
+	if !off.IsOneOff() || off.IsRecurring() || off.IsManual() {
+		t.Errorf("one_off predicates wrong: kind=%v", off.Kind)
+	}
+	// a resource with no kind leaves it nil — every predicate is false.
+	none := get("")
+	if none.Kind != nil || none.IsRecurring() || none.IsManual() || none.IsOneOff() {
+		t.Errorf("no-kind predicates wrong: kind=%v", none.Kind)
+	}
+}
+
+// A manual job carries no schedule: NewManualJob leaves Schedule empty, the
+// create body omits schedule entirely, and the server echoes back kind="manual"
+// with no schedule.
+func TestJobs_ManualJobRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	var rec capturedReq
+	j, cleanup := recordingJobs(t, "", &rec, func(w http.ResponseWriter, _ *http.Request) {
+		attrs := map[string]any{
+			"name": "Manual", "kind": "manual", "type": "http",
+			"configuration":      map[string]any{"url": "https://x"},
+			"environments":       map[string]any{"production": map[string]any{"enabled": true}},
+			"concurrency_policy": "ALLOW", "version": 1,
+			"created_at": "2026-06-04T00:00:00Z", "updated_at": "2026-06-04T00:00:00Z",
+		}
+		writeJSON(w, 201, map[string]any{"data": map[string]any{"id": "manual-job", "type": "job", "attributes": attrs}})
+	})
+	defer cleanup()
+
+	job := j.NewManualJob("manual-job", "Manual", HttpConfig{URL: "https://x"})
+	if job.Schedule != "" {
+		t.Errorf("manual job should have no schedule, got %q", job.Schedule)
+	}
+	job.SetEnabled(true, "production")
+	if err := job.Save(ctx); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !job.IsManual() || job.Kind == nil || *job.Kind != JobKindManual || job.Schedule != "" {
+		t.Errorf("after save: expected manual job with no schedule, got kind=%v schedule=%q", job.Kind, job.Schedule)
+	}
+	// The create body omits schedule entirely (a manual job has none).
+	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
+	if _, ok := attrs["schedule"]; ok {
+		t.Errorf("manual create body must omit schedule, got %v", attrs["schedule"])
+	}
+}
+
+// Schedule serializes the one-off datetime to ISO-8601 on the wire and sends
+// the birth environment as the create header.
+func TestJobs_ScheduleOneOff(t *testing.T) {
+	ctx := context.Background()
+	var rec capturedReq
+	j, cleanup := recordingJobs(t, "", &rec, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 201, map[string]any{"data": jobResource(testJobID, true, 1, true, false)})
+	})
+	defer cleanup()
+
+	when := time.Date(2030, 1, 1, 12, 30, 0, 0, time.UTC)
+	job := j.Schedule("one-off", "One", when, HttpConfig{URL: "https://x"}, WithJobBirthEnvironment("staging"))
+	if err := job.Save(ctx); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	assertEnvHeader(t, &rec, "staging") // birth environment
+	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
+	if got := attrs["schedule"]; got != when.Format(time.RFC3339) {
+		t.Errorf("schedule on the wire = %v, want %q (datetime -> ISO-8601)", got, when.Format(time.RFC3339))
 	}
 }
 
@@ -941,7 +1047,7 @@ func TestJobs_NewDefaults(t *testing.T) {
 	j, cleanup := newTestJobs(t, fullHandler)
 	defer cleanup()
 	envs := map[string]JobEnvironment{"production": {Enabled: true}}
-	job := j.New("id", "n", "now", HttpConfig{URL: "https://x"},
+	job := j.NewManualJob("id", "n", HttpConfig{URL: "https://x"},
 		WithJobEnvironments(envs), WithJobConcurrencyPolicy("ALLOW"))
 	// Base roll-up defaults to false (no writable enabled flag); type/policy
 	// keep their defaults; description stays nil.
@@ -963,14 +1069,14 @@ func TestJobs_MinimalConfigWire(t *testing.T) {
 	// SuccessStatus, no Timeout, nil Body/TlsVerify/CaCert, empty Headers).
 	j, cleanup := newTestJobs(t, fullHandler)
 	defer cleanup()
-	job := j.New("id", "n", "now", HttpConfig{URL: "https://x"})
+	job := j.NewManualJob("id", "n", HttpConfig{URL: "https://x"})
 	if err := job.Save(context.Background()); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 }
 
 // jobFromResource: zero-value optional attributes (nil enabled/type/policy,
-// no id, no environments/recurring) must fall back to defaults.
+// no id, no environments/kind) must fall back to defaults.
 func TestJobs_FromResourceDefaults(t *testing.T) {
 	j, cleanup := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 200, map[string]any{"data": map[string]any{
@@ -986,8 +1092,8 @@ func TestJobs_FromResourceDefaults(t *testing.T) {
 	if job.ID != "" || job.Type != "http" || job.ConcurrencyPolicy != "ALLOW" || job.Enabled {
 		t.Errorf("unexpected defaults from minimal resource: %+v", job)
 	}
-	if job.Recurring != nil || job.Environments != nil {
-		t.Errorf("expected nil recurring/environments, got recurring=%v envs=%v", job.Recurring, job.Environments)
+	if job.Kind != nil || job.Environments != nil {
+		t.Errorf("expected nil kind/environments, got kind=%v envs=%v", job.Kind, job.Environments)
 	}
 	// httpConfigFromWire on a configuration with no optional fields: every
 	// optional must remain zero / nil.
@@ -1052,6 +1158,10 @@ func TestJobs_RunFailureReason(t *testing.T) {
 	if run.Environment != "development" {
 		t.Errorf("environment mismatch: %s", run.Environment)
 	}
+	// trigger is a raw string, equal to its RunTrigger constant value.
+	if run.Trigger != string(RunTriggerSchedule) {
+		t.Errorf("trigger should be RunTriggerSchedule, got %q", run.Trigger)
+	}
 	if run.FailureReason == nil || *run.FailureReason != "TIMEOUT" {
 		t.Errorf("failure reason mismatch: %v", run.FailureReason)
 	}
@@ -1104,7 +1214,7 @@ func TestJobs_ErrorMapping(t *testing.T) {
 	}
 
 	var conflict *ConflictError
-	job := j.New("dup", "D", "now", HttpConfig{URL: "https://x"})
+	job := j.NewManualJob("dup", "D", HttpConfig{URL: "https://x"})
 	if err := job.Save(ctx); !errors.As(err, &conflict) {
 		t.Errorf("expected ConflictError on create, got %v", err)
 	}
@@ -1146,12 +1256,12 @@ func TestJobs_Non2xxBranches(t *testing.T) {
 		t.Error("Runs.Rerun should error on 500")
 	}
 	// create branch (new job → POST) returning 500 → checkStatus error.
-	newJob := j.New(testJobID, "n", "now", HttpConfig{URL: "https://x"})
+	newJob := j.NewManualJob(testJobID, "n", HttpConfig{URL: "https://x"})
 	if err := newJob.Save(ctx); err == nil {
 		t.Error("Save (create) should error on 500")
 	}
 	// update branch (existing job → PUT).
-	job := j.New(testJobID, "n", "now", HttpConfig{URL: "https://x"})
+	job := j.NewManualJob(testJobID, "n", HttpConfig{URL: "https://x"})
 	job.CreatedAt = &nowForTest
 	if err := job.Save(ctx); err == nil {
 		t.Error("Save (update) should error on 500")
@@ -1166,7 +1276,7 @@ func TestJobs_CreateUnexpectedStatus(t *testing.T) {
 		w.WriteHeader(200) // not 201, and not an error code
 	})
 	defer cleanup()
-	job := j.New(testJobID, "n", "now", HttpConfig{URL: "https://x"})
+	job := j.NewManualJob(testJobID, "n", HttpConfig{URL: "https://x"})
 	if err := job.Save(ctx); err == nil {
 		t.Error("expected error when create returns non-201 2xx")
 	}
@@ -1183,7 +1293,7 @@ func TestJobs_CreateEmpty201Body(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	})
 	defer cleanup()
-	job := j.New(testJobID, "n", "now", HttpConfig{URL: "https://x"})
+	job := j.NewManualJob(testJobID, "n", HttpConfig{URL: "https://x"})
 	if err := job.Save(ctx); err == nil {
 		t.Error("expected error when create 201 body is empty")
 	}
@@ -1243,7 +1353,7 @@ func TestJobs_TransportErrors(t *testing.T) {
 		t.Error("Runs.Rerun should error on transport failure")
 	}
 	// create + update transport errors
-	job := j.New(testJobID, "n", "now", HttpConfig{URL: "https://x"})
+	job := j.NewManualJob(testJobID, "n", HttpConfig{URL: "https://x"})
 	if err := job.Save(ctx); err == nil {
 		t.Error("Save (create) should error on transport failure")
 	}
