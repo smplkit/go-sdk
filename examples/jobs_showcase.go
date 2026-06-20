@@ -26,6 +26,7 @@ const (
 	recurringJobID = "showcase-recurring"
 	manualJobID    = "showcase-manual"
 	oneoffJobID    = "showcase-oneoff"
+	retryPolicyID  = "showcase-retry"
 )
 
 func main() {
@@ -39,8 +40,22 @@ func main() {
 	setupJobsShowcase(ctx, jobs)
 	defer cleanupJobsShowcase(ctx, jobs)
 
-	// create a recurring job: a base schedule and configuration every
-	// environment inherits, with per-environment overrides
+	// create a retry policy
+	retryPolicy := jobs.RetryPolicies().New(retryPolicyID, "Retry on server errors", 5, smplkit.BackoffExponential, 2,
+		smplkit.WithRetryPolicyMaxDelaySeconds(60),
+		smplkit.WithRetryPolicyRetryOn(smplkit.RetryOn{
+			Statuses: []int{429, 503},
+			Reasons:  []smplkit.RetryReason{smplkit.RetryReasonTimeout},
+		}))
+	fatalIfErr("save retry policy", retryPolicy.Save(ctx))
+	policies, err := jobs.RetryPolicies().List(ctx, smplkit.ListRetryPoliciesInput{})
+	fatalIfErr("list retry policies", err)
+	if !containsRetryPolicy(policies, retryPolicyID) {
+		fatalIfErr("assertion", fmt.Errorf("retry policy %s not found in listing", retryPolicyID))
+	}
+	fmt.Printf("Created retry policy %q\n", retryPolicy.ID)
+
+	// create a recurring job
 	body := `{"scope": "all"}`
 	job := jobs.NewRecurringJob(recurringJobID, "Nightly cache warm", "0 2 * * *", smplkit.HttpConfig{
 		Method:  smplkit.JobHttpMethodPost,
@@ -48,10 +63,10 @@ func main() {
 		Headers: []smplkit.HttpHeader{{Name: "Authorization", Value: "Bearer s3cr3t"}},
 		Body:    &body,
 		Timeout: 30,
-	}, smplkit.WithJobDescription("Warms the product cache every night at 02:00 UTC."))
-	job.SetEnabled(true, "production")
+	}, smplkit.WithJobDescription("Warms the product cache nightly."))
 	job.SetEnabled(true, "development")
-	job.SetSchedule("0 */6 * * *", "development")
+	job.SetEnabled(true, "production")
+	job.SetSchedule("0 */6 * * *", "America/New_York", "development")
 	devBody := `{"scope": "all"}`
 	job.SetConfiguration(smplkit.HttpConfig{
 		Method:  smplkit.JobHttpMethodPost,
@@ -63,8 +78,14 @@ func main() {
 	if !job.IsRecurring() {
 		fatalIfErr("assertion", fmt.Errorf("expected recurring job"))
 	}
+	if !job.IsEnabled("development") {
+		fatalIfErr("assertion", fmt.Errorf("expected development enabled"))
+	}
 	if !job.IsEnabled("production") {
 		fatalIfErr("assertion", fmt.Errorf("expected production enabled"))
+	}
+	if job.Environments["development"].Timezone != "America/New_York" {
+		fatalIfErr("assertion", fmt.Errorf("dev timezone mismatch: %s", job.Environments["development"].Timezone))
 	}
 	if job.GetConfiguration("development").URL != "https://development.example.com/cache/warm" {
 		fatalIfErr("assertion", fmt.Errorf("dev config url mismatch: %s", job.GetConfiguration("development").URL))
@@ -90,7 +111,8 @@ func main() {
 
 	// update a job
 	job.Name = "Nightly cache warm (v2)"
-	job.SetSchedule("30 2 * * *", "production")
+	job.SetRetryPolicy(retryPolicy, "production")
+	job.SetSchedule("30 2 * * *", "America/Los_Angeles", "production")
 	fatalIfErr("update recurring job", job.Save(ctx))
 	if job.Version == nil || *job.Version != 2 {
 		fatalIfErr("assertion", fmt.Errorf("expected version 2, got %v", job.Version))
@@ -112,6 +134,11 @@ func main() {
 		fatalIfErr("assertion", fmt.Errorf("run %s not found in run history", run.ID))
 	}
 	fmt.Printf("Listed %d production run(s)\n", len(runs))
+
+	// get the last completed run in production
+	recent, err := job.ListRuns(ctx, smplkit.ListJobRunsInput{Environment: "production", LastRunOnly: true})
+	fatalIfErr("list last completed run", err)
+	fmt.Printf("Last completed production run(s): %d\n", len(recent))
 
 	// get a run
 	run, err = jobs.Runs().Get(ctx, run.ID)
@@ -184,7 +211,10 @@ func main() {
 	if containsJob(remaining, recurringJobID) {
 		fatalIfErr("assertion", fmt.Errorf("job %s still present after delete", recurringJobID))
 	}
-	fmt.Printf("Deleted job %q — jobs showcase complete.\n", recurringJobID)
+
+	// delete the retry policy
+	fatalIfErr("delete retry policy", retryPolicy.Delete(ctx))
+	fmt.Printf("Deleted job %q and retry policy — jobs showcase complete.\n", recurringJobID)
 }
 
 func containsJob(jobs []*smplkit.Job, id string) bool {
@@ -199,6 +229,15 @@ func containsJob(jobs []*smplkit.Job, id string) bool {
 func containsRun(runs []*smplkit.Run, id string) bool {
 	for _, r := range runs {
 		if r.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func containsRetryPolicy(policies []*smplkit.RetryPolicy, id string) bool {
+	for _, p := range policies {
+		if p.ID == id {
 			return true
 		}
 	}

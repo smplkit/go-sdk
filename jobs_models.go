@@ -36,6 +36,8 @@ const (
 //
 //   - RunTriggerManual: A Run / Trigger call started it on demand.
 //   - RunTriggerRerun: It repeats an earlier run.
+//   - RunTriggerRetry: An automatic retry of a failed run, per the job's retry
+//     policy.
 //   - RunTriggerSchedule: The job's schedule fired.
 type RunTrigger string
 
@@ -43,7 +45,37 @@ type RunTrigger string
 const (
 	RunTriggerManual   = RunTrigger("MANUAL")
 	RunTriggerRerun    = RunTrigger("RERUN")
+	RunTriggerRetry    = RunTrigger("RETRY")
 	RunTriggerSchedule = RunTrigger("SCHEDULE")
+)
+
+// Backoff is how the wait between retries grows (a retry policy's backoff
+// strategy).
+//
+//   - BackoffExponential: Double the wait each retry — DelaySeconds, then 2×,
+//     4×, … — capped at MaxDelaySeconds.
+//   - BackoffFixed: Wait a constant DelaySeconds before every retry.
+type Backoff string
+
+// Backoff values.
+const (
+	BackoffExponential = Backoff("exponential")
+	BackoffFixed       = Backoff("fixed")
+)
+
+// RetryReason is a failure category a retry policy can retry on.
+//
+//   - RetryReasonConnectionError: The endpoint could not be reached.
+//   - RetryReasonNonSuccessStatus: Any non-success response, regardless of
+//     Statuses.
+//   - RetryReasonTimeout: The run did not complete in time.
+type RetryReason string
+
+// RetryReason values.
+const (
+	RetryReasonConnectionError  = RetryReason("CONNECTION_ERROR")
+	RetryReasonNonSuccessStatus = RetryReason("NON_SUCCESS_STATUS")
+	RetryReasonTimeout          = RetryReason("TIMEOUT")
 )
 
 // HttpConfig is the HTTP request a job performs when it fires (the job's
@@ -107,6 +139,11 @@ type JobEnvironment struct {
 	// inherits the base schedule (it need not also override Schedule). Settable;
 	// sent on writes only when non-empty.
 	Timezone string
+	// RetryPolicy is an optional per-environment retry-policy override — the id
+	// of a RetryPolicy (or "Default"). Empty inherits the job's base
+	// RetryPolicy. When set, runs in this environment retry according to this
+	// policy instead of the base. Settable; sent on writes only when non-empty.
+	RetryPolicy string
 	// Configuration is an optional per-environment request configuration that
 	// fully replaces the job's base Configuration for this environment. Nil
 	// (the default) inherits the base configuration. As with the base
@@ -170,6 +207,11 @@ type Job struct {
 	// Only valid on a recurring (cron) job — empty for a manual or one-off job.
 	// Settable; sent on writes only when non-empty.
 	Timezone string
+	// RetryPolicy is the base retry policy for failed runs — the id of a
+	// RetryPolicy (or the built-in "Default", which never retries), overridable
+	// per environment via JobEnvironment.RetryPolicy. Empty (omitted on the
+	// wire) means Default. Settable; sent on writes only when non-empty.
+	RetryPolicy string
 	// Configuration is the HTTP request the job performs when it fires.
 	Configuration HttpConfig
 	// ConcurrencyPolicy is how overlapping runs are handled. "ALLOW" (the
@@ -217,6 +259,9 @@ type Run struct {
 	Trigger string
 	// RerunOf is the source run's id; set only when Trigger is "RERUN".
 	RerunOf *string
+	// Retry is the run's position in its retry chain; set (non-nil) only when
+	// Trigger is "RETRY", nil otherwise.
+	Retry *RunRetry
 	// ScheduledFor is the intended fire time for a scheduled run; nil for
 	// manual / rerun runs.
 	ScheduledFor *time.Time
@@ -250,6 +295,72 @@ type Run struct {
 	// runs is the backref to the runs client, so a returned Run can Rerun /
 	// Cancel itself. Nil on a Run constructed without a client.
 	runs *RunsClient
+}
+
+// RetryOn is which failures a retry policy retries.
+//
+// An empty RetryOn (both lists empty) retries nothing.
+type RetryOn struct {
+	// Statuses are response status codes to retry when a run fails because the
+	// response did not match the job's success status (e.g. []int{429, 503} for
+	// rate-limit and unavailable). Each is a 3-digit HTTP code.
+	Statuses []int
+	// Reasons are failure categories to retry — see RetryReason.
+	Reasons []RetryReason
+}
+
+// RunRetry is where a RETRY run sits in its retry chain (read-only).
+type RunRetry struct {
+	// Of is the id of the chain's original run — the first attempt that failed
+	// and started the chain.
+	Of string
+	// Attempt is which retry this run is — 1 for the first retry, 2 for the
+	// second, and so on.
+	Attempt int
+}
+
+// RetryPolicy is a named, reusable retry policy.
+//
+// A policy decides whether and how a failed run is retried. Reference it from a
+// job's RetryPolicy (and optionally override it per environment). A job that
+// references nothing uses the built-in "Default" policy, which never retries.
+// Retry policies are account-global — never environment-scoped.
+//
+// Active-record style: build one with RetryPoliciesClient.New, mutate fields,
+// and call Save(ctx) to persist (create when new, full-replace update when it
+// already exists), or Delete(ctx) to remove.
+type RetryPolicy struct {
+	// ID is the caller-supplied unique identifier for the policy. Unique within
+	// the account and immutable; the service returns 409 if another live policy
+	// already uses this id.
+	ID string
+	// Name is the human-readable name for the policy.
+	Name string
+	// MaxRetries is how many times a failed run is retried after the initial
+	// attempt — 3 means up to 4 attempts total. 0 disables retries. Maximum 10.
+	MaxRetries int
+	// Backoff is how the wait between retries grows (see Backoff).
+	Backoff Backoff
+	// DelaySeconds is the wait before a retry, in seconds — the constant wait
+	// for fixed backoff, or the base that doubles each retry for exponential.
+	DelaySeconds int
+	// MaxDelaySeconds is the ceiling on the wait between retries, for
+	// exponential backoff only. Nil (the default) leaves it uncapped; omit it
+	// for fixed backoff. Sent on writes only when non-nil.
+	MaxDelaySeconds *int
+	// RetryOn is which failures to retry (see RetryOn). The zero value retries
+	// nothing.
+	RetryOn RetryOn
+	// CreatedAt is when the policy was created. Nil for an unsaved RetryPolicy.
+	CreatedAt *time.Time
+	// UpdatedAt is when the policy was last modified.
+	UpdatedAt *time.Time
+	// DeletedAt is when the policy was deleted. Nil for live policies.
+	DeletedAt *time.Time
+	// Version is a monotonic counter incremented on every update, starting at 1.
+	Version *int
+
+	client *RetryPoliciesClient
 }
 
 // Usage is the current-period usage against the account's plan
@@ -299,6 +410,16 @@ type ListRunsInput struct {
 	// Empty falls back to the client's configured environment (if any),
 	// otherwise covers every environment you can access.
 	Environments []string
+	// Triggers restricts the listing to runs started by any of these triggers
+	// (see RunTrigger) — e.g. []RunTrigger{RunTriggerRetry} for automatic
+	// retries. Sent as a comma-separated filter[trigger]. Empty covers every
+	// trigger.
+	Triggers []RunTrigger
+	// LastRunOnly, when true, collapses the result to the last completed
+	// (succeeded / failed / canceled) run per job-and-environment; in-flight
+	// runs are excluded. The other filters apply first, then the collapse. The
+	// query param is sent only when true.
+	LastRunOnly bool
 	// PageSize is runs per page. Zero defers to the server default.
 	PageSize int
 	// After is the opaque cursor returned by the previous call. Empty
@@ -313,9 +434,29 @@ type ListJobRunsInput struct {
 	// Empty covers every environment you can access (subject to the client's
 	// configured environment default).
 	Environment string
+	// Triggers restricts the listing to runs started by any of these triggers
+	// (see RunTrigger) — e.g. []RunTrigger{RunTriggerRetry} for automatic
+	// retries. Empty covers every trigger.
+	Triggers []RunTrigger
+	// LastRunOnly, when true, returns only the last completed run per
+	// environment (in-flight runs excluded). Defaults to false.
+	LastRunOnly bool
 	// PageSize is runs per page. Zero defers to the server default.
 	PageSize int
 	// After is the opaque cursor returned by the previous call. Empty
 	// fetches the first page.
 	After string
+}
+
+// ListRetryPoliciesInput passes filters and pagination to
+// RetryPoliciesClient.List.
+type ListRetryPoliciesInput struct {
+	// Name filters to policies whose name contains this text (case-insensitive).
+	// Nil returns all.
+	Name *string
+	// PageNumber is the 1-based page index. Zero defers to the server default
+	// (page 1).
+	PageNumber int
+	// PageSize is items per page. Zero defers to the server default.
+	PageSize int
 }

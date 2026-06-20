@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	testJobID = "showcase-mgmt-abcd1234"
-	testRunID = "8f2b1c4a-0000-4a1b-9c3d-1e2f3a4b5c6d"
+	testJobID         = "showcase-mgmt-abcd1234"
+	testRunID         = "8f2b1c4a-0000-4a1b-9c3d-1e2f3a4b5c6d"
+	testRetryPolicyID = "showcase-retry"
 )
 
 var nowForTest = time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC)
@@ -253,6 +254,9 @@ func TestSmplClient_JobsAccessor(t *testing.T) {
 	if c.Jobs().Runs() == nil {
 		t.Fatal("Jobs().Runs() returned nil")
 	}
+	if c.Jobs().RetryPolicies() == nil {
+		t.Fatal("Jobs().RetryPolicies() returned nil")
+	}
 	// The configured environment threads onto the jobs + runs sub-clients.
 	if c.Jobs().environment != "dev" || c.Jobs().Runs().environment != "dev" {
 		t.Errorf("environment not threaded: jobs=%q runs=%q", c.Jobs().environment, c.Jobs().Runs().environment)
@@ -381,7 +385,7 @@ func TestJobs_Lifecycle(t *testing.T) {
 
 	// update a job (the schedule is environment-agnostic)
 	job.Name = "renamed"
-	job.SetSchedule("30 2 * * *")
+	job.SetSchedule("30 2 * * *", "")
 	job.SetEnabled(true, "development")
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save (update): %v", err)
@@ -512,21 +516,29 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 		t.Errorf("base configuration not replaced: %s", job.GetConfiguration("").URL)
 	}
 
-	// SetSchedule with no environment (and with an explicit empty environment)
-	// sets the base schedule.
-	job.SetSchedule("*/5 * * * *")
+	// SetSchedule with an empty timezone and no environment sets the base
+	// schedule and leaves the timezone untouched.
+	job.SetSchedule("*/5 * * * *", "")
 	if job.Schedule != "*/5 * * * *" {
 		t.Errorf("base schedule not set: %s", job.Schedule)
 	}
-	job.SetSchedule("*/10 * * * *", "")
+	if job.Timezone != "" {
+		t.Errorf("empty timezone must leave the base timezone untouched, got %q", job.Timezone)
+	}
+	// SetSchedule with a non-empty timezone and no environment also sets the base
+	// timezone (equivalent to a follow-up SetTimezone).
+	job.SetSchedule("*/10 * * * *", "America/Denver")
 	if job.Schedule != "*/10 * * * *" {
-		t.Errorf("base schedule (explicit empty env) not set: %s", job.Schedule)
+		t.Errorf("base schedule not set: %s", job.Schedule)
+	}
+	if job.Timezone != "America/Denver" {
+		t.Errorf("base timezone should be set alongside the schedule, got %q", job.Timezone)
 	}
 
 	// SetSchedule with an environment sets a per-environment cron override,
 	// preserving the already-set Enabled on that environment's entry, and does
 	// not touch the base schedule.
-	job.SetSchedule("0 4 * * *", "production")
+	job.SetSchedule("0 4 * * *", "", "production")
 	prod := job.Environments["production"]
 	if prod.Schedule != "0 4 * * *" {
 		t.Errorf("production per-env schedule not set: %q", prod.Schedule)
@@ -538,8 +550,16 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 		t.Errorf("per-env SetSchedule must not change the base schedule: %q", job.Schedule)
 	}
 
+	// SetSchedule with a timezone and an environment sets both on that
+	// environment's override.
+	job.SetSchedule("0 6 * * *", "Europe/Paris", "production")
+	prodTzSched := job.Environments["production"]
+	if prodTzSched.Schedule != "0 6 * * *" || prodTzSched.Timezone != "Europe/Paris" {
+		t.Errorf("per-env SetSchedule with timezone mismatch: %+v", prodTzSched)
+	}
+
 	// SetSchedule on a brand-new environment creates the override entry.
-	job.SetSchedule("0 5 * * *", "qa")
+	job.SetSchedule("0 5 * * *", "", "qa")
 	if qa := job.Environments["qa"]; qa.Schedule != "0 5 * * *" || qa.Enabled {
 		t.Errorf("qa per-env schedule override mismatch: %+v", qa)
 	}
@@ -562,7 +582,7 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 	if prodTz.Timezone != "Europe/London" {
 		t.Errorf("production per-env timezone not set: %q", prodTz.Timezone)
 	}
-	if prodTz.Schedule != "0 4 * * *" {
+	if prodTz.Schedule != "0 6 * * *" {
 		t.Error("SetTimezone must preserve Schedule on the existing production override")
 	}
 	if job.Timezone != "America/Chicago" {
@@ -598,7 +618,7 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	}, WithJobBirthEnvironment("development"))
 	job.SetConfiguration(HttpConfig{URL: "https://dev"}, "development")
 	job.SetEnabled(false, "development")
-	job.SetSchedule("0 3 * * *", "development")
+	job.SetSchedule("0 3 * * *", "", "development")
 	job.SetTimezone("America/New_York")             // base timezone
 	job.SetTimezone("Europe/London", "development") // per-env override
 	job.SetEnabled(true, "production")
@@ -1413,5 +1433,621 @@ func TestJobs_TransportErrors(t *testing.T) {
 	job.CreatedAt = &nowForTest
 	if err := job.Save(ctx); err == nil {
 		t.Error("Save (update) should error on transport failure")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Retry policies
+// ---------------------------------------------------------------------------
+
+// retryPolicyResource builds a retry-policy JSON:API resource that exercises the
+// full attribute set: exponential backoff with a max-delay cap and a populated
+// retry_on (both statuses and reasons).
+func retryPolicyResource(id string, created bool, version int) map[string]any {
+	attrs := map[string]any{
+		"name":              "Retry on server errors",
+		"max_retries":       5,
+		"backoff":           "exponential",
+		"delay_seconds":     2,
+		"max_delay_seconds": 60,
+		"retry_on": map[string]any{
+			"statuses": []any{429, 503},
+			"reasons":  []any{"TIMEOUT"},
+		},
+		"deleted_at": nil,
+		"version":    version,
+	}
+	if created {
+		attrs["created_at"] = "2026-06-04T00:00:00Z"
+		attrs["updated_at"] = "2026-06-04T00:00:00Z"
+	}
+	return map[string]any{"id": id, "type": "retry_policy", "attributes": attrs}
+}
+
+// retryFullHandler routes every retry-policy endpoint to a canned response.
+func retryFullHandler(w http.ResponseWriter, r *http.Request) {
+	m, path := r.Method, r.URL.Path
+	switch {
+	case path == "/api/v1/retry-policies" && m == "POST":
+		writeJSON(w, 201, map[string]any{"data": retryPolicyResource(testRetryPolicyID, true, 1)})
+	case path == "/api/v1/retry-policies" && m == "GET":
+		writeJSON(w, 200, map[string]any{
+			"data": []any{retryPolicyResource(testRetryPolicyID, true, 1)},
+			"meta": map[string]any{"pagination": map[string]any{"page": 1, "size": 1000}},
+		})
+	case path == "/api/v1/retry-policies/"+testRetryPolicyID && m == "GET":
+		writeJSON(w, 200, map[string]any{"data": retryPolicyResource(testRetryPolicyID, true, 1)})
+	case path == "/api/v1/retry-policies/"+testRetryPolicyID && m == "PUT":
+		writeJSON(w, 200, map[string]any{"data": retryPolicyResource(testRetryPolicyID, true, 2)})
+	case path == "/api/v1/retry-policies/"+testRetryPolicyID && m == "DELETE":
+		w.WriteHeader(204)
+	default:
+		http.Error(w, "unexpected "+m+" "+path, http.StatusInternalServerError)
+	}
+}
+
+// Full retry-policy lifecycle: create (New + Save), parse the populated fields,
+// list, get, full-replace update, then delete both ways.
+func TestRetryPolicies_Lifecycle(t *testing.T) {
+	ctx := context.Background()
+	j, cleanup := newTestJobs(t, retryFullHandler)
+	defer cleanup()
+	rp := j.RetryPolicies()
+
+	policy := rp.New(testRetryPolicyID, "Retry on server errors", 5, BackoffExponential, 2,
+		WithRetryPolicyMaxDelaySeconds(60),
+		WithRetryPolicyRetryOn(RetryOn{Statuses: []int{429, 503}, Reasons: []RetryReason{RetryReasonTimeout}}))
+	if policy.CreatedAt != nil {
+		t.Fatal("unsaved policy should have nil CreatedAt")
+	}
+	if err := policy.Save(ctx); err != nil {
+		t.Fatalf("Save (create): %v", err)
+	}
+	if policy.CreatedAt == nil || policy.Version == nil || *policy.Version != 1 {
+		t.Fatalf("after create: version=%v createdAt=%v", policy.Version, policy.CreatedAt)
+	}
+	if policy.Backoff != BackoffExponential || policy.MaxDelaySeconds == nil || *policy.MaxDelaySeconds != 60 {
+		t.Errorf("policy fields mismatch: %+v", policy)
+	}
+	if len(policy.RetryOn.Statuses) != 2 || len(policy.RetryOn.Reasons) != 1 || policy.RetryOn.Reasons[0] != RetryReasonTimeout {
+		t.Errorf("retry_on parse mismatch: %+v", policy.RetryOn)
+	}
+
+	listed, err := rp.List(ctx, ListRetryPoliciesInput{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	found := false
+	for _, p := range listed {
+		if p.ID == testRetryPolicyID {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("created policy not present in the listing")
+	}
+
+	got, err := rp.Get(ctx, testRetryPolicyID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ID != testRetryPolicyID {
+		t.Errorf("get id mismatch: %s", got.ID)
+	}
+
+	// full-replace update bumps the version
+	policy.Name = "Retry (v2)"
+	if err := policy.Save(ctx); err != nil {
+		t.Fatalf("Save (update): %v", err)
+	}
+	if policy.Version == nil || *policy.Version != 2 {
+		t.Fatalf("after update: version=%v", policy.Version)
+	}
+
+	// delete via the instance, then via the client
+	if err := policy.Delete(ctx); err != nil {
+		t.Fatalf("policy.Delete: %v", err)
+	}
+	if err := rp.Delete(ctx, testRetryPolicyID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+}
+
+// New without options leaves the max delay unset and the retry-on empty (retries
+// nothing).
+func TestRetryPolicies_NewDefaults(t *testing.T) {
+	j, cleanup := newTestJobs(t, retryFullHandler)
+	defer cleanup()
+	policy := j.RetryPolicies().New("p", "n", 0, BackoffFixed, 10)
+	if policy.MaxDelaySeconds != nil {
+		t.Errorf("expected nil MaxDelaySeconds, got %v", *policy.MaxDelaySeconds)
+	}
+	if len(policy.RetryOn.Statuses) != 0 || len(policy.RetryOn.Reasons) != 0 {
+		t.Errorf("expected empty RetryOn default, got %+v", policy.RetryOn)
+	}
+	if policy.Backoff != BackoffFixed {
+		t.Errorf("backoff: %s", policy.Backoff)
+	}
+}
+
+// The create body carries the resource id/type and the full attribute set;
+// max_delay_seconds is omitted when unset, and an empty RetryOn still emits both
+// lists as empty arrays.
+func TestRetryPolicies_CreateWire(t *testing.T) {
+	ctx := context.Background()
+	var rec capturedReq
+	j, cleanup := recordingJobs(t, "", &rec, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 201, map[string]any{"data": retryPolicyResource(testRetryPolicyID, true, 1)})
+	})
+	defer cleanup()
+
+	policy := j.RetryPolicies().New(testRetryPolicyID, "Retry on server errors", 5, BackoffExponential, 2,
+		WithRetryPolicyMaxDelaySeconds(60),
+		WithRetryPolicyRetryOn(RetryOn{Statuses: []int{429, 503}, Reasons: []RetryReason{RetryReasonTimeout}}))
+	if err := policy.Save(ctx); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	data := rec.body["data"].(map[string]any)
+	if data["id"] != testRetryPolicyID || data["type"] != "retry_policy" {
+		t.Errorf("resource id/type mismatch: id=%v type=%v", data["id"], data["type"])
+	}
+	attrs := data["attributes"].(map[string]any)
+	if attrs["name"] != "Retry on server errors" || attrs["backoff"] != "exponential" {
+		t.Errorf("name/backoff mismatch: %v / %v", attrs["name"], attrs["backoff"])
+	}
+	if attrs["max_retries"].(float64) != 5 || attrs["delay_seconds"].(float64) != 2 || attrs["max_delay_seconds"].(float64) != 60 {
+		t.Errorf("numeric attrs mismatch: %+v", attrs)
+	}
+	retryOn := attrs["retry_on"].(map[string]any)
+	if statuses := retryOn["statuses"].([]any); len(statuses) != 2 || statuses[0].(float64) != 429 {
+		t.Errorf("statuses wire mismatch: %v", retryOn["statuses"])
+	}
+	if reasons := retryOn["reasons"].([]any); len(reasons) != 1 || reasons[0] != "TIMEOUT" {
+		t.Errorf("reasons wire mismatch: %v", retryOn["reasons"])
+	}
+
+	// No max delay → omitted; empty RetryOn → both lists present but empty.
+	plain := j.RetryPolicies().New(testRetryPolicyID, "n", 3, BackoffFixed, 5)
+	if err := plain.Save(ctx); err != nil {
+		t.Fatalf("Save (plain): %v", err)
+	}
+	attrs = rec.body["data"].(map[string]any)["attributes"].(map[string]any)
+	if _, ok := attrs["max_delay_seconds"]; ok {
+		t.Error("max_delay_seconds must be omitted when unset")
+	}
+	retryOn = attrs["retry_on"].(map[string]any)
+	if s := retryOn["statuses"].([]any); len(s) != 0 {
+		t.Errorf("empty statuses expected, got %v", s)
+	}
+	if rs := retryOn["reasons"].([]any); len(rs) != 0 {
+		t.Errorf("empty reasons expected, got %v", rs)
+	}
+}
+
+// List filters map to filter[name] / page[number] / page[size]; zero values omit
+// them.
+func TestRetryPolicies_ListQueryParams(t *testing.T) {
+	ctx := context.Background()
+	var rec capturedReq
+	j, cleanup := recordingJobs(t, "", &rec, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, map[string]any{
+			"data": []any{}, "meta": map[string]any{"pagination": map[string]any{"page": 1, "size": 1000}},
+		})
+	})
+	defer cleanup()
+
+	name := "server"
+	if _, err := j.RetryPolicies().List(ctx, ListRetryPoliciesInput{Name: &name, PageNumber: 2, PageSize: 25}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for key, want := range map[string]string{"filter[name]": "server", "page[number]": "2", "page[size]": "25"} {
+		if got := rec.query.Get(key); got != want {
+			t.Errorf("retry policies list %s = %q, want %q", key, got, want)
+		}
+	}
+	if _, err := j.RetryPolicies().List(ctx, ListRetryPoliciesInput{}); err != nil {
+		t.Fatalf("List (defaults): %v", err)
+	}
+	for _, key := range []string{"filter[name]", "page[number]", "page[size]"} {
+		if _, ok := rec.query[key]; ok {
+			t.Errorf("retry policies list must omit %s at its zero value", key)
+		}
+	}
+}
+
+// Non-2xx, not-found, unexpected-create-status, empty-201, and transport errors
+// all surface from the retry-policy surface.
+func TestRetryPolicies_Errors(t *testing.T) {
+	ctx := context.Background()
+
+	j, cleanup := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 500, map[string]any{"errors": []any{map[string]any{"detail": "boom"}}})
+	})
+	defer cleanup()
+	rp := j.RetryPolicies()
+	if _, err := rp.List(ctx, ListRetryPoliciesInput{}); err == nil {
+		t.Error("List should error on 500")
+	}
+	if _, err := rp.Get(ctx, "p"); err == nil {
+		t.Error("Get should error on 500")
+	}
+	if err := rp.Delete(ctx, "p"); err == nil {
+		t.Error("Delete should error on 500")
+	}
+	create := rp.New("p", "n", 1, BackoffFixed, 5)
+	if err := create.Save(ctx); err == nil {
+		t.Error("Save (create) should error on 500")
+	}
+	update := rp.New("p", "n", 1, BackoffFixed, 5)
+	update.CreatedAt = &nowForTest
+	if err := update.Save(ctx); err == nil {
+		t.Error("Save (update) should error on 500")
+	}
+
+	// 404 → NotFoundError
+	j404, cleanup404 := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 404, map[string]any{"errors": []any{map[string]any{"detail": "missing"}}})
+	})
+	defer cleanup404()
+	var notFound *NotFoundError
+	if _, err := j404.RetryPolicies().Get(ctx, "missing"); !errors.As(err, &notFound) {
+		t.Errorf("expected NotFoundError, got %v", err)
+	}
+
+	// create returning 2xx-but-not-201 → "unexpected status"
+	jUnexp, cu := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })
+	defer cu()
+	if err := jUnexp.RetryPolicies().New("p", "n", 1, BackoffFixed, 5).Save(ctx); err == nil {
+		t.Error("expected error when create returns non-201 2xx")
+	}
+
+	// create 201 with a non-JSON body → "empty 201 body"
+	jEmpty, ce := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(201)
+		_, _ = w.Write([]byte("ok"))
+	})
+	defer ce()
+	if err := jEmpty.RetryPolicies().New("p", "n", 1, BackoffFixed, 5).Save(ctx); err == nil {
+		t.Error("expected error when create 201 body is empty")
+	}
+
+	// transport errors (closed server)
+	jc := newClosedJobs(t)
+	rpc := jc.RetryPolicies()
+	if _, err := rpc.List(ctx, ListRetryPoliciesInput{}); err == nil {
+		t.Error("List should error on transport failure")
+	}
+	if _, err := rpc.Get(ctx, "p"); err == nil {
+		t.Error("Get should error on transport failure")
+	}
+	if err := rpc.Delete(ctx, "p"); err == nil {
+		t.Error("Delete should error on transport failure")
+	}
+	tc := rpc.New("p", "n", 1, BackoffFixed, 5)
+	if err := tc.Save(ctx); err == nil {
+		t.Error("Save (create) should error on transport failure")
+	}
+	tc.CreatedAt = &nowForTest
+	if err := tc.Save(ctx); err == nil {
+		t.Error("Save (update) should error on transport failure")
+	}
+}
+
+// Save / Delete on a policy with no client (or no id) are guarded.
+func TestRetryPolicies_UnsavedGuards(t *testing.T) {
+	ctx := context.Background()
+	orphan := &RetryPolicy{ID: "p", Name: "n"}
+	if err := orphan.Save(ctx); err == nil {
+		t.Error("Save without client should error")
+	}
+	if err := orphan.Delete(ctx); err == nil {
+		t.Error("Delete without client should error")
+	}
+	j, cleanup := newTestJobs(t, retryFullHandler)
+	defer cleanup()
+	noID := &RetryPolicy{Name: "n", client: j.RetryPolicies()}
+	if err := noID.Delete(ctx); err == nil {
+		t.Error("Delete with empty id should error")
+	}
+}
+
+// RetryOn serializes to / from the wire {statuses, reasons} shape; empty round
+// trips to empty and a nil retry_on yields the zero RetryOn.
+func TestRetryOn_WireConversions(t *testing.T) {
+	// empty → both lists present and empty (not nil)
+	w := retryOnToWire(RetryOn{})
+	if w.Statuses == nil || len(*w.Statuses) != 0 {
+		t.Errorf("empty statuses should be non-nil empty: %v", w.Statuses)
+	}
+	if w.Reasons == nil || len(*w.Reasons) != 0 {
+		t.Errorf("empty reasons should be non-nil empty: %v", w.Reasons)
+	}
+
+	// populated
+	w = retryOnToWire(RetryOn{Statuses: []int{429}, Reasons: []RetryReason{RetryReasonTimeout, RetryReasonConnectionError}})
+	if len(*w.Statuses) != 1 || (*w.Statuses)[0] != 429 {
+		t.Errorf("statuses: %v", w.Statuses)
+	}
+	if len(*w.Reasons) != 2 || (*w.Reasons)[0] != genjobs.RetryOnReasons("TIMEOUT") {
+		t.Errorf("reasons: %v", w.Reasons)
+	}
+
+	// fromWire nil → empty
+	if r := retryOnFromWire(nil); len(r.Statuses) != 0 || len(r.Reasons) != 0 {
+		t.Errorf("nil fromWire: %+v", r)
+	}
+	// fromWire with nil inner slices → empty (the nil-slice branches)
+	if r := retryOnFromWire(&genjobs.RetryOn{}); len(r.Statuses) != 0 || len(r.Reasons) != 0 {
+		t.Errorf("empty-ptr fromWire: %+v", r)
+	}
+	// fromWire populated
+	statuses := []int{503}
+	reasons := []genjobs.RetryOnReasons{"NON_SUCCESS_STATUS"}
+	r := retryOnFromWire(&genjobs.RetryOn{Statuses: &statuses, Reasons: &reasons})
+	if len(r.Statuses) != 1 || r.Statuses[0] != 503 {
+		t.Errorf("statuses fromWire: %v", r.Statuses)
+	}
+	if len(r.Reasons) != 1 || r.Reasons[0] != RetryReasonNonSuccessStatus {
+		t.Errorf("reasons fromWire: %v", r.Reasons)
+	}
+}
+
+// The resource builders carry the id only when set and emit max_delay_seconds
+// only when present.
+func TestRetryPolicy_ResourceBuilders(t *testing.T) {
+	maxDelay := 60
+	policy := &RetryPolicy{ID: "p", Name: "n", MaxRetries: 5, Backoff: BackoffExponential, DelaySeconds: 2, MaxDelaySeconds: &maxDelay}
+	attrs := retryPolicyAttributes(policy)
+	if attrs.MaxDelaySeconds == nil || *attrs.MaxDelaySeconds != 60 {
+		t.Errorf("max delay attr: %v", attrs.MaxDelaySeconds)
+	}
+	if attrs.Backoff != genjobs.RetryPolicyBackoff("exponential") {
+		t.Errorf("backoff attr: %v", attrs.Backoff)
+	}
+
+	plain := &RetryPolicy{ID: "p", Name: "n", MaxRetries: 1, Backoff: BackoffFixed, DelaySeconds: 5}
+	if a := retryPolicyAttributes(plain); a.MaxDelaySeconds != nil {
+		t.Errorf("max delay should be nil: %v", a.MaxDelaySeconds)
+	}
+
+	// update resource with id present
+	if res := retryPolicyResourceFromPolicy(policy); res.Id == nil || *res.Id != "p" {
+		t.Errorf("resource id should be set: %v", res.Id)
+	}
+	// update resource with empty id → nil Id pointer
+	empty := &RetryPolicy{Name: "n", Backoff: BackoffFixed}
+	if r := retryPolicyResourceFromPolicy(empty); r.Id != nil {
+		t.Errorf("empty id should produce nil Id pointer, got %v", *r.Id)
+	}
+}
+
+// retryPolicyFromResource handles the absent-id / absent-retry_on / absent-max
+// delay branches as well as the fully-populated case.
+func TestRetryPolicy_FromResourceBranches(t *testing.T) {
+	min := genjobs.RetryPolicyResource{Attributes: genjobs.RetryPolicy{Name: "n", Backoff: "fixed", DelaySeconds: 5, MaxRetries: 0}}
+	p := retryPolicyFromResource(min, nil)
+	if p.ID != "" {
+		t.Errorf("expected empty id, got %q", p.ID)
+	}
+	if p.MaxDelaySeconds != nil {
+		t.Errorf("expected nil max delay, got %v", *p.MaxDelaySeconds)
+	}
+	if len(p.RetryOn.Statuses) != 0 || len(p.RetryOn.Reasons) != 0 {
+		t.Errorf("expected empty RetryOn, got %+v", p.RetryOn)
+	}
+
+	id := "p"
+	maxDelay := 60
+	statuses := []int{429}
+	reasons := []genjobs.RetryOnReasons{"TIMEOUT"}
+	full := genjobs.RetryPolicyResource{
+		Id: &id,
+		Attributes: genjobs.RetryPolicy{
+			Name: "n", Backoff: "exponential", DelaySeconds: 2, MaxRetries: 5,
+			MaxDelaySeconds: &maxDelay,
+			RetryOn:         &genjobs.RetryOn{Statuses: &statuses, Reasons: &reasons},
+		},
+	}
+	p = retryPolicyFromResource(full, nil)
+	if p.ID != "p" || p.MaxDelaySeconds == nil || *p.MaxDelaySeconds != 60 || p.Backoff != BackoffExponential {
+		t.Errorf("full parse mismatch: %+v", p)
+	}
+	if len(p.RetryOn.Statuses) != 1 || len(p.RetryOn.Reasons) != 1 {
+		t.Errorf("retry_on parse: %+v", p.RetryOn)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Job retry-policy setter + wire round-trip; run-list trigger filters
+// ---------------------------------------------------------------------------
+
+// SetRetryPolicy accepts a *RetryPolicy, a RetryPolicy value, or a bare id
+// string, sets base vs per-environment, preserves a sibling field, and ignores
+// an unsupported type.
+func TestJob_SetRetryPolicy(t *testing.T) {
+	j, cleanup := newTestJobs(t, fullHandler)
+	defer cleanup()
+	job := j.NewRecurringJob("id", "n", "0 * * * *", HttpConfig{URL: "https://base"})
+
+	// base, via id string
+	job.SetRetryPolicy("policy-a")
+	if job.RetryPolicy != "policy-a" {
+		t.Errorf("base retry policy (string) not set: %q", job.RetryPolicy)
+	}
+	// base, via *RetryPolicy (its ID is used)
+	policy := j.RetryPolicies().New("policy-b", "n", 1, BackoffFixed, 5)
+	job.SetRetryPolicy(policy)
+	if job.RetryPolicy != "policy-b" {
+		t.Errorf("base retry policy (object) not set: %q", job.RetryPolicy)
+	}
+	// base, via RetryPolicy value
+	job.SetRetryPolicy(RetryPolicy{ID: "policy-c"})
+	if job.RetryPolicy != "policy-c" {
+		t.Errorf("base retry policy (value) not set: %q", job.RetryPolicy)
+	}
+
+	// per-env, preserving the already-set Enabled and leaving the base alone
+	job.SetEnabled(true, "production")
+	job.SetRetryPolicy("policy-prod", "production")
+	prod := job.Environments["production"]
+	if prod.RetryPolicy != "policy-prod" {
+		t.Errorf("per-env retry policy not set: %q", prod.RetryPolicy)
+	}
+	if !prod.Enabled {
+		t.Error("SetRetryPolicy must preserve Enabled on the existing override")
+	}
+	if job.RetryPolicy != "policy-c" {
+		t.Errorf("per-env SetRetryPolicy must not change the base: %q", job.RetryPolicy)
+	}
+
+	// per-env on a brand-new environment creates the entry (object form)
+	job.SetRetryPolicy(policy, "qa")
+	if qa := job.Environments["qa"]; qa.RetryPolicy != "policy-b" {
+		t.Errorf("qa retry policy mismatch: %+v", qa)
+	}
+
+	// an unsupported type is ignored (no panic, no change)
+	job.SetRetryPolicy(42)
+	if job.RetryPolicy != "policy-c" {
+		t.Errorf("unsupported type must be ignored, base=%q", job.RetryPolicy)
+	}
+}
+
+// The base and per-environment retry_policy (plus base timezone) ride the create
+// body and parse back from the response.
+func TestJob_RetryPolicyWireRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	var rec capturedReq
+	j, cleanup := recordingJobs(t, "", &rec, func(w http.ResponseWriter, _ *http.Request) {
+		attrs := map[string]any{
+			"name": "n", "kind": "recurring", "type": "http",
+			"schedule": "0 * * * *", "timezone": "America/New_York", "retry_policy": "base-policy",
+			"configuration": httpCfgWire("https://base"),
+			"environments": map[string]any{
+				"production": map[string]any{"enabled": true, "retry_policy": "prod-policy"},
+			},
+			"concurrency_policy": "ALLOW", "version": 1,
+			"created_at": "2026-06-04T00:00:00Z", "updated_at": "2026-06-04T00:00:00Z",
+		}
+		writeJSON(w, 201, map[string]any{"data": map[string]any{"id": testJobID, "type": "job", "attributes": attrs}})
+	})
+	defer cleanup()
+
+	job := j.NewRecurringJob(testJobID, "n", "0 * * * *", HttpConfig{URL: "https://base"},
+		WithJobTimezone("America/New_York"), WithJobRetryPolicy("base-policy"))
+	job.SetEnabled(true, "production")
+	job.SetRetryPolicy("prod-policy", "production")
+	if err := job.Save(ctx); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
+	if attrs["retry_policy"] != "base-policy" {
+		t.Errorf("base retry_policy wire mismatch: %v", attrs["retry_policy"])
+	}
+	if attrs["timezone"] != "America/New_York" {
+		t.Errorf("base timezone wire mismatch: %v", attrs["timezone"])
+	}
+	prod := attrs["environments"].(map[string]any)["production"].(map[string]any)
+	if prod["retry_policy"] != "prod-policy" {
+		t.Errorf("per-env retry_policy wire mismatch: %v", prod["retry_policy"])
+	}
+
+	// parse-back from the server response
+	if job.RetryPolicy != "base-policy" {
+		t.Errorf("base retry_policy parse mismatch: %q", job.RetryPolicy)
+	}
+	if job.Environments["production"].RetryPolicy != "prod-policy" {
+		t.Errorf("per-env retry_policy parse mismatch: %q", job.Environments["production"].RetryPolicy)
+	}
+}
+
+// A RETRY run surfaces its retry-chain position; a non-RETRY run has a nil Retry.
+func TestRun_RetryParsed(t *testing.T) {
+	ctx := context.Background()
+	j, cleanup := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) {
+		attrs := map[string]any{
+			"job": testJobID, "environment": "production",
+			"trigger": "RETRY", "status": "PENDING",
+			"retry": map[string]any{"of": testRunID, "attempt": 2},
+		}
+		writeJSON(w, 200, map[string]any{"data": map[string]any{"id": testRunID, "type": "run", "attributes": attrs}})
+	})
+	defer cleanup()
+	got, err := j.Runs().Get(ctx, testRunID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Trigger != string(RunTriggerRetry) {
+		t.Errorf("expected RETRY trigger, got %s", got.Trigger)
+	}
+	if got.Retry == nil || got.Retry.Of != testRunID || got.Retry.Attempt != 2 {
+		t.Errorf("retry chain not parsed: %+v", got.Retry)
+	}
+
+	// A non-RETRY run carries no retry chain.
+	j2, cleanup2 := newTestJobs(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, map[string]any{"data": runResource(testRunID, "SUCCEEDED", "SCHEDULE", "production", nil)})
+	})
+	defer cleanup2()
+	got2, err := j2.Runs().Get(ctx, testRunID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got2.Retry != nil {
+		t.Errorf("non-RETRY run should have nil Retry, got %+v", got2.Retry)
+	}
+}
+
+// Runs().List and (*Job).ListRuns thread Triggers (comma-joined filter[trigger])
+// and LastRunOnly (sent only when true) onto the wire; both are omitted by
+// default.
+func TestRuns_ListTriggerAndLastRunFilters(t *testing.T) {
+	ctx := context.Background()
+	var rec capturedReq
+	j, cleanup := recordingJobs(t, "", &rec, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, map[string]any{"data": []any{}, "meta": map[string]any{"page_size": 50}})
+	})
+	defer cleanup()
+
+	if _, err := j.Runs().List(ctx, ListRunsInput{
+		Triggers:    []RunTrigger{RunTriggerSchedule, RunTriggerRetry},
+		LastRunOnly: true,
+	}); err != nil {
+		t.Fatalf("Runs.List: %v", err)
+	}
+	if got := rec.query.Get("filter[trigger]"); got != "SCHEDULE,RETRY" {
+		t.Errorf("filter[trigger] = %q, want SCHEDULE,RETRY", got)
+	}
+	if got := rec.query.Get("last_run_only"); got != "true" {
+		t.Errorf("last_run_only = %q, want true", got)
+	}
+
+	// defaults omit both
+	if _, err := j.Runs().List(ctx, ListRunsInput{}); err != nil {
+		t.Fatalf("Runs.List (defaults): %v", err)
+	}
+	if _, ok := rec.query["filter[trigger]"]; ok {
+		t.Error("filter[trigger] must be omitted when no triggers are given")
+	}
+	if _, ok := rec.query["last_run_only"]; ok {
+		t.Error("last_run_only must be omitted when false")
+	}
+
+	// (*Job).ListRuns threads the same filters (plus the single-environment scope)
+	job := &Job{ID: testJobID, client: j}
+	if _, err := job.ListRuns(ctx, ListJobRunsInput{
+		Environment: "production",
+		Triggers:    []RunTrigger{RunTriggerRetry},
+		LastRunOnly: true,
+	}); err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if rec.query.Get("filter[trigger]") != "RETRY" ||
+		rec.query.Get("last_run_only") != "true" ||
+		rec.query.Get("filter[environment]") != "production" {
+		t.Errorf("Job.ListRuns query mismatch: %v", rec.query)
 	}
 }

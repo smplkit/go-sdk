@@ -18,6 +18,7 @@ package smplkit
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,22 +40,25 @@ import (
 // Schedule / Get / List / Delete), the run-now action (Run), usage counters
 // (Usage), and run history plus run actions (Runs).
 type JobsClient struct {
-	gen  *genjobs.ClientWithResponses
-	runs *RunsClient
+	gen           *genjobs.ClientWithResponses
+	runs          *RunsClient
+	retryPolicies *RetryPoliciesClient
 	// environment is the SDK's configured environment (empty when unset). It
 	// defaults the one-off birth env on create, the run-now env header, and
 	// the filter[environment] scope on Runs().List.
 	environment string
 }
 
-// newJobsClient wires a JobsClient (and its Runs sub-client) onto a pre-built
-// jobs transport (the wired path used by SmplClient). The environment scopes
-// environment-aware writes/reads (one-off birth, run-now, runs filter).
+// newJobsClient wires a JobsClient (and its Runs / RetryPolicies sub-clients)
+// onto a pre-built jobs transport (the wired path used by SmplClient). The
+// environment scopes environment-aware writes/reads (one-off birth, run-now,
+// runs filter); retry policies are account-global and take no environment.
 func newJobsClient(gen *genjobs.ClientWithResponses, environment string) *JobsClient {
 	return &JobsClient{
-		gen:         gen,
-		runs:        &RunsClient{gen: gen, environment: environment},
-		environment: environment,
+		gen:           gen,
+		runs:          &RunsClient{gen: gen, environment: environment},
+		retryPolicies: &RetryPoliciesClient{gen: gen},
+		environment:   environment,
 	}
 }
 
@@ -81,6 +85,10 @@ func NewJobsClient(cfg Config, opts ...ClientOption) (*JobsClient, error) {
 
 // Runs returns the run history and run-action sub-client.
 func (j *JobsClient) Runs() *RunsClient { return j.runs }
+
+// RetryPolicies returns the retry-policy management sub-client. Retry policies
+// are account-global — never environment-scoped.
+func (j *JobsClient) RetryPolicies() *RetryPoliciesClient { return j.retryPolicies }
 
 // RunsClient is the client.Jobs().Runs() surface: read-only run history plus
 // the cancel / rerun run actions.
@@ -135,7 +143,8 @@ func (j *JobsClient) newJob(
 //
 // Enablement is per environment: pass WithJobEnvironments (or call SetEnabled
 // after construction) to choose where the job is scheduled. The remaining
-// fields — description and concurrency policy — are set via the WithJob*
+// fields — description, base timezone (WithJobTimezone), base retry policy
+// (WithJobRetryPolicy), and concurrency policy — are set via the WithJob*
 // options.
 func (j *JobsClient) NewRecurringJob(
 	id string,
@@ -160,8 +169,9 @@ func (j *JobsClient) NewRecurringJob(
 //
 // Enablement is per environment: pass WithJobEnvironments (or call SetEnabled
 // after construction) to choose where the job is triggerable. The remaining
-// fields — description and concurrency policy — are set via the WithJob*
-// options.
+// fields — description, retry policy (WithJobRetryPolicy), and concurrency
+// policy — are set via the WithJob* options. A manual job has no cron, so
+// WithJobTimezone does not apply.
 func (j *JobsClient) NewManualJob(
 	id string,
 	name string,
@@ -183,7 +193,9 @@ func (j *JobsClient) NewManualJob(
 // runs.
 //
 // The job is born in a single environment — WithJobBirthEnvironment, defaulting
-// to the client's configured environment.
+// to the client's configured environment. A retry policy may be set via
+// WithJobRetryPolicy; a one-off job has no cron, so WithJobTimezone does not
+// apply.
 func (j *JobsClient) Schedule(
 	id string,
 	name string,
@@ -219,6 +231,21 @@ func WithJobBirthEnvironment(environment string) JobOption {
 // WithJobDescription sets the optional free-text description.
 func WithJobDescription(description string) JobOption {
 	return func(job *Job) { job.Description = &description }
+}
+
+// WithJobTimezone sets the base IANA timezone the cron schedule is evaluated in
+// (e.g. "America/New_York"), DST-aware; empty means UTC. Every environment
+// inherits it unless it overrides it. Only meaningful on a recurring (cron)
+// job — manual and one-off jobs have no cron.
+func WithJobTimezone(timezone string) JobOption {
+	return func(job *Job) { job.Timezone = timezone }
+}
+
+// WithJobRetryPolicy sets the base retry policy for failed runs — the id of a
+// RetryPolicy, overridable per environment. Empty (the default) uses the
+// built-in "Default" policy, which never retries.
+func WithJobRetryPolicy(retryPolicy string) JobOption {
+	return func(job *Job) { job.RetryPolicy = retryPolicy }
 }
 
 // WithJobConcurrencyPolicy overrides how overlapping runs are handled.
@@ -361,27 +388,36 @@ func (job *Job) GetConfiguration(environment string) HttpConfig {
 
 // SetSchedule sets the job's schedule in memory — base or per-environment.
 //
-// Called with no environment (or an empty environment), it sets the base
-// Schedule: the cadence every environment inherits unless it overrides it.
-// Called with an environment, it sets that environment's per-environment cron
-// override on Environments, creating the override entry if it doesn't exist yet
-// (preserving any already-set Enabled / Configuration on it). A per-environment
+// Called with an empty environment (or none), it sets the base Schedule: the
+// cadence every environment inherits unless it overrides it. Called with an
+// environment, it sets that environment's per-environment cron override on
+// Environments, creating the override entry if it doesn't exist yet (preserving
+// any already-set Enabled / Timezone / Configuration on it). A per-environment
 // schedule varies the cadence for just that environment (recurring jobs only);
 // clear it (set it back to the base cadence) to fall back to the base schedule.
+//
+// Because the timezone is an integral part of a cron cadence, a timezone may be
+// supplied alongside the schedule; when non-empty it sets the same scope's
+// timezone too (equivalent to a follow-up SetTimezone). Pass "" to leave the
+// timezone untouched. For a timezone-only change, use SetTimezone.
+//
 // At most one environment may be named; extra arguments are ignored. Call Save
 // to persist.
-func (job *Job) SetSchedule(schedule string, environment ...string) {
+func (job *Job) SetSchedule(schedule string, timezone string, environment ...string) {
 	env := ""
 	if len(environment) > 0 {
 		env = environment[0]
 	}
 	if env == "" {
 		job.Schedule = schedule
-		return
+	} else {
+		override := job.environmentOverride(env)
+		override.Schedule = schedule
+		job.Environments[env] = *override
 	}
-	override := job.environmentOverride(env)
-	override.Schedule = schedule
-	job.Environments[env] = *override
+	if timezone != "" {
+		job.SetTimezone(timezone, env)
+	}
 }
 
 // SetTimezone sets the IANA timezone the cron schedule is evaluated in — base
@@ -409,6 +445,44 @@ func (job *Job) SetTimezone(timezone string, environment ...string) {
 	job.Environments[env] = *override
 }
 
+// SetRetryPolicy sets the retry policy for failed runs — base or
+// per-environment.
+//
+// Called with an empty environment (or none), it sets the job's base
+// RetryPolicy, the policy every environment inherits unless it overrides it.
+// Called with an environment, it sets a per-environment override for just that
+// environment, creating the override entry if it doesn't exist yet (preserving
+// any already-set Enabled / Schedule / Timezone / Configuration on it).
+//
+// policyOrID accepts either a *RetryPolicy (or RetryPolicy) instance — its ID
+// is used — or a policy id string; pass "Default" for the built-in never-retry
+// policy. Any other type is ignored. At most one environment may be named;
+// extra arguments are ignored. Call Save to persist.
+func (job *Job) SetRetryPolicy(policyOrID any, environment ...string) {
+	var policyID string
+	switch p := policyOrID.(type) {
+	case *RetryPolicy:
+		policyID = p.ID
+	case RetryPolicy:
+		policyID = p.ID
+	case string:
+		policyID = p
+	default:
+		return
+	}
+	env := ""
+	if len(environment) > 0 {
+		env = environment[0]
+	}
+	if env == "" {
+		job.RetryPolicy = policyID
+		return
+	}
+	override := job.environmentOverride(env)
+	override.RetryPolicy = policyID
+	job.Environments[env] = *override
+}
+
 // Trigger starts one immediate, manual run of this job (a MANUAL run) and
 // returns it. environment is the environment the run executes in; empty
 // defaults to the client's configured environment.
@@ -422,16 +496,20 @@ func (job *Job) Trigger(ctx context.Context, environment string) (*Run, error) {
 // ListRuns returns this job's run history, most recent first.
 //
 // input.Environment restricts the listing to runs stamped with that single
-// environment (empty covers every environment you can access). PageSize / After
-// drive cursor pagination.
+// environment (empty covers every environment you can access). input.Triggers
+// restricts to runs started by any of those triggers; input.LastRunOnly
+// collapses the result to the last completed run per environment. PageSize /
+// After drive cursor pagination.
 func (job *Job) ListRuns(ctx context.Context, input ListJobRunsInput) ([]*Run, error) {
 	if job.client == nil {
 		return nil, &Error{Message: "job was constructed without a client; cannot list runs"}
 	}
 	runsInput := ListRunsInput{
-		Job:      job.ID,
-		PageSize: input.PageSize,
-		After:    input.After,
+		Job:         job.ID,
+		Triggers:    input.Triggers,
+		LastRunOnly: input.LastRunOnly,
+		PageSize:    input.PageSize,
+		After:       input.After,
 	}
 	if input.Environment != "" {
 		runsInput.Environments = []string{input.Environment}
@@ -449,6 +527,7 @@ func (job *Job) apply(other *Job) {
 	job.Type = other.Type
 	job.Schedule = other.Schedule
 	job.Timezone = other.Timezone
+	job.RetryPolicy = other.RetryPolicy
 	job.Configuration = other.Configuration
 	job.ConcurrencyPolicy = other.ConcurrencyPolicy
 	job.CreatedAt = other.CreatedAt
@@ -568,6 +647,8 @@ func (j *JobsClient) Usage(ctx context.Context) (*Usage, error) {
 // paginated: pass PageSize and the After cursor from the prior page. Pass
 // Job to scope to a single job's history, and Environments to scope to one or
 // more environment keys (resolved as explicit list → client default → omitted).
+// Pass Triggers to restrict to runs with any of those triggers, and
+// LastRunOnly to collapse to the last completed run per job-and-environment.
 func (r *RunsClient) List(ctx context.Context, input ListRunsInput) ([]*Run, error) {
 	params := &genjobs.ListRunsParams{}
 	if input.Job != "" {
@@ -576,6 +657,15 @@ func (r *RunsClient) List(ctx context.Context, input ListRunsInput) ([]*Run, err
 	}
 	if env := resolveEnvironmentFilter(input.Environments, r.environment); env != "" {
 		params.FilterEnvironment = &env
+	}
+	if trigger := joinTriggers(input.Triggers); trigger != "" {
+		params.FilterTrigger = &trigger
+	}
+	// last_run_only is sent only when requested; the generated default (false)
+	// would otherwise emit last_run_only=false on every call.
+	if input.LastRunOnly {
+		lastRunOnly := true
+		params.LastRunOnly = &lastRunOnly
 	}
 	if input.PageSize > 0 {
 		params.PageSize = &input.PageSize
@@ -670,6 +760,208 @@ func (run *Run) Cancel(ctx context.Context) (*Run, error) {
 }
 
 // ---------------------------------------------------------------------------
+// Retry-policy active-record + management surface
+// ---------------------------------------------------------------------------
+
+// RetryPoliciesClient is the client.Jobs().RetryPolicies() surface: manage
+// reusable retry policies. A RetryPolicy is an active record — build one with
+// New, set fields, and call Save(ctx); then reference it from a job's
+// RetryPolicy (see WithJobRetryPolicy and (*Job).SetRetryPolicy). Retry
+// policies are account-global — never environment-scoped.
+type RetryPoliciesClient struct {
+	gen *genjobs.ClientWithResponses
+}
+
+// RetryPolicyOption configures an unsaved RetryPolicy returned by
+// RetryPoliciesClient.New.
+type RetryPolicyOption func(*RetryPolicy)
+
+// WithRetryPolicyMaxDelaySeconds sets the ceiling on the wait between retries,
+// for exponential backoff only. Unset (the default) leaves it uncapped; omit it
+// for fixed backoff.
+func WithRetryPolicyMaxDelaySeconds(maxDelaySeconds int) RetryPolicyOption {
+	return func(p *RetryPolicy) { p.MaxDelaySeconds = &maxDelaySeconds }
+}
+
+// WithRetryPolicyRetryOn sets which failures to retry (see RetryOn). Unset (the
+// default) retries nothing.
+func WithRetryPolicyRetryOn(retryOn RetryOn) RetryPolicyOption {
+	return func(p *RetryPolicy) { p.RetryOn = retryOn }
+}
+
+// New returns an unsaved RetryPolicy bound to this client. Call
+// (*RetryPolicy).Save(ctx) to create it.
+//
+// id is the caller-supplied unique identifier for the policy — unique within
+// the account and immutable; the service returns 409 if another live policy
+// already uses this id. name is the human-readable name. maxRetries is how many
+// times a failed run is retried after the initial attempt (3 means up to 4
+// attempts total; 0 disables retries; maximum 10). backoff is how the wait
+// between retries grows (see Backoff). delaySeconds is the wait before a retry —
+// the constant wait for fixed backoff, or the base that doubles each retry for
+// exponential. The optional max delay (exponential only) and the failures to
+// retry are set via WithRetryPolicyMaxDelaySeconds / WithRetryPolicyRetryOn.
+func (c *RetryPoliciesClient) New(
+	id string,
+	name string,
+	maxRetries int,
+	backoff Backoff,
+	delaySeconds int,
+	opts ...RetryPolicyOption,
+) *RetryPolicy {
+	policy := &RetryPolicy{
+		ID:           id,
+		Name:         name,
+		MaxRetries:   maxRetries,
+		Backoff:      backoff,
+		DelaySeconds: delaySeconds,
+		client:       c,
+	}
+	for _, opt := range opts {
+		opt(policy)
+	}
+	return policy
+}
+
+// List returns the retry policies for the authenticated account. Offset
+// pagination via PageNumber / PageSize; Name filters on a case-insensitive
+// substring of the policy name.
+func (c *RetryPoliciesClient) List(ctx context.Context, input ListRetryPoliciesInput) ([]*RetryPolicy, error) {
+	params := &genjobs.ListRetryPoliciesParams{}
+	if input.Name != nil {
+		params.FilterName = input.Name
+	}
+	if input.PageNumber > 0 {
+		params.PageNumber = &input.PageNumber
+	}
+	if input.PageSize > 0 {
+		params.PageSize = &input.PageSize
+	}
+	resp, err := c.gen.ListRetryPoliciesWithResponse(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("jobs RetryPolicies.List: %w", err)
+	}
+	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
+	}
+	body := resp.ApplicationvndApiJSON200
+	policies := make([]*RetryPolicy, 0, len(body.Data))
+	for _, r := range body.Data {
+		policies = append(policies, retryPolicyFromResource(r, c))
+	}
+	return policies, nil
+}
+
+// Get returns one retry policy by id; the returned instance is bound to this
+// client so policy.Save(ctx) and policy.Delete(ctx) work.
+func (c *RetryPoliciesClient) Get(ctx context.Context, id string) (*RetryPolicy, error) {
+	resp, err := c.gen.GetRetryPolicyWithResponse(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("jobs RetryPolicies.Get: %w", err)
+	}
+	if resp.StatusCode() != 200 {
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
+	}
+	return retryPolicyFromResource(resp.ApplicationvndApiJSON200.Data, c), nil
+}
+
+// Delete removes a retry policy by id.
+func (c *RetryPoliciesClient) Delete(ctx context.Context, id string) error {
+	resp, err := c.gen.DeleteRetryPolicyWithResponse(ctx, id)
+	if err != nil {
+		return fmt.Errorf("jobs RetryPolicies.Delete: %w", err)
+	}
+	if resp.StatusCode() != 204 {
+		return checkStatus(resp.StatusCode(), resp.Body)
+	}
+	return nil
+}
+
+// Save creates this retry policy on the server, or full-replaces it if it
+// already exists. Upsert behavior keyed on CreatedAt: nil → create (POST), set
+// → full-replace update (PUT). After the call, every field is refreshed from
+// the server response (including CreatedAt, UpdatedAt, Version).
+func (policy *RetryPolicy) Save(ctx context.Context) error {
+	if policy.client == nil {
+		return &Error{Message: "retry policy was constructed without a client; cannot save"}
+	}
+	if policy.CreatedAt == nil {
+		updated, err := policy.client.create(ctx, policy)
+		if err != nil {
+			return err
+		}
+		policy.apply(updated)
+		return nil
+	}
+	updated, err := policy.client.update(ctx, policy)
+	if err != nil {
+		return err
+	}
+	policy.apply(updated)
+	return nil
+}
+
+// Delete removes this retry policy on the server.
+func (policy *RetryPolicy) Delete(ctx context.Context) error {
+	if policy.client == nil || policy.ID == "" {
+		return &Error{Message: "retry policy was constructed without a client or id; cannot delete"}
+	}
+	return policy.client.Delete(ctx, policy.ID)
+}
+
+func (policy *RetryPolicy) apply(other *RetryPolicy) {
+	policy.ID = other.ID
+	policy.Name = other.Name
+	policy.MaxRetries = other.MaxRetries
+	policy.Backoff = other.Backoff
+	policy.DelaySeconds = other.DelaySeconds
+	policy.MaxDelaySeconds = other.MaxDelaySeconds
+	policy.RetryOn = other.RetryOn
+	policy.CreatedAt = other.CreatedAt
+	policy.UpdatedAt = other.UpdatedAt
+	policy.DeletedAt = other.DeletedAt
+	policy.Version = other.Version
+}
+
+// create posts a new retry policy and returns the server-authoritative
+// response. Called by (*RetryPolicy).Save on unsaved instances.
+func (c *RetryPoliciesClient) create(ctx context.Context, policy *RetryPolicy) (*RetryPolicy, error) {
+	body := genjobs.CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody{
+		Data: retryPolicyCreateResourceFromPolicy(policy),
+	}
+	resp, err := c.gen.CreateRetryPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, body)
+	if err != nil {
+		return nil, fmt.Errorf("jobs RetryPolicies.Create: %w", err)
+	}
+	if resp.StatusCode() != 201 {
+		if err := checkStatus(resp.StatusCode(), resp.Body); err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("jobs RetryPolicies.Create: unexpected status %d", resp.StatusCode())
+	}
+	if resp.ApplicationvndApiJSON201 == nil {
+		return nil, fmt.Errorf("jobs RetryPolicies.Create: empty 201 body")
+	}
+	return retryPolicyFromResource(resp.ApplicationvndApiJSON201.Data, c), nil
+}
+
+// update PUTs a full-replace and returns the server-authoritative response.
+// Called by (*RetryPolicy).Save on saved instances.
+func (c *RetryPoliciesClient) update(ctx context.Context, policy *RetryPolicy) (*RetryPolicy, error) {
+	body := genjobs.UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody{
+		Data: retryPolicyResourceFromPolicy(policy),
+	}
+	resp, err := c.gen.UpdateRetryPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, policy.ID, body)
+	if err != nil {
+		return nil, fmt.Errorf("jobs RetryPolicies.Update: %w", err)
+	}
+	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+		return nil, checkStatus(resp.StatusCode(), resp.Body)
+	}
+	return retryPolicyFromResource(resp.ApplicationvndApiJSON200.Data, c), nil
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers (create / update / wire conversions)
 // ---------------------------------------------------------------------------
 
@@ -749,6 +1041,12 @@ func jobAttributes(job *Job) genjobs.Job {
 		timezone := job.Timezone
 		attrs.Timezone = &timezone
 	}
+	// RetryPolicy is the policy id; an empty RetryPolicy is omitted, leaving the
+	// server default (the built-in "Default" policy, which never retries).
+	if job.RetryPolicy != "" {
+		retryPolicy := job.RetryPolicy
+		attrs.RetryPolicy = &retryPolicy
+	}
 	if len(job.Environments) > 0 {
 		envs := jobEnvironmentsToWire(job.Environments)
 		attrs.Environments = &envs
@@ -785,6 +1083,10 @@ func jobEnvironmentsToWire(envs map[string]JobEnvironment) map[string]genjobs.Jo
 			timezone := env.Timezone
 			ge.Timezone = &timezone
 		}
+		if env.RetryPolicy != "" {
+			retryPolicy := env.RetryPolicy
+			ge.RetryPolicy = &retryPolicy
+		}
 		if env.Configuration != nil {
 			cfg := httpConfigToWire(*env.Configuration)
 			ge.Configuration = &cfg
@@ -809,6 +1111,9 @@ func jobEnvironmentsFromWire(envs map[string]genjobs.JobEnvironment) map[string]
 		}
 		if ge.Timezone != nil {
 			env.Timezone = *ge.Timezone
+		}
+		if ge.RetryPolicy != nil {
+			env.RetryPolicy = *ge.RetryPolicy
 		}
 		if ge.Configuration != nil {
 			cfg := httpConfigFromWire(*ge.Configuration)
@@ -942,6 +1247,9 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 	if a.Timezone != nil {
 		out.Timezone = *a.Timezone
 	}
+	if a.RetryPolicy != nil {
+		out.RetryPolicy = *a.RetryPolicy
+	}
 	if a.Environments != nil {
 		out.Environments = jobEnvironmentsFromWire(*a.Environments)
 	}
@@ -986,6 +1294,11 @@ func runFromResource(r genjobs.RunResource, runs *RunsClient) Run {
 		s := a.RerunOf.String()
 		out.RerunOf = &s
 	}
+	// Retry is present on the wire only for RETRY runs; surface it as the
+	// read-only RunRetry chain position, leaving non-RETRY runs with a nil Retry.
+	if a.Retry != nil {
+		out.Retry = &RunRetry{Of: a.Retry.Of.String(), Attempt: a.Retry.Attempt}
+	}
 	if a.FailureReason != nil {
 		s := string(*a.FailureReason)
 		out.FailureReason = &s
@@ -1007,5 +1320,114 @@ func usageFromResource(r genjobs.UsageResource) Usage {
 		RunsIncluded:    a.RunsIncluded,
 		ActiveJobs:      a.ActiveJobs,
 		ActiveJobsLimit: a.ActiveJobsLimit,
+	}
+}
+
+// joinTriggers comma-joins run triggers for the filter[trigger] query param
+// (any-of). Empty when no triggers are given, so the param stays off the wire.
+func joinTriggers(triggers []RunTrigger) string {
+	if len(triggers) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(triggers))
+	for _, t := range triggers {
+		parts = append(parts, string(t))
+	}
+	return strings.Join(parts, ",")
+}
+
+// retryOnToWire converts the wrapper RetryOn to the generated model. Both lists
+// are always emitted (as empty arrays when empty), mirroring the server's
+// {statuses, reasons} shape; reasons serialize as their string values.
+func retryOnToWire(r RetryOn) genjobs.RetryOn {
+	statuses := make([]int, 0, len(r.Statuses))
+	statuses = append(statuses, r.Statuses...)
+	reasons := make([]genjobs.RetryOnReasons, 0, len(r.Reasons))
+	for _, reason := range r.Reasons {
+		reasons = append(reasons, genjobs.RetryOnReasons(reason))
+	}
+	return genjobs.RetryOn{Statuses: &statuses, Reasons: &reasons}
+}
+
+// retryOnFromWire converts the generated RetryOn back into the wrapper shape. A
+// nil or absent retry_on yields the zero RetryOn (retries nothing).
+func retryOnFromWire(r *genjobs.RetryOn) RetryOn {
+	out := RetryOn{}
+	if r == nil {
+		return out
+	}
+	if r.Statuses != nil {
+		out.Statuses = append([]int(nil), *r.Statuses...)
+	}
+	if r.Reasons != nil {
+		out.Reasons = make([]RetryReason, 0, len(*r.Reasons))
+		for _, reason := range *r.Reasons {
+			out.Reasons = append(out.Reasons, RetryReason(reason))
+		}
+	}
+	return out
+}
+
+// retryPolicyAttributes builds the shared retry-policy attribute payload sent on
+// create and update. max_delay_seconds is emitted only when set (exponential
+// backoff only); retry_on is always present.
+func retryPolicyAttributes(policy *RetryPolicy) genjobs.RetryPolicy {
+	retryOn := retryOnToWire(policy.RetryOn)
+	attrs := genjobs.RetryPolicy{
+		Name:         policy.Name,
+		MaxRetries:   policy.MaxRetries,
+		Backoff:      genjobs.RetryPolicyBackoff(policy.Backoff),
+		DelaySeconds: policy.DelaySeconds,
+		RetryOn:      &retryOn,
+	}
+	if policy.MaxDelaySeconds != nil {
+		v := *policy.MaxDelaySeconds
+		attrs.MaxDelaySeconds = &v
+	}
+	return attrs
+}
+
+func retryPolicyCreateResourceFromPolicy(policy *RetryPolicy) genjobs.RetryPolicyCreateResource {
+	rt := genjobs.RetryPolicyCreateResourceTypeRetryPolicy
+	return genjobs.RetryPolicyCreateResource{
+		Id:         policy.ID,
+		Type:       &rt,
+		Attributes: retryPolicyAttributes(policy),
+	}
+}
+
+func retryPolicyResourceFromPolicy(policy *RetryPolicy) genjobs.RetryPolicyResource {
+	rt := "retry_policy"
+	var idPtr *string
+	if policy.ID != "" {
+		id := policy.ID
+		idPtr = &id
+	}
+	return genjobs.RetryPolicyResource{
+		Id:         idPtr,
+		Type:       &rt,
+		Attributes: retryPolicyAttributes(policy),
+	}
+}
+
+func retryPolicyFromResource(r genjobs.RetryPolicyResource, client *RetryPoliciesClient) *RetryPolicy {
+	id := ""
+	if r.Id != nil {
+		id = *r.Id
+	}
+	a := r.Attributes
+	return &RetryPolicy{
+		ID:              id,
+		Name:            a.Name,
+		MaxRetries:      a.MaxRetries,
+		Backoff:         Backoff(a.Backoff),
+		DelaySeconds:    a.DelaySeconds,
+		MaxDelaySeconds: a.MaxDelaySeconds,
+		RetryOn:         retryOnFromWire(a.RetryOn),
+		CreatedAt:       a.CreatedAt,
+		UpdatedAt:       a.UpdatedAt,
+		DeletedAt:       a.DeletedAt,
+		Version:         a.Version,
+		client:          client,
 	}
 }
