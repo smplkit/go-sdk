@@ -714,6 +714,9 @@ type ListRunsParams struct {
 	// FilterScheduledFor Restrict to runs whose `scheduled_for` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.
 	FilterScheduledFor *string `form:"filter[scheduled_for],omitempty" json:"filter[scheduled_for],omitempty"`
 
+	// LastRunOnly Return only the last completed run for each job-and-environment combination. "Completed" means a terminal state — succeeded, failed, or canceled; runs still in flight (pending or running) are not included, so a job that is currently running still shows its previous completed result. The other filters and date ranges apply first, then the results collapse, so each row is the most recent completed run in its group that also matches them. Defaults to `false`.
+	LastRunOnly *bool `form:"last_run_only,omitempty" json:"last_run_only,omitempty"`
+
 	// PageSize Number of runs per page. Optional; defaults to `50` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
 	PageSize  *int    `form:"page[size],omitempty" json:"page[size],omitempty"`
 	PageAfter *string `form:"page[after],omitempty" json:"page[after],omitempty"`
@@ -1466,6 +1469,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 		if params.FilterScheduledFor != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[scheduled_for]", *params.FilterScheduledFor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.LastRunOnly != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "last_run_only", *params.LastRunOnly, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
