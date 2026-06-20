@@ -543,6 +543,37 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 	if qa := job.Environments["qa"]; qa.Schedule != "0 5 * * *" || qa.Enabled {
 		t.Errorf("qa per-env schedule override mismatch: %+v", qa)
 	}
+
+	// SetTimezone with no environment (and with an explicit empty environment)
+	// sets the base timezone.
+	job.SetTimezone("America/New_York")
+	if job.Timezone != "America/New_York" {
+		t.Errorf("base timezone not set: %s", job.Timezone)
+	}
+	job.SetTimezone("America/Chicago", "")
+	if job.Timezone != "America/Chicago" {
+		t.Errorf("base timezone (explicit empty env) not set: %s", job.Timezone)
+	}
+
+	// SetTimezone with an environment sets a per-environment override, preserving
+	// the already-set per-env schedule, and does not touch the base timezone.
+	job.SetTimezone("Europe/London", "production")
+	prodTz := job.Environments["production"]
+	if prodTz.Timezone != "Europe/London" {
+		t.Errorf("production per-env timezone not set: %q", prodTz.Timezone)
+	}
+	if prodTz.Schedule != "0 4 * * *" {
+		t.Error("SetTimezone must preserve Schedule on the existing production override")
+	}
+	if job.Timezone != "America/Chicago" {
+		t.Errorf("per-env SetTimezone must not change the base timezone: %q", job.Timezone)
+	}
+
+	// SetTimezone on a brand-new environment creates the override entry.
+	job.SetTimezone("Asia/Tokyo", "edge")
+	if edge := job.Environments["edge"]; edge.Timezone != "Asia/Tokyo" || edge.Enabled {
+		t.Errorf("edge per-env timezone override mismatch: %+v", edge)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -568,6 +599,8 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	job.SetConfiguration(HttpConfig{URL: "https://dev"}, "development")
 	job.SetEnabled(false, "development")
 	job.SetSchedule("0 3 * * *", "development")
+	job.SetTimezone("America/New_York")              // base timezone
+	job.SetTimezone("Europe/London", "development")  // per-env override
 	job.SetEnabled(true, "production")
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -579,6 +612,10 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
 	if _, ok := attrs["enabled"]; ok {
 		t.Error("write body must NOT include the read-only base `enabled`")
+	}
+	// The base timezone is sent when set.
+	if attrs["timezone"] != "America/New_York" {
+		t.Errorf("base timezone should be on the wire, got %v", attrs["timezone"])
 	}
 	if _, ok := attrs["next_run_at"]; ok {
 		t.Error("write body must NOT include the removed top-level `next_run_at`")
@@ -599,6 +636,9 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	if dev["schedule"] != "0 3 * * *" {
 		t.Errorf("development per-env schedule should be on the wire, got %v", dev["schedule"])
 	}
+	if dev["timezone"] != "Europe/London" {
+		t.Errorf("development per-env timezone should be on the wire, got %v", dev["timezone"])
+	}
 	if _, ok := dev["next_run_at"]; ok {
 		t.Error("read-only per-env next_run_at must never be sent on the wire")
 	}
@@ -612,6 +652,10 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	// production has no schedule override; it must be omitted from the wire.
 	if _, ok := prod["schedule"]; ok {
 		t.Error("production override has no schedule; it must be omitted")
+	}
+	// production has no timezone override; it must be omitted from the wire.
+	if _, ok := prod["timezone"]; ok {
+		t.Error("production override has no timezone; it must be omitted")
 	}
 }
 
@@ -695,11 +739,13 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 			"id": testJobID, "type": "job",
 			"attributes": map[string]any{
 				"name": "n", "schedule": "0 * * * *", "kind": "recurring",
+				"timezone":      "America/New_York",
 				"configuration": map[string]any{"url": "https://base"},
 				"environments": map[string]any{
 					"development": map[string]any{
 						"enabled":       true,
 						"schedule":      "0 3 * * *",
+						"timezone":      "Europe/London",
 						"configuration": map[string]any{"url": "https://dev", "method": "POST"},
 						"next_run_at":   "2026-06-05T03:00:00Z",
 					},
@@ -721,6 +767,10 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 	if !job.IsRecurring() {
 		t.Errorf("kind should be recurring, got %v", job.Kind)
 	}
+	// The base timezone decodes from the wire.
+	if job.Timezone != "America/New_York" {
+		t.Errorf("base timezone mismatch: %q", job.Timezone)
+	}
 	dev, ok := job.Environments["development"]
 	if !ok || !dev.Enabled || dev.Configuration == nil || dev.Configuration.URL != "https://dev" {
 		t.Errorf("development override mismatch: %+v", dev)
@@ -728,6 +778,9 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 	// The per-environment schedule override and read-only next_run_at surface.
 	if dev.Schedule != "0 3 * * *" {
 		t.Errorf("development per-env schedule mismatch: %q", dev.Schedule)
+	}
+	if dev.Timezone != "Europe/London" {
+		t.Errorf("development per-env timezone mismatch: %q", dev.Timezone)
 	}
 	wantNext := time.Date(2026, 6, 5, 3, 0, 0, 0, time.UTC)
 	if dev.NextRunAt == nil || !dev.NextRunAt.Equal(wantNext) {
@@ -737,9 +790,9 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 	if !ok || prod.Enabled || prod.Configuration != nil {
 		t.Errorf("production override (no configuration) mismatch: %+v", prod)
 	}
-	// production is not enabled, so it has no per-env schedule or next_run_at.
-	if prod.Schedule != "" || prod.NextRunAt != nil {
-		t.Errorf("production override should have no schedule/next_run_at: %+v", prod)
+	// production is not enabled, so it has no per-env schedule/timezone/next_run_at.
+	if prod.Schedule != "" || prod.Timezone != "" || prod.NextRunAt != nil {
+		t.Errorf("production override should have no schedule/timezone/next_run_at: %+v", prod)
 	}
 }
 

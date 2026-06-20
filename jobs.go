@@ -384,6 +384,31 @@ func (job *Job) SetSchedule(schedule string, environment ...string) {
 	job.Environments[env] = *override
 }
 
+// SetTimezone sets the IANA timezone the cron schedule is evaluated in — base
+// or per-environment.
+//
+// Called with no environment (or an empty environment), it sets the base
+// Timezone every environment inherits unless it overrides it. Called with an
+// environment, it sets that environment's per-environment timezone override on
+// Environments, creating the override entry if it doesn't exist yet (preserving
+// any already-set Enabled / Schedule / Configuration on it). A timezone is only
+// valid on a recurring (cron) job; an empty value means UTC (base) or "inherit
+// the base" (per-environment). At most one environment may be named; extra
+// arguments are ignored. Call Save to persist.
+func (job *Job) SetTimezone(timezone string, environment ...string) {
+	env := ""
+	if len(environment) > 0 {
+		env = environment[0]
+	}
+	if env == "" {
+		job.Timezone = timezone
+		return
+	}
+	override := job.environmentOverride(env)
+	override.Timezone = timezone
+	job.Environments[env] = *override
+}
+
 // Trigger starts one immediate, manual run of this job (a MANUAL run) and
 // returns it. environment is the environment the run executes in; empty
 // defaults to the client's configured environment.
@@ -423,6 +448,7 @@ func (job *Job) apply(other *Job) {
 	job.Kind = other.Kind
 	job.Type = other.Type
 	job.Schedule = other.Schedule
+	job.Timezone = other.Timezone
 	job.Configuration = other.Configuration
 	job.ConcurrencyPolicy = other.ConcurrencyPolicy
 	job.CreatedAt = other.CreatedAt
@@ -717,6 +743,12 @@ func jobAttributes(job *Job) genjobs.Job {
 		schedule := job.Schedule
 		attrs.Schedule = &schedule
 	}
+	// Timezone is the IANA zone the cron is evaluated in (recurring jobs only);
+	// an empty Timezone is omitted, leaving the server default of UTC.
+	if job.Timezone != "" {
+		timezone := job.Timezone
+		attrs.Timezone = &timezone
+	}
 	if len(job.Environments) > 0 {
 		envs := jobEnvironmentsToWire(job.Environments)
 		attrs.Environments = &envs
@@ -749,6 +781,10 @@ func jobEnvironmentsToWire(envs map[string]JobEnvironment) map[string]genjobs.Jo
 			schedule := env.Schedule
 			ge.Schedule = &schedule
 		}
+		if env.Timezone != "" {
+			timezone := env.Timezone
+			ge.Timezone = &timezone
+		}
 		if env.Configuration != nil {
 			cfg := httpConfigToWire(*env.Configuration)
 			ge.Configuration = &cfg
@@ -770,6 +806,9 @@ func jobEnvironmentsFromWire(envs map[string]genjobs.JobEnvironment) map[string]
 		}
 		if ge.Schedule != nil {
 			env.Schedule = *ge.Schedule
+		}
+		if ge.Timezone != nil {
+			env.Timezone = *ge.Timezone
 		}
 		if ge.Configuration != nil {
 			cfg := httpConfigFromWire(*ge.Configuration)
@@ -899,6 +938,9 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 	// wrapper Schedule empty.
 	if a.Schedule != nil {
 		out.Schedule = *a.Schedule
+	}
+	if a.Timezone != nil {
+		out.Timezone = *a.Timezone
 	}
 	if a.Environments != nil {
 		out.Environments = jobEnvironmentsFromWire(*a.Environments)

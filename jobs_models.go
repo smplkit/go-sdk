@@ -100,6 +100,13 @@ type JobEnvironment struct {
 	// evaluated in UTC; it cannot appear on a manual or one-off job, and cannot
 	// change a job's kind. Settable; sent on writes only when non-empty.
 	Schedule string
+	// Timezone is an optional per-environment IANA timezone override for
+	// evaluating this environment's cron Schedule (recurring jobs only). Empty
+	// inherits the base Timezone, else UTC. When set, it must be a valid IANA
+	// zone key (e.g. "America/New_York"); it may be set on an environment that
+	// inherits the base schedule (it need not also override Schedule). Settable;
+	// sent on writes only when non-empty.
+	Timezone string
 	// Configuration is an optional per-environment request configuration that
 	// fully replaces the job's base Configuration for this environment. Nil
 	// (the default) inherits the base configuration. As with the base
@@ -156,6 +163,13 @@ type Job struct {
 	// manual job (no schedule), a 5-field cron expression evaluated in UTC for
 	// a recurring job, or an ISO-8601 datetime / "now" for a one-off job.
 	Schedule string
+	// Timezone is the base IANA timezone the cron Schedule is evaluated in
+	// (e.g. "America/New_York"); empty means UTC. The base every environment
+	// inherits unless it sets its own Timezone. The cron fires on this zone's
+	// wall clock (DST-aware) while NextRunAt is still reported as a UTC instant.
+	// Only valid on a recurring (cron) job — empty for a manual or one-off job.
+	// Settable; sent on writes only when non-empty.
+	Timezone string
 	// Configuration is the HTTP request the job performs when it fires.
 	Configuration HttpConfig
 	// ConcurrencyPolicy is how overlapping runs are handled. "ALLOW" (the
