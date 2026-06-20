@@ -387,13 +387,264 @@
         }
       }
     },
+    "/api/v1/retry-policies": {
+      "post": {
+        "tags": [
+          "Retry Policies"
+        ],
+        "summary": "Create Retry Policy",
+        "description": "Create a retry policy for this account.\n\nThe caller supplies the policy's id as `data.id`. Ids are unique within an\naccount and immutable. `Default` is reserved for the built-in policy and\ncannot be created.",
+        "operationId": "create_retry_policy",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryPolicyCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryPolicyResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Retry Policies"
+        ],
+        "summary": "List Retry Policies",
+        "description": "List this account's retry policies.\n\nDefault sort is `name` ascending. Sort by `name`, `created_at`, or\n`updated_at` (prefix `-` for descending). The built-in `Default` policy is\nnot included here \u2014 it always exists and is retrievable at\n`/retry-policies/Default`.",
+        "operationId": "list_retry_policies",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[name]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match on the policy `name` (matches when the name contains the given text).",
+              "title": "Filter[Name]"
+            },
+            "description": "Case-insensitive substring match on the policy `name` (matches when the name contains the given text)."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `name`, `-name`, `updated_at`, `-updated_at`.",
+              "enum": [
+                "created_at",
+                "-created_at",
+                "name",
+                "-name",
+                "updated_at",
+                "-updated_at"
+              ],
+              "default": "name",
+              "title": "Sort"
+            },
+            "description": "Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `name`, `-name`, `updated_at`, `-updated_at`."
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error.",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` \u2014 requests with a smaller value are rejected with a 400 error."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error.",
+              "default": 1000,
+              "title": "Page[Size]"
+            },
+            "description": "Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive \u2014 requests outside that range are rejected with a 400 error."
+          },
+          {
+            "name": "meta[total]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.",
+              "default": false,
+              "title": "Meta[Total]"
+            },
+            "description": "When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryPolicyListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/retry-policies/{policy_id}": {
+      "get": {
+        "tags": [
+          "Retry Policies"
+        ],
+        "summary": "Get Retry Policy",
+        "description": "Retrieve a single retry policy by its id.\n\n`Default` returns the built-in do-not-retry policy.",
+        "operationId": "get_retry_policy",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryPolicyResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Retry Policies"
+        ],
+        "summary": "Update Retry Policy",
+        "description": "Replace an existing retry policy. Every writable field is overwritten.\n\nThe built-in `Default` policy cannot be modified.",
+        "operationId": "update_retry_policy",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryPolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryPolicyResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Retry Policies"
+        ],
+        "summary": "Delete Retry Policy",
+        "description": "Delete a retry policy.\n\nThe built-in `Default` policy cannot be deleted (`403`). A policy still\nreferenced by any job \u2014 at the base level or in a per-environment override \u2014\ncannot be deleted (`409`); the error lists the referencing job ids under\n`meta.referencing_jobs` so they can be reassigned to `Default` first.",
+        "operationId": "delete_retry_policy",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
     "/api/v1/runs": {
       "get": {
         "tags": [
           "Runs"
         ],
         "summary": "List Runs",
-        "description": "List runs for this account (cursor paginated).\n\nDefault sort is `-created_at` (newest first). Sort by `created_at`,\n`started_at`, `finished_at`, `scheduled_for`, `status`, `job`, or\n`total_duration_ms`, ascending or descending (prefix `-` for descending).\nKeep the same `sort` value across paginated requests so the cursor stays\nconsistent. Runs that have not reached the relevant lifecycle point\n(`started_at`, `finished_at`, `scheduled_for`, `total_duration_ms` unset)\nsort to the end regardless of direction.\n\nFilters compose with AND:\n\n- `filter[job]={id}` \u2014 a single job's run history.\n- `filter[status]` \u2014 one state or a comma-separated list (any-of).\n- `filter[environment]` \u2014 one environment key or a comma-separated list\n  (any-of); omitted covers every environment you can access.\n- `filter[created_at]` / `filter[started_at]` / `filter[finished_at]` /\n  `filter[scheduled_for]` \u2014 half-open `[start,end)` date ranges (see each\n  parameter for the interval syntax).\n\nSet `last_run_only=true` to collapse the result to the last completed run\nfor each job-and-environment combination. \"Completed\" means a terminal state\n\u2014 succeeded, failed, or canceled; in-flight runs (pending or running) are\nnot included, so a job that is mid-run still surfaces its previous completed\nresult and a combination with no completed run yet returns nothing. The\nfilters above still apply, evaluated before the collapse, so each row is the\nmost recent completed run in its group that also satisfies them.",
+        "description": "List runs for this account (cursor paginated).\n\nDefault sort is `-created_at` (newest first). Sort by `created_at`,\n`started_at`, `finished_at`, `scheduled_for`, `status`, `job`, or\n`total_duration_ms`, ascending or descending (prefix `-` for descending).\nKeep the same `sort` value across paginated requests so the cursor stays\nconsistent. Runs that have not reached the relevant lifecycle point\n(`started_at`, `finished_at`, `scheduled_for`, `total_duration_ms` unset)\nsort to the end regardless of direction.\n\nFilters compose with AND:\n\n- `filter[job]={id}` \u2014 a single job's run history.\n- `filter[status]` \u2014 one state or a comma-separated list (any-of).\n- `filter[trigger]` \u2014 one trigger (`SCHEDULE`, `MANUAL`, `RERUN`, `RETRY`)\n  or a comma-separated list of them (any-of).\n- `filter[environment]` \u2014 one environment key or a comma-separated list\n  (any-of); omitted covers every environment you can access.\n- `filter[created_at]` / `filter[started_at]` / `filter[finished_at]` /\n  `filter[scheduled_for]` \u2014 half-open `[start,end)` date ranges (see each\n  parameter for the interval syntax).\n\nSet `last_run_only=true` to collapse the result to the last completed run\nfor each job-and-environment combination. \"Completed\" means a terminal state\n\u2014 succeeded, failed, or canceled; in-flight runs (pending or running) are\nnot included, so a job that is mid-run still surfaces its previous completed\nresult and a combination with no completed run yet returns nothing. The\nfilters above still apply, evaluated before the collapse, so each row is the\nmost recent completed run in its group that also satisfies them.",
         "operationId": "list_runs",
         "security": [
           {
@@ -452,6 +703,24 @@
               "title": "Filter[Environment]"
             },
             "description": "Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access."
+          },
+          {
+            "name": "filter[trigger]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to runs with the given trigger. One of `SCHEDULE`, `MANUAL`, `RERUN`, `RETRY`, or a comma-separated list of them to match any (e.g. `SCHEDULE,RETRY` to see a job's automatic runs).",
+              "title": "Filter[Trigger]"
+            },
+            "description": "Restrict to runs with the given trigger. One of `SCHEDULE`, `MANUAL`, `RERUN`, `RETRY`, or a comma-separated list of them to match any (e.g. `SCHEDULE,RETRY` to see a job's automatic runs)."
           },
           {
             "name": "filter[created_at]",
@@ -870,6 +1139,18 @@
             "description": "How overlapping runs are handled. `ALLOW` (the only value today) permits them.",
             "default": "ALLOW"
           },
+          "retry_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Policy",
+            "description": "The base retry policy for failed runs \u2014 the `id` of a retry policy (or the built-in `Default`), overridable per environment. Omit (or send `null`) to use `Default`, which never retries \u2014 so a job that sets nothing behaves exactly as before retries existed."
+          },
           "kind": {
             "anyOf": [
               {
@@ -1032,6 +1313,7 @@
               }
             },
             "name": "Nightly cache warm",
+            "retry_policy": "retry-on-5xx",
             "schedule": "0 2 * * *",
             "timezone": "America/New_York",
             "type": "http"
@@ -1082,6 +1364,18 @@
               }
             ],
             "description": "Per-environment HTTP request override. Omit to inherit the job's base `configuration`. When present, it fully replaces the base configuration for runs in this environment."
+          },
+          "retry_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Policy",
+            "description": "Per-environment retry-policy override \u2014 the `id` of a retry policy (or `Default`). Omit to inherit the job's base `retry_policy`. When present, runs in this environment retry according to this policy instead of the base."
           },
           "next_run_at": {
             "anyOf": [
@@ -1292,6 +1586,7 @@
               }
             },
             "name": "Nightly cache warm",
+            "retry_policy": "retry-on-5xx",
             "schedule": "0 2 * * *",
             "timezone": "America/New_York",
             "type": "http"
@@ -1371,6 +1666,307 @@
         "title": "PaginationMeta",
         "description": "Pagination block returned inside ``meta`` on every list response.\n\n``page`` and ``size`` are always present and echo the parameters that\nserved the response (their defaults when the client omitted them).\n``total`` and ``total_pages`` are present only when the request included\n``meta[total]=true``."
       },
+      "RetryOn": {
+        "properties": {
+          "statuses": {
+            "items": {
+              "type": "integer",
+              "maximum": 599.0,
+              "minimum": 100.0
+            },
+            "type": "array",
+            "title": "Statuses",
+            "description": "Response status codes that should be retried when a run fails because the response did not match the job's success status (for example `[429, 503]` to retry on rate-limit and unavailable). Each is a 3-digit HTTP status code. Empty matches no status."
+          },
+          "reasons": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "TIMEOUT",
+                "CONNECTION_ERROR",
+                "NON_SUCCESS_STATUS"
+              ]
+            },
+            "type": "array",
+            "title": "Reasons",
+            "description": "Failure reasons that should be retried: `TIMEOUT` (the run did not complete in time), `CONNECTION_ERROR` (the endpoint could not be reached), or `NON_SUCCESS_STATUS` (any non-success response, regardless of `statuses`). Empty matches no reason."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RetryOn",
+        "description": "Which failures a policy retries. An empty policy (both lists empty or\nabsent) retries nothing."
+      },
+      "RetryPolicy": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Human-readable name for the policy."
+          },
+          "max_retries": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Max Retries",
+            "description": "How many times a failed run is retried, after the initial attempt \u2014 so `max_retries` of 3 means up to 4 attempts in total. `0` disables retries. Maximum 10."
+          },
+          "backoff": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "exponential"
+            ],
+            "title": "Backoff",
+            "description": "How the wait between retries grows. `fixed` waits `delay_seconds` before every retry. `exponential` doubles the wait each time \u2014 `delay_seconds`, then `2\u00d7`, `4\u00d7`, \u2026 \u2014 capped at `max_delay_seconds`."
+          },
+          "delay_seconds": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Delay Seconds",
+            "description": "The wait before a retry, in seconds. For `fixed` backoff it is the constant wait before every retry; for `exponential` it is the base wait that doubles each retry."
+          },
+          "max_delay_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Delay Seconds",
+            "description": "The ceiling on the wait between retries, in seconds, for `exponential` backoff \u2014 once the doubling reaches it, every subsequent retry waits this long. Only valid with `exponential` backoff; omit it for `fixed`."
+          },
+          "retry_on": {
+            "$ref": "#/components/schemas/RetryOn",
+            "description": "Which failures are retried. A run is retried only when its failure matches this set; an empty set retries nothing. Some failures are never retried regardless of this value."
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "When the policy was created.",
+            "readOnly": true
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "When the policy was last modified.",
+            "readOnly": true
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At",
+            "description": "When the policy was deleted. `null` for active policies.",
+            "readOnly": true
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version",
+            "description": "Monotonic counter incremented on every update, starting at 1.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "max_retries",
+          "backoff",
+          "delay_seconds"
+        ],
+        "title": "RetryPolicy",
+        "description": "A named, reusable automatic-retry policy.\n\nA policy decides whether and how a failed run is retried. Reference it from\na job's `retry_policy` (and optionally override it per environment). A job\nthat references nothing uses the built-in `Default` policy, which never\nretries."
+      },
+      "RetryPolicyCreateRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RetryPolicyCreateResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "RetryPolicyCreateRequest",
+        "description": "JSON:API request envelope for creating a retry policy (caller-supplied `data.id`)."
+      },
+      "RetryPolicyCreateResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Client-supplied resource id."
+          },
+          "type": {
+            "type": "string",
+            "const": "retry_policy",
+            "title": "Type",
+            "default": "retry_policy"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/RetryPolicy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "attributes"
+        ],
+        "title": "RetryPolicyCreateResource",
+        "description": "JSON:API resource envelope for creating a retry policy (id required).",
+        "example": {
+          "attributes": {
+            "backoff": "exponential",
+            "delay_seconds": 2,
+            "max_delay_seconds": 60,
+            "max_retries": 5,
+            "name": "Retry on server errors",
+            "retry_on": {
+              "reasons": [
+                "TIMEOUT",
+                "CONNECTION_ERROR"
+              ],
+              "statuses": [
+                429,
+                503
+              ]
+            }
+          },
+          "id": "retry-on-5xx",
+          "type": "retry_policy"
+        }
+      },
+      "RetryPolicyListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RetryPolicyResource"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "RetryPolicyListResponse",
+        "description": "JSON:API collection response for retry policies."
+      },
+      "RetryPolicyRequest": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RetryPolicyResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "RetryPolicyRequest",
+        "description": "JSON:API request envelope for updating a retry policy."
+      },
+      "RetryPolicyResource": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "retry_policy"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/RetryPolicy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attributes"
+        ],
+        "title": "RetryPolicyResource",
+        "description": "JSON:API resource envelope for a retry policy. The caller supplies `id` on create.",
+        "example": {
+          "attributes": {
+            "backoff": "exponential",
+            "delay_seconds": 2,
+            "max_delay_seconds": 60,
+            "max_retries": 5,
+            "name": "Retry on server errors",
+            "retry_on": {
+              "reasons": [
+                "TIMEOUT",
+                "CONNECTION_ERROR"
+              ],
+              "statuses": [
+                429,
+                503
+              ]
+            }
+          },
+          "id": "retry-on-5xx",
+          "type": "retry_policy"
+        }
+      },
+      "RetryPolicyResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RetryPolicyResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "RetryPolicyResponse",
+        "description": "JSON:API single-resource response for a retry policy."
+      },
       "Run": {
         "properties": {
           "job": {
@@ -1400,10 +1996,11 @@
             "enum": [
               "SCHEDULE",
               "MANUAL",
-              "RERUN"
+              "RERUN",
+              "RETRY"
             ],
             "title": "Trigger",
-            "description": "Why the run exists: `SCHEDULE`, `MANUAL` (Run now), or `RERUN`."
+            "description": "Why the run exists: `SCHEDULE`, `MANUAL` (Run now), `RERUN`, or `RETRY` (an automatic retry of a failed run)."
           },
           "rerun_of": {
             "anyOf": [
@@ -1417,6 +2014,17 @@
             ],
             "title": "Rerun Of",
             "description": "The source run's id; set only when `trigger` is `RERUN`."
+          },
+          "retry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunRetry"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Retry-chain position, present only when `trigger` is `RETRY`: the id of the original run the chain retries (`of`) and this run's `attempt` number."
           },
           "scheduled_for": {
             "anyOf": [
@@ -1618,7 +2226,7 @@
           "page_size"
         ],
         "title": "RunListMeta",
-        "description": "Cursor-pagination meta for the runs list (ADR-014 high-cardinality exception)."
+        "description": "Cursor-pagination meta for the runs list."
       },
       "RunListResponse": {
         "properties": {
@@ -1725,6 +2333,28 @@
         "title": "RunResponse",
         "description": "JSON:API single-resource response for a run."
       },
+      "RunRetry": {
+        "properties": {
+          "of": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Of",
+            "description": "The id of the chain's original run \u2014 the first attempt that failed and started the chain."
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt",
+            "description": "Which retry this run is: `1` for the first retry, `2` for the second, and so on."
+          }
+        },
+        "type": "object",
+        "required": [
+          "of",
+          "attempt"
+        ],
+        "title": "RunRetry",
+        "description": "Where a `RETRY` run sits in its retry chain."
+      },
       "Usage": {
         "properties": {
           "period": {
@@ -1822,6 +2452,9 @@
   "tags": [
     {
       "name": "Jobs"
+    },
+    {
+      "name": "Retry Policies"
     },
     {
       "name": "Runs"
