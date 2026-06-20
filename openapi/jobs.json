@@ -393,7 +393,7 @@
           "Runs"
         ],
         "summary": "List Runs",
-        "description": "List runs for this account (cursor paginated).\n\nDefault sort is `-created_at` (newest first). Sort by `created_at`,\n`started_at`, `finished_at`, `scheduled_for`, `status`, `job`, or\n`total_duration_ms`, ascending or descending (prefix `-` for descending).\nKeep the same `sort` value across paginated requests so the cursor stays\nconsistent. Runs that have not reached the relevant lifecycle point\n(`started_at`, `finished_at`, `scheduled_for`, `total_duration_ms` unset)\nsort to the end regardless of direction.\n\nFilters compose with AND:\n\n- `filter[job]={id}` \u2014 a single job's run history.\n- `filter[status]` \u2014 one state or a comma-separated list (any-of).\n- `filter[environment]` \u2014 one environment key or a comma-separated list\n  (any-of); omitted covers every environment you can access.\n- `filter[created_at]` / `filter[started_at]` / `filter[finished_at]` /\n  `filter[scheduled_for]` \u2014 half-open `[start,end)` date ranges (see each\n  parameter for the interval syntax).",
+        "description": "List runs for this account (cursor paginated).\n\nDefault sort is `-created_at` (newest first). Sort by `created_at`,\n`started_at`, `finished_at`, `scheduled_for`, `status`, `job`, or\n`total_duration_ms`, ascending or descending (prefix `-` for descending).\nKeep the same `sort` value across paginated requests so the cursor stays\nconsistent. Runs that have not reached the relevant lifecycle point\n(`started_at`, `finished_at`, `scheduled_for`, `total_duration_ms` unset)\nsort to the end regardless of direction.\n\nFilters compose with AND:\n\n- `filter[job]={id}` \u2014 a single job's run history.\n- `filter[status]` \u2014 one state or a comma-separated list (any-of).\n- `filter[environment]` \u2014 one environment key or a comma-separated list\n  (any-of); omitted covers every environment you can access.\n- `filter[created_at]` / `filter[started_at]` / `filter[finished_at]` /\n  `filter[scheduled_for]` \u2014 half-open `[start,end)` date ranges (see each\n  parameter for the interval syntax).\n\nSet `last_run_only=true` to collapse the result to the last completed run\nfor each job-and-environment combination. \"Completed\" means a terminal state\n\u2014 succeeded, failed, or canceled; in-flight runs (pending or running) are\nnot included, so a job that is mid-run still surfaces its previous completed\nresult and a combination with no completed run yet returns nothing. The\nfilters above still apply, evaluated before the collapse, so each row is the\nmost recent completed run in its group that also satisfies them.",
         "operationId": "list_runs",
         "security": [
           {
@@ -524,6 +524,18 @@
               "title": "Filter[Scheduled For]"
             },
             "description": "Restrict to runs whose `scheduled_for` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward."
+          },
+          {
+            "name": "last_run_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return only the last completed run for each job-and-environment combination. \"Completed\" means a terminal state \u2014 succeeded, failed, or canceled; runs still in flight (pending or running) are not included, so a job that is currently running still shows its previous completed result. The other filters and date ranges apply first, then the results collapse, so each row is the most recent completed run in its group that also matches them. Defaults to `false`.",
+              "default": false,
+              "title": "Last Run Only"
+            },
+            "description": "Return only the last completed run for each job-and-environment combination. \"Completed\" means a terminal state \u2014 succeeded, failed, or canceled; runs still in flight (pending or running) are not included, so a job that is currently running still shows its previous completed result. The other filters and date ranges apply first, then the results collapse, so each row is the most recent completed run in its group that also matches them. Defaults to `false`."
           },
           {
             "name": "page[size]",
