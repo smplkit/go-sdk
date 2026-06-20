@@ -66,7 +66,7 @@ func main() {
 	}, smplkit.WithJobDescription("Warms the product cache nightly."))
 	job.SetEnabled(true, "development")
 	job.SetEnabled(true, "production")
-	job.SetSchedule("0 */6 * * *", "America/New_York", "development")
+	job.SetSchedule("0 */6 * * *", smplkit.WithScheduleTimezone("America/New_York"), smplkit.WithScheduleEnvironment("development"))
 	devBody := `{"scope": "all"}`
 	job.SetConfiguration(smplkit.HttpConfig{
 		Method:  smplkit.JobHttpMethodPost,
@@ -112,7 +112,7 @@ func main() {
 	// update a job
 	job.Name = "Nightly cache warm (v2)"
 	job.SetRetryPolicy(retryPolicy, "production")
-	job.SetSchedule("30 2 * * *", "America/Los_Angeles", "production")
+	job.SetSchedule("30 2 * * *", smplkit.WithScheduleTimezone("America/Los_Angeles"), smplkit.WithScheduleEnvironment("production"))
 	fatalIfErr("update recurring job", job.Save(ctx))
 	if job.Version == nil || *job.Version != 2 {
 		fatalIfErr("assertion", fmt.Errorf("expected version 2, got %v", job.Version))

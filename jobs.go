@@ -386,37 +386,55 @@ func (job *Job) GetConfiguration(environment string) HttpConfig {
 	return job.Configuration
 }
 
-// SetSchedule sets the job's schedule in memory — base or per-environment.
+// ScheduleOption is an optional refinement to (*Job).SetSchedule — a timezone
+// to set alongside the schedule, or an environment to scope it to.
+type ScheduleOption func(*scheduleOptions)
+
+type scheduleOptions struct {
+	timezone    string
+	environment string
+}
+
+// WithScheduleTimezone also sets the IANA timezone the cron is evaluated in, for
+// the same scope as the schedule (equivalent to a follow-up SetTimezone). Omit
+// it to leave the timezone untouched.
+func WithScheduleTimezone(timezone string) ScheduleOption {
+	return func(o *scheduleOptions) { o.timezone = timezone }
+}
+
+// WithScheduleEnvironment scopes the schedule (and any WithScheduleTimezone) to a
+// single environment as a per-environment override, instead of the job's base.
+func WithScheduleEnvironment(environment string) ScheduleOption {
+	return func(o *scheduleOptions) { o.environment = environment }
+}
+
+// SetSchedule sets the job's schedule in memory. Call Save to persist.
 //
-// Called with an empty environment (or none), it sets the base Schedule: the
-// cadence every environment inherits unless it overrides it. Called with an
-// environment, it sets that environment's per-environment cron override on
-// Environments, creating the override entry if it doesn't exist yet (preserving
-// any already-set Enabled / Timezone / Configuration on it). A per-environment
-// schedule varies the cadence for just that environment (recurring jobs only);
-// clear it (set it back to the base cadence) to fall back to the base schedule.
+// With no options it sets the base Schedule — the cadence every environment
+// inherits unless it overrides it. Pass WithScheduleEnvironment to instead set a
+// per-environment cron override for just that environment (recurring jobs only),
+// creating the override entry if it doesn't exist yet (preserving any already-set
+// Enabled / Timezone / Configuration on it); set it back to the base cadence to
+// fall back to the base schedule.
 //
-// Because the timezone is an integral part of a cron cadence, a timezone may be
-// supplied alongside the schedule; when non-empty it sets the same scope's
-// timezone too (equivalent to a follow-up SetTimezone). Pass "" to leave the
-// timezone untouched. For a timezone-only change, use SetTimezone.
-//
-// At most one environment may be named; extra arguments are ignored. Call Save
-// to persist.
-func (job *Job) SetSchedule(schedule string, timezone string, environment ...string) {
-	env := ""
-	if len(environment) > 0 {
-		env = environment[0]
+// Because the timezone is an integral part of a cron cadence, pass
+// WithScheduleTimezone to set the same scope's timezone alongside the schedule
+// (equivalent to a follow-up SetTimezone). For a timezone-only change, use
+// SetTimezone.
+func (job *Job) SetSchedule(schedule string, opts ...ScheduleOption) {
+	var cfg scheduleOptions
+	for _, opt := range opts {
+		opt(&cfg)
 	}
-	if env == "" {
+	if cfg.environment == "" {
 		job.Schedule = schedule
 	} else {
-		override := job.environmentOverride(env)
+		override := job.environmentOverride(cfg.environment)
 		override.Schedule = schedule
-		job.Environments[env] = *override
+		job.Environments[cfg.environment] = *override
 	}
-	if timezone != "" {
-		job.SetTimezone(timezone, env)
+	if cfg.timezone != "" {
+		job.SetTimezone(cfg.timezone, cfg.environment)
 	}
 }
 

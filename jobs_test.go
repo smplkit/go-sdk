@@ -385,7 +385,7 @@ func TestJobs_Lifecycle(t *testing.T) {
 
 	// update a job (the schedule is environment-agnostic)
 	job.Name = "renamed"
-	job.SetSchedule("30 2 * * *", "")
+	job.SetSchedule("30 2 * * *")
 	job.SetEnabled(true, "development")
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save (update): %v", err)
@@ -516,18 +516,18 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 		t.Errorf("base configuration not replaced: %s", job.GetConfiguration("").URL)
 	}
 
-	// SetSchedule with an empty timezone and no environment sets the base
-	// schedule and leaves the timezone untouched.
-	job.SetSchedule("*/5 * * * *", "")
+	// SetSchedule with no options sets the base schedule and leaves the timezone
+	// untouched.
+	job.SetSchedule("*/5 * * * *")
 	if job.Schedule != "*/5 * * * *" {
 		t.Errorf("base schedule not set: %s", job.Schedule)
 	}
 	if job.Timezone != "" {
-		t.Errorf("empty timezone must leave the base timezone untouched, got %q", job.Timezone)
+		t.Errorf("no timezone option must leave the base timezone untouched, got %q", job.Timezone)
 	}
-	// SetSchedule with a non-empty timezone and no environment also sets the base
+	// SetSchedule with WithScheduleTimezone and no environment also sets the base
 	// timezone (equivalent to a follow-up SetTimezone).
-	job.SetSchedule("*/10 * * * *", "America/Denver")
+	job.SetSchedule("*/10 * * * *", WithScheduleTimezone("America/Denver"))
 	if job.Schedule != "*/10 * * * *" {
 		t.Errorf("base schedule not set: %s", job.Schedule)
 	}
@@ -535,10 +535,10 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 		t.Errorf("base timezone should be set alongside the schedule, got %q", job.Timezone)
 	}
 
-	// SetSchedule with an environment sets a per-environment cron override,
-	// preserving the already-set Enabled on that environment's entry, and does
-	// not touch the base schedule.
-	job.SetSchedule("0 4 * * *", "", "production")
+	// SetSchedule with WithScheduleEnvironment sets a per-environment cron
+	// override, preserving the already-set Enabled on that environment's entry,
+	// and does not touch the base schedule.
+	job.SetSchedule("0 4 * * *", WithScheduleEnvironment("production"))
 	prod := job.Environments["production"]
 	if prod.Schedule != "0 4 * * *" {
 		t.Errorf("production per-env schedule not set: %q", prod.Schedule)
@@ -550,16 +550,16 @@ func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
 		t.Errorf("per-env SetSchedule must not change the base schedule: %q", job.Schedule)
 	}
 
-	// SetSchedule with a timezone and an environment sets both on that
+	// SetSchedule with both a timezone and an environment sets both on that
 	// environment's override.
-	job.SetSchedule("0 6 * * *", "Europe/Paris", "production")
+	job.SetSchedule("0 6 * * *", WithScheduleTimezone("Europe/Paris"), WithScheduleEnvironment("production"))
 	prodTzSched := job.Environments["production"]
 	if prodTzSched.Schedule != "0 6 * * *" || prodTzSched.Timezone != "Europe/Paris" {
 		t.Errorf("per-env SetSchedule with timezone mismatch: %+v", prodTzSched)
 	}
 
 	// SetSchedule on a brand-new environment creates the override entry.
-	job.SetSchedule("0 5 * * *", "", "qa")
+	job.SetSchedule("0 5 * * *", WithScheduleEnvironment("qa"))
 	if qa := job.Environments["qa"]; qa.Schedule != "0 5 * * *" || qa.Enabled {
 		t.Errorf("qa per-env schedule override mismatch: %+v", qa)
 	}
@@ -618,7 +618,7 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	}, WithJobBirthEnvironment("development"))
 	job.SetConfiguration(HttpConfig{URL: "https://dev"}, "development")
 	job.SetEnabled(false, "development")
-	job.SetSchedule("0 3 * * *", "", "development")
+	job.SetSchedule("0 3 * * *", WithScheduleEnvironment("development"))
 	job.SetTimezone("America/New_York")             // base timezone
 	job.SetTimezone("Europe/London", "development") // per-env override
 	job.SetEnabled(true, "production")
