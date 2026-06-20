@@ -929,7 +929,7 @@
           "Runs"
         ],
         "summary": "Cancel Run",
-        "description": "Cancel a pending or running run.\n\nReturns `409` if the run is already in a terminal state. Canceling a\nrunning run stops us tracking it, but the HTTP request may already be in\nflight \u2014 cancel means \"stop tracking,\" not \"guaranteed it didn't happen.\"",
+        "description": "Cancel a pending or running run.\n\nReturns `404` if the run does not exist and `409` if it is already in a\nterminal state. Canceling a running run stops us tracking it, but the HTTP\nrequest may already be in flight \u2014 cancel means \"stop tracking,\" not\n\"guaranteed it didn't happen.\" A run that has already started running still\ncounts toward your monthly run allowance even if you cancel it; a run\ncanceled while it is still pending does not count.",
         "operationId": "cancel_run",
         "security": [
           {
@@ -958,6 +958,26 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Run not found.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run is already in a terminal state (succeeded, failed, or canceled) and cannot be canceled.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -968,7 +988,7 @@
           "Runs"
         ],
         "summary": "Rerun Run",
-        "description": "Spawn a new run from a prior run, using the job's current configuration.\n\nReturns `409` if the run's parent job has been deleted.",
+        "description": "Spawn a new run from a prior run, using the job's current configuration.\n\nReturns `404` if the run does not exist and `409` if the run's parent job\nhas been deleted.",
         "operationId": "rerun_run",
         "security": [
           {
@@ -994,6 +1014,26 @@
               "application/vnd.api+json": {
                 "schema": {
                   "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not found.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run's parent job has been deleted, so there is no current configuration to run.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1043,6 +1083,65 @@
   },
   "components": {
     "schemas": {
+      "Error": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "title"
+        ],
+        "title": "Error",
+        "description": "Single JSON:API error object."
+      },
+      "ErrorResponse": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "errors"
+        ],
+        "title": "ErrorResponse",
+        "description": "JSON:API error response envelope."
+      },
       "HttpHeader": {
         "properties": {
           "name": {
