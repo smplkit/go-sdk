@@ -115,30 +115,84 @@ func (e JobHttpConfigurationMethod) Valid() bool {
 	}
 }
 
+// Defines values for RetryOnReasons.
+const (
+	RetryOnReasonsCONNECTIONERROR  RetryOnReasons = "CONNECTION_ERROR"
+	RetryOnReasonsNONSUCCESSSTATUS RetryOnReasons = "NON_SUCCESS_STATUS"
+	RetryOnReasonsTIMEOUT          RetryOnReasons = "TIMEOUT"
+)
+
+// Valid indicates whether the value is a known member of the RetryOnReasons enum.
+func (e RetryOnReasons) Valid() bool {
+	switch e {
+	case RetryOnReasonsCONNECTIONERROR:
+		return true
+	case RetryOnReasonsNONSUCCESSSTATUS:
+		return true
+	case RetryOnReasonsTIMEOUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RetryPolicyBackoff.
+const (
+	Exponential RetryPolicyBackoff = "exponential"
+	Fixed       RetryPolicyBackoff = "fixed"
+)
+
+// Valid indicates whether the value is a known member of the RetryPolicyBackoff enum.
+func (e RetryPolicyBackoff) Valid() bool {
+	switch e {
+	case Exponential:
+		return true
+	case Fixed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RetryPolicyCreateResourceType.
+const (
+	RetryPolicyCreateResourceTypeRetryPolicy RetryPolicyCreateResourceType = "retry_policy"
+)
+
+// Valid indicates whether the value is a known member of the RetryPolicyCreateResourceType enum.
+func (e RetryPolicyCreateResourceType) Valid() bool {
+	switch e {
+	case RetryPolicyCreateResourceTypeRetryPolicy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunFailureReason.
 const (
-	CONNECTIONERROR  RunFailureReason = "CONNECTION_ERROR"
-	NONSUCCESSSTATUS RunFailureReason = "NON_SUCCESS_STATUS"
-	QUOTAEXCEEDED    RunFailureReason = "QUOTA_EXCEEDED"
-	SSRFBLOCKED      RunFailureReason = "SSRF_BLOCKED"
-	TIMEOUT          RunFailureReason = "TIMEOUT"
-	WORKERLOST       RunFailureReason = "WORKER_LOST"
+	RunFailureReasonCONNECTIONERROR  RunFailureReason = "CONNECTION_ERROR"
+	RunFailureReasonNONSUCCESSSTATUS RunFailureReason = "NON_SUCCESS_STATUS"
+	RunFailureReasonQUOTAEXCEEDED    RunFailureReason = "QUOTA_EXCEEDED"
+	RunFailureReasonSSRFBLOCKED      RunFailureReason = "SSRF_BLOCKED"
+	RunFailureReasonTIMEOUT          RunFailureReason = "TIMEOUT"
+	RunFailureReasonWORKERLOST       RunFailureReason = "WORKER_LOST"
 )
 
 // Valid indicates whether the value is a known member of the RunFailureReason enum.
 func (e RunFailureReason) Valid() bool {
 	switch e {
-	case CONNECTIONERROR:
+	case RunFailureReasonCONNECTIONERROR:
 		return true
-	case NONSUCCESSSTATUS:
+	case RunFailureReasonNONSUCCESSSTATUS:
 		return true
-	case QUOTAEXCEEDED:
+	case RunFailureReasonQUOTAEXCEEDED:
 		return true
-	case SSRFBLOCKED:
+	case RunFailureReasonSSRFBLOCKED:
 		return true
-	case TIMEOUT:
+	case RunFailureReasonTIMEOUT:
 		return true
-	case WORKERLOST:
+	case RunFailureReasonWORKERLOST:
 		return true
 	default:
 		return false
@@ -176,6 +230,7 @@ func (e RunStatus) Valid() bool {
 const (
 	MANUAL   RunTrigger = "MANUAL"
 	RERUN    RunTrigger = "RERUN"
+	RETRY    RunTrigger = "RETRY"
 	SCHEDULE RunTrigger = "SCHEDULE"
 )
 
@@ -186,6 +241,8 @@ func (e RunTrigger) Valid() bool {
 		return true
 	case RERUN:
 		return true
+	case RETRY:
+		return true
 	case SCHEDULE:
 		return true
 	default:
@@ -195,28 +252,58 @@ func (e RunTrigger) Valid() bool {
 
 // Defines values for ListJobsParamsSort.
 const (
-	CreatedAt      ListJobsParamsSort = "created_at"
-	MinusCreatedAt ListJobsParamsSort = "-created_at"
-	MinusName      ListJobsParamsSort = "-name"
-	MinusUpdatedAt ListJobsParamsSort = "-updated_at"
-	Name           ListJobsParamsSort = "name"
-	UpdatedAt      ListJobsParamsSort = "updated_at"
+	ListJobsParamsSortCreatedAt      ListJobsParamsSort = "created_at"
+	ListJobsParamsSortMinusCreatedAt ListJobsParamsSort = "-created_at"
+	ListJobsParamsSortMinusName      ListJobsParamsSort = "-name"
+	ListJobsParamsSortMinusUpdatedAt ListJobsParamsSort = "-updated_at"
+	ListJobsParamsSortName           ListJobsParamsSort = "name"
+	ListJobsParamsSortUpdatedAt      ListJobsParamsSort = "updated_at"
 )
 
 // Valid indicates whether the value is a known member of the ListJobsParamsSort enum.
 func (e ListJobsParamsSort) Valid() bool {
 	switch e {
-	case CreatedAt:
+	case ListJobsParamsSortCreatedAt:
 		return true
-	case MinusCreatedAt:
+	case ListJobsParamsSortMinusCreatedAt:
 		return true
-	case MinusName:
+	case ListJobsParamsSortMinusName:
 		return true
-	case MinusUpdatedAt:
+	case ListJobsParamsSortMinusUpdatedAt:
 		return true
-	case Name:
+	case ListJobsParamsSortName:
 		return true
-	case UpdatedAt:
+	case ListJobsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRetryPoliciesParamsSort.
+const (
+	ListRetryPoliciesParamsSortCreatedAt      ListRetryPoliciesParamsSort = "created_at"
+	ListRetryPoliciesParamsSortMinusCreatedAt ListRetryPoliciesParamsSort = "-created_at"
+	ListRetryPoliciesParamsSortMinusName      ListRetryPoliciesParamsSort = "-name"
+	ListRetryPoliciesParamsSortMinusUpdatedAt ListRetryPoliciesParamsSort = "-updated_at"
+	ListRetryPoliciesParamsSortName           ListRetryPoliciesParamsSort = "name"
+	ListRetryPoliciesParamsSortUpdatedAt      ListRetryPoliciesParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListRetryPoliciesParamsSort enum.
+func (e ListRetryPoliciesParamsSort) Valid() bool {
+	switch e {
+	case ListRetryPoliciesParamsSortCreatedAt:
+		return true
+	case ListRetryPoliciesParamsSortMinusCreatedAt:
+		return true
+	case ListRetryPoliciesParamsSortMinusName:
+		return true
+	case ListRetryPoliciesParamsSortMinusUpdatedAt:
+		return true
+	case ListRetryPoliciesParamsSortName:
+		return true
+	case ListRetryPoliciesParamsSortUpdatedAt:
 		return true
 	default:
 		return false
@@ -333,6 +420,9 @@ type Job struct {
 	// Name Human-readable name for the job.
 	Name string `json:"name"`
 
+	// RetryPolicy The base retry policy for failed runs — the `id` of a retry policy (or the built-in `Default`), overridable per environment. Omit (or send `null`) to use `Default`, which never retries — so a job that sets nothing behaves exactly as before retries existed.
+	RetryPolicy *string `json:"retry_policy,omitempty"`
+
 	// Schedule The base schedule every environment inherits unless it overrides it, and the field that determines the job's `kind`. Omit it (or send `null`) to create a permanent **manual** job that never auto-fires and runs only when triggered. Provide a 5-field cron expression evaluated in the job's `timezone` (UTC by default) for a **recurring** job, an ISO-8601 datetime for a **one-off** run at that instant, or the literal `now` for a one-off run as soon as possible. A datetime or `now` job disables itself after it fires.
 	Schedule *string `json:"schedule,omitempty"`
 
@@ -402,6 +492,9 @@ type JobEnvironment struct {
 
 	// NextRunAt The next scheduled fire time in this environment. `null` when the environment is not enabled, or once a one-off run has fired.
 	NextRunAt *time.Time `json:"next_run_at,omitempty"`
+
+	// RetryPolicy Per-environment retry-policy override — the `id` of a retry policy (or `Default`). Omit to inherit the job's base `retry_policy`. When present, runs in this environment retry according to this policy instead of the base.
+	RetryPolicy *string `json:"retry_policy,omitempty"`
 
 	// Schedule Per-environment schedule override. Omit to inherit the job's base `schedule`. When present, it must be a 5-field cron expression (e.g. `0 3 * * *`), evaluated in this environment's effective `timezone` (the per-environment override, else the base, else UTC), and is only allowed on a recurring (cron) job — it varies the cadence within that environment. It cannot appear on a manual or one-off job, and cannot change a job's kind.
 	Schedule *string `json:"schedule,omitempty"`
@@ -514,6 +607,118 @@ type PaginationMeta struct {
 	TotalPages *int `json:"total_pages,omitempty"`
 }
 
+// RetryOn Which failures a policy retries. An empty policy (both lists empty or
+// absent) retries nothing.
+type RetryOn struct {
+	// Reasons Failure reasons that should be retried: `TIMEOUT` (the run did not complete in time), `CONNECTION_ERROR` (the endpoint could not be reached), or `NON_SUCCESS_STATUS` (any non-success response, regardless of `statuses`). Empty matches no reason.
+	Reasons *[]RetryOnReasons `json:"reasons,omitempty"`
+
+	// Statuses Response status codes that should be retried when a run fails because the response did not match the job's success status (for example `[429, 503]` to retry on rate-limit and unavailable). Each is a 3-digit HTTP status code. Empty matches no status.
+	Statuses *[]int `json:"statuses,omitempty"`
+}
+
+// RetryOnReasons defines model for RetryOn.Reasons.
+type RetryOnReasons string
+
+// RetryPolicy A named, reusable automatic-retry policy.
+//
+// A policy decides whether and how a failed run is retried. Reference it from
+// a job's `retry_policy` (and optionally override it per environment). A job
+// that references nothing uses the built-in `Default` policy, which never
+// retries.
+type RetryPolicy struct {
+	// Backoff How the wait between retries grows. `fixed` waits `delay_seconds` before every retry. `exponential` doubles the wait each time — `delay_seconds`, then `2×`, `4×`, … — capped at `max_delay_seconds`.
+	Backoff RetryPolicyBackoff `json:"backoff"`
+
+	// CreatedAt When the policy was created.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+
+	// DelaySeconds The wait before a retry, in seconds. For `fixed` backoff it is the constant wait before every retry; for `exponential` it is the base wait that doubles each retry.
+	DelaySeconds int `json:"delay_seconds"`
+
+	// DeletedAt When the policy was deleted. `null` for active policies.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+
+	// MaxDelaySeconds The ceiling on the wait between retries, in seconds, for `exponential` backoff — once the doubling reaches it, every subsequent retry waits this long. Only valid with `exponential` backoff; omit it for `fixed`.
+	MaxDelaySeconds *int `json:"max_delay_seconds,omitempty"`
+
+	// MaxRetries How many times a failed run is retried, after the initial attempt — so `max_retries` of 3 means up to 4 attempts in total. `0` disables retries. Maximum 10.
+	MaxRetries int `json:"max_retries"`
+
+	// Name Human-readable name for the policy.
+	Name string `json:"name"`
+
+	// RetryOn Which failures a policy retries. An empty policy (both lists empty or
+	// absent) retries nothing.
+	RetryOn *RetryOn `json:"retry_on,omitempty"`
+
+	// UpdatedAt When the policy was last modified.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+
+	// Version Monotonic counter incremented on every update, starting at 1.
+	Version *int `json:"version,omitempty"`
+}
+
+// RetryPolicyBackoff How the wait between retries grows. `fixed` waits `delay_seconds` before every retry. `exponential` doubles the wait each time — `delay_seconds`, then `2×`, `4×`, … — capped at `max_delay_seconds`.
+type RetryPolicyBackoff string
+
+// RetryPolicyCreateRequest JSON:API request envelope for creating a retry policy (caller-supplied `data.id`).
+type RetryPolicyCreateRequest struct {
+	// Data JSON:API resource envelope for creating a retry policy (id required).
+	Data RetryPolicyCreateResource `json:"data"`
+}
+
+// RetryPolicyCreateResource JSON:API resource envelope for creating a retry policy (id required).
+type RetryPolicyCreateResource struct {
+	// Attributes A named, reusable automatic-retry policy.
+	//
+	// A policy decides whether and how a failed run is retried. Reference it from
+	// a job's `retry_policy` (and optionally override it per environment). A job
+	// that references nothing uses the built-in `Default` policy, which never
+	// retries.
+	Attributes RetryPolicy `json:"attributes"`
+
+	// Id Client-supplied resource id.
+	Id   string                         `json:"id"`
+	Type *RetryPolicyCreateResourceType `json:"type,omitempty"`
+}
+
+// RetryPolicyCreateResourceType defines model for RetryPolicyCreateResource.Type.
+type RetryPolicyCreateResourceType string
+
+// RetryPolicyListResponse JSON:API collection response for retry policies.
+type RetryPolicyListResponse struct {
+	Data []RetryPolicyResource `json:"data"`
+
+	// Meta Top-level ``meta`` block included on every JSON:API list response.
+	Meta ListMeta `json:"meta"`
+}
+
+// RetryPolicyRequest JSON:API request envelope for updating a retry policy.
+type RetryPolicyRequest struct {
+	// Data JSON:API resource envelope for a retry policy. The caller supplies `id` on create.
+	Data RetryPolicyResource `json:"data"`
+}
+
+// RetryPolicyResource JSON:API resource envelope for a retry policy. The caller supplies `id` on create.
+type RetryPolicyResource struct {
+	// Attributes A named, reusable automatic-retry policy.
+	//
+	// A policy decides whether and how a failed run is retried. Reference it from
+	// a job's `retry_policy` (and optionally override it per environment). A job
+	// that references nothing uses the built-in `Default` policy, which never
+	// retries.
+	Attributes RetryPolicy `json:"attributes"`
+	Id         *string     `json:"id,omitempty"`
+	Type       *string     `json:"type,omitempty"`
+}
+
+// RetryPolicyResponse JSON:API single-resource response for a retry policy.
+type RetryPolicyResponse struct {
+	// Data JSON:API resource envelope for a retry policy. The caller supplies `id` on create.
+	Data RetryPolicyResource `json:"data"`
+}
+
 // Run One occurrence of a job executing.
 type Run struct {
 	// CreatedAt When the run was enqueued (became `PENDING`).
@@ -549,6 +754,9 @@ type Run struct {
 	// Result Outcome of the call. For `http`: `status`, `headers`, `body` (capped at 64 KiB), `body_truncated`, and the original `body_bytes`.
 	Result *map[string]interface{} `json:"result,omitempty"`
 
+	// Retry Where a `RETRY` run sits in its retry chain.
+	Retry *RunRetry `json:"retry,omitempty"`
+
 	// RunDurationMs Milliseconds the run spent executing.
 	RunDurationMs *int `json:"run_duration_ms,omitempty"`
 
@@ -564,7 +772,7 @@ type Run struct {
 	// TotalDurationMs Milliseconds from enqueue to finish.
 	TotalDurationMs *int `json:"total_duration_ms,omitempty"`
 
-	// Trigger Why the run exists: `SCHEDULE`, `MANUAL` (Run now), or `RERUN`.
+	// Trigger Why the run exists: `SCHEDULE`, `MANUAL` (Run now), `RERUN`, or `RETRY` (an automatic retry of a failed run).
 	Trigger RunTrigger `json:"trigger"`
 }
 
@@ -574,7 +782,7 @@ type RunFailureReason string
 // RunStatus Lifecycle state of the run.
 type RunStatus string
 
-// RunTrigger Why the run exists: `SCHEDULE`, `MANUAL` (Run now), or `RERUN`.
+// RunTrigger Why the run exists: `SCHEDULE`, `MANUAL` (Run now), `RERUN`, or `RETRY` (an automatic retry of a failed run).
 type RunTrigger string
 
 // RunListLinks defines model for RunListLinks.
@@ -583,7 +791,7 @@ type RunListLinks struct {
 	Next *string `json:"next,omitempty"`
 }
 
-// RunListMeta Cursor-pagination meta for the runs list (ADR-014 high-cardinality exception).
+// RunListMeta Cursor-pagination meta for the runs list.
 type RunListMeta struct {
 	// PageSize Number of runs returned per page.
 	PageSize int `json:"page_size"`
@@ -594,7 +802,7 @@ type RunListResponse struct {
 	Data  []RunResource `json:"data"`
 	Links *RunListLinks `json:"links,omitempty"`
 
-	// Meta Cursor-pagination meta for the runs list (ADR-014 high-cardinality exception).
+	// Meta Cursor-pagination meta for the runs list.
 	Meta RunListMeta `json:"meta"`
 }
 
@@ -610,6 +818,15 @@ type RunResource struct {
 type RunResponse struct {
 	// Data JSON:API resource envelope for a run (server-assigned UUID id).
 	Data RunResource `json:"data"`
+}
+
+// RunRetry Where a `RETRY` run sits in its retry chain.
+type RunRetry struct {
+	// Attempt Which retry this run is: `1` for the first retry, `2` for the second, and so on.
+	Attempt int `json:"attempt"`
+
+	// Of The id of the chain's original run — the first attempt that failed and started the chain.
+	Of openapi_types.UUID `json:"of"`
 }
 
 // Usage Current-period usage against the account's plan allotments.
@@ -692,6 +909,27 @@ type RunJobNowParams struct {
 	XSmplkitEnvironment *string `json:"X-Smplkit-Environment,omitempty"`
 }
 
+// ListRetryPoliciesParams defines parameters for ListRetryPolicies.
+type ListRetryPoliciesParams struct {
+	// FilterName Case-insensitive substring match on the policy `name` (matches when the name contains the given text).
+	FilterName *string `form:"filter[name],omitempty" json:"filter[name],omitempty"`
+
+	// Sort Field to sort by. Prefix with `-` for descending order. Default: `name`. Allowed values: `created_at`, `-created_at`, `name`, `-name`, `updated_at`, `-updated_at`.
+	Sort *ListRetryPoliciesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// PageNumber 1-based page number to return. Optional; defaults to `1` when omitted. Must be `>= 1` — requests with a smaller value are rejected with a 400 error.
+	PageNumber *int `form:"page[number],omitempty" json:"page[number],omitempty"`
+
+	// PageSize Number of items per page. Optional; defaults to `1000` when omitted. Must be between `1` and `1000` inclusive — requests outside that range are rejected with a 400 error.
+	PageSize *int `form:"page[size],omitempty" json:"page[size],omitempty"`
+
+	// MetaTotal When `true`, the response's `meta.pagination` block includes `total` (the total number of matching items across all pages) and `total_pages`. Computing these requires an extra `COUNT` query, so omit (or pass `false`) when the totals are not needed. Defaults to `false`.
+	MetaTotal *bool `form:"meta[total],omitempty" json:"meta[total],omitempty"`
+}
+
+// ListRetryPoliciesParamsSort defines parameters for ListRetryPolicies.
+type ListRetryPoliciesParamsSort string
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	FilterJob *string `form:"filter[job],omitempty" json:"filter[job],omitempty"`
@@ -701,6 +939,9 @@ type ListRunsParams struct {
 
 	// FilterEnvironment Comma-separated list of environment keys to scope results to (e.g. `production,staging`). When omitted, results cover every environment you can access.
 	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
+
+	// FilterTrigger Restrict to runs with the given trigger. One of `SCHEDULE`, `MANUAL`, `RERUN`, `RETRY`, or a comma-separated list of them to match any (e.g. `SCHEDULE,RETRY` to see a job's automatic runs).
+	FilterTrigger *string `form:"filter[trigger],omitempty" json:"filter[trigger],omitempty"`
 
 	// FilterCreatedAt Restrict to runs whose `created_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,2026-06-08T00:00:00Z)` selects the first week of June; `[2026-06-01T00:00:00Z,*)` is everything from then onward.
 	FilterCreatedAt *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
@@ -738,6 +979,12 @@ type CreateJobApplicationVndAPIPlusJSONRequestBody = JobCreateRequest
 
 // UpdateJobApplicationVndAPIPlusJSONRequestBody defines body for UpdateJob for application/vnd.api+json ContentType.
 type UpdateJobApplicationVndAPIPlusJSONRequestBody = JobRequest
+
+// CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody defines body for CreateRetryPolicy for application/vnd.api+json ContentType.
+type CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody = RetryPolicyCreateRequest
+
+// UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody defines body for UpdateRetryPolicy for application/vnd.api+json ContentType.
+type UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody = RetryPolicyRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -833,6 +1080,25 @@ type ClientInterface interface {
 
 	// RunJobNow request
 	RunJobNow(ctx context.Context, jobId string, params *RunJobNowParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRetryPolicies request
+	ListRetryPolicies(ctx context.Context, params *ListRetryPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRetryPolicyWithBody request with any body
+	CreateRetryPolicyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRetryPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteRetryPolicy request
+	DeleteRetryPolicy(ctx context.Context, policyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRetryPolicy request
+	GetRetryPolicy(ctx context.Context, policyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateRetryPolicyWithBody request with any body
+	UpdateRetryPolicyWithBody(ctx context.Context, policyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateRetryPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, policyId string, body UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListRuns request
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -936,6 +1202,90 @@ func (c *Client) UpdateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context,
 
 func (c *Client) RunJobNow(ctx context.Context, jobId string, params *RunJobNowParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRunJobNowRequest(c.Server, jobId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRetryPolicies(ctx context.Context, params *ListRetryPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRetryPoliciesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRetryPolicyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRetryPolicyRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRetryPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRetryPolicyRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteRetryPolicy(ctx context.Context, policyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteRetryPolicyRequest(c.Server, policyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRetryPolicy(ctx context.Context, policyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRetryPolicyRequest(c.Server, policyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateRetryPolicyWithBody(ctx context.Context, policyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateRetryPolicyRequestWithBody(c.Server, policyId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateRetryPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, policyId string, body UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateRetryPolicyRequestWithApplicationVndAPIPlusJSONBody(c.Server, policyId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1366,6 +1716,263 @@ func NewRunJobNowRequest(server string, jobId string, params *RunJobNowParams) (
 	return req, nil
 }
 
+// NewListRetryPoliciesRequest generates requests for ListRetryPolicies
+func NewListRetryPoliciesRequest(server string, params *ListRetryPoliciesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/retry-policies")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.FilterName != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[name]", *params.FilterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageNumber != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[number]", *params.PageNumber, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page[size]", *params.PageSize, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MetaTotal != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "meta[total]", *params.MetaTotal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRetryPolicyRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateRetryPolicy builder with application/vnd.api+json body
+func NewCreateRetryPolicyRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRetryPolicyRequestWithBody(server, "application/vnd.api+json", bodyReader)
+}
+
+// NewCreateRetryPolicyRequestWithBody generates requests for CreateRetryPolicy with any type of body
+func NewCreateRetryPolicyRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/retry-policies")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteRetryPolicyRequest generates requests for DeleteRetryPolicy
+func NewDeleteRetryPolicyRequest(server string, policyId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "policy_id", policyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/retry-policies/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetRetryPolicyRequest generates requests for GetRetryPolicy
+func NewGetRetryPolicyRequest(server string, policyId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "policy_id", policyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/retry-policies/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateRetryPolicyRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateRetryPolicy builder with application/vnd.api+json body
+func NewUpdateRetryPolicyRequestWithApplicationVndAPIPlusJSONBody(server string, policyId string, body UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateRetryPolicyRequestWithBody(server, policyId, "application/vnd.api+json", bodyReader)
+}
+
+// NewUpdateRetryPolicyRequestWithBody generates requests for UpdateRetryPolicy with any type of body
+func NewUpdateRetryPolicyRequestWithBody(server string, policyId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "policy_id", policyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/retry-policies/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListRunsRequest generates requests for ListRuns
 func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, error) {
 	var err error
@@ -1421,6 +2028,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 		if params.FilterEnvironment != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterTrigger != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[trigger]", *params.FilterTrigger, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1761,6 +2380,25 @@ type ClientWithResponsesInterface interface {
 	// RunJobNowWithResponse request
 	RunJobNowWithResponse(ctx context.Context, jobId string, params *RunJobNowParams, reqEditors ...RequestEditorFn) (*RunJobNowResponse, error)
 
+	// ListRetryPoliciesWithResponse request
+	ListRetryPoliciesWithResponse(ctx context.Context, params *ListRetryPoliciesParams, reqEditors ...RequestEditorFn) (*ListRetryPoliciesResponse, error)
+
+	// CreateRetryPolicyWithBodyWithResponse request with any body
+	CreateRetryPolicyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRetryPolicyResponse, error)
+
+	CreateRetryPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRetryPolicyResponse, error)
+
+	// DeleteRetryPolicyWithResponse request
+	DeleteRetryPolicyWithResponse(ctx context.Context, policyId string, reqEditors ...RequestEditorFn) (*DeleteRetryPolicyResponse, error)
+
+	// GetRetryPolicyWithResponse request
+	GetRetryPolicyWithResponse(ctx context.Context, policyId string, reqEditors ...RequestEditorFn) (*GetRetryPolicyResponse, error)
+
+	// UpdateRetryPolicyWithBodyWithResponse request with any body
+	UpdateRetryPolicyWithBodyWithResponse(ctx context.Context, policyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateRetryPolicyResponse, error)
+
+	UpdateRetryPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, policyId string, body UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateRetryPolicyResponse, error)
+
 	// ListRunsWithResponse request
 	ListRunsWithResponse(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*ListRunsResponse, error)
 
@@ -1950,6 +2588,155 @@ func (r RunJobNowResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RunJobNowResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListRetryPoliciesResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *RetryPolicyListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRetryPoliciesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRetryPoliciesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRetryPoliciesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateRetryPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON201 *RetryPolicyResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRetryPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRetryPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateRetryPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteRetryPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteRetryPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteRetryPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteRetryPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetRetryPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *RetryPolicyResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRetryPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRetryPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRetryPolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateRetryPolicyResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *RetryPolicyResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateRetryPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateRetryPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateRetryPolicyResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2176,6 +2963,67 @@ func (c *ClientWithResponses) RunJobNowWithResponse(ctx context.Context, jobId s
 	return ParseRunJobNowResponse(rsp)
 }
 
+// ListRetryPoliciesWithResponse request returning *ListRetryPoliciesResponse
+func (c *ClientWithResponses) ListRetryPoliciesWithResponse(ctx context.Context, params *ListRetryPoliciesParams, reqEditors ...RequestEditorFn) (*ListRetryPoliciesResponse, error) {
+	rsp, err := c.ListRetryPolicies(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRetryPoliciesResponse(rsp)
+}
+
+// CreateRetryPolicyWithBodyWithResponse request with arbitrary body returning *CreateRetryPolicyResponse
+func (c *ClientWithResponses) CreateRetryPolicyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRetryPolicyResponse, error) {
+	rsp, err := c.CreateRetryPolicyWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRetryPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRetryPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRetryPolicyResponse, error) {
+	rsp, err := c.CreateRetryPolicyWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRetryPolicyResponse(rsp)
+}
+
+// DeleteRetryPolicyWithResponse request returning *DeleteRetryPolicyResponse
+func (c *ClientWithResponses) DeleteRetryPolicyWithResponse(ctx context.Context, policyId string, reqEditors ...RequestEditorFn) (*DeleteRetryPolicyResponse, error) {
+	rsp, err := c.DeleteRetryPolicy(ctx, policyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteRetryPolicyResponse(rsp)
+}
+
+// GetRetryPolicyWithResponse request returning *GetRetryPolicyResponse
+func (c *ClientWithResponses) GetRetryPolicyWithResponse(ctx context.Context, policyId string, reqEditors ...RequestEditorFn) (*GetRetryPolicyResponse, error) {
+	rsp, err := c.GetRetryPolicy(ctx, policyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRetryPolicyResponse(rsp)
+}
+
+// UpdateRetryPolicyWithBodyWithResponse request with arbitrary body returning *UpdateRetryPolicyResponse
+func (c *ClientWithResponses) UpdateRetryPolicyWithBodyWithResponse(ctx context.Context, policyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateRetryPolicyResponse, error) {
+	rsp, err := c.UpdateRetryPolicyWithBody(ctx, policyId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateRetryPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateRetryPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, policyId string, body UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateRetryPolicyResponse, error) {
+	rsp, err := c.UpdateRetryPolicyWithApplicationVndAPIPlusJSONBody(ctx, policyId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateRetryPolicyResponse(rsp)
+}
+
 // ListRunsWithResponse request returning *ListRunsResponse
 func (c *ClientWithResponses) ListRunsWithResponse(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*ListRunsResponse, error) {
 	rsp, err := c.ListRuns(ctx, params, reqEditors...)
@@ -2357,6 +3205,126 @@ func ParseRunJobNowResponse(rsp *http.Response) (*RunJobNowResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest RunResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRetryPoliciesResponse parses an HTTP response from a ListRetryPoliciesWithResponse call
+func ParseListRetryPoliciesResponse(rsp *http.Response) (*ListRetryPoliciesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRetryPoliciesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RetryPolicyListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRetryPolicyResponse parses an HTTP response from a CreateRetryPolicyWithResponse call
+func ParseCreateRetryPolicyResponse(rsp *http.Response) (*CreateRetryPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRetryPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RetryPolicyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON201 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteRetryPolicyResponse parses an HTTP response from a DeleteRetryPolicyWithResponse call
+func ParseDeleteRetryPolicyResponse(rsp *http.Response) (*DeleteRetryPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteRetryPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetRetryPolicyResponse parses an HTTP response from a GetRetryPolicyWithResponse call
+func ParseGetRetryPolicyResponse(rsp *http.Response) (*GetRetryPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRetryPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RetryPolicyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateRetryPolicyResponse parses an HTTP response from a UpdateRetryPolicyWithResponse call
+func ParseUpdateRetryPolicyResponse(rsp *http.Response) (*UpdateRetryPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateRetryPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RetryPolicyResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
