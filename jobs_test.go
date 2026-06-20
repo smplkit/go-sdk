@@ -599,8 +599,8 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	job.SetConfiguration(HttpConfig{URL: "https://dev"}, "development")
 	job.SetEnabled(false, "development")
 	job.SetSchedule("0 3 * * *", "development")
-	job.SetTimezone("America/New_York")              // base timezone
-	job.SetTimezone("Europe/London", "development")  // per-env override
+	job.SetTimezone("America/New_York")             // base timezone
+	job.SetTimezone("Europe/London", "development") // per-env override
 	job.SetEnabled(true, "production")
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
