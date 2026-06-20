@@ -364,6 +364,19 @@ func (e ListRunsParamsSort) Valid() bool {
 	}
 }
 
+// Error Single JSON:API error object.
+type Error struct {
+	Detail *string                 `json:"detail,omitempty"`
+	Source *map[string]interface{} `json:"source,omitempty"`
+	Status string                  `json:"status"`
+	Title  string                  `json:"title"`
+}
+
+// ErrorResponse JSON:API error response envelope.
+type ErrorResponse struct {
+	Errors []Error `json:"errors"`
+}
+
 // HttpHeader A single HTTP header attached to an outbound request.
 //
 // Header values are encrypted at the application layer before
@@ -2807,6 +2820,8 @@ type CancelRunResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *RunResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON409 *ErrorResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -2837,6 +2852,8 @@ type RerunRunResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
 	ApplicationvndApiJSON200 *RunResponse
+	ApplicationvndApiJSON404 *ErrorResponse
+	ApplicationvndApiJSON409 *ErrorResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -3408,6 +3425,20 @@ func ParseCancelRunResponse(rsp *http.Response) (*CancelRunResponse, error) {
 		}
 		response.ApplicationvndApiJSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON409 = &dest
+
 	}
 
 	return response, nil
@@ -3433,6 +3464,20 @@ func ParseRerunRunResponse(rsp *http.Response) (*RerunRunResponse, error) {
 			return nil, err
 		}
 		response.ApplicationvndApiJSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON409 = &dest
 
 	}
 
