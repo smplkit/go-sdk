@@ -2452,7 +2452,7 @@
           "enabled": {
             "type": "boolean",
             "title": "Enabled",
-            "description": "Always false. Enablement is per-environment: a forwarder delivers in an environment only when `environments[<env>].enabled` is true. The base value is pinned false and cannot be set.",
+            "description": "Always false. Enablement is per-environment: a forwarder delivers in an environment only when that environment's entry in `environments` sets `enabled` to true. The base value is pinned false and cannot be set.",
             "default": false,
             "readOnly": true
           },
@@ -2500,15 +2500,16 @@
           },
           "configuration": {
             "$ref": "#/components/schemas/HttpConfiguration",
-            "description": "Base delivery configuration template. Shape is discriminated by ``forwarder_type``; today all destination types use ``HttpConfiguration``. Branded vendor types (everything except `http`) constrain the configuration against a per-vendor template \u2014 see `GET /api/v1/forwarder_types` for the URL pattern, fixed headers, and customer-supplied placeholders for each type. A per-environment override in `environments` replaces this template for that environment."
+            "description": "Base delivery configuration template. Shape is discriminated by ``forwarder_type``; today all destination types use ``HttpConfiguration``. Branded vendor types (everything except `http`) constrain the configuration against a per-vendor template \u2014 see `GET /api/v1/forwarder_types` for the URL pattern, fixed headers, and customer-supplied placeholders for each type. A per-environment entry in `environments` overrides individual fields of this template for that environment; fields it omits are inherited from here."
           },
           "environments": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/ForwarderEnvironment"
+              "additionalProperties": true,
+              "type": "object"
             },
             "type": "object",
             "title": "Environments",
-            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the forwarder delivers in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account."
+            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a sparse map of only the fields that differ in that environment: `enabled` (whether the forwarder delivers there) plus any of `url`, `method`, `success_status`, `tls_verify`, `ca_cert`, and individual headers as `headers.<name>` (e.g. `headers.Authorization`). Fields you omit are inherited from the base `configuration`; an entry never needs to repeat the whole configuration. A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account."
           },
           "created_at": {
             "anyOf": [
@@ -2632,7 +2633,8 @@
             "description": "Forwards user.* events to the prod Datadog tenant.",
             "environments": {
               "production": {
-                "enabled": true
+                "enabled": true,
+                "headers.DD-API-KEY": "dd-prod-api-key-plaintext"
               }
             },
             "filter": {
@@ -2896,30 +2898,6 @@
         "title": "ForwarderDeliveryResponse",
         "description": "JSON:API single-resource response for a forwarder delivery."
       },
-      "ForwarderEnvironment": {
-        "properties": {
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "description": "Whether the forwarder delivers events in this environment. A forwarder is enabled in an environment only via this field \u2014 the base `enabled` is always false.",
-            "default": false
-          },
-          "configuration": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/HttpConfiguration"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Per-environment delivery configuration override. Omit to inherit the forwarder's base `configuration`. When present, it fully replaces the base configuration for this environment and is validated against the same per-vendor template."
-          }
-        },
-        "type": "object",
-        "title": "ForwarderEnvironment",
-        "description": "Per-environment override for a forwarder's enablement and configuration."
-      },
       "ForwarderListResponse": {
         "properties": {
           "data": {
@@ -3004,7 +2982,8 @@
             "enabled": false,
             "environments": {
               "production": {
-                "enabled": true
+                "enabled": true,
+                "headers.DD-API-KEY": "dd-prod-api-key-plaintext"
               }
             },
             "filter": {

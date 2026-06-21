@@ -763,11 +763,11 @@ type Forwarder struct {
 	// Description Free-text description for the forwarder.
 	Description *string `json:"description,omitempty"`
 
-	// Enabled Always false. Enablement is per-environment: a forwarder delivers in an environment only when `environments[<env>].enabled` is true. The base value is pinned false and cannot be set.
+	// Enabled Always false. Enablement is per-environment: a forwarder delivers in an environment only when that environment's entry in `environments` sets `enabled` to true. The base value is pinned false and cannot be set.
 	Enabled *bool `json:"enabled,omitempty"`
 
-	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the forwarder delivers in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account.
-	Environments *map[string]ForwarderEnvironment `json:"environments,omitempty"`
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a sparse map of only the fields that differ in that environment: `enabled` (whether the forwarder delivers there) plus any of `url`, `method`, `success_status`, `tls_verify`, `ca_cert`, and individual headers as `headers.<name>` (e.g. `headers.Authorization`). Fields you omit are inherited from the base `configuration`; an entry never needs to repeat the whole configuration. A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account.
+	Environments *map[string]map[string]interface{} `json:"environments,omitempty"`
 
 	// Filter JSON Logic expression evaluated against each event. The event is delivered only if the expression returns truthy. Omit to deliver every event.
 	Filter *map[string]interface{} `json:"filter,omitempty"`
@@ -906,21 +906,6 @@ type ForwarderDeliveryResource struct {
 type ForwarderDeliveryResponse struct {
 	// Data JSON:API resource envelope for a forwarder delivery log entry.
 	Data ForwarderDeliveryResource `json:"data"`
-}
-
-// ForwarderEnvironment Per-environment override for a forwarder's enablement and configuration.
-type ForwarderEnvironment struct {
-	// Configuration HTTP request configuration for delivering a payload to a destination.
-	//
-	// The shared base shape for any product that posts to a customer-supplied
-	// HTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs
-	// extends it (adding ``body`` and ``timeout``). When other transports land
-	// (``FTP``, ``SQS``, …) their own configuration schemas will join this one
-	// as members of a discriminated union under a ``configuration`` field.
-	Configuration *HttpConfiguration `json:"configuration,omitempty"`
-
-	// Enabled Whether the forwarder delivers events in this environment. A forwarder is enabled in an environment only via this field — the base `enabled` is always false.
-	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // ForwarderListResponse JSON:API collection response for forwarders.
