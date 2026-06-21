@@ -115,27 +115,6 @@ func (e JobHttpConfigurationMethod) Valid() bool {
 	}
 }
 
-// Defines values for RetryOnReasons.
-const (
-	RetryOnReasonsCONNECTIONERROR  RetryOnReasons = "CONNECTION_ERROR"
-	RetryOnReasonsNONSUCCESSSTATUS RetryOnReasons = "NON_SUCCESS_STATUS"
-	RetryOnReasonsTIMEOUT          RetryOnReasons = "TIMEOUT"
-)
-
-// Valid indicates whether the value is a known member of the RetryOnReasons enum.
-func (e RetryOnReasons) Valid() bool {
-	switch e {
-	case RetryOnReasonsCONNECTIONERROR:
-		return true
-	case RetryOnReasonsNONSUCCESSSTATUS:
-		return true
-	case RetryOnReasonsTIMEOUT:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for RetryPolicyBackoff.
 const (
 	Exponential RetryPolicyBackoff = "exponential"
@@ -171,28 +150,28 @@ func (e RetryPolicyCreateResourceType) Valid() bool {
 
 // Defines values for RunFailureReason.
 const (
-	RunFailureReasonCONNECTIONERROR  RunFailureReason = "CONNECTION_ERROR"
-	RunFailureReasonNONSUCCESSSTATUS RunFailureReason = "NON_SUCCESS_STATUS"
-	RunFailureReasonQUOTAEXCEEDED    RunFailureReason = "QUOTA_EXCEEDED"
-	RunFailureReasonSSRFBLOCKED      RunFailureReason = "SSRF_BLOCKED"
-	RunFailureReasonTIMEOUT          RunFailureReason = "TIMEOUT"
-	RunFailureReasonWORKERLOST       RunFailureReason = "WORKER_LOST"
+	CONNECTIONERROR  RunFailureReason = "CONNECTION_ERROR"
+	NONSUCCESSSTATUS RunFailureReason = "NON_SUCCESS_STATUS"
+	QUOTAEXCEEDED    RunFailureReason = "QUOTA_EXCEEDED"
+	SSRFBLOCKED      RunFailureReason = "SSRF_BLOCKED"
+	TIMEOUT          RunFailureReason = "TIMEOUT"
+	WORKERLOST       RunFailureReason = "WORKER_LOST"
 )
 
 // Valid indicates whether the value is a known member of the RunFailureReason enum.
 func (e RunFailureReason) Valid() bool {
 	switch e {
-	case RunFailureReasonCONNECTIONERROR:
+	case CONNECTIONERROR:
 		return true
-	case RunFailureReasonNONSUCCESSSTATUS:
+	case NONSUCCESSSTATUS:
 		return true
-	case RunFailureReasonQUOTAEXCEEDED:
+	case QUOTAEXCEEDED:
 		return true
-	case RunFailureReasonSSRFBLOCKED:
+	case SSRFBLOCKED:
 		return true
-	case RunFailureReasonTIMEOUT:
+	case TIMEOUT:
 		return true
-	case RunFailureReasonWORKERLOST:
+	case WORKERLOST:
 		return true
 	default:
 		return false
@@ -620,19 +599,6 @@ type PaginationMeta struct {
 	TotalPages *int `json:"total_pages,omitempty"`
 }
 
-// RetryOn Which failures a policy retries. An empty policy (both lists empty or
-// absent) retries nothing.
-type RetryOn struct {
-	// Reasons Failure reasons that should be retried: `TIMEOUT` (the run did not complete in time), `CONNECTION_ERROR` (the endpoint could not be reached), or `NON_SUCCESS_STATUS` (any non-success response, regardless of `statuses`). Empty matches no reason.
-	Reasons *[]RetryOnReasons `json:"reasons,omitempty"`
-
-	// Statuses Response status codes that should be retried when a run fails because the response did not match the job's success status (for example `[429, 503]` to retry on rate-limit and unavailable). Each is a 3-digit HTTP status code. Empty matches no status.
-	Statuses *[]int `json:"statuses,omitempty"`
-}
-
-// RetryOnReasons defines model for RetryOn.Reasons.
-type RetryOnReasons string
-
 // RetryPolicy A named, reusable automatic-retry policy.
 //
 // A policy decides whether and how a failed run is retried. Reference it from
@@ -661,9 +627,17 @@ type RetryPolicy struct {
 	// Name Human-readable name for the policy.
 	Name string `json:"name"`
 
-	// RetryOn Which failures a policy retries. An empty policy (both lists empty or
-	// absent) retries nothing.
-	RetryOn *RetryOn `json:"retry_on,omitempty"`
+	// RetryOnConnectionError Retry a run that failed because the destination could not be reached (DNS, connection refused, TLS, or transport error). Defaults to `false` (connection errors are not retried).
+	RetryOnConnectionError *bool `json:"retry_on_connection_error,omitempty"`
+
+	// RetryOnTimeout Retry a run that failed because the request did not complete within the job's timeout. Defaults to `false` (timeouts are not retried).
+	RetryOnTimeout *bool `json:"retry_on_timeout,omitempty"`
+
+	// RetryStatuses Allowlist of response status patterns to retry when a run fails because the response did not match the job's success status. Each element is either an exact 3-digit HTTP code (e.g. `429`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`) — for example `["429", "5xx"]` to retry on rate-limit and any server error. Empty (the default) matches no status, so nothing is retried on a non-success response.
+	RetryStatuses *[]string `json:"retry_statuses,omitempty"`
+
+	// RetryStatusesExcept Subtractions from `retry_statuses`, using the same exact-code or class syntax. A status that matches both lists is not retried — `except` wins on overlap — so `retry_statuses` of `["5xx"]` with `retry_statuses_except` of `["501"]` retries every server error except `501`. An element that does not overlap `retry_statuses` is allowed and simply has no effect. Empty (the default) subtracts nothing.
+	RetryStatusesExcept *[]string `json:"retry_statuses_except,omitempty"`
 
 	// UpdatedAt When the policy was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
