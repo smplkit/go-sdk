@@ -63,21 +63,6 @@ const (
 	BackoffFixed       = Backoff("fixed")
 )
 
-// RetryReason is a failure category a retry policy can retry on.
-//
-//   - RetryReasonConnectionError: The endpoint could not be reached.
-//   - RetryReasonNonSuccessStatus: Any non-success response, regardless of
-//     Statuses.
-//   - RetryReasonTimeout: The run did not complete in time.
-type RetryReason string
-
-// RetryReason values.
-const (
-	RetryReasonConnectionError  = RetryReason("CONNECTION_ERROR")
-	RetryReasonNonSuccessStatus = RetryReason("NON_SUCCESS_STATUS")
-	RetryReasonTimeout          = RetryReason("TIMEOUT")
-)
-
 // HttpConfig is the HTTP request a job performs when it fires (the job's
 // "configuration"). It mirrors the shared HttpConfiguration used by audit
 // forwarders but adds the two fields a scheduled job needs: a request Body
@@ -297,18 +282,6 @@ type Run struct {
 	runs *RunsClient
 }
 
-// RetryOn is which failures a retry policy retries.
-//
-// An empty RetryOn (both lists empty) retries nothing.
-type RetryOn struct {
-	// Statuses are response status codes to retry when a run fails because the
-	// response did not match the job's success status (e.g. []int{429, 503} for
-	// rate-limit and unavailable). Each is a 3-digit HTTP code.
-	Statuses []int
-	// Reasons are failure categories to retry — see RetryReason.
-	Reasons []RetryReason
-}
-
 // RunRetry is where a RETRY run sits in its retry chain (read-only).
 type RunRetry struct {
 	// Of is the id of the chain's original run — the first attempt that failed
@@ -348,9 +321,27 @@ type RetryPolicy struct {
 	// exponential backoff only. Nil (the default) leaves it uncapped; omit it
 	// for fixed backoff. Sent on writes only when non-nil.
 	MaxDelaySeconds *int
-	// RetryOn is which failures to retry (see RetryOn). The zero value retries
-	// nothing.
-	RetryOn RetryOn
+	// RetryOnTimeout retries a run that failed because the request did not
+	// complete within the job's timeout. Defaults to false (timeouts are not
+	// retried).
+	RetryOnTimeout bool
+	// RetryOnConnectionError retries a run that failed because the destination
+	// could not be reached (DNS, connection refused, TLS, or transport error).
+	// Defaults to false (connection errors are not retried).
+	RetryOnConnectionError bool
+	// RetryStatuses is an allowlist of response status patterns to retry when a
+	// run fails because the response did not match the job's success status.
+	// Each element is either an exact 3-digit HTTP code (e.g. "429") or a status
+	// class ("1xx", "2xx", "3xx", "4xx", "5xx") — e.g. []string{"429", "5xx"} to
+	// retry on rate-limit and any server error. Empty (the default) matches no
+	// status, so nothing is retried on a non-success response.
+	RetryStatuses []string
+	// RetryStatusesExcept subtracts from RetryStatuses, using the same exact-code
+	// or class syntax. A status matching both lists is not retried — except wins
+	// on overlap — so RetryStatuses of []string{"5xx"} with RetryStatusesExcept
+	// of []string{"501"} retries every server error except 501. Empty (the
+	// default) subtracts nothing.
+	RetryStatusesExcept []string
 	// CreatedAt is when the policy was created. Nil for an unsaved RetryPolicy.
 	CreatedAt *time.Time
 	// UpdatedAt is when the policy was last modified.

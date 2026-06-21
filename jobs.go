@@ -801,10 +801,33 @@ func WithRetryPolicyMaxDelaySeconds(maxDelaySeconds int) RetryPolicyOption {
 	return func(p *RetryPolicy) { p.MaxDelaySeconds = &maxDelaySeconds }
 }
 
-// WithRetryPolicyRetryOn sets which failures to retry (see RetryOn). Unset (the
-// default) retries nothing.
-func WithRetryPolicyRetryOn(retryOn RetryOn) RetryPolicyOption {
-	return func(p *RetryPolicy) { p.RetryOn = retryOn }
+// WithRetryPolicyRetryOnTimeout sets whether to retry a run that failed because
+// the request did not complete within the job's timeout. Unset (the default)
+// does not retry timeouts.
+func WithRetryPolicyRetryOnTimeout(retryOnTimeout bool) RetryPolicyOption {
+	return func(p *RetryPolicy) { p.RetryOnTimeout = retryOnTimeout }
+}
+
+// WithRetryPolicyRetryOnConnectionError sets whether to retry a run that failed
+// because the destination could not be reached (DNS, connection refused, TLS,
+// or transport error). Unset (the default) does not retry connection errors.
+func WithRetryPolicyRetryOnConnectionError(retryOnConnectionError bool) RetryPolicyOption {
+	return func(p *RetryPolicy) { p.RetryOnConnectionError = retryOnConnectionError }
+}
+
+// WithRetryPolicyRetryStatuses sets the allowlist of response status patterns to
+// retry when a run fails because the response did not match the job's success
+// status. Each element is an exact 3-digit HTTP code (e.g. "429") or a status
+// class ("1xx"–"5xx"). Unset (the default) matches no status.
+func WithRetryPolicyRetryStatuses(retryStatuses []string) RetryPolicyOption {
+	return func(p *RetryPolicy) { p.RetryStatuses = retryStatuses }
+}
+
+// WithRetryPolicyRetryStatusesExcept sets patterns subtracted from the
+// RetryStatuses allowlist, using the same exact-code or class syntax; except
+// wins on overlap. Unset (the default) subtracts nothing.
+func WithRetryPolicyRetryStatusesExcept(retryStatusesExcept []string) RetryPolicyOption {
+	return func(p *RetryPolicy) { p.RetryStatusesExcept = retryStatusesExcept }
 }
 
 // New returns an unsaved RetryPolicy bound to this client. Call
@@ -818,7 +841,9 @@ func WithRetryPolicyRetryOn(retryOn RetryOn) RetryPolicyOption {
 // between retries grows (see Backoff). delaySeconds is the wait before a retry —
 // the constant wait for fixed backoff, or the base that doubles each retry for
 // exponential. The optional max delay (exponential only) and the failures to
-// retry are set via WithRetryPolicyMaxDelaySeconds / WithRetryPolicyRetryOn.
+// retry are set via WithRetryPolicyMaxDelaySeconds,
+// WithRetryPolicyRetryOnTimeout, WithRetryPolicyRetryOnConnectionError,
+// WithRetryPolicyRetryStatuses, and WithRetryPolicyRetryStatusesExcept.
 func (c *RetryPoliciesClient) New(
 	id string,
 	name string,
@@ -934,7 +959,10 @@ func (policy *RetryPolicy) apply(other *RetryPolicy) {
 	policy.Backoff = other.Backoff
 	policy.DelaySeconds = other.DelaySeconds
 	policy.MaxDelaySeconds = other.MaxDelaySeconds
-	policy.RetryOn = other.RetryOn
+	policy.RetryOnTimeout = other.RetryOnTimeout
+	policy.RetryOnConnectionError = other.RetryOnConnectionError
+	policy.RetryStatuses = other.RetryStatuses
+	policy.RetryStatusesExcept = other.RetryStatusesExcept
 	policy.CreatedAt = other.CreatedAt
 	policy.UpdatedAt = other.UpdatedAt
 	policy.DeletedAt = other.DeletedAt
@@ -1354,49 +1382,39 @@ func joinTriggers(triggers []RunTrigger) string {
 	return strings.Join(parts, ",")
 }
 
-// retryOnToWire converts the wrapper RetryOn to the generated model. Both lists
-// are always emitted (as empty arrays when empty), mirroring the server's
-// {statuses, reasons} shape; reasons serialize as their string values.
-func retryOnToWire(r RetryOn) genjobs.RetryOn {
-	statuses := make([]int, 0, len(r.Statuses))
-	statuses = append(statuses, r.Statuses...)
-	reasons := make([]genjobs.RetryOnReasons, 0, len(r.Reasons))
-	for _, reason := range r.Reasons {
-		reasons = append(reasons, genjobs.RetryOnReasons(reason))
-	}
-	return genjobs.RetryOn{Statuses: &statuses, Reasons: &reasons}
+// retryStatusesToWire copies a wrapper status-pattern slice for the generated
+// model. The lists are always emitted (as empty arrays when empty), mirroring
+// the server's allowlist/subtraction shape.
+func retryStatusesToWire(s []string) *[]string {
+	out := make([]string, 0, len(s))
+	out = append(out, s...)
+	return &out
 }
 
-// retryOnFromWire converts the generated RetryOn back into the wrapper shape. A
-// nil or absent retry_on yields the zero RetryOn (retries nothing).
-func retryOnFromWire(r *genjobs.RetryOn) RetryOn {
-	out := RetryOn{}
-	if r == nil {
-		return out
+// retryStatusesFromWire copies a generated status-pattern slice into the wrapper
+// shape. A nil or absent list yields an empty slice (matches nothing).
+func retryStatusesFromWire(s *[]string) []string {
+	if s == nil {
+		return []string{}
 	}
-	if r.Statuses != nil {
-		out.Statuses = append([]int(nil), *r.Statuses...)
-	}
-	if r.Reasons != nil {
-		out.Reasons = make([]RetryReason, 0, len(*r.Reasons))
-		for _, reason := range *r.Reasons {
-			out.Reasons = append(out.Reasons, RetryReason(reason))
-		}
-	}
-	return out
+	return append([]string(nil), *s...)
 }
 
 // retryPolicyAttributes builds the shared retry-policy attribute payload sent on
 // create and update. max_delay_seconds is emitted only when set (exponential
-// backoff only); retry_on is always present.
+// backoff only); the four retry-on fields are always present.
 func retryPolicyAttributes(policy *RetryPolicy) genjobs.RetryPolicy {
-	retryOn := retryOnToWire(policy.RetryOn)
+	retryOnTimeout := policy.RetryOnTimeout
+	retryOnConnectionError := policy.RetryOnConnectionError
 	attrs := genjobs.RetryPolicy{
-		Name:         policy.Name,
-		MaxRetries:   policy.MaxRetries,
-		Backoff:      genjobs.RetryPolicyBackoff(policy.Backoff),
-		DelaySeconds: policy.DelaySeconds,
-		RetryOn:      &retryOn,
+		Name:                   policy.Name,
+		MaxRetries:             policy.MaxRetries,
+		Backoff:                genjobs.RetryPolicyBackoff(policy.Backoff),
+		DelaySeconds:           policy.DelaySeconds,
+		RetryOnTimeout:         &retryOnTimeout,
+		RetryOnConnectionError: &retryOnConnectionError,
+		RetryStatuses:          retryStatusesToWire(policy.RetryStatuses),
+		RetryStatusesExcept:    retryStatusesToWire(policy.RetryStatusesExcept),
 	}
 	if policy.MaxDelaySeconds != nil {
 		v := *policy.MaxDelaySeconds
@@ -1434,18 +1452,29 @@ func retryPolicyFromResource(r genjobs.RetryPolicyResource, client *RetryPolicie
 		id = *r.Id
 	}
 	a := r.Attributes
+	retryOnTimeout := false
+	if a.RetryOnTimeout != nil {
+		retryOnTimeout = *a.RetryOnTimeout
+	}
+	retryOnConnectionError := false
+	if a.RetryOnConnectionError != nil {
+		retryOnConnectionError = *a.RetryOnConnectionError
+	}
 	return &RetryPolicy{
-		ID:              id,
-		Name:            a.Name,
-		MaxRetries:      a.MaxRetries,
-		Backoff:         Backoff(a.Backoff),
-		DelaySeconds:    a.DelaySeconds,
-		MaxDelaySeconds: a.MaxDelaySeconds,
-		RetryOn:         retryOnFromWire(a.RetryOn),
-		CreatedAt:       a.CreatedAt,
-		UpdatedAt:       a.UpdatedAt,
-		DeletedAt:       a.DeletedAt,
-		Version:         a.Version,
-		client:          client,
+		ID:                     id,
+		Name:                   a.Name,
+		MaxRetries:             a.MaxRetries,
+		Backoff:                Backoff(a.Backoff),
+		DelaySeconds:           a.DelaySeconds,
+		MaxDelaySeconds:        a.MaxDelaySeconds,
+		RetryOnTimeout:         retryOnTimeout,
+		RetryOnConnectionError: retryOnConnectionError,
+		RetryStatuses:          retryStatusesFromWire(a.RetryStatuses),
+		RetryStatusesExcept:    retryStatusesFromWire(a.RetryStatusesExcept),
+		CreatedAt:              a.CreatedAt,
+		UpdatedAt:              a.UpdatedAt,
+		DeletedAt:              a.DeletedAt,
+		Version:                a.Version,
+		client:                 client,
 	}
 }

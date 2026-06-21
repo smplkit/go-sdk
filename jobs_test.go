@@ -1441,21 +1441,21 @@ func TestJobs_TransportErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // retryPolicyResource builds a retry-policy JSON:API resource that exercises the
-// full attribute set: exponential backoff with a max-delay cap and a populated
-// retry_on (both statuses and reasons).
+// full attribute set: exponential backoff with a max-delay cap and populated
+// retry-on flags / status allowlists.
 func retryPolicyResource(id string, created bool, version int) map[string]any {
 	attrs := map[string]any{
-		"name":              "Retry on server errors",
-		"max_retries":       5,
-		"backoff":           "exponential",
-		"delay_seconds":     2,
-		"max_delay_seconds": 60,
-		"retry_on": map[string]any{
-			"statuses": []any{429, 503},
-			"reasons":  []any{"TIMEOUT"},
-		},
-		"deleted_at": nil,
-		"version":    version,
+		"name":                      "Retry on server errors",
+		"max_retries":               5,
+		"backoff":                   "exponential",
+		"delay_seconds":             2,
+		"max_delay_seconds":         60,
+		"retry_on_timeout":          true,
+		"retry_on_connection_error": true,
+		"retry_statuses":            []any{"429", "5xx"},
+		"retry_statuses_except":     []any{"501"},
+		"deleted_at":                nil,
+		"version":                   version,
 	}
 	if created {
 		attrs["created_at"] = "2026-06-04T00:00:00Z"
@@ -1496,7 +1496,10 @@ func TestRetryPolicies_Lifecycle(t *testing.T) {
 
 	policy := rp.New(testRetryPolicyID, "Retry on server errors", 5, BackoffExponential, 2,
 		WithRetryPolicyMaxDelaySeconds(60),
-		WithRetryPolicyRetryOn(RetryOn{Statuses: []int{429, 503}, Reasons: []RetryReason{RetryReasonTimeout}}))
+		WithRetryPolicyRetryOnTimeout(true),
+		WithRetryPolicyRetryOnConnectionError(true),
+		WithRetryPolicyRetryStatuses([]string{"429", "5xx"}),
+		WithRetryPolicyRetryStatusesExcept([]string{"501"}))
 	if policy.CreatedAt != nil {
 		t.Fatal("unsaved policy should have nil CreatedAt")
 	}
@@ -1509,8 +1512,14 @@ func TestRetryPolicies_Lifecycle(t *testing.T) {
 	if policy.Backoff != BackoffExponential || policy.MaxDelaySeconds == nil || *policy.MaxDelaySeconds != 60 {
 		t.Errorf("policy fields mismatch: %+v", policy)
 	}
-	if len(policy.RetryOn.Statuses) != 2 || len(policy.RetryOn.Reasons) != 1 || policy.RetryOn.Reasons[0] != RetryReasonTimeout {
-		t.Errorf("retry_on parse mismatch: %+v", policy.RetryOn)
+	if !policy.RetryOnTimeout || !policy.RetryOnConnectionError {
+		t.Errorf("retry-on flags parse mismatch: timeout=%v connErr=%v", policy.RetryOnTimeout, policy.RetryOnConnectionError)
+	}
+	if len(policy.RetryStatuses) != 2 || policy.RetryStatuses[0] != "429" || policy.RetryStatuses[1] != "5xx" {
+		t.Errorf("retry_statuses parse mismatch: %+v", policy.RetryStatuses)
+	}
+	if len(policy.RetryStatusesExcept) != 1 || policy.RetryStatusesExcept[0] != "501" {
+		t.Errorf("retry_statuses_except parse mismatch: %+v", policy.RetryStatusesExcept)
 	}
 
 	listed, err := rp.List(ctx, ListRetryPoliciesInput{})
@@ -1553,8 +1562,8 @@ func TestRetryPolicies_Lifecycle(t *testing.T) {
 	}
 }
 
-// New without options leaves the max delay unset and the retry-on empty (retries
-// nothing).
+// New without options leaves the max delay unset, the retry-on flags false, and
+// the status allowlists empty (retries nothing).
 func TestRetryPolicies_NewDefaults(t *testing.T) {
 	j, cleanup := newTestJobs(t, retryFullHandler)
 	defer cleanup()
@@ -1562,8 +1571,11 @@ func TestRetryPolicies_NewDefaults(t *testing.T) {
 	if policy.MaxDelaySeconds != nil {
 		t.Errorf("expected nil MaxDelaySeconds, got %v", *policy.MaxDelaySeconds)
 	}
-	if len(policy.RetryOn.Statuses) != 0 || len(policy.RetryOn.Reasons) != 0 {
-		t.Errorf("expected empty RetryOn default, got %+v", policy.RetryOn)
+	if policy.RetryOnTimeout || policy.RetryOnConnectionError {
+		t.Errorf("expected false retry-on flags, got timeout=%v connErr=%v", policy.RetryOnTimeout, policy.RetryOnConnectionError)
+	}
+	if len(policy.RetryStatuses) != 0 || len(policy.RetryStatusesExcept) != 0 {
+		t.Errorf("expected empty status allowlists, got %+v / %+v", policy.RetryStatuses, policy.RetryStatusesExcept)
 	}
 	if policy.Backoff != BackoffFixed {
 		t.Errorf("backoff: %s", policy.Backoff)
@@ -1571,8 +1583,8 @@ func TestRetryPolicies_NewDefaults(t *testing.T) {
 }
 
 // The create body carries the resource id/type and the full attribute set;
-// max_delay_seconds is omitted when unset, and an empty RetryOn still emits both
-// lists as empty arrays.
+// max_delay_seconds is omitted when unset, the retry-on flags are always
+// present, and empty status allowlists still emit as empty arrays.
 func TestRetryPolicies_CreateWire(t *testing.T) {
 	ctx := context.Background()
 	var rec capturedReq
@@ -1583,7 +1595,10 @@ func TestRetryPolicies_CreateWire(t *testing.T) {
 
 	policy := j.RetryPolicies().New(testRetryPolicyID, "Retry on server errors", 5, BackoffExponential, 2,
 		WithRetryPolicyMaxDelaySeconds(60),
-		WithRetryPolicyRetryOn(RetryOn{Statuses: []int{429, 503}, Reasons: []RetryReason{RetryReasonTimeout}}))
+		WithRetryPolicyRetryOnTimeout(true),
+		WithRetryPolicyRetryOnConnectionError(true),
+		WithRetryPolicyRetryStatuses([]string{"429", "5xx"}),
+		WithRetryPolicyRetryStatusesExcept([]string{"501"}))
 	if err := policy.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -1599,15 +1614,17 @@ func TestRetryPolicies_CreateWire(t *testing.T) {
 	if attrs["max_retries"].(float64) != 5 || attrs["delay_seconds"].(float64) != 2 || attrs["max_delay_seconds"].(float64) != 60 {
 		t.Errorf("numeric attrs mismatch: %+v", attrs)
 	}
-	retryOn := attrs["retry_on"].(map[string]any)
-	if statuses := retryOn["statuses"].([]any); len(statuses) != 2 || statuses[0].(float64) != 429 {
-		t.Errorf("statuses wire mismatch: %v", retryOn["statuses"])
+	if attrs["retry_on_timeout"] != true || attrs["retry_on_connection_error"] != true {
+		t.Errorf("retry-on flags wire mismatch: timeout=%v connErr=%v", attrs["retry_on_timeout"], attrs["retry_on_connection_error"])
 	}
-	if reasons := retryOn["reasons"].([]any); len(reasons) != 1 || reasons[0] != "TIMEOUT" {
-		t.Errorf("reasons wire mismatch: %v", retryOn["reasons"])
+	if statuses := attrs["retry_statuses"].([]any); len(statuses) != 2 || statuses[0] != "429" || statuses[1] != "5xx" {
+		t.Errorf("retry_statuses wire mismatch: %v", attrs["retry_statuses"])
+	}
+	if except := attrs["retry_statuses_except"].([]any); len(except) != 1 || except[0] != "501" {
+		t.Errorf("retry_statuses_except wire mismatch: %v", attrs["retry_statuses_except"])
 	}
 
-	// No max delay → omitted; empty RetryOn → both lists present but empty.
+	// No max delay → omitted; flags default false; allowlists present but empty.
 	plain := j.RetryPolicies().New(testRetryPolicyID, "n", 3, BackoffFixed, 5)
 	if err := plain.Save(ctx); err != nil {
 		t.Fatalf("Save (plain): %v", err)
@@ -1616,12 +1633,14 @@ func TestRetryPolicies_CreateWire(t *testing.T) {
 	if _, ok := attrs["max_delay_seconds"]; ok {
 		t.Error("max_delay_seconds must be omitted when unset")
 	}
-	retryOn = attrs["retry_on"].(map[string]any)
-	if s := retryOn["statuses"].([]any); len(s) != 0 {
-		t.Errorf("empty statuses expected, got %v", s)
+	if attrs["retry_on_timeout"] != false || attrs["retry_on_connection_error"] != false {
+		t.Errorf("default retry-on flags must be false: timeout=%v connErr=%v", attrs["retry_on_timeout"], attrs["retry_on_connection_error"])
 	}
-	if rs := retryOn["reasons"].([]any); len(rs) != 0 {
-		t.Errorf("empty reasons expected, got %v", rs)
+	if s := attrs["retry_statuses"].([]any); len(s) != 0 {
+		t.Errorf("empty retry_statuses expected, got %v", s)
+	}
+	if e := attrs["retry_statuses_except"].([]any); len(e) != 0 {
+		t.Errorf("empty retry_statuses_except expected, got %v", e)
 	}
 }
 
@@ -1753,44 +1772,32 @@ func TestRetryPolicies_UnsavedGuards(t *testing.T) {
 	}
 }
 
-// RetryOn serializes to / from the wire {statuses, reasons} shape; empty round
-// trips to empty and a nil retry_on yields the zero RetryOn.
-func TestRetryOn_WireConversions(t *testing.T) {
-	// empty → both lists present and empty (not nil)
-	w := retryOnToWire(RetryOn{})
-	if w.Statuses == nil || len(*w.Statuses) != 0 {
-		t.Errorf("empty statuses should be non-nil empty: %v", w.Statuses)
+// Status allowlists serialize to / from the wire as a string slice; empty round
+// trips to a present-but-empty array and a nil wire list yields an empty slice.
+func TestRetryStatuses_WireConversions(t *testing.T) {
+	// empty → non-nil empty slice (always emitted)
+	if w := retryStatusesToWire(nil); w == nil || len(*w) != 0 {
+		t.Errorf("empty toWire should be non-nil empty: %v", w)
 	}
-	if w.Reasons == nil || len(*w.Reasons) != 0 {
-		t.Errorf("empty reasons should be non-nil empty: %v", w.Reasons)
+	if w := retryStatusesToWire([]string{}); w == nil || len(*w) != 0 {
+		t.Errorf("empty-slice toWire should be non-nil empty: %v", w)
 	}
 
 	// populated
-	w = retryOnToWire(RetryOn{Statuses: []int{429}, Reasons: []RetryReason{RetryReasonTimeout, RetryReasonConnectionError}})
-	if len(*w.Statuses) != 1 || (*w.Statuses)[0] != 429 {
-		t.Errorf("statuses: %v", w.Statuses)
-	}
-	if len(*w.Reasons) != 2 || (*w.Reasons)[0] != genjobs.RetryOnReasons("TIMEOUT") {
-		t.Errorf("reasons: %v", w.Reasons)
+	w := retryStatusesToWire([]string{"429", "5xx"})
+	if len(*w) != 2 || (*w)[0] != "429" || (*w)[1] != "5xx" {
+		t.Errorf("populated toWire: %v", *w)
 	}
 
-	// fromWire nil → empty
-	if r := retryOnFromWire(nil); len(r.Statuses) != 0 || len(r.Reasons) != 0 {
+	// fromWire nil → empty slice
+	if r := retryStatusesFromWire(nil); len(r) != 0 {
 		t.Errorf("nil fromWire: %+v", r)
 	}
-	// fromWire with nil inner slices → empty (the nil-slice branches)
-	if r := retryOnFromWire(&genjobs.RetryOn{}); len(r.Statuses) != 0 || len(r.Reasons) != 0 {
-		t.Errorf("empty-ptr fromWire: %+v", r)
-	}
 	// fromWire populated
-	statuses := []int{503}
-	reasons := []genjobs.RetryOnReasons{"NON_SUCCESS_STATUS"}
-	r := retryOnFromWire(&genjobs.RetryOn{Statuses: &statuses, Reasons: &reasons})
-	if len(r.Statuses) != 1 || r.Statuses[0] != 503 {
-		t.Errorf("statuses fromWire: %v", r.Statuses)
-	}
-	if len(r.Reasons) != 1 || r.Reasons[0] != RetryReasonNonSuccessStatus {
-		t.Errorf("reasons fromWire: %v", r.Reasons)
+	src := []string{"501"}
+	r := retryStatusesFromWire(&src)
+	if len(r) != 1 || r[0] != "501" {
+		t.Errorf("populated fromWire: %v", r)
 	}
 }
 
@@ -1823,8 +1830,8 @@ func TestRetryPolicy_ResourceBuilders(t *testing.T) {
 	}
 }
 
-// retryPolicyFromResource handles the absent-id / absent-retry_on / absent-max
-// delay branches as well as the fully-populated case.
+// retryPolicyFromResource handles the absent-id / absent-flag / absent-status /
+// absent-max-delay branches as well as the fully-populated case.
 func TestRetryPolicy_FromResourceBranches(t *testing.T) {
 	min := genjobs.RetryPolicyResource{Attributes: genjobs.RetryPolicy{Name: "n", Backoff: "fixed", DelaySeconds: 5, MaxRetries: 0}}
 	p := retryPolicyFromResource(min, nil)
@@ -1834,28 +1841,39 @@ func TestRetryPolicy_FromResourceBranches(t *testing.T) {
 	if p.MaxDelaySeconds != nil {
 		t.Errorf("expected nil max delay, got %v", *p.MaxDelaySeconds)
 	}
-	if len(p.RetryOn.Statuses) != 0 || len(p.RetryOn.Reasons) != 0 {
-		t.Errorf("expected empty RetryOn, got %+v", p.RetryOn)
+	if p.RetryOnTimeout || p.RetryOnConnectionError {
+		t.Errorf("nil retry-on flags should default false: timeout=%v connErr=%v", p.RetryOnTimeout, p.RetryOnConnectionError)
+	}
+	if len(p.RetryStatuses) != 0 || len(p.RetryStatusesExcept) != 0 {
+		t.Errorf("expected empty status allowlists, got %+v / %+v", p.RetryStatuses, p.RetryStatusesExcept)
 	}
 
 	id := "p"
 	maxDelay := 60
-	statuses := []int{429}
-	reasons := []genjobs.RetryOnReasons{"TIMEOUT"}
+	retryOnTimeout := true
+	retryOnConnectionError := true
+	statuses := []string{"429", "5xx"}
+	except := []string{"501"}
 	full := genjobs.RetryPolicyResource{
 		Id: &id,
 		Attributes: genjobs.RetryPolicy{
 			Name: "n", Backoff: "exponential", DelaySeconds: 2, MaxRetries: 5,
-			MaxDelaySeconds: &maxDelay,
-			RetryOn:         &genjobs.RetryOn{Statuses: &statuses, Reasons: &reasons},
+			MaxDelaySeconds:        &maxDelay,
+			RetryOnTimeout:         &retryOnTimeout,
+			RetryOnConnectionError: &retryOnConnectionError,
+			RetryStatuses:          &statuses,
+			RetryStatusesExcept:    &except,
 		},
 	}
 	p = retryPolicyFromResource(full, nil)
 	if p.ID != "p" || p.MaxDelaySeconds == nil || *p.MaxDelaySeconds != 60 || p.Backoff != BackoffExponential {
 		t.Errorf("full parse mismatch: %+v", p)
 	}
-	if len(p.RetryOn.Statuses) != 1 || len(p.RetryOn.Reasons) != 1 {
-		t.Errorf("retry_on parse: %+v", p.RetryOn)
+	if !p.RetryOnTimeout || !p.RetryOnConnectionError {
+		t.Errorf("retry-on flags parse: timeout=%v connErr=%v", p.RetryOnTimeout, p.RetryOnConnectionError)
+	}
+	if len(p.RetryStatuses) != 2 || len(p.RetryStatusesExcept) != 1 || p.RetryStatusesExcept[0] != "501" {
+		t.Errorf("status allowlists parse: %+v / %+v", p.RetryStatuses, p.RetryStatusesExcept)
 	}
 }
 

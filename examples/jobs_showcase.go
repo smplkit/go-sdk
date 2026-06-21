@@ -43,10 +43,10 @@ func main() {
 	// create a retry policy
 	retryPolicy := jobs.RetryPolicies().New(retryPolicyID, "Retry on server errors", 5, smplkit.BackoffExponential, 2,
 		smplkit.WithRetryPolicyMaxDelaySeconds(60),
-		smplkit.WithRetryPolicyRetryOn(smplkit.RetryOn{
-			Statuses: []int{429, 503},
-			Reasons:  []smplkit.RetryReason{smplkit.RetryReasonTimeout},
-		}))
+		smplkit.WithRetryPolicyRetryOnTimeout(true),
+		smplkit.WithRetryPolicyRetryOnConnectionError(true),
+		smplkit.WithRetryPolicyRetryStatuses([]string{"429", "5xx"}),
+		smplkit.WithRetryPolicyRetryStatusesExcept([]string{"501"}))
 	fatalIfErr("save retry policy", retryPolicy.Save(ctx))
 	policies, err := jobs.RetryPolicies().List(ctx, smplkit.ListRetryPoliciesInput{})
 	fatalIfErr("list retry policies", err)
