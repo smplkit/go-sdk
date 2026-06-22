@@ -595,6 +595,7 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	dev.Timezone = "Europe/London"
 	dev.RetryPolicy = "dev-policy"
 	dev.SetHeader("X-Env", "dev-secret")
+	dev.SetHeader("X-Trace.Id", "abc") // a dotted header name round-trips whole
 	job.Environment("production").Enabled = true
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -610,11 +611,18 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	if attrs["timezone"] != "America/New_York" {
 		t.Errorf("base timezone should be on the wire, got %v", attrs["timezone"])
 	}
-	// Base headers are a name→value object, not a list.
+	// Base headers are a name→value object, not a list, and base tls_verify /
+	// ca_cert ride the base configuration on the wire.
 	cfg := attrs["configuration"].(map[string]any)
 	baseHeaders, ok := cfg["headers"].(map[string]any)
 	if !ok || baseHeaders["X-Base"] != "base-secret" {
 		t.Errorf("base headers should be a name→value object, got %v", cfg["headers"])
+	}
+	if cfg["tls_verify"] != false {
+		t.Errorf("base tls_verify should be false on the wire, got %v", cfg["tls_verify"])
+	}
+	if cfg["ca_cert"] != caCert {
+		t.Errorf("base ca_cert should be on the wire, got %v", cfg["ca_cert"])
 	}
 	envs, ok := attrs["environments"].(map[string]any)
 	if !ok {
@@ -629,17 +637,18 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 		t.Errorf("development enabled should be false on the wire, got %v", devWire["enabled"])
 	}
 	for key, want := range map[string]any{
-		"url":            "https://dev",
-		"method":         "PUT",
-		"timeout":        float64(15), // JSON numbers decode to float64
-		"body":           "{}",
-		"success_status": "204",
-		"tls_verify":     false,
-		"ca_cert":        "DEV-PEM",
-		"schedule":       "0 3 * * *",
-		"timezone":       "Europe/London",
-		"retry_policy":   "dev-policy",
-		"headers.X-Env":  "dev-secret", // each header is an individual leaf
+		"url":                "https://dev",
+		"method":             "PUT",
+		"timeout":            float64(15), // JSON numbers decode to float64
+		"body":               "{}",
+		"success_status":     "204",
+		"tls_verify":         false,
+		"ca_cert":            "DEV-PEM",
+		"schedule":           "0 3 * * *",
+		"timezone":           "Europe/London",
+		"retry_policy":       "dev-policy",
+		"headers.X-Env":      "dev-secret", // each header is an individual leaf
+		"headers.X-Trace.Id": "abc",        // dotted header name kept whole on serialize
 	} {
 		if devWire[key] != want {
 			t.Errorf("development overlay leaf %q = %v, want %v", key, devWire[key], want)

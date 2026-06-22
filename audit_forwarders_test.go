@@ -1203,6 +1203,7 @@ func TestForwarder_Save_SendsEnvironments(t *testing.T) {
 	})
 	defer cleanup()
 	fwd := fwds.New("x", "x", ForwarderTypeDatadog, HttpConfiguration{URL: "https://base"})
+	fwd.Configuration.SetHeader("X-Base", "base-secret") // base headers travel as an object
 	prod := fwd.Environment("production")
 	prod.Enabled = true
 	prod.URL = "https://prod.example.com/in"
@@ -1212,6 +1213,7 @@ func TestForwarder_Save_SendsEnvironments(t *testing.T) {
 	prod.TlsVerify = &noVerify
 	prod.CaCert = ptr("PROD-PEM")
 	prod.SetHeader("DD-API-KEY", "secret")
+	prod.SetHeader("X-Trace.Id", "abc") // a dotted header name round-trips whole
 	fwd.Environment("staging").Enabled = false
 	if err := fwd.Save(context.Background()); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -1229,6 +1231,16 @@ func TestForwarder_Save_SendsEnvironments(t *testing.T) {
 	if _, present := parsed.Data.Attributes["enabled"]; present {
 		t.Fatalf("did not expect base `enabled` on wire, got: %s", capturedBody)
 	}
+	// Base configuration headers serialize as a name→value object, not a list.
+	var cfg struct {
+		Headers map[string]string `json:"headers"`
+	}
+	if err := json.Unmarshal(parsed.Data.Attributes["configuration"], &cfg); err != nil {
+		t.Fatalf("parse configuration: %v", err)
+	}
+	if len(cfg.Headers) != 1 || cfg.Headers["X-Base"] != "base-secret" {
+		t.Errorf("base configuration headers should be the object {X-Base: base-secret}, got %v", cfg.Headers)
+	}
 	var envs map[string]map[string]any
 	if err := json.Unmarshal(parsed.Data.Attributes["environments"], &envs); err != nil {
 		t.Fatalf("parse environments: %v", err)
@@ -1245,6 +1257,7 @@ func TestForwarder_Save_SendsEnvironments(t *testing.T) {
 		"tls_verify":         false,
 		"ca_cert":            "PROD-PEM",
 		"headers.DD-API-KEY": "secret",
+		"headers.X-Trace.Id": "abc", // dotted header name kept whole on serialize
 	} {
 		if prodWire[key] != want {
 			t.Errorf("production overlay leaf %q = %v, want %v", key, prodWire[key], want)
