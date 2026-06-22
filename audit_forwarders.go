@@ -56,13 +56,20 @@ type ForwarderOption func(*Forwarder)
 
 // WithForwarderEnvironments sets the per-environment override map that
 // drives enablement. A forwarder delivers in an environment only when
-// that environment's entry has Enabled=true; each entry may
-// carry an optional HttpConfiguration override (nil inherits the base
-// configuration). Every referenced environment must exist and be managed
-// for the account. Without this option the forwarder is created enabled
-// nowhere.
+// that environment's entry has Enabled=true; each entry is a flat overlay that
+// overrides only the leaves it sets (URL, Method, headers, …), inheriting the
+// base configuration for the rest. Every referenced environment must exist and
+// be managed for the account. Without this option the forwarder is created
+// enabled nowhere. The entries are copied, so later mutations of the passed map
+// do not affect the forwarder; mutate via forwarder.Environment(env) instead.
 func WithForwarderEnvironments(environments map[string]ForwarderEnvironment) ForwarderOption {
-	return func(fwd *Forwarder) { fwd.Environments = environments }
+	return func(fwd *Forwarder) {
+		fwd.Environments = make(map[string]*ForwarderEnvironment, len(environments))
+		for key, env := range environments {
+			env := env
+			fwd.Environments[key] = &env
+		}
+	}
 }
 
 // WithForwarderDescription sets the optional free-text description.
@@ -164,55 +171,43 @@ func (fwd *Forwarder) Delete(ctx context.Context) error {
 	return fwd.client.Delete(ctx, fwd.ID)
 }
 
-// environmentOverride returns the override for environment, creating an
-// empty one if absent.
+// Environment returns the per-environment override for environment — the
+// single place to read or set what this forwarder overrides there (ADR-056).
 //
-// The per-environment mutators reach through here so an existing override's
-// other field is preserved when only one of Enabled / Configuration is being
-// set.
-func (fwd *Forwarder) environmentOverride(environment string) *ForwarderEnvironment {
+// It returns the ForwarderEnvironment for environment, creating an empty one
+// (and inserting it into Environments) on first access, so overrides can be set
+// directly on the returned pointer:
+//
+//	forwarder.Environment("production").Enabled = true
+//	forwarder.Environment("production").URL = "https://prod.siem.example.com/in"
+//	forwarder.Environment("production").SetHeader("DD-API-KEY", "prod-secret")
+//
+// Only the leaves you set are sent on save; everything else inherits the base
+// definition (the server resolves base ⊕ overrides on delivery).
+func (fwd *Forwarder) Environment(environment string) *ForwarderEnvironment {
 	if fwd.Environments == nil {
-		fwd.Environments = map[string]ForwarderEnvironment{}
+		fwd.Environments = map[string]*ForwarderEnvironment{}
 	}
 	env, ok := fwd.Environments[environment]
 	if !ok {
-		env = ForwarderEnvironment{}
+		env = &ForwarderEnvironment{}
 		fwd.Environments[environment] = env
 	}
-	return &env
+	return env
 }
 
-// SetConfiguration sets this forwarder's destination configuration in memory.
-//
-// With environment empty, replaces the base Configuration. With environment
-// given, sets the per-environment override's configuration on Environments,
-// creating the override entry if it doesn't exist yet (preserving any
-// already-set Enabled on it). Call Save to persist.
-func (fwd *Forwarder) SetConfiguration(configuration HttpConfiguration, environment string) {
-	if environment == "" {
-		fwd.Configuration = configuration
-		return
+// Enabled reports the read-only roll-up: true when the forwarder is enabled in
+// at least one environment. The audit API has no top-level enabled field, so
+// the wrapper derives it from the Environments map (and it stays correct for
+// in-memory edits made before Save). Enable per environment via
+// forwarder.Environment(env).Enabled = true.
+func (fwd *Forwarder) Enabled() bool {
+	for _, env := range fwd.Environments {
+		if env.Enabled {
+			return true
+		}
 	}
-	env := fwd.environmentOverride(environment)
-	env.Configuration = &configuration
-	fwd.Environments[environment] = *env
-}
-
-// SetEnabled sets this forwarder's enablement in memory.
-//
-// With environment empty, sets the base Enabled (which the server pins false
-// regardless — enablement is per-environment). With environment given, sets
-// the per-environment override's Enabled on Environments, creating the
-// override entry if it doesn't exist yet (preserving any already-set
-// Configuration on it). Call Save to persist.
-func (fwd *Forwarder) SetEnabled(enabled bool, environment string) {
-	if environment == "" {
-		fwd.Enabled = enabled
-		return
-	}
-	env := fwd.environmentOverride(environment)
-	env.Enabled = enabled
-	fwd.Environments[environment] = *env
+	return false
 }
 
 func (fwd *Forwarder) apply(other *Forwarder) {
@@ -220,7 +215,6 @@ func (fwd *Forwarder) apply(other *Forwarder) {
 	fwd.Name = other.Name
 	fwd.Description = other.Description
 	fwd.ForwarderType = other.ForwarderType
-	fwd.Enabled = other.Enabled
 	fwd.Environments = other.Environments
 	fwd.Filter = other.Filter
 	fwd.Transform = other.Transform
@@ -402,48 +396,64 @@ func forwarderCreateResourceFromForwarder(fwd *Forwarder) genaudit.ForwarderCrea
 	}
 }
 
-// environmentsToWire converts the wrapper per-environment override map to
-// the generated model. Per-environment configuration overrides are sent
-// as full HttpConfiguration payloads (plaintext headers in), mirroring the
-// base configuration's round-trip semantics.
-func environmentsToWire(envs map[string]ForwarderEnvironment) map[string]genaudit.ForwarderEnvironment {
-	out := make(map[string]genaudit.ForwarderEnvironment, len(envs))
+// environmentsToWire converts the wrapper per-environment override map to the
+// flat, sparse leaf-path overlay the audit API expects (ADR-056): each
+// environment emits "enabled" plus only the leaves it overrides, with every
+// header addressed individually as headers.<name>.
+func environmentsToWire(envs map[string]*ForwarderEnvironment) map[string]map[string]interface{} {
+	out := make(map[string]map[string]interface{}, len(envs))
 	for key, env := range envs {
-		enabled := env.Enabled
-		ge := genaudit.ForwarderEnvironment{Enabled: &enabled}
-		if env.Configuration != nil {
-			cfg := httpConfigurationToWire(*env.Configuration)
-			ge.Configuration = &cfg
+		overlay := map[string]interface{}{"enabled": env.Enabled}
+		if env.URL != "" {
+			overlay["url"] = env.URL
 		}
-		out[key] = ge
+		if env.Method != "" {
+			overlay["method"] = string(env.Method)
+		}
+		if env.SuccessStatus != "" {
+			overlay["success_status"] = env.SuccessStatus
+		}
+		if env.TlsVerify != nil {
+			overlay["tls_verify"] = *env.TlsVerify
+		}
+		if env.CaCert != nil {
+			overlay["ca_cert"] = *env.CaCert
+		}
+		for name, value := range env.Headers {
+			overlay["headers."+name] = value
+		}
+		out[key] = overlay
 	}
 	return out
 }
 
-// environmentsFromWire converts the generated per-environment override map
-// back into the wrapper shape.
-func environmentsFromWire(envs map[string]genaudit.ForwarderEnvironment) map[string]ForwarderEnvironment {
-	out := make(map[string]ForwarderEnvironment, len(envs))
-	for key, ge := range envs {
-		env := ForwarderEnvironment{}
-		if ge.Enabled != nil {
-			env.Enabled = *ge.Enabled
+// environmentsFromWire parses the flat leaf-path overlay the audit API returns
+// (ADR-056) back into the wrapper shape. Header leaves arrive as headers.<name>
+// (split on the first dot, so a dotted header name is preserved); unknown leaves
+// are ignored for forward compatibility. Reads are pure override — an unset
+// leaf stays the wrapper's zero value, never the base.
+func environmentsFromWire(envs map[string]map[string]interface{}) map[string]*ForwarderEnvironment {
+	out := make(map[string]*ForwarderEnvironment, len(envs))
+	for key, raw := range envs {
+		out[key] = &ForwarderEnvironment{
+			Enabled:       overlayBool(raw, "enabled"),
+			URL:           overlayString(raw, "url"),
+			Method:        HttpMethod(overlayString(raw, "method")),
+			SuccessStatus: overlayString(raw, "success_status"),
+			TlsVerify:     overlayBoolPtr(raw, "tls_verify"),
+			CaCert:        overlayStringPtr(raw, "ca_cert"),
+			Headers:       overlayHeaders(raw),
 		}
-		if ge.Configuration != nil {
-			cfg := httpConfigurationFromWire(*ge.Configuration)
-			env.Configuration = &cfg
-		}
-		out[key] = env
 	}
 	return out
 }
 
-func httpConfigurationToWire(h HttpConfiguration) genaudit.HttpConfiguration {
-	out := genaudit.HttpConfiguration{
+func httpConfigurationToWire(h HttpConfiguration) genaudit.ForwarderHttpConfiguration {
+	out := genaudit.ForwarderHttpConfiguration{
 		Url: h.URL,
 	}
 	if h.Method != "" {
-		m := genaudit.HttpConfigurationMethod(h.Method)
+		m := genaudit.ForwarderHttpConfigurationMethod(h.Method)
 		out.Method = &m
 	}
 	if h.SuccessStatus != "" {
@@ -459,11 +469,11 @@ func httpConfigurationToWire(h HttpConfiguration) genaudit.HttpConfiguration {
 		out.CaCert = &c
 	}
 	if len(h.Headers) > 0 {
-		hh := make([]genaudit.HttpHeader, 0, len(h.Headers))
-		for _, hdr := range h.Headers {
-			hh = append(hh, genaudit.HttpHeader{Name: hdr.Name, Value: hdr.Value})
+		headers := make(map[string]string, len(h.Headers))
+		for name, value := range h.Headers {
+			headers[name] = value
 		}
-		out.Headers = &hh
+		out.Headers = &headers
 	}
 	return out
 }
@@ -491,11 +501,6 @@ func forwarderFromResource(r genaudit.ForwarderResource, client *AuditForwarders
 		tt := ForwarderTransformType(*a.TransformType)
 		out.TransformType = &tt
 	}
-	// The base `enabled` is server-pinned false; round-trip whatever the
-	// server returned (always false) without assuming a default of true.
-	if a.Enabled != nil {
-		out.Enabled = *a.Enabled
-	}
 	if a.Environments != nil {
 		out.Environments = environmentsFromWire(*a.Environments)
 	}
@@ -512,7 +517,7 @@ func forwarderFromResource(r genaudit.ForwarderResource, client *AuditForwarders
 	return out
 }
 
-func httpConfigurationFromWire(h genaudit.HttpConfiguration) HttpConfiguration {
+func httpConfigurationFromWire(h genaudit.ForwarderHttpConfiguration) HttpConfiguration {
 	out := HttpConfiguration{
 		URL: h.Url,
 	}
@@ -531,9 +536,9 @@ func httpConfigurationFromWire(h genaudit.HttpConfiguration) HttpConfiguration {
 		out.CaCert = &c
 	}
 	if h.Headers != nil {
-		out.Headers = make([]HttpHeader, 0, len(*h.Headers))
-		for _, hdr := range *h.Headers {
-			out.Headers = append(out.Headers, HttpHeader{Name: hdr.Name, Value: hdr.Value})
+		out.Headers = make(map[string]string, len(*h.Headers))
+		for name, value := range *h.Headers {
+			out.Headers[name] = value
 		}
 	}
 	return out

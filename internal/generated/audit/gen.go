@@ -88,6 +88,33 @@ func (e ForwarderDeliveryStatus) Valid() bool {
 	}
 }
 
+// Defines values for ForwarderHttpConfigurationMethod.
+const (
+	ForwarderHttpConfigurationMethodDELETE ForwarderHttpConfigurationMethod = "DELETE"
+	ForwarderHttpConfigurationMethodGET    ForwarderHttpConfigurationMethod = "GET"
+	ForwarderHttpConfigurationMethodPATCH  ForwarderHttpConfigurationMethod = "PATCH"
+	ForwarderHttpConfigurationMethodPOST   ForwarderHttpConfigurationMethod = "POST"
+	ForwarderHttpConfigurationMethodPUT    ForwarderHttpConfigurationMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the ForwarderHttpConfigurationMethod enum.
+func (e ForwarderHttpConfigurationMethod) Valid() bool {
+	switch e {
+	case ForwarderHttpConfigurationMethodDELETE:
+		return true
+	case ForwarderHttpConfigurationMethodGET:
+		return true
+	case ForwarderHttpConfigurationMethodPATCH:
+		return true
+	case ForwarderHttpConfigurationMethodPOST:
+		return true
+	case ForwarderHttpConfigurationMethodPUT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ForwarderType.
 const (
 	Datadog   ForwarderType = "datadog"
@@ -115,33 +142,6 @@ func (e ForwarderType) Valid() bool {
 	case SplunkHec:
 		return true
 	case SumoLogic:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for HttpConfigurationMethod.
-const (
-	HttpConfigurationMethodDELETE HttpConfigurationMethod = "DELETE"
-	HttpConfigurationMethodGET    HttpConfigurationMethod = "GET"
-	HttpConfigurationMethodPATCH  HttpConfigurationMethod = "PATCH"
-	HttpConfigurationMethodPOST   HttpConfigurationMethod = "POST"
-	HttpConfigurationMethodPUT    HttpConfigurationMethod = "PUT"
-)
-
-// Valid indicates whether the value is a known member of the HttpConfigurationMethod enum.
-func (e HttpConfigurationMethod) Valid() bool {
-	switch e {
-	case HttpConfigurationMethodDELETE:
-		return true
-	case HttpConfigurationMethodGET:
-		return true
-	case HttpConfigurationMethodPATCH:
-		return true
-	case HttpConfigurationMethodPOST:
-		return true
-	case HttpConfigurationMethodPUT:
 		return true
 	default:
 		return false
@@ -745,14 +745,12 @@ type ExportResponse struct {
 // the event is shaped by the configured transform and delivered to the
 // destination defined by “configuration“.
 type Forwarder struct {
-	// Configuration HTTP request configuration for delivering a payload to a destination.
+	// Configuration HTTP request a forwarder makes to deliver an event.
 	//
-	// The shared base shape for any product that posts to a customer-supplied
-	// HTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs
-	// extends it (adding ``body`` and ``timeout``). When other transports land
-	// (``FTP``, ``SQS``, …) their own configuration schemas will join this one
-	// as members of a discriminated union under a ``configuration`` field.
-	Configuration HttpConfiguration `json:"configuration"`
+	// Identical to the shared HTTP configuration except that ``headers`` is a
+	// name→value object so an individual header can be overridden per environment
+	// by its name.
+	Configuration ForwarderHttpConfiguration `json:"configuration"`
 
 	// CreatedAt When the forwarder was created.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
@@ -763,11 +761,8 @@ type Forwarder struct {
 	// Description Free-text description for the forwarder.
 	Description *string `json:"description,omitempty"`
 
-	// Enabled Always false. Enablement is per-environment: a forwarder delivers in an environment only when `environments[<env>].enabled` is true. The base value is pinned false and cannot be set.
-	Enabled *bool `json:"enabled,omitempty"`
-
-	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the forwarder delivers in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account.
-	Environments *map[string]ForwarderEnvironment `json:"environments,omitempty"`
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a sparse map of only the fields that differ in that environment: `enabled` (whether the forwarder delivers there) plus any of `url`, `method`, `success_status`, `tls_verify`, `ca_cert`, and individual headers as `headers.<name>` (e.g. `headers.Authorization`). Fields you omit are inherited from the base `configuration`; an entry never needs to repeat the whole configuration. A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account.
+	Environments *map[string]map[string]interface{} `json:"environments,omitempty"`
 
 	// Filter JSON Logic expression evaluated against each event. The event is delivered only if the expression returns truthy. Omit to deliver every event.
 	Filter *map[string]interface{} `json:"filter,omitempty"`
@@ -908,20 +903,33 @@ type ForwarderDeliveryResponse struct {
 	Data ForwarderDeliveryResource `json:"data"`
 }
 
-// ForwarderEnvironment Per-environment override for a forwarder's enablement and configuration.
-type ForwarderEnvironment struct {
-	// Configuration HTTP request configuration for delivering a payload to a destination.
-	//
-	// The shared base shape for any product that posts to a customer-supplied
-	// HTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs
-	// extends it (adding ``body`` and ``timeout``). When other transports land
-	// (``FTP``, ``SQS``, …) their own configuration schemas will join this one
-	// as members of a discriminated union under a ``configuration`` field.
-	Configuration *HttpConfiguration `json:"configuration,omitempty"`
+// ForwarderHttpConfiguration HTTP request a forwarder makes to deliver an event.
+//
+// Identical to the shared HTTP configuration except that “headers“ is a
+// name→value object so an individual header can be overridden per environment
+// by its name.
+type ForwarderHttpConfiguration struct {
+	// CaCert Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`.
+	CaCert *string `json:"ca_cert,omitempty"`
 
-	// Enabled Whether the forwarder delivers events in this environment. A forwarder is enabled in an environment only via this field — the base `enabled` is always false.
-	Enabled *bool `json:"enabled,omitempty"`
+	// Headers HTTP headers attached to each delivery, as a name→value object (e.g. `{"DD-API-KEY": "s3cr3t"}`). A header is overridden in a specific environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively.
+	Headers *map[string]string `json:"headers,omitempty"`
+
+	// Method HTTP method used when delivering the request.
+	Method *ForwarderHttpConfigurationMethod `json:"method,omitempty"`
+
+	// SuccessStatus HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
+	SuccessStatus *string `json:"success_status,omitempty"`
+
+	// TlsVerify Whether to verify the destination server's TLS certificate against trusted certificate authorities. Defaults to `true` and should be left on for any production destination. Set to `false` only for development or short-lived testing against a destination that presents an untrusted certificate (e.g. a Splunk Cloud trial stack on `:8088` serving its default self-signed certificate). When `false`, deliveries proceed without certificate verification — they are vulnerable to man-in-the-middle attacks. For long-lived self-signed setups, pin the issuing CA via `ca_cert` instead of disabling verification entirely.
+	TlsVerify *bool `json:"tls_verify,omitempty"`
+
+	// Url Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`).
+	Url string `json:"url"`
 }
+
+// ForwarderHttpConfigurationMethod HTTP method used when delivering the request.
+type ForwarderHttpConfigurationMethod string
 
 // ForwarderListResponse JSON:API collection response for forwarders.
 type ForwarderListResponse struct {
@@ -1073,51 +1081,6 @@ type ForwarderTypeTransform struct {
 	Type string `json:"type"`
 }
 
-// HttpConfiguration HTTP request configuration for delivering a payload to a destination.
-//
-// The shared base shape for any product that posts to a customer-supplied
-// HTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs
-// extends it (adding “body“ and “timeout“). When other transports land
-// (“FTP“, “SQS“, …) their own configuration schemas will join this one
-// as members of a discriminated union under a “configuration“ field.
-type HttpConfiguration struct {
-	// CaCert Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`.
-	CaCert *string `json:"ca_cert,omitempty"`
-
-	// Headers HTTP headers attached to each request.
-	Headers *[]HttpHeader `json:"headers,omitempty"`
-
-	// Method HTTP method used when delivering the request.
-	Method *HttpConfigurationMethod `json:"method,omitempty"`
-
-	// SuccessStatus HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).
-	SuccessStatus *string `json:"success_status,omitempty"`
-
-	// TlsVerify Whether to verify the destination server's TLS certificate against trusted certificate authorities. Defaults to `true` and should be left on for any production destination. Set to `false` only for development or short-lived testing against a destination that presents an untrusted certificate (e.g. a Splunk Cloud trial stack on `:8088` serving its default self-signed certificate). When `false`, deliveries proceed without certificate verification — they are vulnerable to man-in-the-middle attacks. For long-lived self-signed setups, pin the issuing CA via `ca_cert` instead of disabling verification entirely.
-	TlsVerify *bool `json:"tls_verify,omitempty"`
-
-	// Url Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`).
-	Url string `json:"url"`
-}
-
-// HttpConfigurationMethod HTTP method used when delivering the request.
-type HttpConfigurationMethod string
-
-// HttpHeader A single HTTP header attached to an outbound request.
-//
-// Header values are encrypted at the application layer before
-// persistence regardless of header name; the wire representation here
-// is always plaintext on both the request and the response, so a
-// `GET → mutate → PUT` round-trip preserves header values without
-// requiring the customer to re-enter secrets.
-type HttpHeader struct {
-	// Name Header name.
-	Name string `json:"name"`
-
-	// Value Header value. Stored encrypted at rest; returned as plaintext on `GET`.
-	Value string `json:"value"`
-}
-
 // ListMeta Top-level “meta“ block included on every JSON:API list response.
 type ListMeta struct {
 	// Pagination Pagination block returned inside ``meta`` on every list response.
@@ -1207,8 +1170,8 @@ type TestForwarderRequest struct {
 	// CaCert Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate. Mirrors the parent forwarder field. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks.
 	CaCert *string `json:"ca_cert,omitempty"`
 
-	// Headers HTTP headers attached to the test request.
-	Headers *[]HttpHeader `json:"headers,omitempty"`
+	// Headers HTTP headers attached to the test request, as a name→value object (e.g. `{"Authorization": "Bearer s3cr3t"}`).
+	Headers *map[string]string `json:"headers,omitempty"`
 
 	// Method HTTP method used for the test request.
 	Method *TestForwarderRequestMethod `json:"method,omitempty"`

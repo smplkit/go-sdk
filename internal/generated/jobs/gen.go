@@ -356,21 +356,6 @@ type ErrorResponse struct {
 	Errors []Error `json:"errors"`
 }
 
-// HttpHeader A single HTTP header attached to an outbound request.
-//
-// Header values are encrypted at the application layer before
-// persistence regardless of header name; the wire representation here
-// is always plaintext on both the request and the response, so a
-// `GET → mutate → PUT` round-trip preserves header values without
-// requiring the customer to re-enter secrets.
-type HttpHeader struct {
-	// Name Header name.
-	Name string `json:"name"`
-
-	// Value Header value. Stored encrypted at rest; returned as plaintext on `GET`.
-	Value string `json:"value"`
-}
-
 // Job A unit of work: an HTTP request, run on a schedule or triggered on demand.
 //
 // The job is the definition; each time it fires the service records a run
@@ -391,7 +376,8 @@ type Job struct {
 	// Configuration HTTP request a job performs when it fires.
 	//
 	// Extends the shared forwarder configuration with the two fields a scheduled
-	// job needs beyond a forwarder.
+	// job needs beyond a forwarder, and represents headers as a name→value object
+	// so an individual header can be overridden per environment by its name.
 	Configuration JobHttpConfiguration `json:"configuration"`
 
 	// CreatedAt When the job was created.
@@ -403,8 +389,8 @@ type Job struct {
 	// Description Free-text description for the job.
 	Description *string `json:"description,omitempty"`
 
-	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the job is enabled — scheduled, for a recurring job, or triggerable, for a manual job — in that environment), an optional `schedule` override (a cron expression for recurring jobs; omit to inherit the base `schedule`), an optional `timezone` override (an IANA zone for recurring jobs; omit to inherit the base `timezone`, else UTC), and an optional `configuration` override (omit to inherit the base `configuration`); it also reports the read-only `next_run_at` for that environment. A job with no entry for an environment is disabled there. For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
-	Environments *map[string]JobEnvironment `json:"environments,omitempty"`
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy, or `Default`), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
+	Environments *map[string]map[string]interface{} `json:"environments,omitempty"`
 
 	// Kind How the job runs, derived from its base `schedule`: `recurring` for a cron schedule (fires on a repeating cadence), `manual` for no schedule (never auto-fires; runs only when triggered), or `one_off` for a `now` or datetime schedule (runs a single time, then is spent).
 	Kind *JobKind `json:"kind,omitempty"`
@@ -471,34 +457,11 @@ type JobCreateResource struct {
 // JobCreateResourceType defines model for JobCreateResource.Type.
 type JobCreateResourceType string
 
-// JobEnvironment Per-environment override for a job's enablement, schedule, and configuration.
-type JobEnvironment struct {
-	// Configuration HTTP request a job performs when it fires.
-	//
-	// Extends the shared forwarder configuration with the two fields a scheduled
-	// job needs beyond a forwarder.
-	Configuration *JobHttpConfiguration `json:"configuration,omitempty"`
-
-	// Enabled Whether the job schedules runs in this environment. A job runs in an environment only via this field; it is disabled in every environment by default.
-	Enabled *bool `json:"enabled,omitempty"`
-
-	// NextRunAt The next scheduled fire time in this environment. `null` when the environment is not enabled, or once a one-off run has fired.
-	NextRunAt *time.Time `json:"next_run_at,omitempty"`
-
-	// RetryPolicy Per-environment retry-policy override — the `id` of a retry policy (or `Default`). Omit to inherit the job's base `retry_policy`. When present, runs in this environment retry according to this policy instead of the base.
-	RetryPolicy *string `json:"retry_policy,omitempty"`
-
-	// Schedule Per-environment schedule override. Omit to inherit the job's base `schedule`. When present, it must be a 5-field cron expression (e.g. `0 3 * * *`), evaluated in this environment's effective `timezone` (the per-environment override, else the base, else UTC), and is only allowed on a recurring (cron) job — it varies the cadence within that environment. It cannot appear on a manual or one-off job, and cannot change a job's kind.
-	Schedule *string `json:"schedule,omitempty"`
-
-	// Timezone Per-environment timezone override for evaluating this environment's cron `schedule`. Omit to inherit the base `timezone` (else UTC). When present, it must be a valid IANA timezone key (e.g. `America/New_York`). Only valid on a recurring (cron) job; it may be set on an environment that inherits the base schedule (it need not also override `schedule`).
-	Timezone *string `json:"timezone,omitempty"`
-}
-
 // JobHttpConfiguration HTTP request a job performs when it fires.
 //
 // Extends the shared forwarder configuration with the two fields a scheduled
-// job needs beyond a forwarder.
+// job needs beyond a forwarder, and represents headers as a name→value object
+// so an individual header can be overridden per environment by its name.
 type JobHttpConfiguration struct {
 	// Body Request body sent on each run. When omitted, an empty body is sent (suitable for a connectivity ping). Sent verbatim — pair with a matching `Content-Type` header. Limit 1 MiB.
 	Body *string `json:"body,omitempty"`
@@ -506,8 +469,8 @@ type JobHttpConfiguration struct {
 	// CaCert Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`.
 	CaCert *string `json:"ca_cert,omitempty"`
 
-	// Headers HTTP headers attached to each request.
-	Headers *[]HttpHeader `json:"headers,omitempty"`
+	// Headers HTTP headers sent on each request, as a name→value object (e.g. `{"Authorization": "Bearer s3cr3t"}`). A header is overridden per environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively.
+	Headers *map[string]string `json:"headers,omitempty"`
 
 	// Method HTTP method used when delivering the request.
 	Method *JobHttpConfigurationMethod `json:"method,omitempty"`

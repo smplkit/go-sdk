@@ -93,12 +93,13 @@ func recordingJobs(t *testing.T, environment string, rec *capturedReq, reply htt
 	return newJobsClient(withResp, environment), func() { srv.Close() }
 }
 
-// httpCfgWire is a canned http configuration body for a given url.
+// httpCfgWire is a canned http configuration body for a given url. Headers are
+// a name→value object (ADR-056), not a list.
 func httpCfgWire(url string) map[string]any {
 	return map[string]any{
 		"method":         "POST",
 		"url":            url,
-		"headers":        []map[string]string{{"name": "X-Api-Key", "value": "secret"}},
+		"headers":        map[string]any{"X-Api-Key": "secret"},
 		"body":           "{}",
 		"success_status": "2xx",
 		"timeout":        30,
@@ -108,11 +109,11 @@ func httpCfgWire(url string) map[string]any {
 }
 
 // jobResource builds a recurring-job JSON:API resource. devEnabled drives the
-// `development` override (which carries a configuration override plus a
-// per-environment schedule override and a read-only next_run_at); prodEnabled
-// drives the `production` override (which has no configuration override). The
-// base `enabled` roll-up is derived wrapper-side from the environments, so it is
-// not present on the wire.
+// `development` override, a flat sparse overlay (ADR-056) carrying per-leaf
+// overrides — a schedule, a url, and an individual header as headers.<name> —
+// plus a read-only next_run_at; prodEnabled drives the `production` override,
+// which is a pure enable with no leaf overrides. The base `enabled` roll-up is
+// derived wrapper-side from the environments, so it is not present on the wire.
 func jobResource(id string, created bool, version int, devEnabled, prodEnabled bool) map[string]any {
 	attrs := map[string]any{
 		"name":          "My Job",
@@ -123,10 +124,11 @@ func jobResource(id string, created bool, version int, devEnabled, prodEnabled b
 		"configuration": httpCfgWire("https://api.example.com/hook"),
 		"environments": map[string]any{
 			"development": map[string]any{
-				"enabled":       devEnabled,
-				"schedule":      "0 3 * * *",
-				"configuration": httpCfgWire("https://development.example.com/cache/warm"),
-				"next_run_at":   "2026-06-05T03:00:00Z",
+				"enabled":               devEnabled,
+				"schedule":              "0 3 * * *",
+				"url":                   "https://development.example.com/cache/warm",
+				"headers.Authorization": "Bearer development-s3cr3t",
+				"next_run_at":           "2026-06-05T03:00:00Z",
 			},
 			"production": map[string]any{"enabled": prodEnabled},
 		},
@@ -328,18 +330,16 @@ func TestJobs_Lifecycle(t *testing.T) {
 	job := j.NewRecurringJob(testJobID, "Nightly cache warm", "0 2 * * *", HttpConfig{
 		Method:  JobHttpMethodPost,
 		URL:     "https://api.example.com/cache/warm",
-		Headers: []HttpHeader{{Name: "Authorization", Value: "Bearer s3cr3t"}},
+		Headers: map[string]string{"Authorization": "Bearer s3cr3t"},
 		Body:    &body,
 		Timeout: 30,
 	}, WithJobDescription("desc"), WithJobConcurrencyPolicy("ALLOW"))
-	job.SetConfiguration(HttpConfig{
-		Method:  JobHttpMethodPost,
-		URL:     "https://development.example.com/cache/warm",
-		Headers: []HttpHeader{{Name: "Authorization", Value: "Bearer development-s3cr3t"}},
-		Body:    &devBody,
-	}, "development")
-	job.SetEnabled(false, "development")
-	job.SetEnabled(true, "production")
+	dev := job.Environment("development")
+	dev.Enabled = false
+	dev.URL = "https://development.example.com/cache/warm"
+	dev.Body = &devBody
+	dev.SetHeader("Authorization", "Bearer development-s3cr3t")
+	job.Environment("production").Enabled = true
 
 	if job.CreatedAt != nil {
 		t.Fatal("unsaved job should have nil CreatedAt")
@@ -350,8 +350,12 @@ func TestJobs_Lifecycle(t *testing.T) {
 	if job.CreatedAt == nil || job.Version == nil || *job.Version != 1 {
 		t.Fatalf("after create: version=%v createdAt=%v", job.Version, job.CreatedAt)
 	}
-	if job.IsEnabled("development") || !job.IsEnabled("production") {
-		t.Errorf("post-create enablement mismatch: dev=%t prod=%t", job.IsEnabled("development"), job.IsEnabled("production"))
+	if job.Environment("development").Enabled || !job.Environment("production").Enabled {
+		t.Errorf("post-create enablement mismatch: dev=%t prod=%t",
+			job.Environment("development").Enabled, job.Environment("production").Enabled)
+	}
+	if !job.Enabled() {
+		t.Error("rollup Enabled() should be true (production enabled)")
 	}
 	if !job.IsRecurring() {
 		t.Errorf("expected recurring job, got kind=%v", job.Kind)
@@ -362,15 +366,21 @@ func TestJobs_Lifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if fetched.IsEnabled("development") || !fetched.IsEnabled("production") {
-		t.Errorf("fetched enablement mismatch: dev=%t prod=%t", fetched.IsEnabled("development"), fetched.IsEnabled("production"))
+	if fetched.Environment("development").Enabled || !fetched.Environment("production").Enabled {
+		t.Errorf("fetched enablement mismatch: dev=%t prod=%t",
+			fetched.Environment("development").Enabled, fetched.Environment("production").Enabled)
 	}
-	if fetched.GetConfiguration("development").URL != "https://development.example.com/cache/warm" {
-		t.Errorf("dev config url mismatch: %s", fetched.GetConfiguration("development").URL)
+	// The development override surfaces its own leaves (pure override).
+	if fetched.Environment("development").URL != "https://development.example.com/cache/warm" {
+		t.Errorf("dev override url mismatch: %s", fetched.Environment("development").URL)
 	}
-	// production has no override, so GetConfiguration falls back to the base.
-	if fetched.GetConfiguration("production").URL != "https://api.example.com/hook" {
-		t.Errorf("prod config should fall back to base, got %s", fetched.GetConfiguration("production").URL)
+	// production overrides no url; pure-override reads back empty (NOT the base).
+	if fetched.Environment("production").URL != "" {
+		t.Errorf("production override is pure; url should be empty, got %s", fetched.Environment("production").URL)
+	}
+	// The base configuration lives on the job, not the per-env override.
+	if fetched.Configuration.URL != "https://api.example.com/hook" {
+		t.Errorf("base configuration url mismatch: %s", fetched.Configuration.URL)
 	}
 
 	// list jobs, filtered to recurring jobs
@@ -383,15 +393,15 @@ func TestJobs_Lifecycle(t *testing.T) {
 		t.Fatalf("expected 2 jobs, got %d", len(jobs))
 	}
 
-	// update a job (the schedule is environment-agnostic)
+	// update a job (the base schedule is set by direct assignment)
 	job.Name = "renamed"
-	job.SetSchedule("30 2 * * *")
-	job.SetEnabled(true, "development")
+	job.Schedule = "30 2 * * *"
+	job.Environment("development").Enabled = true
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save (update): %v", err)
 	}
-	if job.Version == nil || *job.Version != 2 || !job.IsEnabled("development") {
-		t.Fatalf("after update: version=%v dev-enabled=%t", job.Version, job.IsEnabled("development"))
+	if job.Version == nil || *job.Version != 2 || !job.Environment("development").Enabled {
+		t.Fatalf("after update: version=%v dev-enabled=%t", job.Version, job.Environment("development").Enabled)
 	}
 
 	// trigger an immediate run
@@ -465,134 +475,84 @@ func TestJobs_Lifecycle(t *testing.T) {
 // Per-environment mutators / getters (in-memory)
 // ---------------------------------------------------------------------------
 
-func TestJob_PerEnvMutatorsAndGetters(t *testing.T) {
+func TestJob_EnvironmentAccessor(t *testing.T) {
 	j, cleanup := newTestJobs(t, fullHandler)
 	defer cleanup()
 	job := j.NewRecurringJob("id", "n", "0 * * * *", HttpConfig{URL: "https://base"})
 
-	// IsEnabled on a fresh job: rollup false, unknown env false.
-	if job.IsEnabled("") || job.IsEnabled("production") {
-		t.Errorf("fresh job should be enabled nowhere")
+	// Fresh job: enabled nowhere (the rollup loops an empty map).
+	if job.Enabled() {
+		t.Error("fresh job should be enabled nowhere")
 	}
 
-	// SetEnabled on a fresh job creates the override (exercises the nil-map and
-	// !ok branches of environmentOverride).
-	job.SetEnabled(true, "production")
-	if !job.IsEnabled("production") {
-		t.Error("production should be enabled")
+	// Environment lazily creates the override (nil-map branch, then the !ok
+	// branch) and returns the SAME object stored in the map, so mutations on the
+	// returned pointer persist. Set every overridable leaf.
+	prod := job.Environment("production")
+	prod.Enabled = true
+	prod.Schedule = "0 4 * * *"
+	prod.Timezone = "Europe/Paris"
+	prod.RetryPolicy = "prod-policy"
+	prod.URL = "https://prod-override"
+	prod.Method = JobHttpMethodPut
+	prod.Timeout = 45
+	prodBody := `{"prod": true}`
+	prod.Body = &prodBody
+	prod.SuccessStatus = "204"
+	noVerify := false
+	prod.TlsVerify = &noVerify
+	caCert := "PEM"
+	prod.CaCert = &caCert
+	prod.SetHeader("Authorization", "Bearer prod")
+
+	if !job.Enabled() {
+		t.Error("rollup should be true once an environment is enabled")
 	}
-	// SetConfiguration on the same env preserves the already-set Enabled.
-	prodOverride := HttpConfig{URL: "https://prod-override"}
-	job.SetConfiguration(prodOverride, "production")
-	if !job.IsEnabled("production") {
-		t.Error("SetConfiguration must preserve Enabled on the existing override")
+	// A second access returns the stored override (the !ok branch is NOT taken),
+	// so the leaves set above are still visible.
+	if again := job.Environment("production"); again.URL != "https://prod-override" || again.Timeout != 45 {
+		t.Errorf("Environment must return the stored override on subsequent access: %+v", again)
 	}
-	if job.GetConfiguration("production").URL != "https://prod-override" {
-		t.Errorf("expected per-env override, got %s", job.GetConfiguration("production").URL)
+	if v, ok := job.Environment("production").GetHeader("Authorization"); !ok || v != "Bearer prod" {
+		t.Errorf("GetHeader = %q (ok=%t), want Bearer prod", v, ok)
+	}
+	if _, ok := job.Environment("production").GetHeader("Missing"); ok {
+		t.Error("GetHeader for an un-overridden header must report not-set")
 	}
 
-	// An env entry that exists but has no configuration override falls back to
-	// the base configuration.
-	job.SetEnabled(true, "staging")
-	if job.GetConfiguration("staging").URL != "https://base" {
-		t.Errorf("staging (no override) should fall back to base, got %s", job.GetConfiguration("staging").URL)
+	// Pure override: a fresh environment overrides nothing; every leaf reads as
+	// its zero value / nil, NOT the base. The base lives on job.Configuration.
+	staging := job.Environment("staging")
+	if staging.Enabled || staging.URL != "" || staging.Method != "" || staging.Timeout != 0 ||
+		staging.Body != nil || staging.SuccessStatus != "" || staging.TlsVerify != nil ||
+		staging.CaCert != nil || staging.Schedule != "" || staging.Timezone != "" ||
+		staging.RetryPolicy != "" || staging.Headers != nil {
+		t.Errorf("fresh override should be empty (pure override), got %+v", staging)
+	}
+	if job.Configuration.URL != "https://base" {
+		t.Errorf("base configuration must be unchanged by per-env reads: %s", job.Configuration.URL)
 	}
 
-	// GetConfiguration("") and an unknown env both return the base.
-	if job.GetConfiguration("").URL != "https://base" || job.GetConfiguration("unknown").URL != "https://base" {
-		t.Error("base configuration expected for empty / unknown environment")
+	// Base fields are set by direct assignment (the one way; no env-taking setters).
+	job.Schedule = "*/10 * * * *"
+	job.Timezone = "America/Denver"
+	job.RetryPolicy = "base-policy"
+	if job.Schedule != "*/10 * * * *" || job.Timezone != "America/Denver" || job.RetryPolicy != "base-policy" {
+		t.Error("base schedule/timezone/retry_policy direct assignment failed")
 	}
+}
 
-	// SetEnabled is strictly per-environment (no base form, mirroring Python):
-	// it sets the named environment's override, not the read-only base roll-up.
-	job.SetEnabled(true, "production")
-	if !job.IsEnabled("production") {
-		t.Error("production override should reflect SetEnabled(true, \"production\")")
+// HttpConfig.SetHeader allocates the map on first use and GetHeader reports
+// presence.
+func TestHttpConfig_Headers(t *testing.T) {
+	cfg := HttpConfig{URL: "https://x"}
+	if _, ok := cfg.GetHeader("X"); ok {
+		t.Error("GetHeader on a nil map must report not-set")
 	}
-
-	// SetConfiguration("") replaces the base configuration.
-	job.SetConfiguration(HttpConfig{URL: "https://new-base"}, "")
-	if job.GetConfiguration("").URL != "https://new-base" {
-		t.Errorf("base configuration not replaced: %s", job.GetConfiguration("").URL)
-	}
-
-	// SetSchedule with no options sets the base schedule and leaves the timezone
-	// untouched.
-	job.SetSchedule("*/5 * * * *")
-	if job.Schedule != "*/5 * * * *" {
-		t.Errorf("base schedule not set: %s", job.Schedule)
-	}
-	if job.Timezone != "" {
-		t.Errorf("no timezone option must leave the base timezone untouched, got %q", job.Timezone)
-	}
-	// SetSchedule with WithScheduleTimezone and no environment also sets the base
-	// timezone (equivalent to a follow-up SetTimezone).
-	job.SetSchedule("*/10 * * * *", WithScheduleTimezone("America/Denver"))
-	if job.Schedule != "*/10 * * * *" {
-		t.Errorf("base schedule not set: %s", job.Schedule)
-	}
-	if job.Timezone != "America/Denver" {
-		t.Errorf("base timezone should be set alongside the schedule, got %q", job.Timezone)
-	}
-
-	// SetSchedule with WithScheduleEnvironment sets a per-environment cron
-	// override, preserving the already-set Enabled on that environment's entry,
-	// and does not touch the base schedule.
-	job.SetSchedule("0 4 * * *", WithScheduleEnvironment("production"))
-	prod := job.Environments["production"]
-	if prod.Schedule != "0 4 * * *" {
-		t.Errorf("production per-env schedule not set: %q", prod.Schedule)
-	}
-	if !prod.Enabled {
-		t.Error("SetSchedule must preserve Enabled on the existing production override")
-	}
-	if job.Schedule != "*/10 * * * *" {
-		t.Errorf("per-env SetSchedule must not change the base schedule: %q", job.Schedule)
-	}
-
-	// SetSchedule with both a timezone and an environment sets both on that
-	// environment's override.
-	job.SetSchedule("0 6 * * *", WithScheduleTimezone("Europe/Paris"), WithScheduleEnvironment("production"))
-	prodTzSched := job.Environments["production"]
-	if prodTzSched.Schedule != "0 6 * * *" || prodTzSched.Timezone != "Europe/Paris" {
-		t.Errorf("per-env SetSchedule with timezone mismatch: %+v", prodTzSched)
-	}
-
-	// SetSchedule on a brand-new environment creates the override entry.
-	job.SetSchedule("0 5 * * *", WithScheduleEnvironment("qa"))
-	if qa := job.Environments["qa"]; qa.Schedule != "0 5 * * *" || qa.Enabled {
-		t.Errorf("qa per-env schedule override mismatch: %+v", qa)
-	}
-
-	// SetTimezone with no environment (and with an explicit empty environment)
-	// sets the base timezone.
-	job.SetTimezone("America/New_York")
-	if job.Timezone != "America/New_York" {
-		t.Errorf("base timezone not set: %s", job.Timezone)
-	}
-	job.SetTimezone("America/Chicago", "")
-	if job.Timezone != "America/Chicago" {
-		t.Errorf("base timezone (explicit empty env) not set: %s", job.Timezone)
-	}
-
-	// SetTimezone with an environment sets a per-environment override, preserving
-	// the already-set per-env schedule, and does not touch the base timezone.
-	job.SetTimezone("Europe/London", "production")
-	prodTz := job.Environments["production"]
-	if prodTz.Timezone != "Europe/London" {
-		t.Errorf("production per-env timezone not set: %q", prodTz.Timezone)
-	}
-	if prodTz.Schedule != "0 6 * * *" {
-		t.Error("SetTimezone must preserve Schedule on the existing production override")
-	}
-	if job.Timezone != "America/Chicago" {
-		t.Errorf("per-env SetTimezone must not change the base timezone: %q", job.Timezone)
-	}
-
-	// SetTimezone on a brand-new environment creates the override entry.
-	job.SetTimezone("Asia/Tokyo", "edge")
-	if edge := job.Environments["edge"]; edge.Timezone != "Asia/Tokyo" || edge.Enabled {
-		t.Errorf("edge per-env timezone override mismatch: %+v", edge)
+	cfg.SetHeader("X-Api-Key", "secret")
+	cfg.SetHeader("X-Api-Key", "secret2") // replace
+	if v, ok := cfg.GetHeader("X-Api-Key"); !ok || v != "secret2" {
+		t.Errorf("GetHeader = %q (ok=%t), want secret2", v, ok)
 	}
 }
 
@@ -616,12 +576,26 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 		TlsVerify:     &tlsVerify,
 		CaCert:        &caCert,
 	}, WithJobBirthEnvironment("development"))
-	job.SetConfiguration(HttpConfig{URL: "https://dev"}, "development")
-	job.SetEnabled(false, "development")
-	job.SetSchedule("0 3 * * *", WithScheduleEnvironment("development"))
-	job.SetTimezone("America/New_York")             // base timezone
-	job.SetTimezone("Europe/London", "development") // per-env override
-	job.SetEnabled(true, "production")
+	job.Configuration.SetHeader("X-Base", "base-secret") // base headers travel as an object
+	job.Timezone = "America/New_York"                    // base timezone, direct assignment
+	// A development override that exercises every overridable leaf.
+	dev := job.Environment("development")
+	dev.Enabled = false
+	dev.URL = "https://dev"
+	dev.Method = JobHttpMethodPut
+	dev.Timeout = 15
+	devBody := "{}"
+	dev.Body = &devBody
+	dev.SuccessStatus = "204"
+	devVerify := false
+	dev.TlsVerify = &devVerify
+	devCa := "DEV-PEM"
+	dev.CaCert = &devCa
+	dev.Schedule = "0 3 * * *"
+	dev.Timezone = "Europe/London"
+	dev.RetryPolicy = "dev-policy"
+	dev.SetHeader("X-Env", "dev-secret")
+	job.Environment("production").Enabled = true
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -633,49 +607,56 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	if _, ok := attrs["enabled"]; ok {
 		t.Error("write body must NOT include the read-only base `enabled`")
 	}
-	// The base timezone is sent when set.
 	if attrs["timezone"] != "America/New_York" {
 		t.Errorf("base timezone should be on the wire, got %v", attrs["timezone"])
 	}
-	if _, ok := attrs["next_run_at"]; ok {
-		t.Error("write body must NOT include the removed top-level `next_run_at`")
+	// Base headers are a name→value object, not a list.
+	cfg := attrs["configuration"].(map[string]any)
+	baseHeaders, ok := cfg["headers"].(map[string]any)
+	if !ok || baseHeaders["X-Base"] != "base-secret" {
+		t.Errorf("base headers should be a name→value object, got %v", cfg["headers"])
 	}
 	envs, ok := attrs["environments"].(map[string]any)
 	if !ok {
 		t.Fatalf("write body must include environments, got %v", attrs["environments"])
 	}
-	dev := envs["development"].(map[string]any)
-	if dev["enabled"] != false {
-		t.Errorf("development enabled should be false on the wire, got %v", dev["enabled"])
+	devWire := envs["development"].(map[string]any)
+	// A flat sparse overlay: enabled + each overridden leaf, NOT a nested config.
+	if _, ok := devWire["configuration"]; ok {
+		t.Error("a flat overlay must NOT nest a configuration object")
 	}
-	if _, ok := dev["configuration"]; !ok {
-		t.Error("development override must carry its configuration on the wire")
+	if devWire["enabled"] != false {
+		t.Errorf("development enabled should be false on the wire, got %v", devWire["enabled"])
 	}
-	// The per-environment schedule override is sent; the read-only next_run_at
-	// is never sent.
-	if dev["schedule"] != "0 3 * * *" {
-		t.Errorf("development per-env schedule should be on the wire, got %v", dev["schedule"])
+	for key, want := range map[string]any{
+		"url":            "https://dev",
+		"method":         "PUT",
+		"timeout":        float64(15), // JSON numbers decode to float64
+		"body":           "{}",
+		"success_status": "204",
+		"tls_verify":     false,
+		"ca_cert":        "DEV-PEM",
+		"schedule":       "0 3 * * *",
+		"timezone":       "Europe/London",
+		"retry_policy":   "dev-policy",
+		"headers.X-Env":  "dev-secret", // each header is an individual leaf
+	} {
+		if devWire[key] != want {
+			t.Errorf("development overlay leaf %q = %v, want %v", key, devWire[key], want)
+		}
 	}
-	if dev["timezone"] != "Europe/London" {
-		t.Errorf("development per-env timezone should be on the wire, got %v", dev["timezone"])
-	}
-	if _, ok := dev["next_run_at"]; ok {
+	if _, ok := devWire["next_run_at"]; ok {
 		t.Error("read-only per-env next_run_at must never be sent on the wire")
 	}
 	prod := envs["production"].(map[string]any)
 	if prod["enabled"] != true {
 		t.Errorf("production enabled should be true, got %v", prod["enabled"])
 	}
-	if _, ok := prod["configuration"]; ok {
-		t.Error("production override has no configuration; it must be omitted")
-	}
-	// production has no schedule override; it must be omitted from the wire.
-	if _, ok := prod["schedule"]; ok {
-		t.Error("production override has no schedule; it must be omitted")
-	}
-	// production has no timezone override; it must be omitted from the wire.
-	if _, ok := prod["timezone"]; ok {
-		t.Error("production override has no timezone; it must be omitted")
+	// production overrides nothing else; every other leaf must be omitted.
+	for _, key := range []string{"url", "method", "schedule", "timezone", "retry_policy", "headers.X-Env"} {
+		if _, ok := prod[key]; ok {
+			t.Errorf("production overrides no %q; it must be omitted", key)
+		}
 	}
 }
 
@@ -762,14 +743,30 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 				"timezone":      "America/New_York",
 				"configuration": map[string]any{"url": "https://base"},
 				"environments": map[string]any{
+					// A flat sparse overlay exercising every parsed leaf, a
+					// dotted header name, an unknown leaf (ignored), and the
+					// read-only next_run_at.
 					"development": map[string]any{
-						"enabled":       true,
-						"schedule":      "0 3 * * *",
-						"timezone":      "Europe/London",
-						"configuration": map[string]any{"url": "https://dev", "method": "POST"},
-						"next_run_at":   "2026-06-05T03:00:00Z",
+						"enabled":            true,
+						"schedule":           "0 3 * * *",
+						"timezone":           "Europe/London",
+						"retry_policy":       "dev-policy",
+						"url":                "https://dev",
+						"method":             "POST",
+						"timeout":            15.0,
+						"body":               "{}",
+						"success_status":     "204",
+						"tls_verify":         false,
+						"ca_cert":            "DEV-PEM",
+						"headers.X-Api-Key":  "dev-secret",
+						"headers.X-Trace.Id": "abc", // dotted name kept whole
+						"unknown_leaf":       "ignored",
+						"next_run_at":        "2026-06-05T03:00:00Z",
 					},
+					// A pure enable — no leaf overrides.
 					"production": map[string]any{"enabled": false},
+					// A bad next_run_at exercises the parse-failure branch.
+					"qa": map[string]any{"enabled": false, "next_run_at": "not-a-time"},
 				},
 			},
 		}})
@@ -779,40 +776,46 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	// The base roll-up is derived locally from the environments (development is
-	// enabled), not read from a top-level wire field.
-	if !job.Enabled || !job.IsEnabled("") {
-		t.Error("rollup enabled should be true (derived from environments)")
+	// The roll-up is derived locally from the environments (development enabled).
+	if !job.Enabled() {
+		t.Error("rollup Enabled() should be true (derived from environments)")
 	}
 	if !job.IsRecurring() {
 		t.Errorf("kind should be recurring, got %v", job.Kind)
 	}
-	// The base timezone decodes from the wire.
 	if job.Timezone != "America/New_York" {
 		t.Errorf("base timezone mismatch: %q", job.Timezone)
 	}
 	dev, ok := job.Environments["development"]
-	if !ok || !dev.Enabled || dev.Configuration == nil || dev.Configuration.URL != "https://dev" {
-		t.Errorf("development override mismatch: %+v", dev)
+	if !ok {
+		t.Fatal("development override missing")
 	}
-	// The per-environment schedule override and read-only next_run_at surface.
-	if dev.Schedule != "0 3 * * *" {
-		t.Errorf("development per-env schedule mismatch: %q", dev.Schedule)
+	noVerify := false
+	if !dev.Enabled || dev.Schedule != "0 3 * * *" || dev.Timezone != "Europe/London" ||
+		dev.RetryPolicy != "dev-policy" || dev.URL != "https://dev" || dev.Method != JobHttpMethodPost ||
+		dev.Timeout != 15 || dev.Body == nil || *dev.Body != "{}" || dev.SuccessStatus != "204" ||
+		dev.TlsVerify == nil || *dev.TlsVerify != noVerify || dev.CaCert == nil || *dev.CaCert != "DEV-PEM" {
+		t.Errorf("development override leaves mismatch: %+v", dev)
 	}
-	if dev.Timezone != "Europe/London" {
-		t.Errorf("development per-env timezone mismatch: %q", dev.Timezone)
+	// Headers parse on the FIRST dot, so a dotted header name is preserved.
+	if dev.Headers["X-Api-Key"] != "dev-secret" || dev.Headers["X-Trace.Id"] != "abc" {
+		t.Errorf("development header overrides mismatch: %+v", dev.Headers)
 	}
 	wantNext := time.Date(2026, 6, 5, 3, 0, 0, 0, time.UTC)
 	if dev.NextRunAt == nil || !dev.NextRunAt.Equal(wantNext) {
 		t.Errorf("development next_run_at mismatch: %v", dev.NextRunAt)
 	}
+	// production is a pure enable: every leaf reads back as zero / nil.
 	prod, ok := job.Environments["production"]
-	if !ok || prod.Enabled || prod.Configuration != nil {
-		t.Errorf("production override (no configuration) mismatch: %+v", prod)
+	if !ok || prod.Enabled || prod.Schedule != "" || prod.Timezone != "" || prod.URL != "" ||
+		prod.Method != "" || prod.Timeout != 0 || prod.Body != nil || prod.SuccessStatus != "" ||
+		prod.TlsVerify != nil || prod.CaCert != nil || prod.RetryPolicy != "" ||
+		prod.Headers != nil || prod.NextRunAt != nil {
+		t.Errorf("production override should be pure (all unset): %+v", prod)
 	}
-	// production is not enabled, so it has no per-env schedule/timezone/next_run_at.
-	if prod.Schedule != "" || prod.Timezone != "" || prod.NextRunAt != nil {
-		t.Errorf("production override should have no schedule/timezone/next_run_at: %+v", prod)
+	// A malformed next_run_at is ignored (left nil), not fatal.
+	if qa := job.Environments["qa"]; qa == nil || qa.NextRunAt != nil {
+		t.Errorf("qa next_run_at should be nil for a malformed timestamp: %+v", qa)
 	}
 }
 
@@ -1050,7 +1053,7 @@ func TestJobs_ManualJobRoundTrip(t *testing.T) {
 	if job.Schedule != "" {
 		t.Errorf("manual job should have no schedule, got %q", job.Schedule)
 	}
-	job.SetEnabled(true, "production")
+	job.Environment("production").Enabled = true
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -1119,19 +1122,27 @@ func TestJob_TriggerListRunsGuards(t *testing.T) {
 func TestJobs_NewDefaults(t *testing.T) {
 	j, cleanup := newTestJobs(t, fullHandler)
 	defer cleanup()
-	envs := map[string]JobEnvironment{"production": {Enabled: true}}
+	envs := map[string]JobEnvironment{"production": {Enabled: true, URL: "https://prod"}}
 	job := j.NewManualJob("id", "n", HttpConfig{URL: "https://x"},
 		WithJobEnvironments(envs), WithJobConcurrencyPolicy("ALLOW"))
-	// Base roll-up defaults to false (no writable enabled flag); type/policy
-	// keep their defaults; description stays nil.
-	if job.Enabled || job.Type != "http" || job.ConcurrencyPolicy != "ALLOW" {
+	// Type/policy keep their defaults; description stays nil.
+	if job.Type != "http" || job.ConcurrencyPolicy != "ALLOW" {
 		t.Errorf("unexpected defaults: %+v", job)
 	}
 	if job.Description != nil {
 		t.Errorf("expected nil description, got %v", job.Description)
 	}
-	if !job.IsEnabled("production") {
+	// WithJobEnvironments seeds the map (as pointers); the rollup sees it.
+	if !job.Enabled() || !job.Environment("production").Enabled {
 		t.Error("WithJobEnvironments should seed the environments map")
+	}
+	if job.Environment("production").URL != "https://prod" {
+		t.Errorf("WithJobEnvironments should copy leaves, got %q", job.Environment("production").URL)
+	}
+	// The passed map is copied, so later mutation of it does not affect the job.
+	envs["production"] = JobEnvironment{Enabled: false}
+	if !job.Environment("production").Enabled {
+		t.Error("WithJobEnvironments must copy entries, not alias the caller's map")
 	}
 }
 
@@ -1162,7 +1173,7 @@ func TestJobs_FromResourceDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if job.ID != "" || job.Type != "http" || job.ConcurrencyPolicy != "ALLOW" || job.Enabled {
+	if job.ID != "" || job.Type != "http" || job.ConcurrencyPolicy != "ALLOW" || job.Enabled() {
 		t.Errorf("unexpected defaults from minimal resource: %+v", job)
 	}
 	if job.Kind != nil || job.Environments != nil {
@@ -1190,7 +1201,7 @@ func TestJobs_FromResourceCaCert(t *testing.T) {
 					"url":        "https://x",
 					"tls_verify": false,
 					"ca_cert":    "-----BEGIN CERTIFICATE-----\nPEM\n-----END CERTIFICATE-----",
-					"headers":    []map[string]string{{"name": "X-Api-Key", "value": "secret"}},
+					"headers":    map[string]any{"X-Api-Key": "secret"},
 				},
 			},
 		}})
@@ -1206,7 +1217,7 @@ func TestJobs_FromResourceCaCert(t *testing.T) {
 	if job.Configuration.TlsVerify == nil || *job.Configuration.TlsVerify {
 		t.Errorf("expected tls_verify=false surfaced, got %v", job.Configuration.TlsVerify)
 	}
-	if len(job.Configuration.Headers) != 1 || job.Configuration.Headers[0].Name != "X-Api-Key" {
+	if len(job.Configuration.Headers) != 1 || job.Configuration.Headers["X-Api-Key"] != "secret" {
 		t.Errorf("expected headers surfaced, got %+v", job.Configuration.Headers)
 	}
 }
@@ -1881,55 +1892,40 @@ func TestRetryPolicy_FromResourceBranches(t *testing.T) {
 // Job retry-policy setter + wire round-trip; run-list trigger filters
 // ---------------------------------------------------------------------------
 
-// SetRetryPolicy accepts a *RetryPolicy, a RetryPolicy value, or a bare id
-// string, sets base vs per-environment, preserves a sibling field, and ignores
-// an unsupported type.
-func TestJob_SetRetryPolicy(t *testing.T) {
+// A retry-policy reference is a policy id: set base via job.RetryPolicy and
+// per-environment via job.Environment(env).RetryPolicy, passing a saved policy's
+// ID for the object form.
+func TestJob_RetryPolicyReference(t *testing.T) {
 	j, cleanup := newTestJobs(t, fullHandler)
 	defer cleanup()
 	job := j.NewRecurringJob("id", "n", "0 * * * *", HttpConfig{URL: "https://base"})
 
 	// base, via id string
-	job.SetRetryPolicy("policy-a")
+	job.RetryPolicy = "policy-a"
 	if job.RetryPolicy != "policy-a" {
 		t.Errorf("base retry policy (string) not set: %q", job.RetryPolicy)
 	}
-	// base, via *RetryPolicy (its ID is used)
+	// base, via a saved policy's ID (the object form)
 	policy := j.RetryPolicies().New("policy-b", "n", 1, BackoffFixed, 5)
-	job.SetRetryPolicy(policy)
+	job.RetryPolicy = policy.ID
 	if job.RetryPolicy != "policy-b" {
-		t.Errorf("base retry policy (object) not set: %q", job.RetryPolicy)
-	}
-	// base, via RetryPolicy value
-	job.SetRetryPolicy(RetryPolicy{ID: "policy-c"})
-	if job.RetryPolicy != "policy-c" {
-		t.Errorf("base retry policy (value) not set: %q", job.RetryPolicy)
+		t.Errorf("base retry policy (object id) not set: %q", job.RetryPolicy)
 	}
 
-	// per-env, preserving the already-set Enabled and leaving the base alone
-	job.SetEnabled(true, "production")
-	job.SetRetryPolicy("policy-prod", "production")
-	prod := job.Environments["production"]
-	if prod.RetryPolicy != "policy-prod" {
-		t.Errorf("per-env retry policy not set: %q", prod.RetryPolicy)
+	// per-env override leaves the base alone
+	job.Environment("production").Enabled = true
+	job.Environment("production").RetryPolicy = "policy-prod"
+	if got := job.Environment("production").RetryPolicy; got != "policy-prod" {
+		t.Errorf("per-env retry policy not set: %q", got)
 	}
-	if !prod.Enabled {
-		t.Error("SetRetryPolicy must preserve Enabled on the existing override")
-	}
-	if job.RetryPolicy != "policy-c" {
-		t.Errorf("per-env SetRetryPolicy must not change the base: %q", job.RetryPolicy)
+	if job.RetryPolicy != "policy-b" {
+		t.Errorf("per-env retry policy must not change the base: %q", job.RetryPolicy)
 	}
 
-	// per-env on a brand-new environment creates the entry (object form)
-	job.SetRetryPolicy(policy, "qa")
-	if qa := job.Environments["qa"]; qa.RetryPolicy != "policy-b" {
-		t.Errorf("qa retry policy mismatch: %+v", qa)
-	}
-
-	// an unsupported type is ignored (no panic, no change)
-	job.SetRetryPolicy(42)
-	if job.RetryPolicy != "policy-c" {
-		t.Errorf("unsupported type must be ignored, base=%q", job.RetryPolicy)
+	// per-env on a brand-new environment, via a policy's ID
+	job.Environment("qa").RetryPolicy = policy.ID
+	if got := job.Environment("qa").RetryPolicy; got != "policy-b" {
+		t.Errorf("qa retry policy mismatch: %q", got)
 	}
 }
 
@@ -1955,8 +1951,8 @@ func TestJob_RetryPolicyWireRoundTrip(t *testing.T) {
 
 	job := j.NewRecurringJob(testJobID, "n", "0 * * * *", HttpConfig{URL: "https://base"},
 		WithJobTimezone("America/New_York"), WithJobRetryPolicy("base-policy"))
-	job.SetEnabled(true, "production")
-	job.SetRetryPolicy("prod-policy", "production")
+	job.Environment("production").Enabled = true
+	job.Environment("production").RetryPolicy = "prod-policy"
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
 	}

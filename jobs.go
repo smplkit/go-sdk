@@ -141,11 +141,11 @@ func (j *JobsClient) newJob(
 // environment inherits unless it sets its own override. configuration is the
 // HTTP request the job sends each time it fires.
 //
-// Enablement is per environment: pass WithJobEnvironments (or call SetEnabled
-// after construction) to choose where the job is scheduled. The remaining
-// fields — description, base timezone (WithJobTimezone), base retry policy
-// (WithJobRetryPolicy), and concurrency policy — are set via the WithJob*
-// options.
+// Enablement is per environment: pass WithJobEnvironments, or set
+// job.Environment(env).Enabled = true after construction, to choose where the
+// job is scheduled. The remaining fields — description, base timezone
+// (WithJobTimezone), base retry policy (WithJobRetryPolicy), and concurrency
+// policy — are set via the WithJob* options.
 func (j *JobsClient) NewRecurringJob(
 	id string,
 	name string,
@@ -167,11 +167,11 @@ func (j *JobsClient) NewRecurringJob(
 // uses this id. name is the human-readable name. configuration is the HTTP
 // request the job sends each time it runs.
 //
-// Enablement is per environment: pass WithJobEnvironments (or call SetEnabled
-// after construction) to choose where the job is triggerable. The remaining
-// fields — description, retry policy (WithJobRetryPolicy), and concurrency
-// policy — are set via the WithJob* options. A manual job has no cron, so
-// WithJobTimezone does not apply.
+// Enablement is per environment: pass WithJobEnvironments, or set
+// job.Environment(env).Enabled = true after construction, to choose where the
+// job is triggerable. The remaining fields — description, retry policy
+// (WithJobRetryPolicy), and concurrency policy — are set via the WithJob*
+// options. A manual job has no cron, so WithJobTimezone does not apply.
 func (j *JobsClient) NewManualJob(
 	id string,
 	name string,
@@ -212,12 +212,21 @@ type JobOption func(*Job)
 
 // WithJobEnvironments sets the per-environment override map that drives
 // enablement. A job fires in an environment only when that environment's entry
-// has Enabled=true; each entry may carry an optional HttpConfig override (nil
-// inherits the base configuration). Every referenced environment must exist for
-// the account. Without this option (and without SetEnabled), a recurring job is
-// enabled nowhere.
+// has Enabled=true; each entry is a flat overlay that overrides only the leaves
+// it sets (URL, Method, Schedule, headers, …), inheriting the base
+// configuration for the rest. Every referenced environment must exist for the
+// account. Without this option (and without setting any Environment), a
+// recurring job is enabled nowhere. The entries are copied, so later mutations
+// of the passed map do not affect the job; mutate via job.Environment(env)
+// instead.
 func WithJobEnvironments(environments map[string]JobEnvironment) JobOption {
-	return func(job *Job) { job.Environments = environments }
+	return func(job *Job) {
+		job.Environments = make(map[string]*JobEnvironment, len(environments))
+		for key, env := range environments {
+			env := env
+			job.Environments[key] = &env
+		}
+	}
 }
 
 // WithJobBirthEnvironment sets the single environment a one-off ("now" /
@@ -287,56 +296,38 @@ func (job *Job) Delete(ctx context.Context) error {
 	return job.client.Delete(ctx, job.ID)
 }
 
-// environmentOverride returns the override for environment, creating an empty
-// one if absent.
+// Environment returns the per-environment override for environment — the
+// single place to read or set what this job overrides there (ADR-056).
 //
-// The per-environment mutators reach through here so an existing override's
-// other field is preserved when only one of Enabled / Configuration is being
-// set.
-func (job *Job) environmentOverride(environment string) *JobEnvironment {
+// It returns the JobEnvironment for environment, creating an empty one (and
+// inserting it into Environments) on first access, so overrides can be set
+// directly on the returned pointer:
+//
+//	job.Environment("production").Enabled = true
+//	job.Environment("production").URL = "https://prod.example.com/warm"
+//	job.Environment("production").SetHeader("Authorization", "Bearer prod")
+//
+// Only the leaves you set are sent on save; everything else inherits the base
+// definition (the server resolves base ⊕ overrides when the job fires).
+func (job *Job) Environment(environment string) *JobEnvironment {
 	if job.Environments == nil {
-		job.Environments = map[string]JobEnvironment{}
+		job.Environments = map[string]*JobEnvironment{}
 	}
 	env, ok := job.Environments[environment]
 	if !ok {
-		env = JobEnvironment{}
+		env = &JobEnvironment{}
 		job.Environments[environment] = env
 	}
-	return &env
+	return env
 }
 
-// SetEnabled sets this job's enablement in a single environment, in memory.
-//
-// Enablement is strictly per-environment: this sets the per-environment
-// override's Enabled on Environments, creating the override entry if it doesn't
-// exist yet (preserving any already-set Configuration on it). The base Enabled
-// is a read-only roll-up the server derives and cannot be set here. Call Save
-// to persist.
-func (job *Job) SetEnabled(enabled bool, environment string) {
-	env := job.environmentOverride(environment)
-	env.Enabled = enabled
-	job.Environments[environment] = *env
-}
-
-// IsEnabled reports whether the job is enabled.
-//
-// With environment empty, returns the roll-up — enabled in at least one
-// environment — derived locally from the Environments map (so it stays correct
-// for in-memory edits made via SetEnabled before Save). With environment given,
-// returns whether the job is enabled in that specific environment.
-func (job *Job) IsEnabled(environment string) bool {
-	if environment == "" {
-		return anyEnvironmentEnabled(job.Environments)
-	}
-	env, ok := job.Environments[environment]
-	return ok && env.Enabled
-}
-
-// anyEnvironmentEnabled is the base-enabled roll-up: true iff at least one
-// environment override has Enabled=true. The jobs API no longer exposes a
-// top-level enabled flag, so the wrapper derives it from the environments map.
-func anyEnvironmentEnabled(environments map[string]JobEnvironment) bool {
-	for _, env := range environments {
+// Enabled reports the read-only roll-up: true when the job is enabled in at
+// least one environment. The jobs API has no top-level enabled field, so the
+// wrapper derives it from the Environments map (and it stays correct for
+// in-memory edits made before Save). Enable per environment via
+// job.Environment(env).Enabled = true.
+func (job *Job) Enabled() bool {
+	for _, env := range job.Environments {
 		if env.Enabled {
 			return true
 		}
@@ -354,152 +345,6 @@ func (job *Job) IsManual() bool { return job.Kind != nil && *job.Kind == JobKind
 // IsOneOff reports whether this is a one-off job — a single "now" / datetime
 // run.
 func (job *Job) IsOneOff() bool { return job.Kind != nil && *job.Kind == JobKindOneOff }
-
-// SetConfiguration sets this job's configuration in memory.
-//
-// With environment empty, replaces the base Configuration. With environment
-// given, sets the per-environment override's configuration on Environments,
-// creating the override entry if it doesn't exist yet (preserving any
-// already-set Enabled on it). Call Save to persist.
-func (job *Job) SetConfiguration(configuration HttpConfig, environment string) {
-	if environment == "" {
-		job.Configuration = configuration
-		return
-	}
-	env := job.environmentOverride(environment)
-	env.Configuration = &configuration
-	job.Environments[environment] = *env
-}
-
-// GetConfiguration returns the job's effective configuration.
-//
-// With environment empty, returns the base Configuration. With environment
-// given, returns that environment's configuration override when it has one,
-// else the base configuration — the request the job actually sends when it
-// fires in that environment.
-func (job *Job) GetConfiguration(environment string) HttpConfig {
-	if environment != "" {
-		if env, ok := job.Environments[environment]; ok && env.Configuration != nil {
-			return *env.Configuration
-		}
-	}
-	return job.Configuration
-}
-
-// ScheduleOption is an optional refinement to (*Job).SetSchedule — a timezone
-// to set alongside the schedule, or an environment to scope it to.
-type ScheduleOption func(*scheduleOptions)
-
-type scheduleOptions struct {
-	timezone    string
-	environment string
-}
-
-// WithScheduleTimezone also sets the IANA timezone the cron is evaluated in, for
-// the same scope as the schedule (equivalent to a follow-up SetTimezone). Omit
-// it to leave the timezone untouched.
-func WithScheduleTimezone(timezone string) ScheduleOption {
-	return func(o *scheduleOptions) { o.timezone = timezone }
-}
-
-// WithScheduleEnvironment scopes the schedule (and any WithScheduleTimezone) to a
-// single environment as a per-environment override, instead of the job's base.
-func WithScheduleEnvironment(environment string) ScheduleOption {
-	return func(o *scheduleOptions) { o.environment = environment }
-}
-
-// SetSchedule sets the job's schedule in memory. Call Save to persist.
-//
-// With no options it sets the base Schedule — the cadence every environment
-// inherits unless it overrides it. Pass WithScheduleEnvironment to instead set a
-// per-environment cron override for just that environment (recurring jobs only),
-// creating the override entry if it doesn't exist yet (preserving any already-set
-// Enabled / Timezone / Configuration on it); set it back to the base cadence to
-// fall back to the base schedule.
-//
-// Because the timezone is an integral part of a cron cadence, pass
-// WithScheduleTimezone to set the same scope's timezone alongside the schedule
-// (equivalent to a follow-up SetTimezone). For a timezone-only change, use
-// SetTimezone.
-func (job *Job) SetSchedule(schedule string, opts ...ScheduleOption) {
-	var cfg scheduleOptions
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-	if cfg.environment == "" {
-		job.Schedule = schedule
-	} else {
-		override := job.environmentOverride(cfg.environment)
-		override.Schedule = schedule
-		job.Environments[cfg.environment] = *override
-	}
-	if cfg.timezone != "" {
-		job.SetTimezone(cfg.timezone, cfg.environment)
-	}
-}
-
-// SetTimezone sets the IANA timezone the cron schedule is evaluated in — base
-// or per-environment.
-//
-// Called with no environment (or an empty environment), it sets the base
-// Timezone every environment inherits unless it overrides it. Called with an
-// environment, it sets that environment's per-environment timezone override on
-// Environments, creating the override entry if it doesn't exist yet (preserving
-// any already-set Enabled / Schedule / Configuration on it). A timezone is only
-// valid on a recurring (cron) job; an empty value means UTC (base) or "inherit
-// the base" (per-environment). At most one environment may be named; extra
-// arguments are ignored. Call Save to persist.
-func (job *Job) SetTimezone(timezone string, environment ...string) {
-	env := ""
-	if len(environment) > 0 {
-		env = environment[0]
-	}
-	if env == "" {
-		job.Timezone = timezone
-		return
-	}
-	override := job.environmentOverride(env)
-	override.Timezone = timezone
-	job.Environments[env] = *override
-}
-
-// SetRetryPolicy sets the retry policy for failed runs — base or
-// per-environment.
-//
-// Called with an empty environment (or none), it sets the job's base
-// RetryPolicy, the policy every environment inherits unless it overrides it.
-// Called with an environment, it sets a per-environment override for just that
-// environment, creating the override entry if it doesn't exist yet (preserving
-// any already-set Enabled / Schedule / Timezone / Configuration on it).
-//
-// policyOrID accepts either a *RetryPolicy (or RetryPolicy) instance — its ID
-// is used — or a policy id string; pass "Default" for the built-in never-retry
-// policy. Any other type is ignored. At most one environment may be named;
-// extra arguments are ignored. Call Save to persist.
-func (job *Job) SetRetryPolicy(policyOrID any, environment ...string) {
-	var policyID string
-	switch p := policyOrID.(type) {
-	case *RetryPolicy:
-		policyID = p.ID
-	case RetryPolicy:
-		policyID = p.ID
-	case string:
-		policyID = p
-	default:
-		return
-	}
-	env := ""
-	if len(environment) > 0 {
-		env = environment[0]
-	}
-	if env == "" {
-		job.RetryPolicy = policyID
-		return
-	}
-	override := job.environmentOverride(env)
-	override.RetryPolicy = policyID
-	job.Environments[env] = *override
-}
 
 // Trigger starts one immediate, manual run of this job (a MANUAL run) and
 // returns it. environment is the environment the run executes in; empty
@@ -539,7 +384,6 @@ func (job *Job) apply(other *Job) {
 	job.ID = other.ID
 	job.Name = other.Name
 	job.Description = other.Description
-	job.Enabled = other.Enabled
 	job.Environments = other.Environments
 	job.Kind = other.Kind
 	job.Type = other.Type
@@ -1112,61 +956,80 @@ func jobAttributes(job *Job) genjobs.Job {
 }
 
 // jobEnvironmentsToWire converts the wrapper per-environment override map to
-// the generated model. Per-environment configuration overrides are sent as
-// full HttpConfig payloads (plaintext headers in), mirroring the base
-// configuration's round-trip semantics. A per-environment Schedule override is
-// sent only when set; the read-only NextRunAt is never sent.
-func jobEnvironmentsToWire(envs map[string]JobEnvironment) map[string]genjobs.JobEnvironment {
-	out := make(map[string]genjobs.JobEnvironment, len(envs))
+// the flat, sparse leaf-path overlay the jobs API expects (ADR-056): each
+// environment emits "enabled" plus only the leaves it overrides, with every
+// header addressed individually as headers.<name>. The read-only NextRunAt is
+// never sent.
+func jobEnvironmentsToWire(envs map[string]*JobEnvironment) map[string]map[string]interface{} {
+	out := make(map[string]map[string]interface{}, len(envs))
 	for key, env := range envs {
-		enabled := env.Enabled
-		ge := genjobs.JobEnvironment{Enabled: &enabled}
+		overlay := map[string]interface{}{"enabled": env.Enabled}
 		if env.Schedule != "" {
-			schedule := env.Schedule
-			ge.Schedule = &schedule
+			overlay["schedule"] = env.Schedule
 		}
 		if env.Timezone != "" {
-			timezone := env.Timezone
-			ge.Timezone = &timezone
+			overlay["timezone"] = env.Timezone
 		}
 		if env.RetryPolicy != "" {
-			retryPolicy := env.RetryPolicy
-			ge.RetryPolicy = &retryPolicy
+			overlay["retry_policy"] = env.RetryPolicy
 		}
-		if env.Configuration != nil {
-			cfg := httpConfigToWire(*env.Configuration)
-			ge.Configuration = &cfg
+		if env.URL != "" {
+			overlay["url"] = env.URL
 		}
-		out[key] = ge
+		if env.Method != "" {
+			overlay["method"] = string(env.Method)
+		}
+		if env.Timeout != 0 {
+			overlay["timeout"] = env.Timeout
+		}
+		if env.Body != nil {
+			overlay["body"] = *env.Body
+		}
+		if env.SuccessStatus != "" {
+			overlay["success_status"] = env.SuccessStatus
+		}
+		if env.TlsVerify != nil {
+			overlay["tls_verify"] = *env.TlsVerify
+		}
+		if env.CaCert != nil {
+			overlay["ca_cert"] = *env.CaCert
+		}
+		for name, value := range env.Headers {
+			overlay["headers."+name] = value
+		}
+		out[key] = overlay
 	}
 	return out
 }
 
-// jobEnvironmentsFromWire converts the generated per-environment override map
-// back into the wrapper shape, surfacing the per-environment Schedule override
-// and the read-only NextRunAt.
-func jobEnvironmentsFromWire(envs map[string]genjobs.JobEnvironment) map[string]JobEnvironment {
-	out := make(map[string]JobEnvironment, len(envs))
-	for key, ge := range envs {
-		env := JobEnvironment{}
-		if ge.Enabled != nil {
-			env.Enabled = *ge.Enabled
+// jobEnvironmentsFromWire parses the flat leaf-path overlay the jobs API
+// returns (ADR-056) back into the wrapper shape. Header leaves arrive as
+// headers.<name> (split on the first dot, so a dotted header name is
+// preserved); next_run_at is surfaced as the read-only NextRunAt rather than an
+// override leaf; unknown leaves are ignored for forward compatibility. Reads
+// are pure override — an unset leaf stays the wrapper's zero value, never the
+// base.
+func jobEnvironmentsFromWire(envs map[string]map[string]interface{}) map[string]*JobEnvironment {
+	out := make(map[string]*JobEnvironment, len(envs))
+	for key, raw := range envs {
+		env := &JobEnvironment{
+			Enabled:       overlayBool(raw, "enabled"),
+			Schedule:      overlayString(raw, "schedule"),
+			Timezone:      overlayString(raw, "timezone"),
+			RetryPolicy:   overlayString(raw, "retry_policy"),
+			URL:           overlayString(raw, "url"),
+			Method:        JobHttpMethod(overlayString(raw, "method")),
+			Timeout:       overlayInt(raw, "timeout"),
+			Body:          overlayStringPtr(raw, "body"),
+			SuccessStatus: overlayString(raw, "success_status"),
+			TlsVerify:     overlayBoolPtr(raw, "tls_verify"),
+			CaCert:        overlayStringPtr(raw, "ca_cert"),
+			Headers:       overlayHeaders(raw),
 		}
-		if ge.Schedule != nil {
-			env.Schedule = *ge.Schedule
-		}
-		if ge.Timezone != nil {
-			env.Timezone = *ge.Timezone
-		}
-		if ge.RetryPolicy != nil {
-			env.RetryPolicy = *ge.RetryPolicy
-		}
-		if ge.Configuration != nil {
-			cfg := httpConfigFromWire(*ge.Configuration)
-			env.Configuration = &cfg
-		}
-		if ge.NextRunAt != nil {
-			env.NextRunAt = ge.NextRunAt
+		if next, ok := raw["next_run_at"].(string); ok {
+			if parsed, err := time.Parse(time.RFC3339, next); err == nil {
+				env.NextRunAt = &parsed
+			}
 		}
 		out[key] = env
 	}
@@ -1224,11 +1087,11 @@ func httpConfigToWire(h HttpConfig) genjobs.JobHttpConfiguration {
 		out.CaCert = &c
 	}
 	if len(h.Headers) > 0 {
-		hh := make([]genjobs.HttpHeader, 0, len(h.Headers))
-		for _, hdr := range h.Headers {
-			hh = append(hh, genjobs.HttpHeader{Name: hdr.Name, Value: hdr.Value})
+		headers := make(map[string]string, len(h.Headers))
+		for name, value := range h.Headers {
+			headers[name] = value
 		}
-		out.Headers = &hh
+		out.Headers = &headers
 	}
 	return out
 }
@@ -1259,9 +1122,9 @@ func httpConfigFromWire(h genjobs.JobHttpConfiguration) HttpConfig {
 		out.CaCert = &c
 	}
 	if h.Headers != nil {
-		out.Headers = make([]HttpHeader, 0, len(*h.Headers))
-		for _, hdr := range *h.Headers {
-			out.Headers = append(out.Headers, HttpHeader{Name: hdr.Name, Value: hdr.Value})
+		out.Headers = make(map[string]string, len(*h.Headers))
+		for name, value := range *h.Headers {
+			out.Headers[name] = value
 		}
 	}
 	return out
@@ -1299,10 +1162,6 @@ func jobFromResource(r genjobs.JobResource, client *JobsClient) *Job {
 	if a.Environments != nil {
 		out.Environments = jobEnvironmentsFromWire(*a.Environments)
 	}
-	// The base `enabled` is a read-only roll-up: enablement now lives strictly
-	// per-environment on the wire, so derive it locally as "enabled in at least
-	// one environment" rather than reading a top-level field.
-	out.Enabled = anyEnvironmentEnabled(out.Environments)
 	if a.Kind != nil {
 		kind := JobKind(*a.Kind)
 		out.Kind = &kind
