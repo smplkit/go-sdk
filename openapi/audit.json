@@ -2910,7 +2910,7 @@
             },
             "type": "object",
             "title": "Headers",
-            "description": "HTTP headers attached to each delivery, as a name\u2192value object (e.g. `{\"DD-API-KEY\": \"s3cr3t\"}`). A header is overridden in a specific environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively."
+            "description": "HTTP headers attached to each request, as a name\u2192value object (e.g. `{\"Authorization\": \"Bearer s3cr3t\"}`). Override an individual header in a specific environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively."
           },
           "success_status": {
             "type": "string",
@@ -2945,7 +2945,7 @@
           "url"
         ],
         "title": "ForwarderHttpConfiguration",
-        "description": "HTTP request a forwarder makes to deliver an event.\n\nIdentical to the shared HTTP configuration except that ``headers`` is a\nname\u2192value object so an individual header can be overridden per environment\nby its name."
+        "description": "HTTP request a forwarder makes to deliver an event.\n\nThe shared HTTP configuration, unchanged \u2014 including the name\u2192value\n``headers`` object whose entries can be overridden per environment by name.\nIt exists as a distinct subclass only so the spec exposes a\nforwarder-specific schema name; it adds no fields of its own."
       },
       "ForwarderListResponse": {
         "properties": {
