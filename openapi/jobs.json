@@ -1411,7 +1411,7 @@
             },
             "type": "object",
             "title": "Headers",
-            "description": "HTTP headers sent on each request, as a name\u2192value object (e.g. `{\"Authorization\": \"Bearer s3cr3t\"}`). A header is overridden per environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively."
+            "description": "HTTP headers attached to each request, as a name\u2192value object (e.g. `{\"Authorization\": \"Bearer s3cr3t\"}`). Override an individual header in a specific environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively."
           },
           "success_status": {
             "type": "string",
@@ -1466,7 +1466,7 @@
           "url"
         ],
         "title": "JobHttpConfiguration",
-        "description": "HTTP request a job performs when it fires.\n\nExtends the shared forwarder configuration with the two fields a scheduled\njob needs beyond a forwarder, and represents headers as a name\u2192value object\nso an individual header can be overridden per environment by its name."
+        "description": "HTTP request a job performs when it fires.\n\nExtends the shared HTTP configuration with the two fields a scheduled job\nneeds beyond a forwarder (``body`` and ``timeout``); everything else,\nincluding the shared name\u2192value ``headers`` object, is inherited unchanged."
       },
       "JobListResponse": {
         "properties": {

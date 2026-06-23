@@ -375,9 +375,9 @@ type Job struct {
 
 	// Configuration HTTP request a job performs when it fires.
 	//
-	// Extends the shared forwarder configuration with the two fields a scheduled
-	// job needs beyond a forwarder, and represents headers as a name→value object
-	// so an individual header can be overridden per environment by its name.
+	// Extends the shared HTTP configuration with the two fields a scheduled job
+	// needs beyond a forwarder (``body`` and ``timeout``); everything else,
+	// including the shared name→value ``headers`` object, is inherited unchanged.
 	Configuration JobHttpConfiguration `json:"configuration"`
 
 	// CreatedAt When the job was created.
@@ -459,9 +459,9 @@ type JobCreateResourceType string
 
 // JobHttpConfiguration HTTP request a job performs when it fires.
 //
-// Extends the shared forwarder configuration with the two fields a scheduled
-// job needs beyond a forwarder, and represents headers as a name→value object
-// so an individual header can be overridden per environment by its name.
+// Extends the shared HTTP configuration with the two fields a scheduled job
+// needs beyond a forwarder (“body“ and “timeout“); everything else,
+// including the shared name→value “headers“ object, is inherited unchanged.
 type JobHttpConfiguration struct {
 	// Body Request body sent on each run. When omitted, an empty body is sent (suitable for a connectivity ping). Sent verbatim — pair with a matching `Content-Type` header. Limit 1 MiB.
 	Body *string `json:"body,omitempty"`
@@ -469,7 +469,7 @@ type JobHttpConfiguration struct {
 	// CaCert Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`.
 	CaCert *string `json:"ca_cert,omitempty"`
 
-	// Headers HTTP headers sent on each request, as a name→value object (e.g. `{"Authorization": "Bearer s3cr3t"}`). A header is overridden per environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively.
+	// Headers HTTP headers attached to each request, as a name→value object (e.g. `{"Authorization": "Bearer s3cr3t"}`). Override an individual header in a specific environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively.
 	Headers *map[string]string `json:"headers,omitempty"`
 
 	// Method HTTP method used when delivering the request.
