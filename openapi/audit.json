@@ -2449,13 +2449,6 @@
             "$ref": "#/components/schemas/ForwarderType",
             "description": "Destination type."
           },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "description": "Always false. Enablement is per-environment: a forwarder delivers in an environment only when `environments[<env>].enabled` is true. The base value is pinned false and cannot be set.",
-            "default": false,
-            "readOnly": true
-          },
           "forward_smplkit_events": {
             "type": "boolean",
             "title": "Forward Smplkit Events",
@@ -2499,16 +2492,17 @@
             "description": "Template applied to each event before delivery. The shape depends on ``transform_type``: for `JSONATA`, a string containing a JSONata expression. Omit to deliver the event JSON unchanged."
           },
           "configuration": {
-            "$ref": "#/components/schemas/HttpConfiguration",
-            "description": "Base delivery configuration template. Shape is discriminated by ``forwarder_type``; today all destination types use ``HttpConfiguration``. Branded vendor types (everything except `http`) constrain the configuration against a per-vendor template \u2014 see `GET /api/v1/forwarder_types` for the URL pattern, fixed headers, and customer-supplied placeholders for each type. A per-environment override in `environments` replaces this template for that environment."
+            "$ref": "#/components/schemas/ForwarderHttpConfiguration",
+            "description": "Base delivery configuration template. Shape is discriminated by ``forwarder_type``; today all destination types deliver over HTTP. Branded vendor types (everything except `http`) constrain the configuration against a per-vendor template \u2014 see `GET /api/v1/forwarder_types` for the URL pattern, fixed headers, and customer-supplied placeholders for each type. A per-environment entry in `environments` overrides individual fields of this template for that environment; fields it omits are inherited from here."
           },
           "environments": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/ForwarderEnvironment"
+              "additionalProperties": true,
+              "type": "object"
             },
             "type": "object",
             "title": "Environments",
-            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry sets `enabled` (whether the forwarder delivers in that environment) and an optional `configuration` override (omit to inherit the base `configuration`). A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account."
+            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a sparse map of only the fields that differ in that environment: `enabled` (whether the forwarder delivers there) plus any of `url`, `method`, `success_status`, `tls_verify`, `ca_cert`, and individual headers as `headers.<name>` (e.g. `headers.Authorization`). Fields you omit are inherited from the base `configuration`; an entry never needs to repeat the whole configuration. A forwarder with no entry for an environment is disabled there. Every referenced environment must exist and be managed for the account."
           },
           "created_at": {
             "anyOf": [
@@ -2615,16 +2609,10 @@
         "example": {
           "attributes": {
             "configuration": {
-              "headers": [
-                {
-                  "name": "Content-Type",
-                  "value": "application/json"
-                },
-                {
-                  "name": "DD-API-KEY",
-                  "value": "dd-api-key-plaintext"
-                }
-              ],
+              "headers": {
+                "Content-Type": "application/json",
+                "DD-API-KEY": "dd-api-key-plaintext"
+              },
               "method": "POST",
               "success_status": "2xx",
               "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"
@@ -2632,7 +2620,8 @@
             "description": "Forwards user.* events to the prod Datadog tenant.",
             "environments": {
               "production": {
-                "enabled": true
+                "enabled": true,
+                "headers.DD-API-KEY": "dd-prod-api-key-plaintext"
               }
             },
             "filter": {
@@ -2866,12 +2855,9 @@
             "latency_ms": 187,
             "request": {
               "body": "{\"event_type\":\"user.created\",\"resource_id\":\"u-1\"}",
-              "headers": [
-                {
-                  "name": "DD-API-KEY",
-                  "value": "<redacted>"
-                }
-              ],
+              "headers": {
+                "DD-API-KEY": "<redacted>"
+              },
               "method": "POST",
               "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"
             },
@@ -2896,29 +2882,70 @@
         "title": "ForwarderDeliveryResponse",
         "description": "JSON:API single-resource response for a forwarder delivery."
       },
-      "ForwarderEnvironment": {
+      "ForwarderHttpConfiguration": {
         "properties": {
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "description": "Whether the forwarder delivers events in this environment. A forwarder is enabled in an environment only via this field \u2014 the base `enabled` is always false.",
-            "default": false
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "title": "Method",
+            "description": "HTTP method used when delivering the request.",
+            "default": "POST"
           },
-          "configuration": {
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "description": "Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`)."
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Headers",
+            "description": "HTTP headers attached to each delivery, as a name\u2192value object (e.g. `{\"DD-API-KEY\": \"s3cr3t\"}`). A header is overridden in a specific environment by its name via a `headers.<name>` entry in that environment's overrides; header names match case-insensitively."
+          },
+          "success_status": {
+            "type": "string",
+            "maxLength": 3,
+            "title": "Success Status",
+            "description": "HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
+            "default": "2xx"
+          },
+          "tls_verify": {
+            "type": "boolean",
+            "title": "Tls Verify",
+            "description": "Whether to verify the destination server's TLS certificate against trusted certificate authorities. Defaults to `true` and should be left on for any production destination. Set to `false` only for development or short-lived testing against a destination that presents an untrusted certificate (e.g. a Splunk Cloud trial stack on `:8088` serving its default self-signed certificate). When `false`, deliveries proceed without certificate verification \u2014 they are vulnerable to man-in-the-middle attacks. For long-lived self-signed setups, pin the issuing CA via `ca_cert` instead of disabling verification entirely.",
+            "default": true
+          },
+          "ca_cert": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/HttpConfiguration"
+                "type": "string",
+                "maxLength": 65536
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Per-environment delivery configuration override. Omit to inherit the forwarder's base `configuration`. When present, it fully replaces the base configuration for this environment and is validated against the same per-vendor template."
+            "title": "Ca Cert",
+            "description": "Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`."
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "title": "ForwarderEnvironment",
-        "description": "Per-environment override for a forwarder's enablement and configuration."
+        "required": [
+          "url"
+        ],
+        "title": "ForwarderHttpConfiguration",
+        "description": "HTTP request a forwarder makes to deliver an event.\n\nIdentical to the shared HTTP configuration except that ``headers`` is a\nname\u2192value object so an individual header can be overridden per environment\nby its name."
       },
       "ForwarderListResponse": {
         "properties": {
@@ -2985,26 +3012,20 @@
         "example": {
           "attributes": {
             "configuration": {
-              "headers": [
-                {
-                  "name": "Content-Type",
-                  "value": "application/json"
-                },
-                {
-                  "name": "DD-API-KEY",
-                  "value": "dd-api-key-plaintext"
-                }
-              ],
+              "headers": {
+                "Content-Type": "application/json",
+                "DD-API-KEY": "dd-api-key-plaintext"
+              },
               "method": "POST",
               "success_status": "2xx",
               "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"
             },
             "created_at": "2026-05-07T12:00:00Z",
             "description": "Forwards user.* events to the prod Datadog tenant.",
-            "enabled": false,
             "environments": {
               "production": {
-                "enabled": true
+                "enabled": true,
+                "headers.DD-API-KEY": "dd-prod-api-key-plaintext"
               }
             },
             "filter": {
@@ -3368,95 +3389,6 @@
         "title": "ForwarderTypeTransform",
         "description": "Default transform shipped with the type."
       },
-      "HttpConfiguration": {
-        "properties": {
-          "method": {
-            "type": "string",
-            "enum": [
-              "GET",
-              "POST",
-              "PUT",
-              "PATCH",
-              "DELETE"
-            ],
-            "title": "Method",
-            "description": "HTTP method used when delivering the request.",
-            "default": "POST"
-          },
-          "url": {
-            "type": "string",
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Url",
-            "description": "Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`)."
-          },
-          "headers": {
-            "items": {
-              "$ref": "#/components/schemas/HttpHeader"
-            },
-            "type": "array",
-            "title": "Headers",
-            "description": "HTTP headers attached to each request."
-          },
-          "success_status": {
-            "type": "string",
-            "maxLength": 3,
-            "title": "Success Status",
-            "description": "HTTP response status that indicates success. Either a specific status code (e.g. `200`, `204`) or a status class (`1xx`, `2xx`, `3xx`, `4xx`, `5xx`).",
-            "default": "2xx"
-          },
-          "tls_verify": {
-            "type": "boolean",
-            "title": "Tls Verify",
-            "description": "Whether to verify the destination server's TLS certificate against trusted certificate authorities. Defaults to `true` and should be left on for any production destination. Set to `false` only for development or short-lived testing against a destination that presents an untrusted certificate (e.g. a Splunk Cloud trial stack on `:8088` serving its default self-signed certificate). When `false`, deliveries proceed without certificate verification \u2014 they are vulnerable to man-in-the-middle attacks. For long-lived self-signed setups, pin the issuing CA via `ca_cert` instead of disabling verification entirely.",
-            "default": true
-          },
-          "ca_cert": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 65536
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ca Cert",
-            "description": "Optional PEM-encoded certificate (or bundle) used to verify the destination server's TLS certificate, in addition to the system trust store. Use this to pin a private or self-signed CA (e.g. Splunk's default `SplunkCommonCA`) without disabling verification entirely via `tls_verify`. Must contain one or more `-----BEGIN CERTIFICATE-----` blocks. Ignored when `tls_verify` is `false`."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "url"
-        ],
-        "title": "HttpConfiguration",
-        "description": "HTTP request configuration for delivering a payload to a destination.\n\nThe shared base shape for any product that posts to a customer-supplied\nHTTP destination. Smpl Audit forwarders use it directly; Smpl Jobs\nextends it (adding ``body`` and ``timeout``). When other transports land\n(``FTP``, ``SQS``, \u2026) their own configuration schemas will join this one\nas members of a discriminated union under a ``configuration`` field."
-      },
-      "HttpHeader": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Name",
-            "description": "Header name."
-          },
-          "value": {
-            "type": "string",
-            "maxLength": 8192,
-            "title": "Value",
-            "description": "Header value. Stored encrypted at rest; returned as plaintext on `GET`."
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "value"
-        ],
-        "title": "HttpHeader",
-        "description": "A single HTTP header attached to an outbound request.\n\nHeader values are encrypted at the application layer before\npersistence regardless of header name; the wire representation here\nis always plaintext on both the request and the response, so a\n`GET \u2192 mutate \u2192 PUT` round-trip preserves header values without\nrequiring the customer to re-enter secrets."
-      },
       "ListMeta": {
         "properties": {
           "pagination": {
@@ -3670,12 +3602,12 @@
             "description": "Destination URL. Must be an absolute `http://` or `https://` URL with a hostname (e.g. `https://siem.example.com/in`)."
           },
           "headers": {
-            "items": {
-              "$ref": "#/components/schemas/HttpHeader"
+            "additionalProperties": {
+              "type": "string"
             },
-            "type": "array",
+            "type": "object",
             "title": "Headers",
-            "description": "HTTP headers attached to the test request."
+            "description": "HTTP headers attached to the test request, as a name\u2192value object (e.g. `{\"Authorization\": \"Bearer s3cr3t\"}`)."
           },
           "success_status": {
             "type": "string",

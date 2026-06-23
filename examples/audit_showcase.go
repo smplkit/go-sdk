@@ -169,7 +169,7 @@ func main() {
 		forwarderID,
 		smplkit.ForwarderTypeHTTP,
 		smplkit.HttpConfiguration{
-			Headers: []smplkit.HttpHeader{{Name: "X-Showcase", Value: "ok"}},
+			Headers: map[string]string{"X-Showcase": "ok"},
 			Method:  smplkit.HttpMethodPost,
 			URL:     "https://example.com",
 		},
@@ -203,20 +203,16 @@ func main() {
 	fmt.Printf("Fetched forwarder: %s (id=%s)\n", forwarder.Name, forwarder.ID)
 
 	// configure where to forward events in production
-	forwarder.SetConfiguration(smplkit.HttpConfiguration{
-		Headers: []smplkit.HttpHeader{{Name: "X-Showcase", Value: "ok"}},
-		Method:  smplkit.HttpMethodPost,
-		URL:     "https://httpbin.org/post",
-	}, "production")
+	forwarder.Environment("production").URL = "https://httpbin.org/post"
+	forwarder.Environment("production").SetHeader("X-Showcase", "ok")
 	fatalIfErr("audit.Forwarders.Save", forwarder.Save(ctx))
-	prod, ok := forwarder.Environments["production"]
-	if !ok || prod.Configuration == nil || prod.Configuration.URL != "https://httpbin.org/post" {
-		fatalIfErr("assertion", fmt.Errorf("updated forwarder configuration mismatch: %+v", forwarder.Environments))
+	if forwarder.Environments["production"].URL != "https://httpbin.org/post" {
+		fatalIfErr("assertion", fmt.Errorf("updated forwarder url mismatch: %+v", forwarder.Environments))
 	}
 	fmt.Printf("Updated forwarder: %s\n", forwarder.Name)
 
 	// start forwarding events in production
-	forwarder.SetEnabled(true, "production")
+	forwarder.Environment("production").Enabled = true
 	fatalIfErr("audit.Forwarders.Save", forwarder.Save(ctx))
 	fmt.Printf("Enabled forwarder %s (id=%s) to start forwarding events in production\n",
 		forwarder.Name, forwarder.ID)

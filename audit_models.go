@@ -380,17 +380,6 @@ type CategoryListPage struct {
 // Forwarders (SIEM streaming)
 // ---------------------------------------------------------------------------
 
-// HttpHeader is a single name/value HTTP header on a forwarder
-// destination request.
-type HttpHeader struct {
-	// Name is the header name (e.g. "Authorization", "DD-API-KEY").
-	Name string
-	// Value is the header value. Supply it plaintext on writes; reads
-	// return it plaintext too, so a Get → mutate → Save round-trip
-	// preserves header values without re-entering secrets.
-	Value string
-}
-
 // HttpConfiguration is the destination HTTP request configuration used
 // by a forwarder of the HTTP family (HTTP, DATADOG, SPLUNK_HEC,
 // SUMO_LOGIC, NEW_RELIC, HONEYCOMB, ELASTIC). Other transports will
@@ -402,10 +391,12 @@ type HttpConfiguration struct {
 	Method HttpMethod
 	// URL is the destination the audit service POSTs each event to.
 	URL string
-	// Headers are attached to every outbound request. Values carry
-	// credentials; supply them plaintext on writes. Reads return them
-	// plaintext too, so a Get → mutate → Save round-trip preserves them.
-	Headers []HttpHeader
+	// Headers are attached to every outbound request, as a name→value map
+	// (e.g. {"DD-API-KEY": "s3cr3t"}). Values carry credentials; supply them
+	// plaintext on writes. Reads return them plaintext too, so a Get → mutate
+	// → Save round-trip preserves them. Use SetHeader / GetHeader to read and
+	// write individual headers without worrying about a nil map.
+	Headers map[string]string
 	// SuccessStatus is the response status the destination must return
 	// for delivery to count as success — an exact code ("200", "204")
 	// or a class ("2xx", "4xx"). Defaults to "2xx" server-side when
@@ -424,22 +415,80 @@ type HttpConfiguration struct {
 	CaCert *string
 }
 
-// ForwarderEnvironment is a per-environment override for a forwarder's
-// enablement and optional configuration. A forwarder delivers events in
-// a given environment only when that environment has an entry in
-// Forwarder.Environments with Enabled=true; an environment with no entry
-// (or Enabled=false) receives no deliveries.
+// SetHeader sets (or replaces) a single request header by name, allocating the
+// Headers map on first use.
+func (h *HttpConfiguration) SetHeader(name, value string) {
+	if h.Headers == nil {
+		h.Headers = map[string]string{}
+	}
+	h.Headers[name] = value
+}
+
+// GetHeader returns the value of header name and whether it is set.
+func (h *HttpConfiguration) GetHeader(name string) (string, bool) {
+	v, ok := h.Headers[name]
+	return v, ok
+}
+
+// ForwarderEnvironment is one environment's sparse override for a forwarder
+// (ADR-056).
+//
+// A forwarder's Environments map holds one of these per environment. Only the
+// leaves you set are sent on save; everything you leave unset is inherited from
+// the forwarder's base definition, and the server resolves base ⊕ overrides on
+// delivery. The base definition delivers nowhere, so a forwarder delivers in an
+// environment only when that environment's override sets Enabled=true.
+//
+// Reach (and lazily create) an environment's override via
+// (*Forwarder).Environment, then set leaves directly, e.g.
+//
+//	forwarder.Environment("production").Enabled = true
+//	forwarder.Environment("production").URL = "https://prod.siem.example.com/in"
+//	forwarder.Environment("production").SetHeader("DD-API-KEY", "prod-secret")
+//
+// Reads are pure override: a leaf this environment does not override reads back
+// as its zero value / nil, NOT the base value — the SDK does not merge in the
+// base (forwarders resolve server-side). To see a base value, read the
+// forwarder's base definition (forwarder.Configuration).
 type ForwarderEnvironment struct {
 	// Enabled controls whether the forwarder delivers events in this
 	// environment. Defaults to false.
 	Enabled bool
-	// Configuration is an optional per-environment destination
-	// configuration that fully replaces the forwarder's base
-	// Configuration for this environment. Nil (the default) inherits the
-	// base configuration. As with the base configuration, header values
-	// are plaintext on both writes and reads, so a Get → mutate → Save
-	// round-trip preserves them.
-	Configuration *HttpConfiguration
+	// URL optionally overrides the base destination URL for this environment.
+	// Empty does not override.
+	URL string
+	// Method optionally overrides the base HTTP verb for this environment.
+	// Empty does not override.
+	Method HttpMethod
+	// SuccessStatus optionally overrides the base success-status pattern for
+	// this environment. Empty does not override.
+	SuccessStatus string
+	// TlsVerify optionally overrides base TLS verification for this environment.
+	// Nil does not override; &false / &true overrides explicitly.
+	TlsVerify *bool
+	// CaCert optionally overrides the base CA certificate for this environment.
+	// Nil does not override.
+	CaCert *string
+	// Headers holds per-environment header overrides as a name→value map. Each
+	// entry overrides (or adds) that one header by name on top of the base
+	// headers, leaving the rest inherited. Use SetHeader / GetHeader.
+	Headers map[string]string
+}
+
+// SetHeader overrides (or adds) a single header by name in this environment,
+// allocating the Headers map on first use.
+func (e *ForwarderEnvironment) SetHeader(name, value string) {
+	if e.Headers == nil {
+		e.Headers = map[string]string{}
+	}
+	e.Headers[name] = value
+}
+
+// GetHeader returns this environment's override for header name and whether it
+// overrides that header.
+func (e *ForwarderEnvironment) GetHeader(name string) (string, bool) {
+	v, ok := e.Headers[name]
+	return v, ok
 }
 
 // Forwarder is a SIEM streaming destination configured on the
@@ -461,20 +510,16 @@ type Forwarder struct {
 	Description *string
 	// ForwarderType is the destination type — see ForwarderType.
 	ForwarderType ForwarderType
-	// Enabled is read-only and always false. The base enablement is
-	// pinned off; whether a forwarder actually delivers is decided per
-	// environment via Environments. Mutating this field has
-	// no effect on the server — the wrapper does not send it. It is kept
-	// so reads round-trip the server value.
-	Enabled bool
-	// Environments holds per-environment overrides keyed by environment
+	// Environments holds per-environment sparse overrides keyed by environment
 	// key (e.g. "production", "staging"). A forwarder delivers in an
-	// environment only when Environments[env].Enabled is true. Each entry
-	// may carry an optional HttpConfiguration override; leave it nil to
-	// inherit the base Configuration. Every referenced environment must
-	// exist and be managed for the account. Nil/empty means the forwarder
-	// delivers nowhere until enabled per environment.
-	Environments map[string]ForwarderEnvironment
+	// environment only when Environments[env].Enabled is true. Each entry is a
+	// flat overlay that overrides only the leaves it sets (URL, Method, headers,
+	// …), inheriting the base Configuration for the rest. Reach (and lazily
+	// create) an entry via Environment. Every referenced environment must exist
+	// and be managed for the account. Nil/empty means the forwarder delivers
+	// nowhere until enabled per environment. Enablement has no top-level field —
+	// use Enabled() for the roll-up.
+	Environments map[string]*ForwarderEnvironment
 	// Filter is an optional JSON Logic expression evaluated per event.
 	// When set, events that don't match are recorded as filtered_out
 	// deliveries instead of being POSTed to the destination.

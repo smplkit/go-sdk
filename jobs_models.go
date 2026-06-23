@@ -73,10 +73,12 @@ type HttpConfig struct {
 	Method JobHttpMethod
 	// URL is the absolute http:// or https:// destination the job calls.
 	URL string
-	// Headers are attached to every run's request. Values carry
-	// credentials; supply them plaintext on writes. Reads return them
-	// plaintext too, so a Get → mutate → Save round-trip preserves them.
-	Headers []HttpHeader
+	// Headers are attached to every run's request, as a name→value map
+	// (e.g. {"Authorization": "Bearer s3cr3t"}). Values carry credentials;
+	// supply them plaintext on writes. Reads return them plaintext too, so a
+	// Get → mutate → Save round-trip preserves them. Use SetHeader / GetHeader
+	// to read and write individual headers without worrying about a nil map.
+	Headers map[string]string
 	// Body is the request body sent on each run. Nil sends an empty body
 	// (suitable for a connectivity ping). Sent verbatim — pair with a
 	// matching Content-Type header.
@@ -100,45 +102,104 @@ type HttpConfig struct {
 	CaCert *string
 }
 
-// JobEnvironment is a per-environment override for a job's enablement,
-// schedule, and configuration.
+// SetHeader sets (or replaces) a single request header by name, allocating the
+// Headers map on first use.
+func (h *HttpConfig) SetHeader(name, value string) {
+	if h.Headers == nil {
+		h.Headers = map[string]string{}
+	}
+	h.Headers[name] = value
+}
+
+// GetHeader returns the value of header name and whether it is set.
+func (h *HttpConfig) GetHeader(name string) (string, bool) {
+	v, ok := h.Headers[name]
+	return v, ok
+}
+
+// JobEnvironment is one environment's sparse override for a job (ADR-056).
 //
-// A job runs in a given environment only when that environment has an entry in
-// Job.Environments with Enabled=true (scheduled there for a recurring job,
-// triggerable there for a manual one); an environment with no entry (or
-// Enabled=false) is disabled there.
+// A job's Environments map holds one of these per environment. Only the leaves
+// you set are sent on save; everything you leave unset is inherited from the
+// job's base definition, and the server resolves base ⊕ overrides when the job
+// fires. The base definition is disabled everywhere, so a job runs in an
+// environment only when that environment's override sets Enabled=true.
+//
+// Reach (and lazily create) an environment's override via (*Job).Environment,
+// then set leaves directly, e.g.
+//
+//	job.Environment("production").Enabled = true
+//	job.Environment("production").URL = "https://prod.example.com/warm"
+//	job.Environment("production").SetHeader("Authorization", "Bearer prod")
+//
+// Reads are pure override: a leaf this environment does not override reads back
+// as its zero value / nil, NOT the base value — the SDK does not merge in the
+// base (jobs resolve server-side). To see a base value, read the job's base
+// definition (job.Configuration, job.Schedule, …).
 type JobEnvironment struct {
-	// Enabled controls whether the job is enabled in this environment.
-	// Defaults to false.
+	// Enabled controls whether the job runs in this environment. Defaults to
+	// false.
 	Enabled bool
 	// Schedule is an optional per-environment cron override that varies the
-	// cadence for just this environment (recurring jobs only). Empty inherits
-	// the job's base Schedule. When set, it must be a 5-field cron expression
-	// evaluated in UTC; it cannot appear on a manual or one-off job, and cannot
-	// change a job's kind. Settable; sent on writes only when non-empty.
+	// cadence for just this environment (recurring jobs only). Empty does not
+	// override (inherits the job's base Schedule). When set, it must be a
+	// 5-field cron expression; it cannot appear on a manual or one-off job, and
+	// cannot change a job's kind.
 	Schedule string
 	// Timezone is an optional per-environment IANA timezone override for
 	// evaluating this environment's cron Schedule (recurring jobs only). Empty
-	// inherits the base Timezone, else UTC. When set, it must be a valid IANA
-	// zone key (e.g. "America/New_York"); it may be set on an environment that
-	// inherits the base schedule (it need not also override Schedule). Settable;
-	// sent on writes only when non-empty.
+	// does not override (inherits the base Timezone, else UTC). When set, it
+	// must be a valid IANA zone key (e.g. "America/New_York").
 	Timezone string
 	// RetryPolicy is an optional per-environment retry-policy override — the id
-	// of a RetryPolicy (or "Default"). Empty inherits the job's base
-	// RetryPolicy. When set, runs in this environment retry according to this
-	// policy instead of the base. Settable; sent on writes only when non-empty.
+	// of a RetryPolicy (or "Default"); pass a saved policy's ID. Empty does not
+	// override (inherits the job's base RetryPolicy).
 	RetryPolicy string
-	// Configuration is an optional per-environment request configuration that
-	// fully replaces the job's base Configuration for this environment. Nil
-	// (the default) inherits the base configuration. As with the base
-	// configuration, header values are plaintext on both writes and reads, so
-	// a Get → mutate → Save round-trip preserves them.
-	Configuration *HttpConfig
+	// URL optionally overrides the base destination URL for this environment.
+	// Empty does not override.
+	URL string
+	// Method optionally overrides the base HTTP verb for this environment.
+	// Empty does not override.
+	Method JobHttpMethod
+	// Timeout optionally overrides the base per-run timeout (seconds) for this
+	// environment. Zero does not override.
+	Timeout int
+	// Body optionally overrides the base request body for this environment. Nil
+	// does not override.
+	Body *string
+	// SuccessStatus optionally overrides the base success-status pattern for
+	// this environment. Empty does not override.
+	SuccessStatus string
+	// TlsVerify optionally overrides base TLS verification for this environment.
+	// Nil does not override; &false / &true overrides explicitly.
+	TlsVerify *bool
+	// CaCert optionally overrides the base CA certificate for this environment.
+	// Nil does not override.
+	CaCert *string
+	// Headers holds per-environment header overrides as a name→value map. Each
+	// entry overrides (or adds) that one header by name on top of the base
+	// headers, leaving the rest inherited. Use SetHeader / GetHeader.
+	Headers map[string]string
 	// NextRunAt is the read-only next scheduled fire time in this environment.
 	// Nil when the environment is not enabled, or once a one-off run has fired.
 	// Populated on reads; never sent on writes.
 	NextRunAt *time.Time
+}
+
+// SetHeader overrides (or adds) a single header by name in this environment,
+// allocating the Headers map on first use.
+func (e *JobEnvironment) SetHeader(name, value string) {
+	if e.Headers == nil {
+		e.Headers = map[string]string{}
+	}
+	e.Headers[name] = value
+}
+
+// GetHeader returns this environment's override for header name and whether it
+// overrides that header.
+func (e *JobEnvironment) GetHeader(name string) (string, bool) {
+	v, ok := e.Headers[name]
+	return v, ok
 }
 
 // Job is a unit of work: an HTTP request, run on a schedule or triggered on
@@ -160,19 +221,16 @@ type Job struct {
 	Name string
 	// Description is an optional free-text description.
 	Description *string
-	// Enabled reports whether the job is enabled in at least one environment.
-	// Read-only roll-up derived from Environments[*].Enabled (true iff any
-	// environment is enabled); the wrapper computes it locally and never sends
-	// it. Set enablement per environment via Environments / SetEnabled.
-	Enabled bool
-	// Environments holds per-environment overrides keyed by environment key
-	// (e.g. "production", "development"). A job fires in an environment only
-	// when Environments[env].Enabled is true. Each entry may carry an optional
-	// HttpConfig override; leave it nil to inherit the base Configuration. For
-	// a recurring job, supply this map to choose where it runs; a one-off job
-	// records the single environment it was created in. Every referenced
-	// environment must exist for the account.
-	Environments map[string]JobEnvironment
+	// Environments holds per-environment sparse overrides keyed by environment
+	// key (e.g. "production", "development"). A job fires in an environment only
+	// when Environments[env].Enabled is true. Each entry is a flat overlay that
+	// overrides only the leaves it sets, inheriting the base definition for the
+	// rest. Reach (and lazily create) an entry via Environment. For a recurring
+	// job, supply this map to choose where it runs; a one-off job records the
+	// single environment it was created in. Every referenced environment must
+	// exist for the account. Enablement has no top-level field — use Enabled()
+	// for the roll-up.
+	Environments map[string]*JobEnvironment
 	// Kind is how the job runs, derived server-side from Schedule (read-only):
 	// JobKindRecurring (cron), JobKindManual (no schedule), or JobKindOneOff
 	// ("now" / datetime). Nil on an unsaved Job; use IsRecurring / IsManual /
