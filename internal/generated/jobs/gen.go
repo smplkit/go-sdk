@@ -367,8 +367,8 @@ type ErrorResponse struct {
 // be enabled in several environments at once and fires once per enabled
 // environment, each on its own next-fire schedule; a **manual** job (no
 // schedule) is permanent and never auto-fires — it runs only when triggered;
-// a **one-off** (`now` or a future datetime) job runs a single time in the
-// environment it was created in and is then spent.
+// a **one-off** (`now` or a future datetime) job runs a single time in each
+// environment it was created in (one run per environment) and is then spent.
 type Job struct {
 	// ConcurrencyPolicy How overlapping runs are handled. `ALLOW` (the only value today) permits them.
 	ConcurrencyPolicy *JobConcurrencyPolicy `json:"concurrency_policy,omitempty"`
@@ -389,7 +389,7 @@ type Job struct {
 	// Description Free-text description for the job.
 	Description *string `json:"description,omitempty"`
 
-	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, name its target environment(s) here as the map keys — one run is enqueued per named environment; when the map is empty a single-environment credential implies the one environment. Every referenced environment must exist for the account.
 	Environments *map[string]map[string]interface{} `json:"environments,omitempty"`
 
 	// Kind How the job runs, derived from its base `schedule`: `recurring` for a cron schedule (fires on a repeating cadence), `manual` for no schedule (never auto-fires; runs only when triggered), or `one_off` for a `now` or datetime schedule (runs a single time, then is spent).
@@ -445,8 +445,8 @@ type JobCreateResource struct {
 	// be enabled in several environments at once and fires once per enabled
 	// environment, each on its own next-fire schedule; a **manual** job (no
 	// schedule) is permanent and never auto-fires — it runs only when triggered;
-	// a **one-off** (`now` or a future datetime) job runs a single time in the
-	// environment it was created in and is then spent.
+	// a **one-off** (`now` or a future datetime) job runs a single time in each
+	// environment it was created in (one run per environment) and is then spent.
 	Attributes Job `json:"attributes"`
 
 	// Id Client-supplied resource id.
@@ -518,8 +518,8 @@ type JobResource struct {
 	// be enabled in several environments at once and fires once per enabled
 	// environment, each on its own next-fire schedule; a **manual** job (no
 	// schedule) is permanent and never auto-fires — it runs only when triggered;
-	// a **one-off** (`now` or a future datetime) job runs a single time in the
-	// environment it was created in and is then spent.
+	// a **one-off** (`now` or a future datetime) job runs a single time in each
+	// environment it was created in (one run per environment) and is then spent.
 	Attributes Job     `json:"attributes"`
 	Id         *string `json:"id,omitempty"`
 	Type       *string `json:"type,omitempty"`
@@ -671,7 +671,7 @@ type Run struct {
 	// CreatedAt When the run was enqueued (became `PENDING`).
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 
-	// Environment The environment this run executed in. A scheduled run inherits the firing job-environment; a manual run is created in the environment you name with the `X-Smplkit-Environment` header; a rerun copies its source run's environment.
+	// Environment The environment this run executed in. A scheduled run inherits the firing job-environment; a manual run is created in the environment you name in the run request body (implied when your credential is scoped to a single environment); a rerun copies its source run's environment.
 	Environment string `json:"environment"`
 
 	// Error Free-text failure detail, if any.
@@ -751,6 +751,16 @@ type RunListResponse struct {
 
 	// Meta Cursor-pagination meta for the runs list.
 	Meta RunListMeta `json:"meta"`
+}
+
+// RunNowRequest Request body for the run-now action (`POST /jobs/{id}/actions/run`).
+//
+// A plain object (not a JSON:API envelope), matching the platform convention
+// for action endpoints. The body itself is optional — omit it entirely when
+// the target environment is unambiguous.
+type RunNowRequest struct {
+	// Environment The environment to run the job in. Must be one the job is **enabled** in (otherwise the request is rejected). Optional when the target is unambiguous: when the job is enabled in exactly one environment, or your credential is scoped to a single environment, that environment is used.
+	Environment *string `json:"environment,omitempty"`
 }
 
 // RunResource JSON:API resource envelope for a run (server-assigned UUID id).
@@ -838,24 +848,6 @@ type ListJobsParams struct {
 // ListJobsParamsSort defines parameters for ListJobs.
 type ListJobsParamsSort string
 
-// CreateJobParams defines parameters for CreateJob.
-type CreateJobParams struct {
-	// XSmplkitEnvironment The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map.
-	XSmplkitEnvironment *string `json:"X-Smplkit-Environment,omitempty"`
-}
-
-// UpdateJobParams defines parameters for UpdateJob.
-type UpdateJobParams struct {
-	// XSmplkitEnvironment The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map.
-	XSmplkitEnvironment *string `json:"X-Smplkit-Environment,omitempty"`
-}
-
-// RunJobNowParams defines parameters for RunJobNow.
-type RunJobNowParams struct {
-	// XSmplkitEnvironment The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map.
-	XSmplkitEnvironment *string `json:"X-Smplkit-Environment,omitempty"`
-}
-
 // ListRetryPoliciesParams defines parameters for ListRetryPolicies.
 type ListRetryPoliciesParams struct {
 	// FilterName Case-insensitive substring match on the policy `name` (matches when the name contains the given text).
@@ -926,6 +918,9 @@ type CreateJobApplicationVndAPIPlusJSONRequestBody = JobCreateRequest
 
 // UpdateJobApplicationVndAPIPlusJSONRequestBody defines body for UpdateJob for application/vnd.api+json ContentType.
 type UpdateJobApplicationVndAPIPlusJSONRequestBody = JobRequest
+
+// RunJobNowApplicationVndAPIPlusJSONRequestBody defines body for RunJobNow for application/vnd.api+json ContentType.
+type RunJobNowApplicationVndAPIPlusJSONRequestBody = RunNowRequest
 
 // CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody defines body for CreateRetryPolicy for application/vnd.api+json ContentType.
 type CreateRetryPolicyApplicationVndAPIPlusJSONRequestBody = RetryPolicyCreateRequest
@@ -1010,9 +1005,9 @@ type ClientInterface interface {
 	ListJobs(ctx context.Context, params *ListJobsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateJobWithBody request with any body
-	CreateJobWithBody(ctx context.Context, params *CreateJobParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateJobWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *CreateJobParams, body CreateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteJob request
 	DeleteJob(ctx context.Context, jobId string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1021,12 +1016,14 @@ type ClientInterface interface {
 	GetJob(ctx context.Context, jobId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateJobWithBody request with any body
-	UpdateJobWithBody(ctx context.Context, jobId string, params *UpdateJobParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateJobWithBody(ctx context.Context, jobId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context, jobId string, params *UpdateJobParams, body UpdateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context, jobId string, body UpdateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RunJobNow request
-	RunJobNow(ctx context.Context, jobId string, params *RunJobNowParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// RunJobNowWithBody request with any body
+	RunJobNowWithBody(ctx context.Context, jobId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RunJobNowWithApplicationVndAPIPlusJSONBody(ctx context.Context, jobId string, body RunJobNowApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListRetryPolicies request
 	ListRetryPolicies(ctx context.Context, params *ListRetryPoliciesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1075,8 +1072,8 @@ func (c *Client) ListJobs(ctx context.Context, params *ListJobsParams, reqEditor
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateJobWithBody(ctx context.Context, params *CreateJobParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateJobRequestWithBody(c.Server, params, contentType, body)
+func (c *Client) CreateJobWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateJobRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1087,8 +1084,8 @@ func (c *Client) CreateJobWithBody(ctx context.Context, params *CreateJobParams,
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context, params *CreateJobParams, body CreateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateJobRequestWithApplicationVndAPIPlusJSONBody(c.Server, params, body)
+func (c *Client) CreateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context, body CreateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateJobRequestWithApplicationVndAPIPlusJSONBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1123,8 +1120,8 @@ func (c *Client) GetJob(ctx context.Context, jobId string, reqEditors ...Request
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateJobWithBody(ctx context.Context, jobId string, params *UpdateJobParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateJobRequestWithBody(c.Server, jobId, params, contentType, body)
+func (c *Client) UpdateJobWithBody(ctx context.Context, jobId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateJobRequestWithBody(c.Server, jobId, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1135,8 +1132,8 @@ func (c *Client) UpdateJobWithBody(ctx context.Context, jobId string, params *Up
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context, jobId string, params *UpdateJobParams, body UpdateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateJobRequestWithApplicationVndAPIPlusJSONBody(c.Server, jobId, params, body)
+func (c *Client) UpdateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context, jobId string, body UpdateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateJobRequestWithApplicationVndAPIPlusJSONBody(c.Server, jobId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1147,8 +1144,20 @@ func (c *Client) UpdateJobWithApplicationVndAPIPlusJSONBody(ctx context.Context,
 	return c.Client.Do(req)
 }
 
-func (c *Client) RunJobNow(ctx context.Context, jobId string, params *RunJobNowParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRunJobNowRequest(c.Server, jobId, params)
+func (c *Client) RunJobNowWithBody(ctx context.Context, jobId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunJobNowRequestWithBody(c.Server, jobId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RunJobNowWithApplicationVndAPIPlusJSONBody(ctx context.Context, jobId string, body RunJobNowApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunJobNowRequestWithApplicationVndAPIPlusJSONBody(c.Server, jobId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1430,18 +1439,18 @@ func NewListJobsRequest(server string, params *ListJobsParams) (*http.Request, e
 }
 
 // NewCreateJobRequestWithApplicationVndAPIPlusJSONBody calls the generic CreateJob builder with application/vnd.api+json body
-func NewCreateJobRequestWithApplicationVndAPIPlusJSONBody(server string, params *CreateJobParams, body CreateJobApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+func NewCreateJobRequestWithApplicationVndAPIPlusJSONBody(server string, body CreateJobApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateJobRequestWithBody(server, params, "application/vnd.api+json", bodyReader)
+	return NewCreateJobRequestWithBody(server, "application/vnd.api+json", bodyReader)
 }
 
 // NewCreateJobRequestWithBody generates requests for CreateJob with any type of body
-func NewCreateJobRequestWithBody(server string, params *CreateJobParams, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateJobRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1465,21 +1474,6 @@ func NewCreateJobRequestWithBody(server string, params *CreateJobParams, content
 	}
 
 	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.XSmplkitEnvironment != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "X-Smplkit-Environment", *params.XSmplkitEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Smplkit-Environment", headerParam0)
-		}
-
-	}
 
 	return req, nil
 }
@@ -1553,18 +1547,18 @@ func NewGetJobRequest(server string, jobId string) (*http.Request, error) {
 }
 
 // NewUpdateJobRequestWithApplicationVndAPIPlusJSONBody calls the generic UpdateJob builder with application/vnd.api+json body
-func NewUpdateJobRequestWithApplicationVndAPIPlusJSONBody(server string, jobId string, params *UpdateJobParams, body UpdateJobApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+func NewUpdateJobRequestWithApplicationVndAPIPlusJSONBody(server string, jobId string, body UpdateJobApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateJobRequestWithBody(server, jobId, params, "application/vnd.api+json", bodyReader)
+	return NewUpdateJobRequestWithBody(server, jobId, "application/vnd.api+json", bodyReader)
 }
 
 // NewUpdateJobRequestWithBody generates requests for UpdateJob with any type of body
-func NewUpdateJobRequestWithBody(server string, jobId string, params *UpdateJobParams, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateJobRequestWithBody(server string, jobId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -1596,26 +1590,22 @@ func NewUpdateJobRequestWithBody(server string, jobId string, params *UpdateJobP
 
 	req.Header.Add("Content-Type", contentType)
 
-	if params != nil {
-
-		if params.XSmplkitEnvironment != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "X-Smplkit-Environment", *params.XSmplkitEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Smplkit-Environment", headerParam0)
-		}
-
-	}
-
 	return req, nil
 }
 
-// NewRunJobNowRequest generates requests for RunJobNow
-func NewRunJobNowRequest(server string, jobId string, params *RunJobNowParams) (*http.Request, error) {
+// NewRunJobNowRequestWithApplicationVndAPIPlusJSONBody calls the generic RunJobNow builder with application/vnd.api+json body
+func NewRunJobNowRequestWithApplicationVndAPIPlusJSONBody(server string, jobId string, body RunJobNowApplicationVndAPIPlusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRunJobNowRequestWithBody(server, jobId, "application/vnd.api+json", bodyReader)
+}
+
+// NewRunJobNowRequestWithBody generates requests for RunJobNow with any type of body
+func NewRunJobNowRequestWithBody(server string, jobId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -1640,25 +1630,12 @@ func NewRunJobNowRequest(server string, jobId string, params *RunJobNowParams) (
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 
-	if params != nil {
-
-		if params.XSmplkitEnvironment != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "X-Smplkit-Environment", *params.XSmplkitEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("X-Smplkit-Environment", headerParam0)
-		}
-
-	}
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -2309,9 +2286,9 @@ type ClientWithResponsesInterface interface {
 	ListJobsWithResponse(ctx context.Context, params *ListJobsParams, reqEditors ...RequestEditorFn) (*ListJobsResponse, error)
 
 	// CreateJobWithBodyWithResponse request with any body
-	CreateJobWithBodyWithResponse(ctx context.Context, params *CreateJobParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateJobResponse, error)
+	CreateJobWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateJobResponse, error)
 
-	CreateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *CreateJobParams, body CreateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateJobResponse, error)
+	CreateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateJobResponse, error)
 
 	// DeleteJobWithResponse request
 	DeleteJobWithResponse(ctx context.Context, jobId string, reqEditors ...RequestEditorFn) (*DeleteJobResponse, error)
@@ -2320,12 +2297,14 @@ type ClientWithResponsesInterface interface {
 	GetJobWithResponse(ctx context.Context, jobId string, reqEditors ...RequestEditorFn) (*GetJobResponse, error)
 
 	// UpdateJobWithBodyWithResponse request with any body
-	UpdateJobWithBodyWithResponse(ctx context.Context, jobId string, params *UpdateJobParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateJobResponse, error)
+	UpdateJobWithBodyWithResponse(ctx context.Context, jobId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateJobResponse, error)
 
-	UpdateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, jobId string, params *UpdateJobParams, body UpdateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateJobResponse, error)
+	UpdateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, jobId string, body UpdateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateJobResponse, error)
 
-	// RunJobNowWithResponse request
-	RunJobNowWithResponse(ctx context.Context, jobId string, params *RunJobNowParams, reqEditors ...RequestEditorFn) (*RunJobNowResponse, error)
+	// RunJobNowWithBodyWithResponse request with any body
+	RunJobNowWithBodyWithResponse(ctx context.Context, jobId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunJobNowResponse, error)
+
+	RunJobNowWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, jobId string, body RunJobNowApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*RunJobNowResponse, error)
 
 	// ListRetryPoliciesWithResponse request
 	ListRetryPoliciesWithResponse(ctx context.Context, params *ListRetryPoliciesParams, reqEditors ...RequestEditorFn) (*ListRetryPoliciesResponse, error)
@@ -2854,16 +2833,16 @@ func (c *ClientWithResponses) ListJobsWithResponse(ctx context.Context, params *
 }
 
 // CreateJobWithBodyWithResponse request with arbitrary body returning *CreateJobResponse
-func (c *ClientWithResponses) CreateJobWithBodyWithResponse(ctx context.Context, params *CreateJobParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateJobResponse, error) {
-	rsp, err := c.CreateJobWithBody(ctx, params, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateJobWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateJobResponse, error) {
+	rsp, err := c.CreateJobWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateJobResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, params *CreateJobParams, body CreateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateJobResponse, error) {
-	rsp, err := c.CreateJobWithApplicationVndAPIPlusJSONBody(ctx, params, body, reqEditors...)
+func (c *ClientWithResponses) CreateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, body CreateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateJobResponse, error) {
+	rsp, err := c.CreateJobWithApplicationVndAPIPlusJSONBody(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -2889,25 +2868,33 @@ func (c *ClientWithResponses) GetJobWithResponse(ctx context.Context, jobId stri
 }
 
 // UpdateJobWithBodyWithResponse request with arbitrary body returning *UpdateJobResponse
-func (c *ClientWithResponses) UpdateJobWithBodyWithResponse(ctx context.Context, jobId string, params *UpdateJobParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateJobResponse, error) {
-	rsp, err := c.UpdateJobWithBody(ctx, jobId, params, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateJobWithBodyWithResponse(ctx context.Context, jobId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateJobResponse, error) {
+	rsp, err := c.UpdateJobWithBody(ctx, jobId, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateJobResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, jobId string, params *UpdateJobParams, body UpdateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateJobResponse, error) {
-	rsp, err := c.UpdateJobWithApplicationVndAPIPlusJSONBody(ctx, jobId, params, body, reqEditors...)
+func (c *ClientWithResponses) UpdateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, jobId string, body UpdateJobApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateJobResponse, error) {
+	rsp, err := c.UpdateJobWithApplicationVndAPIPlusJSONBody(ctx, jobId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateJobResponse(rsp)
 }
 
-// RunJobNowWithResponse request returning *RunJobNowResponse
-func (c *ClientWithResponses) RunJobNowWithResponse(ctx context.Context, jobId string, params *RunJobNowParams, reqEditors ...RequestEditorFn) (*RunJobNowResponse, error) {
-	rsp, err := c.RunJobNow(ctx, jobId, params, reqEditors...)
+// RunJobNowWithBodyWithResponse request with arbitrary body returning *RunJobNowResponse
+func (c *ClientWithResponses) RunJobNowWithBodyWithResponse(ctx context.Context, jobId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunJobNowResponse, error) {
+	rsp, err := c.RunJobNowWithBody(ctx, jobId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRunJobNowResponse(rsp)
+}
+
+func (c *ClientWithResponses) RunJobNowWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, jobId string, body RunJobNowApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*RunJobNowResponse, error) {
+	rsp, err := c.RunJobNowWithApplicationVndAPIPlusJSONBody(ctx, jobId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
