@@ -389,7 +389,7 @@ type Job struct {
 	// Description Free-text description for the job.
 	Description *string `json:"description,omitempty"`
 
-	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy, or `Default`), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
+	// Environments Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically — name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account.
 	Environments *map[string]map[string]interface{} `json:"environments,omitempty"`
 
 	// Kind How the job runs, derived from its base `schedule`: `recurring` for a cron schedule (fires on a repeating cadence), `manual` for no schedule (never auto-fires; runs only when triggered), or `one_off` for a `now` or datetime schedule (runs a single time, then is spent).
@@ -398,7 +398,7 @@ type Job struct {
 	// Name Human-readable name for the job.
 	Name string `json:"name"`
 
-	// RetryPolicy The base retry policy for failed runs — the `id` of a retry policy (or the built-in `Default`), overridable per environment. Omit (or send `null`) to use `Default`, which never retries — so a job that sets nothing behaves exactly as before retries existed.
+	// RetryPolicy The base retry policy for failed runs — the `id` of a retry policy, overridable per environment. Omit (or send `null`) to reference no policy, in which case failed runs are never retried.
 	RetryPolicy *string `json:"retry_policy,omitempty"`
 
 	// Schedule The base schedule every environment inherits unless it overrides it, and the field that determines the job's `kind`. Omit it (or send `null`) to create a permanent **manual** job that never auto-fires and runs only when triggered. Provide a 5-field cron expression evaluated in the job's `timezone` (UTC by default) for a **recurring** job, an ISO-8601 datetime for a **one-off** run at that instant, or the literal `now` for a one-off run as soon as possible. A datetime or `now` job disables itself after it fires.
@@ -566,8 +566,7 @@ type PaginationMeta struct {
 //
 // A policy decides whether and how a failed run is retried. Reference it from
 // a job's `retry_policy` (and optionally override it per environment). A job
-// that references nothing uses the built-in `Default` policy, which never
-// retries.
+// that references no policy is never retried.
 type RetryPolicy struct {
 	// Backoff How the wait between retries grows. `fixed` waits `delay_seconds` before every retry. `exponential` doubles the wait each time — `delay_seconds`, then `2×`, `4×`, … — capped at `max_delay_seconds`.
 	Backoff RetryPolicyBackoff `json:"backoff"`
@@ -624,8 +623,7 @@ type RetryPolicyCreateResource struct {
 	//
 	// A policy decides whether and how a failed run is retried. Reference it from
 	// a job's `retry_policy` (and optionally override it per environment). A job
-	// that references nothing uses the built-in `Default` policy, which never
-	// retries.
+	// that references no policy is never retried.
 	Attributes RetryPolicy `json:"attributes"`
 
 	// Id Client-supplied resource id.
@@ -656,8 +654,7 @@ type RetryPolicyResource struct {
 	//
 	// A policy decides whether and how a failed run is retried. Reference it from
 	// a job's `retry_policy` (and optionally override it per environment). A job
-	// that references nothing uses the built-in `Default` policy, which never
-	// retries.
+	// that references no policy is never retried.
 	Attributes RetryPolicy `json:"attributes"`
 	Id         *string     `json:"id,omitempty"`
 	Type       *string     `json:"type,omitempty"`
