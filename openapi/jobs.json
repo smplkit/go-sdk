@@ -393,7 +393,7 @@
           "Retry Policies"
         ],
         "summary": "Create Retry Policy",
-        "description": "Create a retry policy for this account.\n\nThe caller supplies the policy's id as `data.id`. Ids are unique within an\naccount and immutable. `Default` is reserved for the built-in policy and\ncannot be created.",
+        "description": "Create a retry policy for this account.\n\nThe caller supplies the policy's id as `data.id`. Ids are unique within an\naccount and immutable.",
         "operationId": "create_retry_policy",
         "security": [
           {
@@ -428,7 +428,7 @@
           "Retry Policies"
         ],
         "summary": "List Retry Policies",
-        "description": "List this account's retry policies.\n\nDefault sort is `name` ascending. Sort by `name`, `created_at`, or\n`updated_at` (prefix `-` for descending). The built-in `Default` policy is\nnot included here \u2014 it always exists and is retrievable at\n`/retry-policies/Default`.",
+        "description": "List this account's retry policies.\n\nDefault sort is `name` ascending. Sort by `name`, `created_at`, or\n`updated_at` (prefix `-` for descending).",
         "operationId": "list_retry_policies",
         "security": [
           {
@@ -531,7 +531,7 @@
           "Retry Policies"
         ],
         "summary": "Get Retry Policy",
-        "description": "Retrieve a single retry policy by its id.\n\n`Default` returns the built-in do-not-retry policy.",
+        "description": "Retrieve a single retry policy by its id.",
         "operationId": "get_retry_policy",
         "security": [
           {
@@ -567,7 +567,7 @@
           "Retry Policies"
         ],
         "summary": "Update Retry Policy",
-        "description": "Replace an existing retry policy. Every writable field is overwritten.\n\nThe built-in `Default` policy cannot be modified.",
+        "description": "Replace an existing retry policy. Every writable field is overwritten.",
         "operationId": "update_retry_policy",
         "security": [
           {
@@ -613,7 +613,7 @@
           "Retry Policies"
         ],
         "summary": "Delete Retry Policy",
-        "description": "Delete a retry policy.\n\nThe built-in `Default` policy cannot be deleted (`403`). A policy still\nreferenced by any job \u2014 at the base level or in a per-environment override \u2014\ncannot be deleted (`409`); the error lists the referencing job ids under\n`meta.referencing_jobs` so they can be reassigned to `Default` first.",
+        "description": "Delete a retry policy.\n\nA policy still referenced by any job \u2014 at the base level or in a\nper-environment override \u2014 cannot be deleted (`409`); the error lists the\nreferencing job ids under `meta.referencing_jobs` so they can be reassigned\n(or cleared to no policy) first.",
         "operationId": "delete_retry_policy",
         "security": [
           {
@@ -1206,7 +1206,7 @@
             },
             "type": "object",
             "title": "Environments",
-            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy, or `Default`), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically \u2014 name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account."
+            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically \u2014 name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account."
           },
           "concurrency_policy": {
             "type": "string",
@@ -1225,7 +1225,7 @@
               }
             ],
             "title": "Retry Policy",
-            "description": "The base retry policy for failed runs \u2014 the `id` of a retry policy (or the built-in `Default`), overridable per environment. Omit (or send `null`) to use `Default`, which never retries \u2014 so a job that sets nothing behaves exactly as before retries existed."
+            "description": "The base retry policy for failed runs \u2014 the `id` of a retry policy, overridable per environment. Omit (or send `null`) to reference no policy, in which case failed runs are never retried."
           },
           "kind": {
             "anyOf": [
@@ -1774,7 +1774,7 @@
           "delay_seconds"
         ],
         "title": "RetryPolicy",
-        "description": "A named, reusable automatic-retry policy.\n\nA policy decides whether and how a failed run is retried. Reference it from\na job's `retry_policy` (and optionally override it per environment). A job\nthat references nothing uses the built-in `Default` policy, which never\nretries."
+        "description": "A named, reusable automatic-retry policy.\n\nA policy decides whether and how a failed run is retried. Reference it from\na job's `retry_policy` (and optionally override it per environment). A job\nthat references no policy is never retried."
       },
       "RetryPolicyCreateRequest": {
         "properties": {
