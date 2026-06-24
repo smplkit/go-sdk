@@ -12,31 +12,11 @@
           "Jobs"
         ],
         "summary": "Create Job",
-        "description": "Create a job for this account.\n\nThe caller supplies the job's id as `data.id`. Ids are unique within an\naccount and immutable. The job's kind follows from its `schedule`: omit the\nschedule for a permanent **manual** job (triggered on demand), give a cron\nexpression for a **recurring** job, or a datetime / `now` for a **one-off**\njob. A recurring or manual job supplies `environments` to choose where it\nruns; a recurring job begins scheduling immediately in each enabled\nenvironment. A one-off job is created in the environment named by the\n`X-Smplkit-Environment` header (implied when the credential is scoped to a\nsingle environment); a `now` one-off enqueues its single run immediately.",
+        "description": "Create a job for this account.\n\nThe caller supplies the job's id as `data.id`. Ids are unique within an\naccount and immutable. The job's kind follows from its `schedule`: omit the\nschedule for a permanent **manual** job (triggered on demand), give a cron\nexpression for a **recurring** job, or a datetime / `now` for a **one-off**\njob. Supply `environments` to choose where the job runs: a recurring job\nbegins scheduling immediately in each enabled environment, while a one-off\njob names its target environment(s) by the keys of that map and enqueues one\nrun per environment (a single-environment credential implies the one\nenvironment when the map is empty). A `now` one-off enqueues its run(s)\nimmediately.",
         "operationId": "create_job",
         "security": [
           {
             "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "X-Smplkit-Environment",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map.",
-              "title": "X-Smplkit-Environment"
-            },
-            "description": "The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map."
           }
         ],
         "requestBody": {
@@ -242,7 +222,7 @@
           "Jobs"
         ],
         "summary": "Update Job",
-        "description": "Replace an existing job. Every writable field is overwritten.\n\nThe job's kind is re-derived from the new `schedule` (omit it for a manual\njob). Set enablement per environment via the `environments` map (a recurring\nor manual job), or by recreating a one-off job in the desired environment.\nEach environment may carry its own cron `schedule` override (recurring jobs\nonly). Editing a recurring environment's effective schedule recomputes its\nnext fire time; an edit that leaves it unchanged preserves the existing\ncadence.",
+        "description": "Replace an existing job. Every writable field is overwritten.\n\nThe job's kind is re-derived from the new `schedule` (omit it for a manual\njob). Set enablement per environment via the `environments` map (a recurring\nor manual job), or by recreating a one-off job naming its target\nenvironment(s) in that map. Each environment may carry its own cron\n`schedule` override (recurring jobs only). Editing a recurring environment's\neffective schedule recomputes its next fire time; an edit that leaves it\nunchanged preserves the existing cadence.",
         "operationId": "update_job",
         "security": [
           {
@@ -258,24 +238,6 @@
               "type": "string",
               "title": "Job Id"
             }
-          },
-          {
-            "name": "X-Smplkit-Environment",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map.",
-              "title": "X-Smplkit-Environment"
-            },
-            "description": "The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map."
           }
         ],
         "requestBody": {
@@ -337,7 +299,7 @@
           "Jobs"
         ],
         "summary": "Run Job Now",
-        "description": "Trigger one immediate run of the job in a specified environment (a\n`MANUAL` run).\n\nThis is the primary execution path for a manual job and is also usable ad\nhoc for a recurring job (\"run now\"). The job's schedule and enabled state are\nuntouched. The run executes in the environment named by the\n`X-Smplkit-Environment` header; when the job is enabled in exactly one\nenvironment that environment is used, and a single-environment credential\nimplies it. The environment must be one the job is **enabled** in (409\notherwise). The run executes the job's effective configuration for that\nenvironment. It is enqueued and executed by the worker; if the account is\nover its run allotment the run will fail with reason `QUOTA_EXCEEDED` rather\nthan being rejected here.",
+        "description": "Trigger one immediate run of the job in a specified environment (a\n`MANUAL` run).\n\nThis is the primary execution path for a manual job and is also usable ad\nhoc for a recurring job (\"run now\"). The job's schedule and enabled state are\nuntouched. The run executes in the environment named by the request body's\n`environment`; when the job is enabled in exactly one environment that\nenvironment is used, and a single-environment credential implies it. The\nenvironment must be one the job is **enabled** in (409 otherwise). The run\nexecutes the job's effective configuration for that environment. It is\nenqueued and executed by the worker; if the account is over its run\nallotment the run will fail with reason `QUOTA_EXCEEDED` rather than being\nrejected here.",
         "operationId": "run_job_now",
         "security": [
           {
@@ -353,26 +315,25 @@
               "type": "string",
               "title": "Job Id"
             }
-          },
-          {
-            "name": "X-Smplkit-Environment",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map.",
-              "title": "X-Smplkit-Environment"
-            },
-            "description": "The environment to operate in. Names the single environment a one-off job is born in (or a manual run executes in). Optional when the credential is scoped to a single environment (which is then implied); required when the credential can reach several environments and the choice is otherwise ambiguous. Ignored for a recurring job, whose environments come from its `environments` map."
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RunNowRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1206,7 +1167,7 @@
             },
             "type": "object",
             "title": "Environments",
-            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, the environment it is created in is recorded here automatically \u2014 name it with the `X-Smplkit-Environment` header. Every referenced environment must exist for the account."
+            "description": "Per-environment overrides keyed by environment key (e.g. `production`, `staging`). Each entry is a flat, sparse overlay: only the leaves that differ from the base definition are present, and everything absent is inherited. Set `enabled` to `true` to run the job in that environment (the base is disabled everywhere; an environment with no entry, or an entry without `enabled: true`, does not run). Overridable leaves are `url`, `method`, `timeout`, `body`, `success_status`, `tls_verify`, `ca_cert`, `schedule` and `timezone` (recurring jobs only), `retry_policy` (the `id` of a retry policy), and an individual header as `headers.<name>` (e.g. `headers.Authorization`). On read, each entry also reports the read-only `next_run_at` for that environment (the next fire time, or `null`). For a recurring or manual job, supply this map to choose where it runs. For a one-off job, name its target environment(s) here as the map keys \u2014 one run is enqueued per named environment; when the map is empty a single-environment credential implies the one environment. Every referenced environment must exist for the account."
           },
           "concurrency_policy": {
             "type": "string",
@@ -1307,7 +1268,7 @@
           "configuration"
         ],
         "title": "Job",
-        "description": "A unit of work: an HTTP request, run on a schedule or triggered on demand.\n\nThe job is the definition; each time it fires the service records a run\ncapturing the request, response, timing, and outcome. A job runs per\nenvironment: set `environments[<env>].enabled` to enable it there, and\noptionally give that environment its own `schedule` or `configuration`.\n\nA job's `kind` follows from its `schedule`: a **recurring** (cron) job may\nbe enabled in several environments at once and fires once per enabled\nenvironment, each on its own next-fire schedule; a **manual** job (no\nschedule) is permanent and never auto-fires \u2014 it runs only when triggered;\na **one-off** (`now` or a future datetime) job runs a single time in the\nenvironment it was created in and is then spent."
+        "description": "A unit of work: an HTTP request, run on a schedule or triggered on demand.\n\nThe job is the definition; each time it fires the service records a run\ncapturing the request, response, timing, and outcome. A job runs per\nenvironment: set `environments[<env>].enabled` to enable it there, and\noptionally give that environment its own `schedule` or `configuration`.\n\nA job's `kind` follows from its `schedule`: a **recurring** (cron) job may\nbe enabled in several environments at once and fires once per enabled\nenvironment, each on its own next-fire schedule; a **manual** job (no\nschedule) is permanent and never auto-fires \u2014 it runs only when triggered;\na **one-off** (`now` or a future datetime) job runs a single time in each\nenvironment it was created in (one run per environment) and is then spent."
       },
       "JobCreateRequest": {
         "properties": {
@@ -1952,7 +1913,7 @@
           "environment": {
             "type": "string",
             "title": "Environment",
-            "description": "The environment this run executed in. A scheduled run inherits the firing job-environment; a manual run is created in the environment you name with the `X-Smplkit-Environment` header; a rerun copies its source run's environment."
+            "description": "The environment this run executed in. A scheduled run inherits the firing job-environment; a manual run is created in the environment you name in the run request body (implied when your credential is scoped to a single environment); a rerun copies its source run's environment."
           },
           "trigger": {
             "type": "string",
@@ -2221,6 +2182,25 @@
         ],
         "title": "RunListResponse",
         "description": "JSON:API collection response for runs (cursor paginated)."
+      },
+      "RunNowRequest": {
+        "properties": {
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "The environment to run the job in. Must be one the job is **enabled** in (otherwise the request is rejected). Optional when the target is unambiguous: when the job is enabled in exactly one environment, or your credential is scoped to a single environment, that environment is used."
+          }
+        },
+        "type": "object",
+        "title": "RunNowRequest",
+        "description": "Request body for the run-now action (`POST /jobs/{id}/actions/run`).\n\nA plain object (not a JSON:API envelope), matching the platform convention\nfor action endpoints. The body itself is optional \u2014 omit it entirely when\nthe target environment is unambiguous."
       },
       "RunResource": {
         "properties": {
