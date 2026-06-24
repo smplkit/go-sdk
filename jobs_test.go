@@ -557,7 +557,7 @@ func TestHttpConfig_Headers(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Build-to-wire: drops base enabled, emits environments + the env header
+// Build-to-wire: drops base enabled, emits environments, sends no env header
 // ---------------------------------------------------------------------------
 
 func TestJobs_CreateWireAndHeader(t *testing.T) {
@@ -601,8 +601,9 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	// Birth environment is sent as the X-Smplkit-Environment header.
-	assertEnvHeader(t, &rec, "development")
+	// No X-Smplkit-Environment header anymore: a recurring job's birth env is
+	// ignored, and every environment travels in the body's environments map.
+	assertEnvHeader(t, &rec, "")
 
 	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
 	if _, ok := attrs["enabled"]; ok {
@@ -669,8 +670,9 @@ func TestJobs_CreateWireAndHeader(t *testing.T) {
 	}
 }
 
-// A create with no per-environment overrides and no birth env sends neither
-// an environments map nor the X-Smplkit-Environment header.
+// A create with no per-environment overrides (a manual job, so no birth env)
+// omits the environments map, and the wrapper never sends an
+// X-Smplkit-Environment header.
 func TestJobs_CreateNoEnvironments(t *testing.T) {
 	ctx := context.Background()
 	var rec capturedReq
@@ -707,21 +709,27 @@ func TestJobs_NewDefaultBirthEnvironment(t *testing.T) {
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	assertEnvHeader(t, &rec, "production")
+	// The default birth env is conveyed in the body map, not a header.
+	assertEnvHeader(t, &rec, "")
+	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
+	prod := attrs["environments"].(map[string]any)["production"].(map[string]any)
+	if prod["enabled"] != true {
+		t.Errorf("default birth env should be {production: {enabled: true}}, got %v", prod)
+	}
 }
 
-// Update sends X-Smplkit-Environment = the client's configured environment, and
-// omits it when the client has none.
+// Update never sends an X-Smplkit-Environment header, whatever the client's
+// configured environment: a job's environments travel entirely in the body's
+// environments map.
 func TestJobs_UpdateHeader(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tc := range []struct {
 		name string
 		env  string
-		want string
 	}{
-		{"with-env", "production", "production"},
-		{"no-env", "", ""},
+		{"with-env", "production"},
+		{"no-env", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var rec capturedReq
@@ -734,7 +742,7 @@ func TestJobs_UpdateHeader(t *testing.T) {
 			if err := job.Save(ctx); err != nil {
 				t.Fatalf("Save (update): %v", err)
 			}
-			assertEnvHeader(t, &rec, tc.want)
+			assertEnvHeader(t, &rec, "")
 		})
 	}
 }
@@ -829,16 +837,16 @@ func TestJobs_ParseEnvironments(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Run-now header resolution: explicit env / client default / omitted
+// Run-now body resolution: explicit env / client default / omitted
 // ---------------------------------------------------------------------------
 
 func TestJobs_RunNowHeader(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
-		name       string
-		clientEnv  string
-		explicit   string
-		wantHeader string
+		name      string
+		clientEnv string
+		explicit  string
+		wantEnv   string // "" means the body carries no environment key
 	}{
 		{"explicit-wins", "production", "staging", "staging"},
 		{"client-default", "production", "", "production"},
@@ -853,8 +861,27 @@ func TestJobs_RunNowHeader(t *testing.T) {
 			if _, err := j.Run(ctx, testJobID, tc.explicit); err != nil {
 				t.Fatalf("Run: %v", err)
 			}
-			assertEnvHeader(t, &rec, tc.wantHeader)
+			// The environment travels in the run-now request body, never a header.
+			assertEnvHeader(t, &rec, "")
+			assertRunNowBodyEnv(t, &rec, tc.wantEnv)
 		})
+	}
+}
+
+// assertRunNowBodyEnv asserts the run-now request body's `environment` equals
+// want, or — when want is empty — that the body carries no `environment` key
+// (an empty RunNowRequest, leaving the target for the service to imply).
+func assertRunNowBodyEnv(t *testing.T, rec *capturedReq, want string) {
+	t.Helper()
+	got, present := rec.body["environment"]
+	if want == "" {
+		if present {
+			t.Errorf("expected no environment in the run-now body, got %v", got)
+		}
+		return
+	}
+	if !present || got != want {
+		t.Errorf("run-now body environment = %v (present=%t), want %q", got, present, want)
 	}
 }
 
@@ -1076,8 +1103,9 @@ func TestJobs_ManualJobRoundTrip(t *testing.T) {
 	}
 }
 
-// Schedule serializes the one-off datetime to ISO-8601 on the wire and sends
-// the birth environment as the create header.
+// Schedule serializes the one-off datetime to ISO-8601 on the wire and carries
+// the birth environment as an enabled entry of the body's environments map
+// (there is no create header).
 func TestJobs_ScheduleOneOff(t *testing.T) {
 	ctx := context.Background()
 	var rec capturedReq
@@ -1088,13 +1116,78 @@ func TestJobs_ScheduleOneOff(t *testing.T) {
 
 	when := time.Date(2030, 1, 1, 12, 30, 0, 0, time.UTC)
 	job := j.Schedule("one-off", "One", when, HttpConfig{URL: "https://x"}, WithJobBirthEnvironment("staging"))
+	// The birth environment is reflected in the in-memory job immediately.
+	if !job.Environment("staging").Enabled {
+		t.Error("Schedule should seed the birth environment as an enabled entry")
+	}
 	if err := job.Save(ctx); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	assertEnvHeader(t, &rec, "staging") // birth environment
+	assertEnvHeader(t, &rec, "") // no X-Smplkit-Environment header anymore
 	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
 	if got := attrs["schedule"]; got != when.Format(time.RFC3339) {
 		t.Errorf("schedule on the wire = %v, want %q (datetime -> ISO-8601)", got, when.Format(time.RFC3339))
+	}
+	// The birth environment travels in the body's environments map as a pure
+	// enable.
+	envs, ok := attrs["environments"].(map[string]any)
+	if !ok {
+		t.Fatalf("one-off create body must include environments, got %v", attrs["environments"])
+	}
+	staging, ok := envs["staging"].(map[string]any)
+	if !ok || staging["enabled"] != true {
+		t.Errorf("birth environment should be {staging: {enabled: true}}, got %v", envs["staging"])
+	}
+}
+
+// A one-off Schedule with neither an explicit birth environment nor a client
+// default sends no environments map, leaving the service to imply the target.
+func TestJobs_ScheduleOneOffNoEnvironment(t *testing.T) {
+	ctx := context.Background()
+	var rec capturedReq
+	j, cleanup := recordingJobs(t, "", &rec, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 201, map[string]any{"data": jobResource(testJobID, true, 1, false, false)})
+	})
+	defer cleanup()
+
+	when := time.Date(2030, 1, 1, 12, 30, 0, 0, time.UTC)
+	job := j.Schedule("one-off", "One", when, HttpConfig{URL: "https://x"})
+	if len(job.Environments) != 0 {
+		t.Errorf("no birth env and no client default should leave the map empty, got %v", job.Environments)
+	}
+	if err := job.Save(ctx); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	assertEnvHeader(t, &rec, "")
+	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
+	if _, ok := attrs["environments"]; ok {
+		t.Errorf("empty environments must be omitted from the one-off create body, got %v", attrs["environments"])
+	}
+}
+
+// A one-off Schedule with no explicit birth environment defaults it to the
+// client's configured environment, seeded as an enabled entry of the body map.
+func TestJobs_ScheduleOneOffClientDefaultEnvironment(t *testing.T) {
+	ctx := context.Background()
+	var rec capturedReq
+	j, cleanup := recordingJobs(t, "production", &rec, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 201, map[string]any{"data": jobResource(testJobID, true, 1, false, true)})
+	})
+	defer cleanup()
+
+	when := time.Date(2030, 1, 1, 12, 30, 0, 0, time.UTC)
+	job := j.Schedule("one-off", "One", when, HttpConfig{URL: "https://x"})
+	if !job.Environment("production").Enabled {
+		t.Error("Schedule should default the birth env to the client environment")
+	}
+	if err := job.Save(ctx); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	attrs := rec.body["data"].(map[string]any)["attributes"].(map[string]any)
+	envs := attrs["environments"].(map[string]any)
+	prod, ok := envs["production"].(map[string]any)
+	if !ok || prod["enabled"] != true {
+		t.Errorf("client-default birth env should be {production: {enabled: true}}, got %v", envs["production"])
 	}
 }
 

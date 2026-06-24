@@ -272,9 +272,10 @@ type Job struct {
 	Version *int
 
 	// birthEnvironment is creation-time only: the environment a one-off job is
-	// born in, sent as the X-Smplkit-Environment header by JobsClient.create.
-	// Ignored for recurring and manual jobs, whose environments come from
-	// Environments.
+	// born in. JobsClient.Schedule seeds it into the Environments map as an
+	// enabled entry, so it travels in the create request body (there is no
+	// X-Smplkit-Environment header). Ignored for recurring and manual jobs,
+	// whose environments come from Environments.
 	birthEnvironment string
 
 	client *JobsClient

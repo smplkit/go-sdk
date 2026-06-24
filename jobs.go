@@ -44,8 +44,8 @@ type JobsClient struct {
 	runs          *RunsClient
 	retryPolicies *RetryPoliciesClient
 	// environment is the SDK's configured environment (empty when unset). It
-	// defaults the one-off birth env on create, the run-now env header, and
-	// the filter[environment] scope on Runs().List.
+	// defaults the one-off birth env on create, the run-now body environment,
+	// and the filter[environment] scope on Runs().List.
 	environment string
 }
 
@@ -203,7 +203,16 @@ func (j *JobsClient) Schedule(
 	configuration HttpConfig,
 	opts ...JobOption,
 ) *Job {
-	return j.newJob(id, name, schedule.Format(time.RFC3339), configuration, opts...)
+	job := j.newJob(id, name, schedule.Format(time.RFC3339), configuration, opts...)
+	// A one-off job's birth environment now travels in the request body as an
+	// enabled entry of the environments map (there is no X-Smplkit-Environment
+	// header). birthEnvironment is resolved after the options run, so an explicit
+	// WithJobBirthEnvironment wins over the client default; when neither is known
+	// the map is left empty and a single-environment credential implies it.
+	if job.birthEnvironment != "" {
+		job.Environment(job.birthEnvironment).Enabled = true
+	}
+	return job
 }
 
 // JobOption configures an unsaved Job returned by JobsClient.NewRecurringJob,
@@ -230,9 +239,11 @@ func WithJobEnvironments(environments map[string]JobEnvironment) JobOption {
 }
 
 // WithJobBirthEnvironment sets the single environment a one-off ("now" /
-// datetime) job is born in, sent as the X-Smplkit-Environment header on create.
-// Defaults to the client's configured environment. Ignored for recurring and
-// manual jobs, whose environments come from WithJobEnvironments / SetEnabled.
+// datetime) job is born in. On create it travels in the request body as an
+// enabled entry of the environments map ({env: {enabled: true}}); there is no
+// X-Smplkit-Environment header. Defaults to the client's configured
+// environment. Ignored for recurring and manual jobs, whose environments come
+// from WithJobEnvironments / SetEnabled.
 func WithJobBirthEnvironment(environment string) JobOption {
 	return func(job *Job) { job.birthEnvironment = environment }
 }
@@ -466,18 +477,19 @@ func (j *JobsClient) Delete(ctx context.Context, id string) error {
 //
 // environment is the environment the manual run executes in; empty defaults to
 // the client's configured environment (and a single-environment credential
-// implies it). The job must be enabled in the chosen environment. It is sent as
-// the X-Smplkit-Environment header.
+// implies it). The job must be enabled in the chosen environment. It is sent in
+// the run-now request body; when no environment is resolved the body's
+// environment is left unset and the service implies it.
 func (j *JobsClient) Run(ctx context.Context, id string, environment string) (*Run, error) {
 	env := environment
 	if env == "" {
 		env = j.environment
 	}
-	params := &genjobs.RunJobNowParams{}
+	body := genjobs.RunNowRequest{}
 	if env != "" {
-		params.XSmplkitEnvironment = &env
+		body.Environment = &env
 	}
-	resp, err := j.gen.RunJobNowWithResponse(ctx, id, params)
+	resp, err := j.gen.RunJobNowWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, id, body)
 	if err != nil {
 		return nil, fmt.Errorf("jobs Run: %w", err)
 	}
@@ -861,14 +873,11 @@ func (j *JobsClient) create(ctx context.Context, job *Job) (*Job, error) {
 	body := genjobs.CreateJobApplicationVndAPIPlusJSONRequestBody{
 		Data: jobCreateResourceFromJob(job),
 	}
-	// A one-off job is born in the environment named here (recurring and manual
-	// jobs ignore it server-side; their environments come from the map).
-	params := &genjobs.CreateJobParams{}
-	if job.birthEnvironment != "" {
-		env := job.birthEnvironment
-		params.XSmplkitEnvironment = &env
-	}
-	resp, err := j.gen.CreateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, params, body)
+	// The environment travels entirely in the body now: a one-off job's birth
+	// environment is seeded into the environments map by Schedule (recurring and
+	// manual jobs get their environments from the map directly). There is no
+	// X-Smplkit-Environment header.
+	resp, err := j.gen.CreateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, body)
 	if err != nil {
 		return nil, fmt.Errorf("jobs Create: %w", err)
 	}
@@ -890,14 +899,9 @@ func (j *JobsClient) update(ctx context.Context, job *Job) (*Job, error) {
 	body := genjobs.UpdateJobApplicationVndAPIPlusJSONRequestBody{
 		Data: jobResourceFromJob(job.ID, job),
 	}
-	// Name the client's configured environment on update (ignored server-side
-	// for recurring and manual jobs, whose environments come from the map).
-	params := &genjobs.UpdateJobParams{}
-	if j.environment != "" {
-		env := j.environment
-		params.XSmplkitEnvironment = &env
-	}
-	resp, err := j.gen.UpdateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, job.ID, params, body)
+	// Update carries no environment header: a job's environments travel entirely
+	// in the body's environments map.
+	resp, err := j.gen.UpdateJobWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, job.ID, body)
 	if err != nil {
 		return nil, fmt.Errorf("jobs Update: %w", err)
 	}
