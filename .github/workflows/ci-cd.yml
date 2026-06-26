@@ -65,6 +65,34 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
+  test-min-floor:
+    name: Test (minimum dependency floor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+          cache: true
+
+      # Floor verification. Go's Minimal Version Selection resolves a
+      # consumer's build to the exact versions declared in our go.mod, so
+      # those versions ARE the customer-facing floor we publish. Building and
+      # testing in -mod=readonly on the minimum supported Go toolchain proves
+      # the published floor compiles and passes — i.e. it is real, not
+      # aspirational — and that nothing has quietly bumped it above go.mod.
+      - name: Verify module integrity
+        run: go mod verify
+
+      - name: Build & test against the declared floor
+        run: |
+          go build -mod=readonly ./...
+          go test -mod=readonly ./...
+          (cd logging/adapters/slog && go test -mod=readonly ./...)
+          (cd logging/adapters/zap && go test -mod=readonly ./...)
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -84,7 +112,7 @@ jobs:
 
   ci-gate:
     if: always()
-    needs: [lint, test]
+    needs: [lint, test, test-min-floor]
     runs-on: ubuntu-latest
     steps:
       - uses: smplkit/.github-public/actions/ci-gate@main

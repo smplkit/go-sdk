@@ -27,28 +27,31 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: approve patch/minor bumps (excludes customer-facing prod deps)
+      - name: approve patch/minor bumps (test-only gomod deps + actions)
         if: |
           contains(fromJSON('["version-update:semver-patch","version-update:semver-minor"]'), steps.meta.outputs.update-type) &&
           (steps.meta.outputs.package-ecosystem == 'github-actions' ||
-           steps.meta.outputs.dependency-type != 'direct:production')
+           steps.meta.outputs.dependency-type == 'direct:development')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          # SDK floor protection: only approve indirect deps and
-          # github-actions bumps. A customer-facing production-dep
-          # bump (gomod direct require) sits open awaiting human
-          # review so we never silently tighten the MVS floor we
+          # SDK floor protection. Go's Minimal Version Selection makes
+          # BOTH direct requires AND indirect requires a customer-facing
+          # floor (the consumer's build resolves to the max of their
+          # version and ours), so only test-only deps (direct:development,
+          # e.g. testify) and github-actions bumps auto-merge. A
+          # direct:production OR indirect gomod bump sits open awaiting
+          # human review so we never silently tighten the MVS floor we
           # publish to Go consumers. See ~/.claude/CLAUDE.md "SDK
           # Dependency Floor Sensitivity".
           gh pr review "$PR_URL" --approve 2>/dev/null || true
 
-      - name: enable auto-merge for patch/minor bumps (excludes customer-facing prod deps)
+      - name: enable auto-merge for patch/minor bumps (test-only gomod deps + actions)
         if: |
           contains(fromJSON('["version-update:semver-patch","version-update:semver-minor"]'), steps.meta.outputs.update-type) &&
           (steps.meta.outputs.package-ecosystem == 'github-actions' ||
-           steps.meta.outputs.dependency-type != 'direct:production')
+           steps.meta.outputs.dependency-type == 'direct:development')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
