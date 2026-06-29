@@ -158,6 +158,10 @@ type CreateEventInput struct {
 	// listing (client.Audit().Categories()). Omit it to leave the event
 	// uncategorized.
 	Category string
+	// Severity is an optional severity level for the event — one of
+	// "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL". Omit it to let
+	// the server default the event to "INFO".
+	Severity string
 	// Data is free-form contextual JSON. To record a resource snapshot,
 	// nest it inside Data — the smplkit internal convention is
 	// Data["snapshot"], but the shape is unconstrained.

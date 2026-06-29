@@ -231,6 +231,10 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 		cat := input.Category
 		attrs.Category = &cat
 	}
+	if input.Severity != "" {
+		sev := genaudit.Severity(input.Severity)
+		attrs.Severity = &sev
+	}
 	if input.Data != nil {
 		d := input.Data
 		attrs.Data = &d

@@ -781,6 +781,32 @@ func TestAuditEvents_Record_PassesCategory(t *testing.T) {
 	}
 }
 
+// Record threads the optional Severity onto the wire when non-empty.
+func TestAuditEvents_Record_PassesSeverity(t *testing.T) {
+	captured := make(chan string, 1)
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		captured <- string(b)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"data":{"id":"00000000-0000-0000-0000-000000000001","type":"event","attributes":{"event_type":"x.created","resource_type":"x","resource_id":"1","severity":"WARN"}}}`))
+	})
+	defer cleanup()
+	if err := events.Record(CreateEventInput{
+		EventType:    "invoice.paid",
+		ResourceType: "invoice",
+		ResourceID:   "inv-1",
+		Severity:     "WARN",
+	}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	events.Flush(2 * time.Second)
+	body := <-captured
+	if !strings.Contains(body, `"severity":"WARN"`) {
+		t.Errorf("expected severity in body, got: %s", body)
+	}
+}
+
 // Record passes customer-supplied actor attribution straight onto the
 // wire — the wrapper does not validate or backfill the fields.
 func TestAuditEvents_Record_ForwardsActorFields(t *testing.T) {
