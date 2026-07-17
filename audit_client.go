@@ -293,6 +293,9 @@ func (e *AuditEvents) List(ctx context.Context, input ListEventsInput) (*ListEve
 	if input.ActorID != "" {
 		params.FilterActorId = &input.ActorID
 	}
+	if input.Category != "" {
+		params.FilterCategory = &input.Category
+	}
 	if input.OccurredAtRange != "" {
 		params.FilterOccurredAt = &input.OccurredAtRange
 	}

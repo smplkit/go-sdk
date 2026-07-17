@@ -209,6 +209,9 @@ type ListEventsInput struct {
 	// ActorID filters by exact actor id. Matches the literal string
 	// stored on the event — any identifier scheme works.
 	ActorID string
+	// Category filters to this exact category — the indexed correlation
+	// label callers stamp on related events.
+	Category string
 	// OccurredAtRange filters by occurred_at using the platform's range
 	// syntax (e.g. "[2026-01-01T00:00:00Z,*)").
 	OccurredAtRange string

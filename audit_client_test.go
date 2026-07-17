@@ -904,6 +904,7 @@ func TestAuditEvents_List_AllFilters(t *testing.T) {
 		ResourceID:      "u-1",
 		ActorType:       "USER",
 		ActorID:         "not-a-uuid:billing-bot",
+		Category:        "billing",
 		OccurredAtRange: "[2026-04-01T00:00:00Z,*)",
 		Search:          "inv-",
 		PageSize:        1,
@@ -911,6 +912,33 @@ func TestAuditEvents_List_AllFilters(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
+	}
+}
+
+// Category is an exact-match filter — the value travels as filter[category]
+// and is omitted from the wire entirely when unset.
+func TestAuditEvents_List_CategoryFilter(t *testing.T) {
+	var capturedValue string
+	var capturedPresent bool
+	events, cleanup := newTestAuditEvents(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedValue = r.URL.Query().Get("filter[category]")
+		_, capturedPresent = r.URL.Query()["filter[category]"]
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"data":[],"meta":{"page_size":50}}`))
+	})
+	defer cleanup()
+	if _, err := events.List(context.Background(), ListEventsInput{Category: "billing"}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if capturedValue != "billing" {
+		t.Fatalf("expected filter[category]=billing on the wire, got %q", capturedValue)
+	}
+	if _, err := events.List(context.Background(), ListEventsInput{}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if capturedPresent {
+		t.Fatal("expected filter[category] absent when Category is unset")
 	}
 }
 
