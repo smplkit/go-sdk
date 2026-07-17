@@ -164,7 +164,7 @@ func TestLoggers_Get(t *testing.T) {
 		assert.Equal(t, "/api/v1/loggers/my.logger", r.URL.Path)
 		assert.Equal(t, "Bearer sk_test_key", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Accept"))
-		assert.True(t, strings.HasPrefix(r.Header.Get("User-Agent"), "smplkit-go-sdk/"))
+		assert.True(t, strings.HasPrefix(r.Header.Get("User-Agent"), "smplkit-sdk-go/"))
 		_, _ = w.Write([]byte(sampleLoggerJSON("my.logger", "My Logger", "INFO", true)))
 	}))
 	logger, err := client.Logging().Loggers().Get(context.Background(), "my.logger")

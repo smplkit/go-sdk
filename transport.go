@@ -10,8 +10,6 @@ import (
 	"net/url"
 )
 
-const userAgent = "smplkit-go-sdk/0.0.0"
-
 // parseJSONAPIErrors extracts error details from a response body.
 func parseJSONAPIErrors(body []byte) ([]ApiErrorDetail, string) {
 	var envelope struct {

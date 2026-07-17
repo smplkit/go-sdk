@@ -77,6 +77,11 @@ type LoggingClient struct {
 	appURL      string
 	apiKey      string
 
+	// callerUA is the User-Agent supplied via Config.ExtraHeaders (any
+	// casing), or "" when none was; it rides on the standalone-owned
+	// WebSocket handshake.
+	callerUA string
+
 	// disableStreaming mirrors Config.DisableStreaming: Install still
 	// discovers, fetches, and applies levels once synchronously, but never
 	// opens a WebSocket or spawns background goroutines; threshold flushes
@@ -180,7 +185,8 @@ func NewLoggingClient(cfg Config, opts ...ClientOption) (*LoggingClient, error) 
 	logURL := serviceURL(optCfg, "logging", rc)
 	appURL := serviceURL(optCfg, "app", rc)
 
-	// Extra headers first, then SDK headers (so SDK-owned headers win on a collision).
+	// Extra headers first, then SDK headers (so the SDK Accept wins on a
+	// collision; the SDK User-Agent is only a default the caller may override).
 	extraHeaders := rc.extraHeaders
 	extraEditor := func(_ context.Context, req *http.Request) error {
 		for k, v := range extraHeaders {
@@ -190,7 +196,7 @@ func NewLoggingClient(cfg Config, opts ...ClientOption) (*LoggingClient, error) 
 	}
 	headerEditor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	}
 	genLogging, _ := genlogging.NewClient(logURL,
@@ -208,6 +214,7 @@ func NewLoggingClient(cfg Config, opts ...ClientOption) (*LoggingClient, error) 
 		metrics:          nil,
 		appURL:           appURL,
 		apiKey:           rc.apiKey,
+		callerUA:         callerUserAgent(extraHeaders),
 		buffer:           buffer,
 		loggersCache:     make(map[string]map[string]interface{}),
 		groupsCache:      make(map[string]map[string]interface{}),
@@ -230,6 +237,7 @@ func (c *LoggingClient) ensureWS() *sharedWebSocket {
 	defer c.wsMu.Unlock()
 	if c.ownWS == nil {
 		c.ownWS = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
+		c.ownWS.callerUA = c.callerUA
 		c.ownWS.start()
 	}
 	return c.ownWS

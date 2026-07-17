@@ -39,6 +39,11 @@ type SmplClient struct {
 	httpClient   *http.Client
 	appGenerated genapp.ClientInterface
 
+	// callerUA is the User-Agent the caller supplied via Config.ExtraHeaders
+	// (any casing), or "" when none was supplied. It rides on the WebSocket
+	// handshake, where headers are not merged through the request editors.
+	callerUA string
+
 	// disableStreaming mirrors Config.DisableStreaming: the config / flags /
 	// logging runtime surfaces fetch synchronously and never open the shared
 	// WebSocket or spawn background goroutines.
@@ -148,7 +153,8 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 
 	// Build the generated config client, passing the auth-wrapped httpClient
 	// and request editors that inject extra headers (first) then SDK headers
-	// (second, so SDK headers win on any collision).
+	// (second, so the SDK Accept wins on a collision; the SDK User-Agent is
+	// only a default — a caller-supplied one is left alone).
 	configExtraEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		for k, v := range extraHeaders {
 			req.Header.Set(k, v)
@@ -157,7 +163,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	})
 	headerEditor := genconfig.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	})
 	genConfigClient, _ := genconfig.NewClient(configURL,
@@ -175,7 +181,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	})
 	flagsHeaderEditor := genflags.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	})
 	genFlagsClient, _ := genflags.NewClient(flagsURL,
@@ -193,7 +199,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	})
 	appHeaderEditor := genapp.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	})
 	genAppClient, _ := genapp.NewClient(appURL,
@@ -211,7 +217,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	})
 	loggingHeaderEditor := genlogging.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	})
 	genLoggingClient, _ := genlogging.NewClient(logURL,
@@ -234,13 +240,16 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	})
 	auditHeaderEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	})
+	// Extra headers first, then SDK headers — the same order as every other
+	// sub-client, so the SDK Accept wins on a collision while a caller
+	// User-Agent survives the default check above.
 	genAuditRaw, _ := genaudit.NewClient(auditURL,
 		genaudit.WithHTTPClient(httpClient),
-		auditHeaderEditor,
 		auditExtraEditor,
+		auditHeaderEditor,
 	)
 	genAuditClient := &genaudit.ClientWithResponses{ClientInterface: genAuditRaw}
 
@@ -253,7 +262,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	})
 	jobsHeaderEditor := genjobs.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	})
 	genJobsRaw, _ := genjobs.NewClient(jobsURL,
@@ -274,6 +283,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 		appGenerated:     genAppClient,
 		contextBuf:       ctxBuf,
 		disableStreaming: rc.disableStreaming,
+		callerUA:         callerUserAgent(extraHeaders),
 	}
 
 	if !rc.disableTelemetry {
@@ -438,6 +448,7 @@ func (c *SmplClient) ensureWS() *sharedWebSocket {
 	defer c.wsMu.Unlock()
 	if c.ws == nil {
 		c.ws = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
+		c.ws.callerUA = c.callerUA
 		c.ws.start()
 	}
 	return c.ws

@@ -24,7 +24,8 @@ func buildGenClients(optCfg clientConfig, rc *resolvedConfig) (*http.Client, gen
 	httpClient.Transport = &authTransport{token: rc.apiKey, base: base}
 
 	appURL := serviceURL(optCfg, "app", rc)
-	// Extra headers first, then SDK headers (so SDK-owned headers win on a collision).
+	// Extra headers first, then SDK headers (so the SDK Accept wins on a
+	// collision; the SDK User-Agent is only a default the caller may override).
 	extraHeaders := rc.extraHeaders
 	extraEditor := func(_ context.Context, req *http.Request) error {
 		for k, v := range extraHeaders {
@@ -34,7 +35,7 @@ func buildGenClients(optCfg clientConfig, rc *resolvedConfig) (*http.Client, gen
 	}
 	headerEditor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	}
 	genApp, _ := genapp.NewClient(appURL,
@@ -48,7 +49,9 @@ func buildGenClients(optCfg clientConfig, rc *resolvedConfig) (*http.Client, gen
 // buildJobsGenClient constructs the generated jobs API client. No
 // environment/service headers are injected — management callers authenticate
 // via the API key only (set by authTransport on httpClient) — but caller
-// ExtraHeaders are honored, added before SDK headers so SDK-owned headers win.
+// ExtraHeaders are honored, added before SDK headers so the SDK Accept wins
+// on a collision (the SDK User-Agent is only a default the caller may
+// override).
 func buildJobsGenClient(optCfg clientConfig, rc *resolvedConfig, httpClient *http.Client) *genjobs.ClientWithResponses {
 	jobsURL := serviceURL(optCfg, "jobs", rc)
 	extraHeaders := rc.extraHeaders
@@ -60,7 +63,7 @@ func buildJobsGenClient(optCfg clientConfig, rc *resolvedConfig, httpClient *htt
 	})
 	headerEditor := genjobs.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	})
 	raw, _ := genjobs.NewClient(jobsURL, genjobs.WithHTTPClient(httpClient), extraEditor, headerEditor)

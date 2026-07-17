@@ -67,7 +67,7 @@ func TestConfigClient_Get(t *testing.T) {
 		assert.Equal(t, "/api/v1/configs/my-service", r.URL.Path)
 		assert.Equal(t, "Bearer sk_test_key", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Accept"))
-		assert.Contains(t, r.Header.Get("User-Agent"), "smplkit-go-sdk")
+		assert.Contains(t, r.Header.Get("User-Agent"), "smplkit-sdk-go")
 
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
@@ -530,7 +530,7 @@ func TestConfigClient_AuthHeader(t *testing.T) {
 func TestConfigClient_UserAgent(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		ua := r.Header.Get("User-Agent")
-		assert.True(t, strings.HasPrefix(ua, "smplkit-go-sdk/"), "User-Agent should start with smplkit-go-sdk/")
+		assert.True(t, strings.HasPrefix(ua, "smplkit-sdk-go/"), "User-Agent should start with smplkit-sdk-go/")
 
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": []}`))
@@ -1185,7 +1185,7 @@ func TestNewConfigClient_Standalone_CRUD(t *testing.T) {
 	mux.HandleFunc("/api/v1/configs/svc", func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer sk_standalone", r.Header.Get("Authorization"))
 		assert.Equal(t, "application/vnd.api+json", r.Header.Get("Accept"))
-		assert.Contains(t, r.Header.Get("User-Agent"), "smplkit-go-sdk")
+		assert.Contains(t, r.Header.Get("User-Agent"), "smplkit-sdk-go")
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(sampleConfigJSON("svc", "Svc")))

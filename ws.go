@@ -28,6 +28,10 @@ type sharedWebSocket struct {
 	appBaseURL string
 	apiKey     string
 
+	// callerUA is the caller-supplied User-Agent (from Config.ExtraHeaders,
+	// any casing) to send on the handshake; "" means send the SDK default.
+	callerUA string
+
 	listenersMu sync.Mutex
 	listeners   map[string][]eventCallback
 
@@ -73,7 +77,7 @@ func nextCallbackID() uintptr {
 }
 
 func newSharedWebSocket(appBaseURL, apiKey string, metrics *metricsReporter) *sharedWebSocket {
-	return &sharedWebSocket{
+	s := &sharedWebSocket{
 		appBaseURL:       appBaseURL,
 		apiKey:           apiKey,
 		listeners:        make(map[string][]eventCallback),
@@ -81,9 +85,10 @@ func newSharedWebSocket(appBaseURL, apiKey string, metrics *metricsReporter) *sh
 		firstConnectedCh: make(chan struct{}),
 		closeCh:          make(chan struct{}),
 		wsDone:           make(chan struct{}),
-		dialWS:           defaultDialWS,
 		metrics:          metrics,
 	}
+	s.dialWS = s.defaultDial
+	return s
 }
 
 // on registers a listener for a specific event type.
@@ -183,13 +188,19 @@ func (ws *sharedWebSocket) waitConnected(ctx context.Context, timeout time.Durat
 	}
 }
 
-func defaultDialWS(wsURL string) (*websocket.Conn, error) {
+func (ws *sharedWebSocket) defaultDial(wsURL string) (*websocket.Conn, error) {
 	// CloudFront's WAF blocks WebSocket upgrade requests that omit a
 	// User-Agent header. gorilla/websocket doesn't set one by default
 	// (browsers do), so we inject it explicitly to match the User-Agent
 	// the HTTP transport sends. Without this, the upgrade request can
-	// be rejected with HTTP 403 before reaching our backend.
-	header := http.Header{"User-Agent": []string{userAgent}}
+	// be rejected with HTTP 403 before reaching our backend. A
+	// caller-supplied User-Agent (Config.ExtraHeaders) wins over the SDK
+	// default here, exactly as on the HTTP surface.
+	ua := ws.callerUA
+	if ua == "" {
+		ua = userAgent
+	}
+	header := http.Header{"User-Agent": []string{ua}}
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
 	return conn, err
 }
@@ -287,7 +298,7 @@ func (ws *sharedWebSocket) connect() (closed bool) {
 
 	dial := ws.dialWS
 	if dial == nil {
-		dial = defaultDialWS
+		dial = ws.defaultDial
 	}
 
 	conn, dialErr := dial(wsURL)

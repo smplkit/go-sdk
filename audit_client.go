@@ -175,7 +175,7 @@ func NewAuditClient(cfg Config, opts ...ClientOption) (*AuditClient, error) {
 
 	auditHeaderEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Accept", "application/vnd.api+json")
-		req.Header.Set("User-Agent", userAgent)
+		setDefaultUserAgent(req.Header)
 		return nil
 	})
 	auditExtraEditor := genaudit.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
@@ -185,10 +185,13 @@ func NewAuditClient(cfg Config, opts ...ClientOption) (*AuditClient, error) {
 		return nil
 	})
 
+	// Extra headers first, then SDK headers — the same order as every other
+	// sub-client, so the SDK Accept wins on a collision while a caller
+	// User-Agent survives the default check above.
 	auditRaw, _ := genaudit.NewClient(auditURL,
 		genaudit.WithHTTPClient(httpClient),
-		auditHeaderEditor,
 		auditExtraEditor,
+		auditHeaderEditor,
 	)
 	auditGen := &genaudit.ClientWithResponses{ClientInterface: auditRaw}
 

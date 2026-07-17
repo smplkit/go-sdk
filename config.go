@@ -44,8 +44,11 @@ type Config struct {
 	DisableTelemetry bool
 
 	// ExtraHeaders are additional HTTP headers sent on every request.
-	// SDK-owned headers (Authorization, Accept, User-Agent) take precedence
-	// over any key supplied here — callers cannot override them.
+	// SDK-owned headers (Authorization, Accept) take precedence over any
+	// key supplied here — callers cannot override them. User-Agent is the
+	// exception: the SDK sends smplkit-sdk-go/<version> by default, but a
+	// User-Agent supplied here (any casing) replaces it, on HTTP requests
+	// and the WebSocket handshake alike.
 	ExtraHeaders map[string]string
 
 	// DisableEventBuffering makes audit event recording synchronous. It

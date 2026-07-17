@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -237,6 +238,43 @@ func TestWS_BuildWSURL(t *testing.T) {
 		ws := newSharedWebSocket(tc.base, "k", nil)
 		assert.Equal(t, tc.want, ws.buildWSURL())
 	}
+}
+
+// TestWS_DefaultDial_UserAgent asserts the handshake User-Agent: the SDK
+// default (smplkit-sdk-go/<version>) when the caller supplied none, and the
+// caller's own User-Agent (wired from Config.ExtraHeaders) when present —
+// CloudFront's WAF rejects UA-less upgrade requests, so the header must
+// always be there.
+func TestWS_DefaultDial_UserAgent(t *testing.T) {
+	uaCh := make(chan string, 1)
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uaCh <- r.Header.Get("User-Agent")
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		_ = conn.Close()
+	}))
+	t.Cleanup(srv.Close)
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	t.Run("default", func(t *testing.T) {
+		ws := newSharedWebSocket(srv.URL, "k", nil)
+		conn, err := ws.dialWS(wsURL) // constructor wires dialWS to defaultDial
+		require.NoError(t, err)
+		_ = conn.Close()
+		assert.Regexp(t, `^smplkit-sdk-go/\S+$`, <-uaCh)
+	})
+
+	t.Run("caller UA wins", func(t *testing.T) {
+		ws := newSharedWebSocket(srv.URL, "k", nil)
+		ws.callerUA = "corp-agent/7"
+		conn, err := ws.defaultDial(wsURL)
+		require.NoError(t, err)
+		_ = conn.Close()
+		assert.Equal(t, "corp-agent/7", <-uaCh)
+	})
 }
 
 func TestWS_OffUnregistersListener(t *testing.T) {
