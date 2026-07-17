@@ -47,19 +47,48 @@ type Config struct {
 	// SDK-owned headers (Authorization, Accept, User-Agent) take precedence
 	// over any key supplied here — callers cannot override them.
 	ExtraHeaders map[string]string
+
+	// DisableEventBuffering makes audit event recording synchronous. It
+	// applies to the audit event write path only.
+	//
+	// By default Events().Record enqueues onto an in-memory buffer and
+	// returns immediately; a background worker delivers events with retry
+	// on transient failures. When true, no background worker is ever
+	// started: every Record call performs one synchronous POST and returns
+	// the SDK's typed errors on failure, Flush is meaningless (each Record
+	// is already durable on return), and Close has no buffer to drain.
+	// This is the right shape for serverless and edge runtimes, whose
+	// instances cannot host background delivery.
+	DisableEventBuffering bool
+
+	// DisableStreaming turns off live updates for the config, flags, and
+	// logging runtime surfaces.
+	//
+	// By default the first live call opens a shared WebSocket and changes
+	// stream in. When true, the first live call still fetches, resolves,
+	// and applies definitions once synchronously, but no WebSocket is
+	// opened and no background goroutines or timers are created — buffer
+	// flushes that would normally run in the background run inline
+	// instead, and Refresh re-fetches on demand (change handlers fire from
+	// refresh deltas; there is no stream to drive them otherwise). This is
+	// the right shape for serverless and edge runtimes, whose instances
+	// cannot host socket-driven state.
+	DisableStreaming bool
 }
 
 // resolvedConfig holds fully-resolved configuration with all layers merged.
 type resolvedConfig struct {
-	profile          string
-	apiKey           string
-	baseDomain       string
-	scheme           string
-	environment      string
-	service          string
-	debug            bool
-	disableTelemetry bool
-	extraHeaders     map[string]string
+	profile               string
+	apiKey                string
+	baseDomain            string
+	scheme                string
+	environment           string
+	service               string
+	debug                 bool
+	disableTelemetry      bool
+	disableEventBuffering bool
+	disableStreaming      bool
+	extraHeaders          map[string]string
 }
 
 // resolveConfig merges configuration from four layers and validates that an
@@ -185,6 +214,15 @@ func resolveConfigLayers(cfg Config) (*resolvedConfig, error) {
 	}
 	if cfg.DisableTelemetry {
 		rc.disableTelemetry = true
+	}
+	// The stateless-mode switches are struct-field only (no env var / config
+	// file layer): they describe the shape of the hosting runtime, which is a
+	// property of the calling code rather than of the deployment environment.
+	if cfg.DisableEventBuffering {
+		rc.disableEventBuffering = true
+	}
+	if cfg.DisableStreaming {
+		rc.disableStreaming = true
 	}
 	if len(cfg.ExtraHeaders) > 0 {
 		rc.extraHeaders = cfg.ExtraHeaders

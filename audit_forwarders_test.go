@@ -321,7 +321,7 @@ func newTestAuditClient(t *testing.T, handler http.HandlerFunc) (*AuditClient, f
 		t.Fatalf("genaudit.NewClient: %v", err)
 	}
 	wrapped := &genaudit.ClientWithResponses{ClientInterface: gen}
-	c := newAuditClient(wrapped, "")
+	c := newAuditClient(wrapped, "", false)
 	cleanup := func() {
 		_ = c.Close()
 		srv.Close()
@@ -366,7 +366,7 @@ func TestNewAuditClient_WiresSubClients(t *testing.T) {
 	defer srv.Close()
 	g, _ := genaudit.NewClient(srv.URL)
 	gen := &genaudit.ClientWithResponses{ClientInterface: g}
-	c := newAuditClient(gen, "production")
+	c := newAuditClient(gen, "production", false)
 	defer c.Close()
 
 	if c.Events() == nil || c.ResourceTypes() == nil || c.EventTypes() == nil ||

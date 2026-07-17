@@ -250,9 +250,7 @@ func (rt *FlagsRuntime) BooleanFlag(key string, defaultValue bool) *BooleanFlagH
 	rt.handlesMu.Unlock()
 	if rt.flagsClient != nil {
 		rt.flagBuffer.add(key, "BOOLEAN", defaultValue, rt.flagsClient.service, rt.flagsClient.environment)
-		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
-			go rt.flushFlagBuffer(context.Background())
-		}
+		rt.maybeThresholdFlush(context.Background())
 	}
 	return h
 }
@@ -265,9 +263,7 @@ func (rt *FlagsRuntime) StringFlag(key string, defaultValue string) *StringFlagH
 	rt.handlesMu.Unlock()
 	if rt.flagsClient != nil {
 		rt.flagBuffer.add(key, "STRING", defaultValue, rt.flagsClient.service, rt.flagsClient.environment)
-		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
-			go rt.flushFlagBuffer(context.Background())
-		}
+		rt.maybeThresholdFlush(context.Background())
 	}
 	return h
 }
@@ -280,9 +276,7 @@ func (rt *FlagsRuntime) NumberFlag(key string, defaultValue float64) *NumberFlag
 	rt.handlesMu.Unlock()
 	if rt.flagsClient != nil {
 		rt.flagBuffer.add(key, "NUMERIC", defaultValue, rt.flagsClient.service, rt.flagsClient.environment)
-		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
-			go rt.flushFlagBuffer(context.Background())
-		}
+		rt.maybeThresholdFlush(context.Background())
 	}
 	return h
 }
@@ -295,11 +289,24 @@ func (rt *FlagsRuntime) JsonFlag(key string, defaultValue map[string]interface{}
 	rt.handlesMu.Unlock()
 	if rt.flagsClient != nil {
 		rt.flagBuffer.add(key, "JSON", defaultValue, rt.flagsClient.service, rt.flagsClient.environment)
-		if rt.flagBuffer.pendingCount() >= flagRegistrationThreshold {
-			go rt.flushFlagBuffer(context.Background())
-		}
+		rt.maybeThresholdFlush(context.Background())
 	}
 	return h
+}
+
+// maybeThresholdFlush flushes the flag-registration buffer once it crosses
+// the batch threshold. Normally the flush runs on a background goroutine so
+// registration never blocks the caller; with Config.DisableStreaming set it
+// runs inline instead — stateless mode spawns no goroutines.
+func (rt *FlagsRuntime) maybeThresholdFlush(ctx context.Context) {
+	if rt.flagBuffer.pendingCount() < flagRegistrationThreshold {
+		return
+	}
+	if rt.flagsClient != nil && rt.flagsClient.disableStreaming {
+		rt.flushFlagBuffer(ctx)
+		return
+	}
+	go rt.flushFlagBuffer(context.Background())
 }
 
 type flagHandle struct {
@@ -522,21 +529,25 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 
 	rt.cache.clear()
 
-	// Register WebSocket handlers exactly once across all retry attempts.
-	// A second successful start after a transient failure must not double-register.
-	rt.wsOnce.Do(func() {
-		ws := rt.flagsClient.ensureWS()
-		rt.wsManager = ws
-		ws.on("flag_changed", rt.handleFlagChanged)
-		ws.on("flag_deleted", rt.handleFlagDeleted)
-		ws.on("flags_changed", rt.handleFlagsChanged)
-	})
+	// In stateless mode (Config.DisableStreaming) no WebSocket is opened and
+	// no periodic flush goroutine starts — Refresh re-fetches on demand.
+	if !rt.flagsClient.disableStreaming {
+		// Register WebSocket handlers exactly once across all retry attempts.
+		// A second successful start after a transient failure must not double-register.
+		rt.wsOnce.Do(func() {
+			ws := rt.flagsClient.ensureWS()
+			rt.wsManager = ws
+			ws.on("flag_changed", rt.handleFlagChanged)
+			ws.on("flag_deleted", rt.handleFlagDeleted)
+			ws.on("flags_changed", rt.handleFlagsChanged)
+		})
 
-	// Start the periodic flag-registration flush exactly once.
-	rt.periodicOnce.Do(func() {
-		rt.flagFlushDone = make(chan struct{})
-		go rt.periodicFlagFlush(rt.flagFlushDone)
-	})
+		// Start the periodic flag-registration flush exactly once.
+		rt.periodicOnce.Do(func() {
+			rt.flagFlushDone = make(chan struct{})
+			go rt.periodicFlagFlush(rt.flagFlushDone)
+		})
+	}
 
 	rt.connected = true
 	rt.retryDelay = 0
@@ -705,7 +716,12 @@ func (rt *FlagsRuntime) evaluateHandle(ctx context.Context, key string, defaultV
 			evalDict = contextsToEvalDict(contexts)
 			rt.contextBuffer.observe(contexts)
 			if rt.contextBuffer.pendingCount() >= contextBatchFlushSize {
-				go rt.flagsClient.flushContexts(context.Background(), rt.contextBuffer.drain())
+				if rt.flagsClient.disableStreaming {
+					// Stateless mode: flush inline rather than spawning.
+					rt.flagsClient.flushContexts(ctx, rt.contextBuffer.drain())
+				} else {
+					go rt.flagsClient.flushContexts(context.Background(), rt.contextBuffer.drain())
+				}
 			}
 		} else if ambient := rt.ambientContexts(); len(ambient) > 0 {
 			// Fall back to the top-level SmplClient.SetContext stash. It is

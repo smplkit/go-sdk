@@ -39,6 +39,11 @@ type SmplClient struct {
 	httpClient   *http.Client
 	appGenerated genapp.ClientInterface
 
+	// disableStreaming mirrors Config.DisableStreaming: the config / flags /
+	// logging runtime surfaces fetch synchronously and never open the shared
+	// WebSocket or spawn background goroutines.
+	disableStreaming bool
+
 	platform *PlatformClient
 	account  *AccountClient
 	config   *ConfigClient
@@ -261,13 +266,14 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	ctxBuf := newContextRegistrationBuffer()
 
 	c := &SmplClient{
-		apiKey:       rc.apiKey,
-		environment:  rc.environment,
-		service:      rc.service,
-		appURL:       appURL,
-		httpClient:   httpClient,
-		appGenerated: genAppClient,
-		contextBuf:   ctxBuf,
+		apiKey:           rc.apiKey,
+		environment:      rc.environment,
+		service:          rc.service,
+		appURL:           appURL,
+		httpClient:       httpClient,
+		appGenerated:     genAppClient,
+		contextBuf:       ctxBuf,
+		disableStreaming: rc.disableStreaming,
 	}
 
 	if !rc.disableTelemetry {
@@ -295,7 +301,7 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	// (ADR-055) — the configured environment is stamped on the event body and
 	// defaulted onto filter[environment] for reads, so one gen client backs the
 	// whole surface.
-	c.audit = newAuditClient(genAuditClient, rc.environment)
+	c.audit = newAuditClient(genAuditClient, rc.environment, rc.disableEventBuffering)
 	c.audit.client = c
 	// Jobs reuses the shared jobs transport (single connection pool) so
 	// client.Jobs() is one-stop; the configured environment defaults
@@ -346,6 +352,11 @@ func (c *SmplClient) Account() *AccountClient { return c.account }
 // Idempotent and thread-safe (lock + flag); a no-op after Close. Triggered by
 // the first config/flags/logging operation or WebSocket open — never at
 // construction.
+//
+// With Config.DisableStreaming set there is no background machinery to start:
+// no periodic flush timer is armed (buffers flush inline at their thresholds
+// and on the first live call instead) and the service-context registration
+// runs synchronously rather than on a goroutine.
 func (c *SmplClient) ensureStarted() {
 	c.startMu.Lock()
 	if c.started || c.closed {
@@ -354,6 +365,10 @@ func (c *SmplClient) ensureStarted() {
 	}
 	c.started = true
 	c.startMu.Unlock()
+	if c.disableStreaming {
+		c.registerServiceContext(context.Background())
+		return
+	}
 	c.schedulePeriodicFlush()
 	go c.registerServiceContext(context.Background())
 }
@@ -445,6 +460,10 @@ func (c *SmplClient) ensureWS() *sharedWebSocket {
 //
 // timeout=0 uses the SDK default. Context cancellation also returns. Returns
 // a TimeoutError if the WebSocket fails to connect within timeout.
+//
+// With Config.DisableStreaming set there is no socket to wait for: the call
+// still pre-warms the flag and config caches, then returns without opening a
+// WebSocket.
 func (c *SmplClient) WaitUntilReady(ctx context.Context, timeout time.Duration) error {
 	if timeout == 0 {
 		timeout = wsConnectTimeout
@@ -454,6 +473,9 @@ func (c *SmplClient) WaitUntilReady(ctx context.Context, timeout time.Duration) 
 	}
 	if err := c.config.ensureInit(ctx); err != nil {
 		return err
+	}
+	if c.disableStreaming {
+		return nil
 	}
 	return c.ensureWS().waitConnected(ctx, timeout)
 }

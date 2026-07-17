@@ -22,6 +22,10 @@ type LoggersClient struct {
 
 	// metrics records discovery counts on flush; nil when unset.
 	metrics *metricsReporter
+
+	// disableStreaming mirrors Config.DisableStreaming: threshold flushes
+	// run inline instead of on a background goroutine.
+	disableStreaming bool
 }
 
 // New returns a new unsaved Logger. Call logger.Save(ctx) to persist.
@@ -78,13 +82,19 @@ func (m *LoggersClient) Register(ctx context.Context, sources []LoggerSource, fl
 		return m.Flush(ctx)
 	}
 	if m.buffer.pendingCount() >= loggerBatchFlushSize {
-		go m.thresholdFlush()
+		if m.disableStreaming {
+			// Stateless mode: flush inline rather than spawning.
+			m.thresholdFlush()
+		} else {
+			go m.thresholdFlush()
+		}
 	}
 	return nil
 }
 
-// thresholdFlush flushes in the background once the buffer crosses the
-// batch threshold, logging (not returning) any error.
+// thresholdFlush flushes once the buffer crosses the batch threshold,
+// logging (not returning) any error. Runs on a background goroutine
+// normally, inline when Config.DisableStreaming is set.
 func (m *LoggersClient) thresholdFlush() {
 	if err := m.Flush(context.Background()); err != nil {
 		log.Printf("smplkit: logger registration flush failed: %s", err.Error())

@@ -70,6 +70,11 @@ type ConfigClient struct {
 	appURL      string
 	apiKey      string
 
+	// disableStreaming mirrors Config.DisableStreaming: the live surface
+	// fetches synchronously and never opens a WebSocket or spawns
+	// background goroutines; threshold flushes run inline.
+	disableStreaming bool
+
 	configCache map[string]map[string]interface{}
 
 	initOnce sync.Once
@@ -98,12 +103,13 @@ type ConfigClient struct {
 // path), borrowing the parent's config transport, metrics, and WebSocket.
 func newConfigClient(parent *SmplClient, gen genconfig.ClientInterface, metrics *metricsReporter) *ConfigClient {
 	return &ConfigClient{
-		client:      parent,
-		generated:   gen,
-		buffer:      newConfigRegistrationBuffer(),
-		environment: parent.environment,
-		service:     parent.service,
-		metrics:     metrics,
+		client:           parent,
+		generated:        gen,
+		buffer:           newConfigRegistrationBuffer(),
+		environment:      parent.environment,
+		service:          parent.service,
+		metrics:          metrics,
+		disableStreaming: parent.disableStreaming,
 	}
 }
 
@@ -148,12 +154,13 @@ func NewConfigClient(cfg Config, opts ...ClientOption) (*ConfigClient, error) {
 	})
 	gen, _ := genconfig.NewClient(configURL, genconfig.WithHTTPClient(httpClient), extraEditor, headerEditor)
 	return &ConfigClient{
-		generated:   gen,
-		buffer:      newConfigRegistrationBuffer(),
-		environment: rc.environment,
-		service:     rc.service,
-		appURL:      appURL,
-		apiKey:      rc.apiKey,
+		generated:        gen,
+		buffer:           newConfigRegistrationBuffer(),
+		environment:      rc.environment,
+		service:          rc.service,
+		appURL:           appURL,
+		apiKey:           rc.apiKey,
+		disableStreaming: rc.disableStreaming,
 	}, nil
 }
 
@@ -338,9 +345,7 @@ func (c *ConfigClient) RegisterConfig(configID, service, environment, parent, na
 		name:        name,
 		description: description,
 	})
-	if c.buffer.pendingCount() >= configRegistrationFlushSize {
-		go func() { _ = c.Flush(context.Background()) }()
-	}
+	c.maybeThresholdFlush()
 }
 
 // RegisterConfigItem queues a config item declaration. RegisterConfig must
@@ -354,9 +359,23 @@ func (c *ConfigClient) RegisterConfig(configID, service, environment, parent, na
 // the item. description is an optional human-readable description.
 func (c *ConfigClient) RegisterConfigItem(configID, itemKey, itemType string, defaultVal interface{}, description string) {
 	c.buffer.addItem(configID, itemKey, itemType, defaultVal, description)
-	if c.buffer.pendingCount() >= configRegistrationFlushSize {
-		go func() { _ = c.Flush(context.Background()) }()
+	c.maybeThresholdFlush()
+}
+
+// maybeThresholdFlush flushes the discovery buffer once it crosses the batch
+// threshold. Normally the flush runs on a background goroutine so declaring
+// never blocks the caller; with Config.DisableStreaming set it runs inline
+// instead — stateless mode spawns no goroutines. Flush is fire-and-forget
+// either way (ADR-024 §2.9): failures never propagate to customer code.
+func (c *ConfigClient) maybeThresholdFlush() {
+	if c.buffer.pendingCount() < configRegistrationFlushSize {
+		return
 	}
+	if c.disableStreaming {
+		_ = c.Flush(context.Background())
+		return
+	}
+	go func() { _ = c.Flush(context.Background()) }()
 }
 
 // PendingCount returns the number of pending config declarations awaiting flush.
@@ -554,6 +573,12 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 			cache[cfg.ID] = resolveChain(chain, environment)
 		}
 		c.configCache = cache
+
+		// In stateless mode (Config.DisableStreaming) no WebSocket is opened
+		// — Refresh re-fetches on demand.
+		if c.disableStreaming {
+			return
+		}
 
 		// Register WebSocket listeners for real-time config updates.
 		ws := c.ensureWS()

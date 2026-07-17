@@ -77,6 +77,12 @@ type LoggingClient struct {
 	appURL      string
 	apiKey      string
 
+	// disableStreaming mirrors Config.DisableStreaming: Install still
+	// discovers, fetches, and applies levels once synchronously, but never
+	// opens a WebSocket or spawns background goroutines; threshold flushes
+	// run inline.
+	disableStreaming bool
+
 	// wsMu guards the lazily-created own WebSocket (standalone path).
 	wsMu  sync.Mutex
 	ownWS *sharedWebSocket
@@ -125,18 +131,19 @@ func (c *LoggingClient) LogGroups() *LogGroupsClient {
 // owned discovery buffer.
 func newLoggingClient(parent *SmplClient, gen genlogging.ClientInterface, metrics *metricsReporter) *LoggingClient {
 	c := &LoggingClient{
-		client:       parent,
-		generated:    gen,
-		environment:  parent.environment,
-		service:      parent.service,
-		metrics:      metrics,
-		buffer:       newLoggerRegistrationBuffer(),
-		loggersCache: make(map[string]map[string]interface{}),
-		groupsCache:  make(map[string]map[string]interface{}),
-		nameMap:      make(map[string]string),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
+		client:           parent,
+		generated:        gen,
+		environment:      parent.environment,
+		service:          parent.service,
+		metrics:          metrics,
+		buffer:           newLoggerRegistrationBuffer(),
+		loggersCache:     make(map[string]map[string]interface{}),
+		groupsCache:      make(map[string]map[string]interface{}),
+		nameMap:          make(map[string]string),
+		keyListeners:     make(map[string][]func(*LoggerChangeEvent)),
+		disableStreaming: parent.disableStreaming,
 	}
-	c.loggers = &LoggersClient{gen: gen, buffer: c.buffer, metrics: metrics}
+	c.loggers = &LoggersClient{gen: gen, buffer: c.buffer, metrics: metrics, disableStreaming: parent.disableStreaming}
 	c.logGroups = &LogGroupsClient{gen: gen}
 	return c
 }
@@ -194,20 +201,21 @@ func NewLoggingClient(cfg Config, opts ...ClientOption) (*LoggingClient, error) 
 
 	buffer := newLoggerRegistrationBuffer()
 	c := &LoggingClient{
-		client:       nil,
-		generated:    genLogging,
-		environment:  rc.environment,
-		service:      rc.service,
-		metrics:      nil,
-		appURL:       appURL,
-		apiKey:       rc.apiKey,
-		buffer:       buffer,
-		loggersCache: make(map[string]map[string]interface{}),
-		groupsCache:  make(map[string]map[string]interface{}),
-		nameMap:      make(map[string]string),
-		keyListeners: make(map[string][]func(*LoggerChangeEvent)),
+		client:           nil,
+		generated:        genLogging,
+		environment:      rc.environment,
+		service:          rc.service,
+		metrics:          nil,
+		appURL:           appURL,
+		apiKey:           rc.apiKey,
+		buffer:           buffer,
+		loggersCache:     make(map[string]map[string]interface{}),
+		groupsCache:      make(map[string]map[string]interface{}),
+		nameMap:          make(map[string]string),
+		keyListeners:     make(map[string][]func(*LoggerChangeEvent)),
+		disableStreaming: rc.disableStreaming,
 	}
-	c.loggers = &LoggersClient{gen: genLogging, buffer: buffer}
+	c.loggers = &LoggersClient{gen: genLogging, buffer: buffer, disableStreaming: rc.disableStreaming}
 	c.logGroups = &LogGroupsClient{gen: genLogging}
 	return c, nil
 }
@@ -336,18 +344,23 @@ func (c *LoggingClient) Install(ctx context.Context) error {
 		debug.Debug("resolution", "starting initial level resolution pass")
 		c.applyLevels()
 
-		// 7. Register WebSocket event handlers for real-time level updates.
-		ws := c.ensureWS()
-		c.wsManager = ws
-		ws.on("logger_changed", c.handleLoggerChanged)
-		ws.on("logger_deleted", c.handleLoggerDeleted)
-		ws.on("group_changed", c.handleGroupChanged)
-		ws.on("group_deleted", c.handleGroupDeleted)
-		ws.on("loggers_changed", c.handleLoggersChanged)
+		// 7. Register WebSocket event handlers for real-time level updates
+		// and start the periodic flush timer. Skipped in stateless mode
+		// (Config.DisableStreaming): levels were applied once above, and
+		// Refresh re-fetches on demand.
+		if !c.disableStreaming {
+			ws := c.ensureWS()
+			c.wsManager = ws
+			ws.on("logger_changed", c.handleLoggerChanged)
+			ws.on("logger_deleted", c.handleLoggerDeleted)
+			ws.on("group_changed", c.handleGroupChanged)
+			ws.on("group_deleted", c.handleGroupDeleted)
+			ws.on("loggers_changed", c.handleLoggersChanged)
 
-		// Start periodic flush timer.
-		c.flushDone = make(chan struct{})
-		go c.periodicFlush(c.flushDone)
+			// Start periodic flush timer.
+			c.flushDone = make(chan struct{})
+			go c.periodicFlush(c.flushDone)
+		}
 
 		c.connected = true
 	})

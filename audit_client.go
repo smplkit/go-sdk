@@ -34,13 +34,17 @@ type AuditClient struct {
 
 // AuditEvents handles event recording, listing, and retrieval. Writes are
 // fire-and-forget by default and return as soon as the event is enqueued
-// onto the in-process buffer.
+// onto the in-process buffer. With Config.DisableEventBuffering set, writes
+// are synchronous instead — one POST per Record, no buffer.
 //
 // environment is the SDK's configured runtime environment (empty when
 // unset). It is stamped onto the event request body when recording and
 // supplied as the default filter[environment] on List (ADR-055).
 type AuditEvents struct {
-	gen         *genaudit.ClientWithResponses
+	gen *genaudit.ClientWithResponses
+	// buffer is the in-memory queue + worker behind fire-and-forget writes.
+	// nil in stateless mode (Config.DisableEventBuffering), where Record
+	// POSTs synchronously instead.
 	buffer      *auditEventBuffer
 	environment string
 }
@@ -106,8 +110,15 @@ func (a *AuditClient) Forwarders() *AuditForwarders {
 // environment-agnostic, so it carries no environment. One transport backs the
 // whole surface. The top-level SmplClient wires this in and sets the optional
 // client back-reference itself.
-func newAuditClient(gen *genaudit.ClientWithResponses, environment string) *AuditClient {
-	events := &AuditEvents{gen: gen, buffer: newAuditEventBuffer(gen), environment: environment}
+//
+// disableBuffering selects the stateless write path
+// (Config.DisableEventBuffering): no buffer is constructed — and therefore
+// no worker goroutine ever starts — and Record POSTs synchronously.
+func newAuditClient(gen *genaudit.ClientWithResponses, environment string, disableBuffering bool) *AuditClient {
+	events := &AuditEvents{gen: gen, environment: environment}
+	if !disableBuffering {
+		events.buffer = newAuditEventBuffer(gen)
+	}
 	return &AuditClient{
 		gen:           gen,
 		events:        events,
@@ -133,7 +144,9 @@ func newAuditClient(gen *genaudit.ClientWithResponses, environment string) *Audi
 // variables and the ~/.smplkit profile.
 //
 // Call Close when done to release the underlying HTTP resources and drain
-// the in-memory event buffer.
+// the in-memory event buffer. With cfg.DisableEventBuffering set, no buffer
+// (and no background goroutine) exists — Record POSTs synchronously and
+// Close has nothing to drain.
 func NewAuditClient(cfg Config, opts ...ClientOption) (*AuditClient, error) {
 	rc, err := resolveConfig(cfg)
 	if err != nil {
@@ -179,14 +192,15 @@ func NewAuditClient(cfg Config, opts ...ClientOption) (*AuditClient, error) {
 	)
 	auditGen := &genaudit.ClientWithResponses{ClientInterface: auditRaw}
 
-	return newAuditClient(auditGen, rc.environment), nil
+	return newAuditClient(auditGen, rc.environment, rc.disableEventBuffering), nil
 }
 
 // Close drains the in-memory event buffer, blocking until it empties or the
 // drain times out. Call it when done with a standalone AuditClient (one built
 // via NewAuditClient) so buffered fire-and-forget events are delivered before
 // the process exits. When the audit surface was wired in by a top-level
-// Client, SmplClient.Close drives this.
+// Client, SmplClient.Close drives this. A no-op in stateless mode
+// (Config.DisableEventBuffering), where there is no buffer to drain.
 func (a *AuditClient) Close() error {
 	if a.events != nil {
 		a.events.close()
@@ -202,6 +216,10 @@ func (a *AuditClient) Close() error {
 // useful when the caller needs the event durable before continuing.
 // ResourceType beginning with "smpl." is rejected by the server with 403 —
 // that namespace is reserved for smplkit-emitted events.
+//
+// In stateless mode (Config.DisableEventBuffering) every call performs one
+// synchronous POST and returns the SDK's typed errors on failure;
+// input.Flush and input.FlushTimeout are meaningless there and ignored.
 func (e *AuditEvents) Record(input CreateEventInput) error {
 	if input.EventType == "" || input.ResourceType == "" || input.ResourceID == "" {
 		return errors.New("audit Record requires EventType, ResourceType, and ResourceID")
@@ -257,6 +275,9 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 			Attributes: attrs,
 		},
 	}
+	if e.buffer == nil {
+		return e.recordSync(body, input.IdempotencyKey)
+	}
 	e.buffer.enqueue(body, input.IdempotencyKey)
 	if input.Flush {
 		timeout := input.FlushTimeout
@@ -264,6 +285,27 @@ func (e *AuditEvents) Record(input CreateEventInput) error {
 			timeout = auditDefaultFlushTimeout
 		}
 		e.buffer.flush(timeout)
+	}
+	return nil
+}
+
+// recordSync is the stateless write path (Config.DisableEventBuffering):
+// one synchronous POST per Record. It issues the same wire call the buffer
+// worker's delivery path uses and maps failures to the SDK's typed errors.
+func (e *AuditEvents) recordSync(body genaudit.EventRequest, idempKey string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	params := &genaudit.RecordEventParams{}
+	if idempKey != "" {
+		ik := idempKey
+		params.IdempotencyKey = &ik
+	}
+	resp, err := e.gen.RecordEventWithApplicationVndAPIPlusJSONBodyWithResponse(ctx, params, body)
+	if err != nil {
+		return fmt.Errorf("audit Record: %w", err)
+	}
+	if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+		return checkStatus(resp.StatusCode(), resp.Body)
 	}
 	return nil
 }
@@ -347,9 +389,13 @@ func (e *AuditEvents) Get(ctx context.Context, eventID uuid.UUID) (*AuditEvent, 
 
 // Flush blocks until the in-memory event buffer is drained or the
 // timeout elapses. Useful for shutdown semantics in short-lived
-// processes that don't always reach SmplClient.Close.
+// processes that don't always reach SmplClient.Close. A no-op in
+// stateless mode (Config.DisableEventBuffering), where every Record is
+// already durable on return.
 func (e *AuditEvents) Flush(timeout time.Duration) {
-	e.buffer.flush(timeout)
+	if e.buffer != nil {
+		e.buffer.flush(timeout)
+	}
 }
 
 // close drains and stops the background worker. Called from SmplClient.Close.

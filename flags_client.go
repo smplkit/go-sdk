@@ -49,6 +49,11 @@ type FlagsClient struct {
 	appURL      string
 	apiKey      string
 
+	// disableStreaming mirrors Config.DisableStreaming: the live surface
+	// fetches synchronously and never opens a WebSocket or spawns
+	// background goroutines; threshold flushes run inline.
+	disableStreaming bool
+
 	// wsMu guards the lazily-created own WebSocket (standalone path).
 	wsMu  sync.Mutex
 	ownWS *sharedWebSocket
@@ -66,13 +71,14 @@ type FlagsClient struct {
 // parent's metrics reporter.
 func newFlagsClient(parent *SmplClient, gen genflags.ClientInterface, appGen genapp.ClientInterface, contexts *ContextsClient, metrics *metricsReporter) *FlagsClient {
 	c := &FlagsClient{
-		client:       parent,
-		generated:    gen,
-		appGenerated: appGen,
-		environment:  parent.environment,
-		service:      parent.service,
-		metrics:      metrics,
-		contexts:     contexts,
+		client:           parent,
+		generated:        gen,
+		appGenerated:     appGen,
+		environment:      parent.environment,
+		service:          parent.service,
+		metrics:          metrics,
+		contexts:         contexts,
+		disableStreaming: parent.disableStreaming,
 	}
 	var ctxBuf *contextRegistrationBuffer
 	if contexts != nil {
@@ -141,15 +147,16 @@ func NewFlagsClient(cfg Config, opts ...ClientOption) (*FlagsClient, error) {
 
 	ctxBuf := newContextRegistrationBuffer()
 	c := &FlagsClient{
-		client:       nil,
-		generated:    genFlags,
-		appGenerated: genApp,
-		environment:  rc.environment,
-		service:      rc.service,
-		metrics:      nil,
-		appURL:       appURL,
-		apiKey:       rc.apiKey,
-		contexts:     &ContextsClient{appClient: genApp, contextBuf: ctxBuf},
+		client:           nil,
+		generated:        genFlags,
+		appGenerated:     genApp,
+		environment:      rc.environment,
+		service:          rc.service,
+		metrics:          nil,
+		appURL:           appURL,
+		apiKey:           rc.apiKey,
+		contexts:         &ContextsClient{appClient: genApp, contextBuf: ctxBuf},
+		disableStreaming: rc.disableStreaming,
 	}
 	c.runtime = newFlagsRuntime(c, ctxBuf)
 	return c, nil
@@ -928,9 +935,7 @@ func (c *FlagsClient) updateFlag(ctx context.Context, flag *Flag) error {
 // are retried by the next Flush() call.
 func (c *FlagsClient) RegisterFlag(id, flagType string, defaultVal interface{}) {
 	c.runtime.flagBuffer.add(id, flagType, defaultVal, c.service, c.environment)
-	if c.runtime.flagBuffer.pendingCount() >= flagRegistrationThreshold {
-		go c.runtime.flushFlagBuffer(context.Background())
-	}
+	c.runtime.maybeThresholdFlush(context.Background())
 }
 
 // FlagRegisterOption configures a batch Register call. Use WithFlagFlush.
@@ -974,9 +979,7 @@ func (c *FlagsClient) Register(ctx context.Context, declarations []FlagDeclarati
 		c.Flush(ctx)
 		return
 	}
-	if c.runtime.flagBuffer.pendingCount() >= flagRegistrationThreshold {
-		go c.runtime.flushFlagBuffer(context.Background())
-	}
+	c.runtime.maybeThresholdFlush(ctx)
 }
 
 // Flush POSTs pending declarations to the flags bulk endpoint.
