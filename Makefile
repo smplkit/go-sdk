@@ -7,7 +7,12 @@
 	showcases
 
 install:
-	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+	# Pinned: oapi-codegen v2.8.0 raised its floor to Go 1.25.0, which breaks
+	# CI (setup-go reads our go.mod → Go 1.24.3, GOTOOLCHAIN=local can't
+	# auto-upgrade). v2.7.2 is the last release compatible with our Go directive
+	# and was `@latest` until v2.8.0 shipped, so this restores last-known-good.
+	# Revisit when we intentionally raise the module's Go version.
+	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.2
 	go mod download
 
 test:
