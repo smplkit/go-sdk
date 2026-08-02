@@ -56,8 +56,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          # --auto waits for required status checks before merging.
-          # Falls through to immediate merge if the repo doesn't have
-          # auto-merge enabled in Settings → General → Pull Requests.
-          gh pr merge "$PR_URL" --auto --squash ||
+          # main uses a merge queue, which rejects an explicit merge
+          # strategy ("The merge strategy for main is set by the merge
+          # queue") — plain --auto adds the PR to the queue instead and
+          # the queue merges once its checks pass. The squash fallbacks
+          # keep this step working if the workflow is ever copied to a
+          # repo without a merge queue.
+          gh pr merge "$PR_URL" --auto ||
+            gh pr merge "$PR_URL" --auto --squash ||
             gh pr merge "$PR_URL" --squash
