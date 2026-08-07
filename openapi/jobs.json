@@ -599,6 +599,97 @@
         }
       }
     },
+    "/api/v1/run_stats": {
+      "get": {
+        "tags": [
+          "Runs"
+        ],
+        "summary": "Get Run Stats",
+        "description": "Report aggregated statistics over this account's runs.\n\nOne request answers the common monitoring questions: how many runs matched\nthe filters (`total`), how they broke down by lifecycle state (`tally`),\nhow they were distributed over time (`buckets`, when the `bucket`\ndirective is given), which runs failed most recently (`recent_failures`,\nat most 3, newest first), and what fires next (`next_scheduled`).\n\nFilters compose with AND:\n\n- `filter[created_at]` \u2014 a half-open `[start,end)` date range (see the\n  parameter for the interval syntax).\n- `filter[environment]` \u2014 one environment key or a comma-separated list\n  (any-of); omitted covers every environment you can access.\n\n`next_scheduled` honors only the environment filter: it reports the\nsoonest `PENDING` run with a fire time at or after the request, no matter\nwhen that run was created.\n\nThe resource id is always `current` \u2014 statistics are computed at read\ntime, not stored.",
+        "operationId": "get_run_stats",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "filter[created_at]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict the statistics to runs whose `created_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,*)` covers everything from June 1 onward. Does not apply to `next_scheduled`.",
+              "title": "Filter[Created At]"
+            },
+            "description": "Restrict the statistics to runs whose `created_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,*)` covers everything from June 1 onward. Does not apply to `next_scheduled`."
+          },
+          {
+            "name": "filter[environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated list of environment keys to scope the statistics to (e.g. `production,staging`). When omitted, statistics cover every environment you can access.",
+              "title": "Filter[Environment]"
+            },
+            "description": "Comma-separated list of environment keys to scope the statistics to (e.g. `production,staging`). When omitted, statistics cover every environment you can access."
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "1m",
+                    "5m",
+                    "15m",
+                    "1h",
+                    "6h",
+                    "1d"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Also return run counts over time, grouped into buckets of this size (a directive, not a filter). One of `1m`, `5m`, `15m`, `1h`, `6h`, or `1d`. Omit to skip the time series.",
+              "title": "Bucket"
+            },
+            "description": "Also return run counts over time, grouped into buckets of this size (a directive, not a filter). One of `1m`, `5m`, `15m`, `1h`, `6h`, or `1d`. Omit to skip the time series."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunStatsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/runs": {
       "get": {
         "tags": [
@@ -2294,6 +2385,290 @@
         ],
         "title": "RunRetry",
         "description": "Where a `RETRY` run sits in its retry chain."
+      },
+      "RunStat": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Runs matching the filters."
+          },
+          "tally": {
+            "$ref": "#/components/schemas/RunStatTally",
+            "description": "Those runs counted by lifecycle state."
+          },
+          "buckets": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunStatBucket"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buckets",
+            "description": "Run counts over time at the requested `bucket` granularity, ordered by bucket start. Only buckets containing at least one run are listed \u2014 treat missing buckets as zero. `null` when the request did not include the `bucket` directive."
+          },
+          "recent_failures": {
+            "items": {
+              "$ref": "#/components/schemas/RunStatFailure"
+            },
+            "type": "array",
+            "title": "Recent Failures",
+            "description": "The most recently created `FAILED` runs matching the filters, newest first \u2014 at most 3."
+          },
+          "next_scheduled": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunStatNextScheduled"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The soonest `PENDING` run with a fire time at or after the request, or `null` when nothing upcoming is scheduled. The `filter[created_at]` range does not apply here \u2014 a run scheduled long ago for a future fire time is still next."
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "tally",
+          "recent_failures"
+        ],
+        "title": "RunStat",
+        "description": "Aggregated run statistics for the requested scope.\n\nComputed on demand from the account's runs; `total`, `tally`, `buckets`,\nand `recent_failures` honor the request's filters, while `next_scheduled`\nhonors only the environment filter (it is forward-looking by definition)."
+      },
+      "RunStatBucket": {
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Bucket",
+            "description": "Start of the bucket (UTC). Buckets are aligned to the epoch \u2014 e.g. `1h` buckets start on the hour."
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "description": "Runs created within this bucket."
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket",
+          "count"
+        ],
+        "title": "RunStatBucket",
+        "description": "Run count for one time bucket."
+      },
+      "RunStatFailure": {
+        "properties": {
+          "job": {
+            "type": "string",
+            "title": "Job",
+            "description": "Key of the job the failed run belongs to."
+          },
+          "job_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Name",
+            "description": "Display name of that job, resolved at read time; `null` when the job no longer exists."
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "TIMEOUT",
+                  "CONNECTION_ERROR",
+                  "NON_SUCCESS_STATUS",
+                  "SSRF_BLOCKED",
+                  "QUOTA_EXCEEDED",
+                  "WORKER_LOST"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason",
+            "description": "Why the run failed; `null` when unrecorded."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the failed run was created."
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "created_at"
+        ],
+        "title": "RunStatFailure",
+        "description": "One recently failed run."
+      },
+      "RunStatNextScheduled": {
+        "properties": {
+          "job": {
+            "type": "string",
+            "title": "Job",
+            "description": "Key of the job the run belongs to."
+          },
+          "job_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Name",
+            "description": "Display name of that job, resolved at read time; `null` when the job no longer exists."
+          },
+          "scheduled_for": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Scheduled For",
+            "description": "The intended fire time."
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment",
+            "description": "Environment the run will execute in."
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "scheduled_for",
+          "environment"
+        ],
+        "title": "RunStatNextScheduled",
+        "description": "The soonest upcoming scheduled run."
+      },
+      "RunStatResource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "default": "current"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "run_stat"
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/RunStat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attributes"
+        ],
+        "title": "RunStatResource",
+        "description": "JSON:API resource envelope for run statistics.",
+        "example": {
+          "attributes": {
+            "buckets": [
+              {
+                "bucket": "2026-06-05T00:00:00Z",
+                "count": 17
+              },
+              {
+                "bucket": "2026-06-05T01:00:00Z",
+                "count": 25
+              }
+            ],
+            "next_scheduled": {
+              "environment": "production",
+              "job": "nightly_backup",
+              "job_name": "Nightly database backup",
+              "scheduled_for": "2026-06-06T02:00:00Z"
+            },
+            "recent_failures": [
+              {
+                "created_at": "2026-06-05T01:12:00Z",
+                "failure_reason": "NON_SUCCESS_STATUS",
+                "job": "nightly_backup",
+                "job_name": "Nightly database backup"
+              }
+            ],
+            "tally": {
+              "canceled": 0,
+              "failed": 2,
+              "pending": 1,
+              "running": 0,
+              "succeeded": 39
+            },
+            "total": 42
+          },
+          "id": "current",
+          "type": "run_stat"
+        }
+      },
+      "RunStatTally": {
+        "properties": {
+          "pending": {
+            "type": "integer",
+            "title": "Pending",
+            "description": "Runs in status `PENDING`."
+          },
+          "running": {
+            "type": "integer",
+            "title": "Running",
+            "description": "Runs in status `RUNNING`."
+          },
+          "succeeded": {
+            "type": "integer",
+            "title": "Succeeded",
+            "description": "Runs in status `SUCCEEDED`."
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "description": "Runs in status `FAILED`."
+          },
+          "canceled": {
+            "type": "integer",
+            "title": "Canceled",
+            "description": "Runs in status `CANCELED`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed",
+          "canceled"
+        ],
+        "title": "RunStatTally",
+        "description": "Run counts by lifecycle state within the requested scope."
+      },
+      "RunStatsResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RunStatResource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "RunStatsResponse",
+        "description": "JSON:API single-resource response for run statistics."
       },
       "Usage": {
         "properties": {

@@ -150,28 +150,28 @@ func (e RetryPolicyCreateResourceType) Valid() bool {
 
 // Defines values for RunFailureReason.
 const (
-	CONNECTIONERROR  RunFailureReason = "CONNECTION_ERROR"
-	NONSUCCESSSTATUS RunFailureReason = "NON_SUCCESS_STATUS"
-	QUOTAEXCEEDED    RunFailureReason = "QUOTA_EXCEEDED"
-	SSRFBLOCKED      RunFailureReason = "SSRF_BLOCKED"
-	TIMEOUT          RunFailureReason = "TIMEOUT"
-	WORKERLOST       RunFailureReason = "WORKER_LOST"
+	RunFailureReasonCONNECTIONERROR  RunFailureReason = "CONNECTION_ERROR"
+	RunFailureReasonNONSUCCESSSTATUS RunFailureReason = "NON_SUCCESS_STATUS"
+	RunFailureReasonQUOTAEXCEEDED    RunFailureReason = "QUOTA_EXCEEDED"
+	RunFailureReasonSSRFBLOCKED      RunFailureReason = "SSRF_BLOCKED"
+	RunFailureReasonTIMEOUT          RunFailureReason = "TIMEOUT"
+	RunFailureReasonWORKERLOST       RunFailureReason = "WORKER_LOST"
 )
 
 // Valid indicates whether the value is a known member of the RunFailureReason enum.
 func (e RunFailureReason) Valid() bool {
 	switch e {
-	case CONNECTIONERROR:
+	case RunFailureReasonCONNECTIONERROR:
 		return true
-	case NONSUCCESSSTATUS:
+	case RunFailureReasonNONSUCCESSSTATUS:
 		return true
-	case QUOTAEXCEEDED:
+	case RunFailureReasonQUOTAEXCEEDED:
 		return true
-	case SSRFBLOCKED:
+	case RunFailureReasonSSRFBLOCKED:
 		return true
-	case TIMEOUT:
+	case RunFailureReasonTIMEOUT:
 		return true
-	case WORKERLOST:
+	case RunFailureReasonWORKERLOST:
 		return true
 	default:
 		return false
@@ -223,6 +223,36 @@ func (e RunTrigger) Valid() bool {
 	case RETRY:
 		return true
 	case SCHEDULE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunStatFailureFailureReason.
+const (
+	RunStatFailureFailureReasonCONNECTIONERROR  RunStatFailureFailureReason = "CONNECTION_ERROR"
+	RunStatFailureFailureReasonNONSUCCESSSTATUS RunStatFailureFailureReason = "NON_SUCCESS_STATUS"
+	RunStatFailureFailureReasonQUOTAEXCEEDED    RunStatFailureFailureReason = "QUOTA_EXCEEDED"
+	RunStatFailureFailureReasonSSRFBLOCKED      RunStatFailureFailureReason = "SSRF_BLOCKED"
+	RunStatFailureFailureReasonTIMEOUT          RunStatFailureFailureReason = "TIMEOUT"
+	RunStatFailureFailureReasonWORKERLOST       RunStatFailureFailureReason = "WORKER_LOST"
+)
+
+// Valid indicates whether the value is a known member of the RunStatFailureFailureReason enum.
+func (e RunStatFailureFailureReason) Valid() bool {
+	switch e {
+	case RunStatFailureFailureReasonCONNECTIONERROR:
+		return true
+	case RunStatFailureFailureReasonNONSUCCESSSTATUS:
+		return true
+	case RunStatFailureFailureReasonQUOTAEXCEEDED:
+		return true
+	case RunStatFailureFailureReasonSSRFBLOCKED:
+		return true
+	case RunStatFailureFailureReasonTIMEOUT:
+		return true
+	case RunStatFailureFailureReasonWORKERLOST:
 		return true
 	default:
 		return false
@@ -283,6 +313,36 @@ func (e ListRetryPoliciesParamsSort) Valid() bool {
 	case ListRetryPoliciesParamsSortName:
 		return true
 	case ListRetryPoliciesParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetRunStatsParamsBucket.
+const (
+	N15m GetRunStatsParamsBucket = "15m"
+	N1d  GetRunStatsParamsBucket = "1d"
+	N1h  GetRunStatsParamsBucket = "1h"
+	N1m  GetRunStatsParamsBucket = "1m"
+	N5m  GetRunStatsParamsBucket = "5m"
+	N6h  GetRunStatsParamsBucket = "6h"
+)
+
+// Valid indicates whether the value is a known member of the GetRunStatsParamsBucket enum.
+func (e GetRunStatsParamsBucket) Valid() bool {
+	switch e {
+	case N15m:
+		return true
+	case N1d:
+		return true
+	case N1h:
+		return true
+	case N1m:
+		return true
+	case N5m:
+		return true
+	case N6h:
 		return true
 	default:
 		return false
@@ -786,6 +846,106 @@ type RunRetry struct {
 	Of openapi_types.UUID `json:"of"`
 }
 
+// RunStat Aggregated run statistics for the requested scope.
+//
+// Computed on demand from the account's runs; `total`, `tally`, `buckets`,
+// and `recent_failures` honor the request's filters, while `next_scheduled`
+// honors only the environment filter (it is forward-looking by definition).
+type RunStat struct {
+	// Buckets Run counts over time at the requested `bucket` granularity, ordered by bucket start. Only buckets containing at least one run are listed — treat missing buckets as zero. `null` when the request did not include the `bucket` directive.
+	Buckets *[]RunStatBucket `json:"buckets,omitempty"`
+
+	// NextScheduled The soonest upcoming scheduled run.
+	NextScheduled *RunStatNextScheduled `json:"next_scheduled,omitempty"`
+
+	// RecentFailures The most recently created `FAILED` runs matching the filters, newest first — at most 3.
+	RecentFailures []RunStatFailure `json:"recent_failures"`
+
+	// Tally Run counts by lifecycle state within the requested scope.
+	Tally RunStatTally `json:"tally"`
+
+	// Total Runs matching the filters.
+	Total int `json:"total"`
+}
+
+// RunStatBucket Run count for one time bucket.
+type RunStatBucket struct {
+	// Bucket Start of the bucket (UTC). Buckets are aligned to the epoch — e.g. `1h` buckets start on the hour.
+	Bucket time.Time `json:"bucket"`
+
+	// Count Runs created within this bucket.
+	Count int `json:"count"`
+}
+
+// RunStatFailure One recently failed run.
+type RunStatFailure struct {
+	// CreatedAt When the failed run was created.
+	CreatedAt time.Time `json:"created_at"`
+
+	// FailureReason Why the run failed; `null` when unrecorded.
+	FailureReason *RunStatFailureFailureReason `json:"failure_reason,omitempty"`
+
+	// Job Key of the job the failed run belongs to.
+	Job string `json:"job"`
+
+	// JobName Display name of that job, resolved at read time; `null` when the job no longer exists.
+	JobName *string `json:"job_name,omitempty"`
+}
+
+// RunStatFailureFailureReason Why the run failed; `null` when unrecorded.
+type RunStatFailureFailureReason string
+
+// RunStatNextScheduled The soonest upcoming scheduled run.
+type RunStatNextScheduled struct {
+	// Environment Environment the run will execute in.
+	Environment string `json:"environment"`
+
+	// Job Key of the job the run belongs to.
+	Job string `json:"job"`
+
+	// JobName Display name of that job, resolved at read time; `null` when the job no longer exists.
+	JobName *string `json:"job_name,omitempty"`
+
+	// ScheduledFor The intended fire time.
+	ScheduledFor time.Time `json:"scheduled_for"`
+}
+
+// RunStatResource JSON:API resource envelope for run statistics.
+type RunStatResource struct {
+	// Attributes Aggregated run statistics for the requested scope.
+	//
+	// Computed on demand from the account's runs; `total`, `tally`, `buckets`,
+	// and `recent_failures` honor the request's filters, while `next_scheduled`
+	// honors only the environment filter (it is forward-looking by definition).
+	Attributes RunStat `json:"attributes"`
+	Id         *string `json:"id,omitempty"`
+	Type       *string `json:"type,omitempty"`
+}
+
+// RunStatTally Run counts by lifecycle state within the requested scope.
+type RunStatTally struct {
+	// Canceled Runs in status `CANCELED`.
+	Canceled int `json:"canceled"`
+
+	// Failed Runs in status `FAILED`.
+	Failed int `json:"failed"`
+
+	// Pending Runs in status `PENDING`.
+	Pending int `json:"pending"`
+
+	// Running Runs in status `RUNNING`.
+	Running int `json:"running"`
+
+	// Succeeded Runs in status `SUCCEEDED`.
+	Succeeded int `json:"succeeded"`
+}
+
+// RunStatsResponse JSON:API single-resource response for run statistics.
+type RunStatsResponse struct {
+	// Data JSON:API resource envelope for run statistics.
+	Data RunStatResource `json:"data"`
+}
+
 // Usage Current-period usage against the account's plan allotments.
 type Usage struct {
 	// ActiveJobs Number of permanent jobs (recurring and manual) counted against the plan's job limit.
@@ -868,6 +1028,21 @@ type ListRetryPoliciesParams struct {
 
 // ListRetryPoliciesParamsSort defines parameters for ListRetryPolicies.
 type ListRetryPoliciesParamsSort string
+
+// GetRunStatsParams defines parameters for GetRunStats.
+type GetRunStatsParams struct {
+	// FilterCreatedAt Restrict the statistics to runs whose `created_at` falls in a half-open `[start,end)` interval. Bounds are ISO-8601 timestamps; `*` leaves a bound open. The leading bracket is `[` (inclusive) or `(` (exclusive) and the trailing bracket is `]` (inclusive) or `)` (exclusive). Example: `[2026-06-01T00:00:00Z,*)` covers everything from June 1 onward. Does not apply to `next_scheduled`.
+	FilterCreatedAt *string `form:"filter[created_at],omitempty" json:"filter[created_at],omitempty"`
+
+	// FilterEnvironment Comma-separated list of environment keys to scope the statistics to (e.g. `production,staging`). When omitted, statistics cover every environment you can access.
+	FilterEnvironment *string `form:"filter[environment],omitempty" json:"filter[environment],omitempty"`
+
+	// Bucket Also return run counts over time, grouped into buckets of this size (a directive, not a filter). One of `1m`, `5m`, `15m`, `1h`, `6h`, or `1d`. Omit to skip the time series.
+	Bucket *GetRunStatsParamsBucket `form:"bucket,omitempty" json:"bucket,omitempty"`
+}
+
+// GetRunStatsParamsBucket defines parameters for GetRunStats.
+type GetRunStatsParamsBucket string
 
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
@@ -1043,6 +1218,9 @@ type ClientInterface interface {
 	UpdateRetryPolicyWithBody(ctx context.Context, policyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateRetryPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, policyId string, body UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRunStats request
+	GetRunStats(ctx context.Context, params *GetRunStatsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListRuns request
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1242,6 +1420,18 @@ func (c *Client) UpdateRetryPolicyWithBody(ctx context.Context, policyId string,
 
 func (c *Client) UpdateRetryPolicyWithApplicationVndAPIPlusJSONBody(ctx context.Context, policyId string, body UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateRetryPolicyRequestWithApplicationVndAPIPlusJSONBody(c.Server, policyId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRunStats(ctx context.Context, params *GetRunStatsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRunStatsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1897,6 +2087,84 @@ func NewUpdateRetryPolicyRequestWithBody(server string, policyId string, content
 	return req, nil
 }
 
+// NewGetRunStatsRequest generates requests for GetRunStats
+func NewGetRunStatsRequest(server string, params *GetRunStatsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/run_stats")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.FilterCreatedAt != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[created_at]", *params.FilterCreatedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.FilterEnvironment != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter[environment]", *params.FilterEnvironment, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Bucket != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "bucket", *params.Bucket, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListRunsRequest generates requests for ListRuns
 func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, error) {
 	var err error
@@ -2325,6 +2593,9 @@ type ClientWithResponsesInterface interface {
 
 	UpdateRetryPolicyWithApplicationVndAPIPlusJSONBodyWithResponse(ctx context.Context, policyId string, body UpdateRetryPolicyApplicationVndAPIPlusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateRetryPolicyResponse, error)
 
+	// GetRunStatsWithResponse request
+	GetRunStatsWithResponse(ctx context.Context, params *GetRunStatsParams, reqEditors ...RequestEditorFn) (*GetRunStatsResponse, error)
+
 	// ListRunsWithResponse request
 	ListRunsWithResponse(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*ListRunsResponse, error)
 
@@ -2669,6 +2940,36 @@ func (r UpdateRetryPolicyResponse) ContentType() string {
 	return ""
 }
 
+type GetRunStatsResponse struct {
+	Body                     []byte
+	HTTPResponse             *http.Response
+	ApplicationvndApiJSON200 *RunStatsResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRunStatsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRunStatsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRunStatsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListRunsResponse struct {
 	Body                     []byte
 	HTTPResponse             *http.Response
@@ -2960,6 +3261,15 @@ func (c *ClientWithResponses) UpdateRetryPolicyWithApplicationVndAPIPlusJSONBody
 		return nil, err
 	}
 	return ParseUpdateRetryPolicyResponse(rsp)
+}
+
+// GetRunStatsWithResponse request returning *GetRunStatsResponse
+func (c *ClientWithResponses) GetRunStatsWithResponse(ctx context.Context, params *GetRunStatsParams, reqEditors ...RequestEditorFn) (*GetRunStatsResponse, error) {
+	rsp, err := c.GetRunStats(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRunStatsResponse(rsp)
 }
 
 // ListRunsWithResponse request returning *ListRunsResponse
@@ -3263,6 +3573,32 @@ func ParseUpdateRetryPolicyResponse(rsp *http.Response) (*UpdateRetryPolicyRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest RetryPolicyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndApiJSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRunStatsResponse parses an HTTP response from a GetRunStatsWithResponse call
+func ParseGetRunStatsResponse(rsp *http.Response) (*GetRunStatsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRunStatsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RunStatsResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
