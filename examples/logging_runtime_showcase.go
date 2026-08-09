@@ -52,7 +52,7 @@ func main() {
 	slog.Info("info from slog.Default")
 	slog.Debug("debug from slog.Default (filtered unless level is DEBUG)")
 
-	// Force-pull post-Install platform changes without waiting on the
-	// WebSocket. Useful for short-lived scripts.
+	// Force-pull post-Install platform changes without waiting on a
+	// live update. Useful for short-lived scripts.
 	fatalIfErr("refresh logging", client.Logging().Refresh(ctx))
 }
