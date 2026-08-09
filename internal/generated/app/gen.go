@@ -67,6 +67,24 @@ func (e AdminSubscriptionRequestResourceType) Valid() bool {
 	}
 }
 
+// Defines values for ApiKeyKind.
+const (
+	PRIVATE ApiKeyKind = "PRIVATE"
+	PUBLIC  ApiKeyKind = "PUBLIC"
+)
+
+// Valid indicates whether the value is a known member of the ApiKeyKind enum.
+func (e ApiKeyKind) Valid() bool {
+	switch e {
+	case PRIVATE:
+		return true
+	case PUBLIC:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ApiKeyResourceType.
 const (
 	ApiKeyResourceTypeApiKey ApiKeyResourceType = "api_key"
@@ -1393,6 +1411,9 @@ type ApiKey struct {
 	// Key The bearer token value. Returned in plaintext on the create response so the caller can capture it; subsequent reads return the same value for round-tripping.
 	Key *string `json:"key,omitempty"`
 
+	// Kind Credential class of the key, set at creation and immutable. `PRIVATE` (the default) keys carry full API access and must be kept secret — never expose one in a browser or client application. `PUBLIC` keys are browser-safe, read-only credentials for reading feature flags and configuration from client-side code; they must be scoped to exactly one environment with `permissions: ["read"]`. Accepted case-insensitively.
+	Kind *ApiKeyKind `json:"kind,omitempty"`
+
 	// LastUsedAt When the key was most recently used to authenticate.
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 
@@ -1408,6 +1429,9 @@ type ApiKey struct {
 	// UpdatedAt When the key was last modified.
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
+
+// ApiKeyKind Credential class of the key, set at creation and immutable. `PRIVATE` (the default) keys carry full API access and must be kept secret — never expose one in a browser or client application. `PUBLIC` keys are browser-safe, read-only credentials for reading feature flags and configuration from client-side code; they must be scoped to exactly one environment with `permissions: ["read"]`. Accepted case-insensitively.
+type ApiKeyKind string
 
 // ApiKeyListResponse JSON:API collection response for API keys.
 type ApiKeyListResponse struct {
