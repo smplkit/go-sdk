@@ -48,7 +48,7 @@ type Config struct {
 	// key supplied here — callers cannot override them. User-Agent is the
 	// exception: the SDK sends smplkit-sdk-go/<version> by default, but a
 	// User-Agent supplied here (any casing) replaces it, on HTTP requests
-	// and the WebSocket handshake alike.
+	// and the live event stream request alike.
 	ExtraHeaders map[string]string
 
 	// DisableEventBuffering makes audit event recording synchronous. It
@@ -67,9 +67,9 @@ type Config struct {
 	// DisableStreaming turns off live updates for the config, flags, and
 	// logging runtime surfaces.
 	//
-	// By default the first live call opens a shared WebSocket and changes
+	// By default the first live call opens a shared event stream and changes
 	// stream in. When true, the first live call still fetches, resolves,
-	// and applies definitions once synchronously, but no WebSocket is
+	// and applies definitions once synchronously, but no event stream is
 	// opened and no background goroutines or timers are created — buffer
 	// flushes that would normally run in the background run inline
 	// instead, and Refresh re-fetches on demand (change handlers fire from

@@ -48,7 +48,7 @@ func WithBindParent(parent interface{}) BindOption {
 //
 // After Bind returns, the local cache has been synced into `target` for
 // any keys the server already had values for. On every subsequent
-// WebSocket-delivered change, the SDK mutates `target` in place.
+// server-pushed change, the SDK mutates `target` in place.
 //
 // Mirrors python-sdk's `client.config.bind()` and typescript-sdk's
 // `client.config.bind()`.
@@ -97,7 +97,7 @@ func (c *ConfigClient) Bind(ctx context.Context, id string, target interface{}, 
 		c.observeItemDeclaration(id, item.key, item.itemType, item.value, "")
 	}
 
-	// Register the binding BEFORE ensureInit so that any WebSocket events
+	// Register the binding BEFORE ensureInit so that any pushed events
 	// arriving during the initial fetch find the binding and route to it.
 	c.bindingsMu.Lock()
 	c.bindings[id] = target

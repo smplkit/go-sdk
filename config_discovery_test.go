@@ -440,7 +440,7 @@ func TestDiffAndFireMutatesBoundStructWithNestedFields(t *testing.T) {
 	}
 	oldCache := map[string]map[string]interface{}{"billing": {"plan.max_seats": 5}}
 	newCache := map[string]map[string]interface{}{"billing": {"plan.max_seats": 50}}
-	cc.diffAndFire(oldCache, newCache, "websocket")
+	cc.diffAndFire(oldCache, newCache, "push")
 	if billing.Plan.MaxSeats != 50 {
 		t.Fatalf("expected nested struct to mutate to 50, got %d", billing.Plan.MaxSeats)
 	}
@@ -459,7 +459,7 @@ func TestMutateBoundTargets_NoBindingNoOp(t *testing.T) {
 	cc.diffAndFire(
 		map[string]map[string]interface{}{"ghost": {"a": 1}},
 		map[string]map[string]interface{}{"ghost": {"a": 2}},
-		"websocket",
+		"push",
 	)
 	assert(true, "should not panic without a binding")
 }
@@ -805,7 +805,7 @@ func TestDiffAndFireMutatesBoundStruct(t *testing.T) {
 	}
 	oldCache := map[string]map[string]interface{}{"billing": {"max_seats": 5}}
 	newCache := map[string]map[string]interface{}{"billing": {"max_seats": 50}}
-	cc.diffAndFire(oldCache, newCache, "websocket")
+	cc.diffAndFire(oldCache, newCache, "push")
 	if plan.MaxSeats != 50 {
 		t.Fatalf("expected struct to mutate to 50, got %d", plan.MaxSeats)
 	}

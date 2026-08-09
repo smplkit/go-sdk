@@ -50,7 +50,7 @@ func sdkVersion(bi *rtdebug.BuildInfo, ok bool) string {
 }
 
 // userAgent is the SDK-identifying User-Agent sent by default on every
-// outbound request (HTTP and WebSocket handshake). Resolved exactly once at
+// outbound request (HTTP calls and the live event stream). Resolved exactly once at
 // package initialization; the version comes from build metadata, never from
 // a hand-maintained constant.
 var userAgent = func() string {
@@ -72,7 +72,7 @@ func setDefaultUserAgent(h http.Header) {
 // callerUserAgent returns the User-Agent the caller supplied through the
 // extra-headers surface, matching the key case-insensitively, or "" when
 // none was supplied. Used where headers are not merged through http.Header
-// (the WebSocket handshake), so the caller's value can win there too.
+// (the live event stream request), so the caller's value can win there too.
 func callerUserAgent(extraHeaders map[string]string) string {
 	for k, v := range extraHeaders {
 		if http.CanonicalHeaderKey(k) == "User-Agent" {

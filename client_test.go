@@ -17,8 +17,9 @@ import (
 )
 
 // waitReadyServer serves empty config/flag lists so WaitUntilReady's eager
-// config+flags connect succeeds, leaving only the WebSocket handshake (which a
-// plain httptest server rejects) to drive the readiness wait.
+// config+flags connect succeeds, leaving only the live event stream (which a
+// plain httptest server never establishes — its responses lack the
+// text/event-stream content type) to drive the readiness wait.
 func waitReadyServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	h := http.NewServeMux()
@@ -37,11 +38,12 @@ func waitReadyServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func TestClient_WaitUntilReady_TimeoutWhenWSNeverConnects(t *testing.T) {
+func TestClient_WaitUntilReady_TimeoutWhenStreamNeverConnects(t *testing.T) {
 	// config + flags connect successfully (empty lists), so the only thing
-	// left is the WebSocket handshake — which a plain httptest server rejects,
-	// so the WS dial loop never reaches "connected" and WaitUntilReady must
-	// return a timeout error rather than blocking forever.
+	// left is the live event stream — which a plain httptest server never
+	// establishes (wrong content type), so the connect loop never reaches
+	// "connected" and WaitUntilReady must return a timeout error rather than
+	// blocking forever.
 	srv := waitReadyServer(t)
 	client, err := smplkit.NewClient(
 		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
@@ -53,7 +55,7 @@ func TestClient_WaitUntilReady_TimeoutWhenWSNeverConnects(t *testing.T) {
 	err = client.WaitUntilReady(context.Background(), 50*time.Millisecond)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "timed out")
-	// WaitUntilReady's doc promises a TimeoutError on WebSocket timeout; the
+	// WaitUntilReady's doc promises a TimeoutError on stream timeout; the
 	// error must be matchable via errors.As so callers can branch on it.
 	var timeoutErr *smplkit.TimeoutError
 	require.True(t, errors.As(err, &timeoutErr), "expected *TimeoutError, got %T: %v", err, err)
@@ -61,7 +63,7 @@ func TestClient_WaitUntilReady_TimeoutWhenWSNeverConnects(t *testing.T) {
 
 func TestClient_WaitUntilReady_EagerConnectError(t *testing.T) {
 	// Point at a closed port: WaitUntilReady eagerly connects flags + config
-	// before waiting on the socket (matching Python's wait_until_ready), so the
+	// before waiting on the stream (matching Python's wait_until_ready), so the
 	// connection failure surfaces rather than blocking forever.
 	client, err := smplkit.NewClient(
 		smplkit.Config{APIKey: "sk_test_key", Environment: "test", Service: "test-service", DisableTelemetry: true},
@@ -91,7 +93,7 @@ func TestClient_WaitUntilReady_ZeroTimeoutUsesDefault(t *testing.T) {
 func TestClient_WaitUntilReady_ConfigConnectError(t *testing.T) {
 	// flags connects (empty list) but config returns 500 — WaitUntilReady
 	// surfaces the config connect failure (it eagerly connects flags first,
-	// then config, before the WebSocket wait).
+	// then config, before the event-stream wait).
 	h := http.NewServeMux()
 	h.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")

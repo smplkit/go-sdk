@@ -114,7 +114,7 @@ func TestDebug_NoOpWhenDisabled(t *testing.T) {
 	os.Stderr = w
 	defer func() { os.Stderr = oldStderr }()
 
-	Debug("websocket", "this should not appear")
+	Debug("events", "this should not appear")
 
 	w.Close()
 	var buf bytes.Buffer
@@ -154,7 +154,7 @@ func TestDebug_WritesToStderr(t *testing.T) {
 	defer func() { debugEnabled = orig }()
 
 	out := captureStderr(t, func() {
-		Debug("websocket", "connected")
+		Debug("events", "connected")
 	})
 	if out == "" {
 		t.Error("Debug wrote nothing to stderr when enabled")
@@ -167,10 +167,10 @@ func TestDebug_PrefixFormat(t *testing.T) {
 	defer func() { debugEnabled = orig }()
 
 	out := captureStderr(t, func() {
-		Debug("websocket", "some message")
+		Debug("events", "some message")
 	})
-	if !strings.HasPrefix(out, "[smplkit:websocket]") {
-		t.Errorf("output does not start with [smplkit:websocket]: %q", out)
+	if !strings.HasPrefix(out, "[smplkit:events]") {
+		t.Errorf("output does not start with [smplkit:events]: %q", out)
 	}
 }
 
@@ -270,7 +270,7 @@ func TestDebug_AllSubsystems(t *testing.T) {
 	defer func() { debugEnabled = orig }()
 
 	subsystems := []string{
-		"lifecycle", "websocket", "api", "discovery",
+		"lifecycle", "events", "api", "discovery",
 		"resolution", "adapter", "registration",
 	}
 	for _, sub := range subsystems {

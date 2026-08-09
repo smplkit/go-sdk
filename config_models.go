@@ -150,7 +150,7 @@ func (c *ConfigEntry) apply(other *ConfigEntry) {
 
 // LiveConfig is a live, dict-like, read-only proxy for a config's resolved
 // values. Returned by ConfigClient.Subscribe. Every read goes through the
-// client's resolved-config cache, so WebSocket updates are picked up
+// client's resolved-config cache, so pushed updates are picked up
 // automatically.
 //
 // Customer mutation paths are absent: there is no Set / Put / Delete

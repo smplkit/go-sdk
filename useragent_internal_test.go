@@ -222,11 +222,12 @@ func TestNewClient_CallerUserAgentWinsPerService(t *testing.T) {
 	}
 }
 
-// TestEnsureWS_CallerUserAgentWiring proves the caller-supplied User-Agent
-// reaches the WebSocket handshake configuration on every construction shape
-// that can own a socket (SmplClient plus the three standalone live clients).
-// The suite-wide wsLaunch no-op keeps the sockets from dialing.
-func TestEnsureWS_CallerUserAgentWiring(t *testing.T) {
+// TestEnsureEventStream_CallerUserAgentWiring proves the caller-supplied
+// User-Agent reaches the event-stream configuration on every construction
+// shape that can own a stream (SmplClient plus the three standalone live
+// clients). The suite-wide eventsLaunch no-op keeps the streams from
+// connecting.
+func TestEnsureEventStream_CallerUserAgentWiring(t *testing.T) {
 	server, _ := uaCaptureServer(t)
 	cfg := Config{
 		APIKey:           "sk_test",
@@ -240,24 +241,24 @@ func TestEnsureWS_CallerUserAgentWiring(t *testing.T) {
 		c, err := NewClient(cfg, withBaseURLOverride(server.URL))
 		require.NoError(t, err)
 		defer func() { _ = c.Close() }()
-		assert.Equal(t, "corp-agent/7", c.ensureWS().callerUA)
+		assert.Equal(t, "corp-agent/7", c.ensureEventStream().callerUA)
 	})
 
 	t.Run("config standalone", func(t *testing.T) {
 		c, err := NewConfigClient(cfg, withBaseURLOverride(server.URL))
 		require.NoError(t, err)
-		assert.Equal(t, "corp-agent/7", c.ensureWS().callerUA)
+		assert.Equal(t, "corp-agent/7", c.ensureEventStream().callerUA)
 	})
 
 	t.Run("flags standalone", func(t *testing.T) {
 		c, err := NewFlagsClient(cfg, withBaseURLOverride(server.URL))
 		require.NoError(t, err)
-		assert.Equal(t, "corp-agent/7", c.ensureWS().callerUA)
+		assert.Equal(t, "corp-agent/7", c.ensureEventStream().callerUA)
 	})
 
 	t.Run("logging standalone", func(t *testing.T) {
 		c, err := NewLoggingClient(cfg, withBaseURLOverride(server.URL))
 		require.NoError(t, err)
-		assert.Equal(t, "corp-agent/7", c.ensureWS().callerUA)
+		assert.Equal(t, "corp-agent/7", c.ensureEventStream().callerUA)
 	})
 }

@@ -19,7 +19,7 @@ import (
 type FlagChangeEvent struct {
 	// ID is the flag ID that changed.
 	ID string
-	// Source is "websocket" or "manual".
+	// Source is "push" (a server-pushed change) or "manual" (a Refresh call).
 	Source string
 	// Deleted is true when the flag was deleted server-side.
 	Deleted bool
@@ -424,9 +424,10 @@ type FlagsRuntime struct {
 	connected   bool
 	retryDelay  time.Duration
 	nextRetryAt time.Time
-	// wsOnce and periodicOnce ensure WS handlers and the flush goroutine are
-	// each registered exactly once, even across multiple retry attempts.
-	wsOnce       sync.Once
+	// streamOnce and periodicOnce ensure event handlers and the flush
+	// goroutine are each registered exactly once, even across multiple
+	// retry attempts.
+	streamOnce   sync.Once
 	periodicOnce sync.Once
 
 	cache         *resolutionCache
@@ -444,7 +445,10 @@ type FlagsRuntime struct {
 	globalListeners []func(*FlagChangeEvent)
 	keyListeners    map[string][]func(*FlagChangeEvent)
 
-	wsManager *sharedWebSocket
+	streamManager *sharedEventStream
+
+	// refetchID unregisters the reconnect-refetch callback on disconnect.
+	refetchID uintptr
 }
 
 func newFlagsRuntime(fc *FlagsClient, sharedBuf *contextRegistrationBuffer) *FlagsRuntime {
@@ -529,17 +533,22 @@ func (rt *FlagsRuntime) ensureInit(ctx context.Context) error {
 
 	rt.cache.clear()
 
-	// In stateless mode (Config.DisableStreaming) no WebSocket is opened and
-	// no periodic flush goroutine starts — Refresh re-fetches on demand.
+	// In stateless mode (Config.DisableStreaming) no event stream is opened
+	// and no periodic flush goroutine starts — Refresh re-fetches on demand.
 	if !rt.flagsClient.disableStreaming {
-		// Register WebSocket handlers exactly once across all retry attempts.
+		// Register event handlers exactly once across all retry attempts.
 		// A second successful start after a transient failure must not double-register.
-		rt.wsOnce.Do(func() {
-			ws := rt.flagsClient.ensureWS()
-			rt.wsManager = ws
-			ws.on("flag_changed", rt.handleFlagChanged)
-			ws.on("flag_deleted", rt.handleFlagDeleted)
-			ws.on("flags_changed", rt.handleFlagsChanged)
+		rt.streamOnce.Do(func() {
+			stream := rt.flagsClient.ensureEventStream()
+			rt.streamManager = stream
+			stream.on("flag_changed", rt.handleFlagChanged)
+			stream.on("flag_deleted", rt.handleFlagDeleted)
+			stream.on("flags_changed", rt.handleFlagsChanged)
+			// On reconnect the stream may have missed events; re-sync via
+			// the same bulk-refresh path the flags_changed event uses, so
+			// change listeners fire only for keys whose resolved state
+			// actually changed.
+			rt.refetchID = stream.onReconnectRefetch(func() { rt.handleFlagsChanged(nil) })
 		})
 
 		// Start the periodic flag-registration flush exactly once.
@@ -576,11 +585,12 @@ func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 		rt.flagFlushDone = nil
 	}
 
-	if rt.wsManager != nil {
-		rt.wsManager.off("flag_changed", rt.handleFlagChanged)
-		rt.wsManager.off("flag_deleted", rt.handleFlagDeleted)
-		rt.wsManager.off("flags_changed", rt.handleFlagsChanged)
-		rt.wsManager = nil
+	if rt.streamManager != nil {
+		rt.streamManager.off("flag_changed", rt.handleFlagChanged)
+		rt.streamManager.off("flag_deleted", rt.handleFlagDeleted)
+		rt.streamManager.off("flags_changed", rt.handleFlagsChanged)
+		rt.streamManager.offReconnectRefetch(rt.refetchID)
+		rt.streamManager = nil
 	}
 
 	batch := rt.contextBuffer.drain()
@@ -598,7 +608,7 @@ func (rt *FlagsRuntime) disconnect(ctx context.Context) {
 	rt.connected = false
 	rt.retryDelay = 0
 	rt.nextRetryAt = time.Time{}
-	rt.wsOnce = sync.Once{}
+	rt.streamOnce = sync.Once{}
 	rt.periodicOnce = sync.Once{}
 	rt.connectMu.Unlock()
 }
@@ -622,8 +632,8 @@ func (rt *FlagsRuntime) Refresh(ctx context.Context) error {
 
 // ConnectionStatus returns the current real-time connection status.
 func (rt *FlagsRuntime) ConnectionStatus() string {
-	if rt.wsManager != nil {
-		return rt.wsManager.connectionStatus()
+	if rt.streamManager != nil {
+		return rt.streamManager.connectionStatus()
 	}
 	return "disconnected"
 }
@@ -924,7 +934,7 @@ func (rt *FlagsRuntime) runPeriodicFlagFlush(done chan struct{}, interval time.D
 
 func (rt *FlagsRuntime) handleFlagChanged(data map[string]interface{}) {
 	flagKey, _ := data["id"].(string)
-	debug.Debug("websocket", "flag_changed event received, key=%q", flagKey)
+	debug.Debug("events", "flag_changed event received, key=%q", flagKey)
 
 	ctx := context.Background()
 
@@ -947,24 +957,24 @@ func (rt *FlagsRuntime) handleFlagChanged(data map[string]interface{}) {
 
 	// Only fire if content changed.
 	if !hadPre || !mapsEqual(pre, updated) {
-		rt.fireChangeListeners(flagKey, "websocket")
+		rt.fireChangeListeners(flagKey, "push")
 	}
 }
 
 func (rt *FlagsRuntime) handleFlagDeleted(data map[string]interface{}) {
 	flagKey, _ := data["id"].(string)
-	debug.Debug("websocket", "flag_deleted event received, key=%q", flagKey)
+	debug.Debug("events", "flag_deleted event received, key=%q", flagKey)
 
 	rt.mu.Lock()
 	delete(rt.flagStore, flagKey)
 	rt.mu.Unlock()
 
 	rt.cache.clear()
-	rt.fireDeletedListener(flagKey, "websocket")
+	rt.fireDeletedListener(flagKey, "push")
 }
 
 func (rt *FlagsRuntime) handleFlagsChanged(_ map[string]interface{}) {
-	debug.Debug("websocket", "flags_changed event received")
+	debug.Debug("events", "flags_changed event received")
 
 	ctx := context.Background()
 	newStore, err := rt.flagsClient.fetchAllFlags(ctx)
@@ -1000,11 +1010,11 @@ func (rt *FlagsRuntime) handleFlagsChanged(_ map[string]interface{}) {
 	}
 
 	// Fire global listener once.
-	rt.fireGlobalOnce("websocket")
+	rt.fireGlobalOnce("push")
 
 	// Fire per-key listeners only for changed keys.
 	for _, k := range changedKeys {
-		rt.fireKeyListenersOnly(k, "websocket")
+		rt.fireKeyListenersOnly(k, "push")
 	}
 }
 

@@ -281,7 +281,7 @@ func TestDiffAndFire_RecordsMetrics(t *testing.T) {
 	c.diffAndFire(
 		map[string]map[string]interface{}{"app": {"a": 1}},
 		map[string]map[string]interface{}{"app": {"a": 2}},
-		"websocket",
+		"push",
 	)
 }
 
@@ -1292,7 +1292,7 @@ func TestDelete_Config_Success(t *testing.T) {
 
 // --- WS listener registration after ensureInit ---
 
-func TestConfigEnsureInit_RegistersWSListeners(t *testing.T) {
+func TestConfigEnsureInit_RegistersEventListeners(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -1305,26 +1305,61 @@ func TestConfigEnsureInit_RegistersWSListeners(t *testing.T) {
 
 	cc := newTestConfigClient(t, mux)
 
-	// Pre-inject a sharedWebSocket so ensureWS() uses it without starting a goroutine.
-	ws := &sharedWebSocket{
-		listeners: make(map[string][]eventCallback),
-		closeCh:   make(chan struct{}),
-		wsDone:    make(chan struct{}),
+	// Pre-inject a sharedEventStream so ensureEventStream() uses it without starting a goroutine.
+	stream := &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
 	}
-	cc.client.ws = ws
+	cc.client.stream = stream
 
 	err := cc.ensureInit(context.Background())
 	require.NoError(t, err)
 
-	ws.listenersMu.Lock()
-	_, hasChanged := ws.listeners["config_changed"]
-	_, hasDeleted := ws.listeners["config_deleted"]
-	_, hasConfigsChanged := ws.listeners["configs_changed"]
-	ws.listenersMu.Unlock()
+	stream.listenersMu.Lock()
+	_, hasChanged := stream.listeners["config_changed"]
+	_, hasDeleted := stream.listeners["config_deleted"]
+	_, hasConfigsChanged := stream.listeners["configs_changed"]
+	stream.listenersMu.Unlock()
 
-	assert.True(t, hasChanged, "config_changed should be registered in WS listener map")
-	assert.True(t, hasDeleted, "config_deleted should be registered in WS listener map")
-	assert.True(t, hasConfigsChanged, "configs_changed should be registered in WS listener map")
+	assert.True(t, hasChanged, "config_changed should be registered in the listener map")
+	assert.True(t, hasDeleted, "config_deleted should be registered in the listener map")
+	assert.True(t, hasConfigsChanged, "configs_changed should be registered in the listener map")
+}
+
+// TestConfigEnsureInit_ReconnectRefetchReusesBulkRefresh proves ensureInit
+// registers a reconnect-refetch callback with the shared stream, and that the
+// callback reuses the same bulk-refresh path the configs_changed handler uses
+// (a full re-list of configs).
+func TestConfigEnsureInit_ReconnectRefetchReusesBulkRefresh(t *testing.T) {
+	var listCalls int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&listCalls, 1)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	cc := newTestConfigClient(t, mux)
+	stream := &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
+	}
+	cc.client.stream = stream
+
+	require.NoError(t, cc.ensureInit(context.Background()))
+	require.Equal(t, int32(1), atomic.LoadInt32(&listCalls), "ensureInit fetches once")
+
+	// Simulate a stream reconnect: the registered callback must run the
+	// module's full refetch (a second list call).
+	stream.runRefetch()
+	assert.Equal(t, int32(2), atomic.LoadInt32(&listCalls),
+		"reconnect refetch must re-list all configs via the bulk-refresh path")
 }
 
 func TestConfigEnsureInit_FetchAllError(t *testing.T) {
@@ -1333,12 +1368,12 @@ func TestConfigEnsureInit_FetchAllError(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"boom"}]}`))
 	}))
-	ws := &sharedWebSocket{
-		listeners: make(map[string][]eventCallback),
-		closeCh:   make(chan struct{}),
-		wsDone:    make(chan struct{}),
+	stream := &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
 	}
-	cc.client.ws = ws
+	cc.client.stream = stream
 
 	err := cc.ensureInit(context.Background())
 	require.Error(t, err)
@@ -1357,12 +1392,12 @@ func TestConfigEnsureInit_FetchChainError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"errors":[{"detail":"boom"}]}`))
 	})
 	cc := newTestConfigClient(t, mux)
-	ws := &sharedWebSocket{
-		listeners: make(map[string][]eventCallback),
-		closeCh:   make(chan struct{}),
-		wsDone:    make(chan struct{}),
+	stream := &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
 	}
-	cc.client.ws = ws
+	cc.client.stream = stream
 
 	err := cc.ensureInit(context.Background())
 	require.Error(t, err)
@@ -1379,12 +1414,12 @@ func TestConfigEnsureInit_Idempotent(t *testing.T) {
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	cc := newTestConfigClient(t, mux)
-	ws := &sharedWebSocket{
-		listeners: make(map[string][]eventCallback),
-		closeCh:   make(chan struct{}),
-		wsDone:    make(chan struct{}),
+	stream := &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
 	}
-	cc.client.ws = ws
+	cc.client.stream = stream
 
 	require.NoError(t, cc.ensureInit(context.Background()))
 	require.NoError(t, cc.ensureInit(context.Background()))
@@ -1478,7 +1513,7 @@ func TestHandleConfigChanged_FetchError(t *testing.T) {
 // child-over-that, so the grandparent's value survives into the child's
 // resolved values. This test LOCKS that behavior so a future refactor can't
 // reintroduce the bug where a missing intermediate dropped the grandparent's
-// value. The assertion runs AFTER the config_changed websocket handler fires.
+// value. The assertion runs AFTER the config_changed event handler fires.
 func TestHandleConfigChanged_GrandparentInheritedValueSurvives(t *testing.T) {
 	const (
 		childID  = "child"
@@ -1521,7 +1556,7 @@ func TestHandleConfigChanged_GrandparentInheritedValueSurvives(t *testing.T) {
 		}
 	})
 
-	// Fire the websocket event handler.
+	// Fire the pushed-event handler.
 	cc.handleConfigChanged(map[string]interface{}{"id": childID})
 
 	// After the handler runs, the child's resolved values must contain the

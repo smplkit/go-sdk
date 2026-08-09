@@ -27,7 +27,7 @@ type ConfigChangeEvent struct {
 	OldValue interface{}
 	// NewValue is the value after the change (nil if the key was removed).
 	NewValue interface{}
-	// Source is "websocket" for server-pushed changes or "manual" for Refresh calls.
+	// Source is "push" for server-pushed changes or "manual" for Refresh calls.
 	Source string
 }
 
@@ -52,7 +52,7 @@ type configChangeListener struct {
 // CRUD. The live surface (Subscribe / GetValue / Bind / OnChange / Refresh)
 // connects lazily on first use — the first call flushes discovery, fetches
 // and resolves all configs into the local cache, and opens the live-updates
-// WebSocket. No explicit install step is required.
+// event stream. No explicit install step is required.
 type ConfigClient struct {
 	client    *SmplClient // parent; nil when constructed standalone
 	generated genconfig.ClientInterface
@@ -72,11 +72,11 @@ type ConfigClient struct {
 
 	// callerUA is the User-Agent supplied via Config.ExtraHeaders (any
 	// casing), or "" when none was; it rides on the standalone-owned
-	// WebSocket handshake.
+	// event stream request.
 	callerUA string
 
 	// disableStreaming mirrors Config.DisableStreaming: the live surface
-	// fetches synchronously and never opens a WebSocket or spawns
+	// fetches synchronously and never opens an event stream or spawns
 	// background goroutines; threshold flushes run inline.
 	disableStreaming bool
 
@@ -94,18 +94,18 @@ type ConfigClient struct {
 	proxyCache   map[string]*LiveConfig
 
 	// bindings holds targets (struct pointers or string-keyed maps)
-	// registered via Bind. WebSocket dispatch mutates these in place
+	// registered via Bind. Event dispatch mutates these in place
 	// when values change.
 	bindingsMu sync.Mutex
 	bindings   map[string]interface{}
 
-	wsMu      sync.Mutex
-	ownWS     *sharedWebSocket // standalone-owned WebSocket (nil when wired)
-	wsManager *sharedWebSocket
+	streamMu      sync.Mutex
+	ownStream     *sharedEventStream // standalone-owned event stream (nil when wired)
+	streamManager *sharedEventStream
 }
 
 // newConfigClient wires a ConfigClient onto a parent SmplClient (the common
-// path), borrowing the parent's config transport, metrics, and WebSocket.
+// path), borrowing the parent's config transport, metrics, and event stream.
 func newConfigClient(parent *SmplClient, gen genconfig.ClientInterface, metrics *metricsReporter) *ConfigClient {
 	return &ConfigClient{
 		client:           parent,
@@ -120,7 +120,7 @@ func newConfigClient(parent *SmplClient, gen genconfig.ClientInterface, metrics 
 
 // NewConfigClient creates a standalone Smpl Config client that builds and
 // owns its own config transport, and on first live use opens and owns its
-// own WebSocket.
+// own event stream.
 func NewConfigClient(cfg Config, opts ...ClientOption) (*ConfigClient, error) {
 	rc, err := resolveConfig(cfg)
 	if err != nil {
@@ -171,19 +171,20 @@ func NewConfigClient(cfg Config, opts ...ClientOption) (*ConfigClient, error) {
 	}, nil
 }
 
-// ensureWS returns the shared WebSocket — the parent's when wired, else our own.
-func (c *ConfigClient) ensureWS() *sharedWebSocket {
+// ensureEventStream returns the shared event stream — the parent's when
+// wired, else our own.
+func (c *ConfigClient) ensureEventStream() *sharedEventStream {
 	if c.client != nil {
-		return c.client.ensureWS()
+		return c.client.ensureEventStream()
 	}
-	c.wsMu.Lock()
-	defer c.wsMu.Unlock()
-	if c.ownWS == nil {
-		c.ownWS = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
-		c.ownWS.callerUA = c.callerUA
-		c.ownWS.start()
+	c.streamMu.Lock()
+	defer c.streamMu.Unlock()
+	if c.ownStream == nil {
+		c.ownStream = newSharedEventStream(c.appURL, c.apiKey, c.metrics)
+		c.ownStream.callerUA = c.callerUA
+		c.ownStream.start()
 	}
-	return c.ownWS
+	return c.ownStream
 }
 
 // ------------------------------------------------------------------
@@ -494,7 +495,7 @@ func (c *ConfigClient) getByID(ctx context.Context, id string) (*ConfigEntry, er
 
 // Subscribe returns a live, dict-like, read-only LiveConfig proxy whose reads
 // always reflect the latest resolved values for the given config id.
-// WebSocket updates are picked up automatically. Subscribing registers the
+// pushed updates are picked up automatically. Subscribing registers the
 // config declaration for code-first observability so the reference appears in
 // the smplkit console.
 //
@@ -547,7 +548,7 @@ func (c *ConfigClient) observeItemDeclaration(configID, itemKey, itemType string
 //
 // Flushes any buffered discovery declarations, fetches and resolves every
 // config for the configured environment into the local cache, opens the
-// shared WebSocket, and subscribes to config_changed / config_deleted /
+// shared event stream, and subscribes to config_changed / config_deleted /
 // configs_changed events. Idempotent and internal — every live method calls
 // it on first use, so the live surface auto-connects with no explicit step.
 func (c *ConfigClient) ensureInit(ctx context.Context) error {
@@ -582,25 +583,29 @@ func (c *ConfigClient) ensureInit(ctx context.Context) error {
 		}
 		c.configCache = cache
 
-		// In stateless mode (Config.DisableStreaming) no WebSocket is opened
-		// — Refresh re-fetches on demand.
+		// In stateless mode (Config.DisableStreaming) no event stream is
+		// opened — Refresh re-fetches on demand.
 		if c.disableStreaming {
 			return
 		}
 
-		// Register WebSocket listeners for real-time config updates.
-		ws := c.ensureWS()
-		c.wsManager = ws
-		ws.on("config_changed", c.handleConfigChanged)
-		ws.on("config_deleted", c.handleConfigDeleted)
-		ws.on("configs_changed", c.handleConfigsChanged)
+		// Register event listeners for real-time config updates.
+		stream := c.ensureEventStream()
+		c.streamManager = stream
+		stream.on("config_changed", c.handleConfigChanged)
+		stream.on("config_deleted", c.handleConfigDeleted)
+		stream.on("configs_changed", c.handleConfigsChanged)
+		// On reconnect the stream may have missed events; re-sync via the
+		// same bulk-refresh path the configs_changed event uses, so change
+		// listeners fire only for values that actually changed.
+		stream.onReconnectRefetch(func() { c.handleConfigsChanged(nil) })
 	})
 	return c.initErr
 }
 
 func (c *ConfigClient) handleConfigChanged(data map[string]interface{}) {
 	configKey, _ := data["id"].(string)
-	debug.Debug("websocket", "config_changed event received, key=%q", configKey)
+	debug.Debug("events", "config_changed event received, key=%q", configKey)
 
 	ctx := context.Background()
 	environment := c.environment
@@ -625,12 +630,12 @@ func (c *ConfigClient) handleConfigChanged(data map[string]interface{}) {
 	newCache := map[string]map[string]interface{}{configKey: newResolved}
 
 	c.configCache[configKey] = newResolved
-	c.diffAndFire(oldCache, newCache, "websocket")
+	c.diffAndFire(oldCache, newCache, "push")
 }
 
 func (c *ConfigClient) handleConfigDeleted(data map[string]interface{}) {
 	configKey, _ := data["id"].(string)
-	debug.Debug("websocket", "config_deleted event received, key=%q", configKey)
+	debug.Debug("events", "config_deleted event received, key=%q", configKey)
 
 	if c.configCache == nil {
 		return
@@ -645,11 +650,11 @@ func (c *ConfigClient) handleConfigDeleted(data map[string]interface{}) {
 
 	oldCache := map[string]map[string]interface{}{configKey: oldResolved}
 	newCache := map[string]map[string]interface{}{configKey: {}}
-	c.diffAndFire(oldCache, newCache, "websocket")
+	c.diffAndFire(oldCache, newCache, "push")
 }
 
 func (c *ConfigClient) handleConfigsChanged(_ map[string]interface{}) {
-	debug.Debug("websocket", "configs_changed event received")
+	debug.Debug("events", "configs_changed event received")
 	_ = c.Refresh(context.Background())
 }
 
@@ -723,7 +728,7 @@ func WithItemKey(key string) ChangeListenerOption {
 
 // diffAndFire compares old and new values, mutates any bound targets
 // in place, and fires change listeners.
-func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]interface{}, source string) { //nolint:unparam // "websocket" source will be used when real-time config push is wired up
+func (c *ConfigClient) diffAndFire(oldCache, newCache map[string]map[string]interface{}, source string) {
 	c.listenersMu.Lock()
 	listeners := make([]configChangeListener, len(c.listeners))
 	copy(listeners, c.listeners)

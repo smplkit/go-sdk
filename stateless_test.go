@@ -7,7 +7,7 @@ package smplkit
 //   Events().Record performs one synchronous POST and returns the SDK's
 //   typed errors on failure. Flush / Close are no-ops for the buffer.
 // - DisableStreaming: the first live call still fetches / resolves / applies
-//   once synchronously, but no sharedWebSocket, no tickers or periodic
+//   once synchronously, but no sharedEventStream, no tickers or periodic
 //   goroutines, and no threshold `go ...` calls are created — threshold
 //   flushes run inline instead. Refresh re-fetches on demand and still
 //   fires change handlers from deltas.
@@ -262,9 +262,9 @@ func TestNewFlagsClient_DisableStreaming_StatelessLive(t *testing.T) {
 	handle := fc.BooleanFlag("feature", false)
 	assert.True(t, handle.Get(context.Background()))
 
-	// No socket, no WS handlers, no periodic flush goroutine.
-	assert.Nil(t, fc.ownWS)
-	assert.Nil(t, fc.runtime.wsManager)
+	// No stream, no event handlers, no periodic flush goroutine.
+	assert.Nil(t, fc.ownStream)
+	assert.Nil(t, fc.runtime.streamManager)
 	assert.Nil(t, fc.runtime.flagFlushDone)
 	assert.Equal(t, "disconnected", fc.ConnectionStatus())
 }
@@ -401,9 +401,9 @@ func TestNewConfigClient_DisableStreaming_StatelessLive(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "localhost", proxy.Value()["host"])
 
-	// No socket, no WS handlers.
-	assert.Nil(t, cc.ownWS)
-	assert.Nil(t, cc.wsManager)
+	// No stream, no event handlers.
+	assert.Nil(t, cc.ownStream)
+	assert.Nil(t, cc.streamManager)
 }
 
 func TestNewConfigClient_DisableStreaming_RefreshFiresChangeHandlers(t *testing.T) {
@@ -498,9 +498,9 @@ func TestNewLoggingClient_DisableStreaming_InstallStateless(t *testing.T) {
 	require.NotEmpty(t, adapter.applied)
 	assert.Equal(t, "WARN", adapter.applied[0].level)
 
-	// No socket, no WS handlers, no periodic flush goroutine.
-	assert.Nil(t, lc.ownWS)
-	assert.Nil(t, lc.wsManager)
+	// No stream, no event handlers, no periodic flush goroutine.
+	assert.Nil(t, lc.ownStream)
+	assert.Nil(t, lc.streamManager)
 	assert.Nil(t, lc.flushDone)
 
 	// The not-installed gate is satisfied; Refresh re-fetches on demand.
@@ -605,8 +605,8 @@ func TestSmplClient_DisableStreaming_WaitUntilReadySkipsSocket(t *testing.T) {
 
 	// Pre-warms the flag and config caches, then returns — no socket.
 	require.NoError(t, c.WaitUntilReady(context.Background(), time.Second))
-	c.wsMu.Lock()
-	ws := c.ws
-	c.wsMu.Unlock()
-	assert.Nil(t, ws, "stateless mode must not open the shared WebSocket")
+	c.streamMu.Lock()
+	stream := c.stream
+	c.streamMu.Unlock()
+	assert.Nil(t, stream, "stateless mode must not open the shared event stream")
 }

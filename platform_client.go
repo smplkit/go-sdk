@@ -70,7 +70,7 @@ func newPlatformClient(appClient genapp.ClientInterface, buf *contextRegistratio
 // own app transport and context-registration buffer.
 //
 // Construction has zero side effects: no service registration, no metrics, no
-// websocket — just CRUD against the app service.
+// event stream — just CRUD against the app service.
 func NewPlatformClient(cfg Config, opts ...ClientOption) (*PlatformClient, error) {
 	rc, err := resolveConfig(cfg)
 	if err != nil {

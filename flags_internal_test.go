@@ -493,18 +493,18 @@ func TestFlagApply(t *testing.T) {
 	assert.Equal(t, "Feature", f.Name)
 }
 
-// --- Client ensureWS (SmplClient) ---
+// --- Client ensureEventStream (SmplClient) ---
 
-func TestSmplClient_EnsureWS(t *testing.T) {
+func TestSmplClient_EnsureEventStream(t *testing.T) {
 	c := &SmplClient{
 		apiKey: "sk_test",
 		appURL: "https://app.smplkit.com",
 	}
-	ws1 := c.ensureWS()
-	ws2 := c.ensureWS()
-	assert.Same(t, ws1, ws2)
+	s1 := c.ensureEventStream()
+	s2 := c.ensureEventStream()
+	assert.Same(t, s1, s2)
 
-	c.stopWS()
+	c.stopEventStream()
 }
 
 // --- FlagsRuntime additional coverage ---
@@ -1287,7 +1287,7 @@ func TestFlagsRuntime_LazyInit(t *testing.T) {
 
 	// Clean up
 	fc.Disconnect(context.Background())
-	fc.client.stopWS()
+	fc.client.stopEventStream()
 }
 
 func TestFlagsRuntime_Disconnect(t *testing.T) {
@@ -1306,7 +1306,7 @@ func TestFlagsRuntime_Disconnect(t *testing.T) {
 	assert.Equal(t, "", fc.runtime.environment)
 	fc.runtime.mu.RUnlock()
 
-	fc.client.stopWS()
+	fc.client.stopEventStream()
 }
 
 func TestFlagsRuntime_Refresh(t *testing.T) {
@@ -1433,14 +1433,14 @@ func (t *failingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return nil, assert.AnError
 }
 
-// --- FlagsRuntime ConnectionStatus with wsManager ---
+// --- FlagsRuntime ConnectionStatus with streamManager ---
 
-func TestFlagsRuntime_ConnectionStatus_WithWSManager(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	ws.setStatus("connected")
+func TestFlagsRuntime_ConnectionStatus_WithStreamManager(t *testing.T) {
+	stream := newSharedEventStream("https://app.smplkit.com", "test", nil)
+	stream.setStatus("connected")
 
 	rt := newFlagsRuntime(nil, newContextRegistrationBuffer())
-	rt.wsManager = ws
+	rt.streamManager = stream
 	assert.Equal(t, "connected", rt.ConnectionStatus())
 }
 
@@ -1486,7 +1486,7 @@ func TestFlagsRuntime_HandleFlagChanged(t *testing.T) {
 
 	assert.NotNil(t, changeEvent)
 	assert.Equal(t, "feature-x", changeEvent.ID)
-	assert.Equal(t, "websocket", changeEvent.Source)
+	assert.Equal(t, "push", changeEvent.Source)
 }
 
 func TestFlagsRuntime_HandleFlagDeleted(t *testing.T) {
@@ -2376,7 +2376,7 @@ func TestFlagsRuntime_ServiceContextAutoInjection(t *testing.T) {
 	assert.Equal(t, true, result, "service context should be auto-injected and match the rule")
 
 	fc.Disconnect(context.Background())
-	fc.client.stopWS()
+	fc.client.stopEventStream()
 }
 
 func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
@@ -2416,7 +2416,7 @@ func TestFlagsRuntime_ServiceContextNotOverridden(t *testing.T) {
 	result := handle.Get(context.Background(), Context{Type: "service", Key: "custom-service"})
 	assert.Equal(t, true, result, "customer-provided service context should take precedence")
 
-	fc.client.stopWS()
+	fc.client.stopEventStream()
 }
 
 // --- Evaluate service-context auto-injection (explicit Evaluate path) ---
@@ -2784,11 +2784,11 @@ func TestFlagsRuntime_OnChangeKey(t *testing.T) {
 	}
 	rt.mu.Unlock()
 
-	rt.fireChangeListeners("test-flag", "websocket")
+	rt.fireChangeListeners("test-flag", "push")
 
 	require.NotNil(t, received)
 	assert.Equal(t, "test-flag", received.ID)
-	assert.Equal(t, "websocket", received.Source)
+	assert.Equal(t, "push", received.Source)
 }
 
 // ---------- fireChangeListeners key listener path ----------
@@ -2835,7 +2835,7 @@ func TestFireChangeListeners_HandleListeners(t *testing.T) {
 	}
 	rt.mu.Unlock()
 
-	rt.fireChangeListeners("my-flag", "websocket")
+	rt.fireChangeListeners("my-flag", "push")
 
 	require.NotNil(t, handleReceived)
 	assert.Equal(t, "my-flag", handleReceived.ID)
@@ -2882,7 +2882,7 @@ func TestFireChangeListeners_HandleListenerPanicRecovery(t *testing.T) {
 	}
 	rt.mu.Unlock()
 
-	rt.fireChangeListeners("my-flag", "websocket")
+	rt.fireChangeListeners("my-flag", "push")
 	assert.True(t, secondCalled)
 }
 
@@ -2921,7 +2921,7 @@ func TestHandleFlagChanged(t *testing.T) {
 
 	require.NotNil(t, received)
 	assert.Equal(t, "my-flag", received.ID)
-	assert.Equal(t, "websocket", received.Source)
+	assert.Equal(t, "push", received.Source)
 }
 
 // --- createFlag (POST) error paths ---
@@ -3335,7 +3335,7 @@ func TestEnsureInit_FlushesBeforeFetch(t *testing.T) {
 	assert.True(t, bulkCalledBefore.Load(), "bulk registration should happen before flag fetch")
 
 	rt.disconnect(context.Background())
-	fc.client.stopWS()
+	fc.client.stopEventStream()
 }
 
 // --- WS listener registration after ensureInit ---
@@ -3354,28 +3354,71 @@ func TestFlagsEnsureInit_RegistersWSListeners(t *testing.T) {
 	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
 	rt := fc.runtime
 
-	// Pre-inject a sharedWebSocket so ensureWS() uses it without starting a goroutine.
-	ws := &sharedWebSocket{
-		listeners: make(map[string][]eventCallback),
-		closeCh:   make(chan struct{}),
-		wsDone:    make(chan struct{}),
+	// Pre-inject a sharedEventStream so ensureEventStream() uses it without starting a goroutine.
+	stream := &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
 	}
-	fc.client.ws = ws
+	fc.client.stream = stream
 
 	err := rt.ensureInit(context.Background())
 	require.NoError(t, err)
 
-	ws.listenersMu.Lock()
-	_, hasChanged := ws.listeners["flag_changed"]
-	_, hasDeleted := ws.listeners["flag_deleted"]
-	_, hasFlagsChanged := ws.listeners["flags_changed"]
-	ws.listenersMu.Unlock()
+	stream.listenersMu.Lock()
+	_, hasChanged := stream.listeners["flag_changed"]
+	_, hasDeleted := stream.listeners["flag_deleted"]
+	_, hasFlagsChanged := stream.listeners["flags_changed"]
+	stream.listenersMu.Unlock()
 
-	assert.True(t, hasChanged, "flag_changed should be registered in WS listener map")
-	assert.True(t, hasDeleted, "flag_deleted should be registered in WS listener map")
-	assert.True(t, hasFlagsChanged, "flags_changed should be registered in WS listener map")
+	assert.True(t, hasChanged, "flag_changed should be registered in the listener map")
+	assert.True(t, hasDeleted, "flag_deleted should be registered in the listener map")
+	assert.True(t, hasFlagsChanged, "flags_changed should be registered in the listener map")
 
 	rt.disconnect(context.Background())
+}
+
+// TestFlagsEnsureInit_ReconnectRefetchReusesBulkRefresh proves ensureInit
+// registers a reconnect-refetch callback with the shared stream, and that the
+// callback reuses the same bulk-refresh path the flags_changed handler uses
+// (a full re-fetch of all flags), and that disconnect unregisters it.
+func TestFlagsEnsureInit_ReconnectRefetchReusesBulkRefresh(t *testing.T) {
+	var listCalls int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/flags", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&listCalls, 1)
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	fc, _ := newTestFlagsClient(t, http.HandlerFunc(mux.ServeHTTP))
+	rt := fc.runtime
+	stream := &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
+	}
+	fc.client.stream = stream
+
+	require.NoError(t, rt.ensureInit(context.Background()))
+	require.Equal(t, int32(1), atomic.LoadInt32(&listCalls), "ensureInit fetches once")
+
+	// Simulate a stream reconnect: the registered callback must run the
+	// module's full refetch (a second list call).
+	stream.runRefetch()
+	assert.Equal(t, int32(2), atomic.LoadInt32(&listCalls),
+		"reconnect refetch must re-fetch all flags via the bulk-refresh path")
+
+	// disconnect unregisters the refetch callback: another reconnect must
+	// not refetch.
+	rt.disconnect(context.Background())
+	stream.runRefetch()
+	assert.Equal(t, int32(2), atomic.LoadInt32(&listCalls),
+		"refetch must be unregistered after disconnect")
 }
 
 // --- disconnect closes the flush goroutine ---
@@ -3402,10 +3445,10 @@ func TestDisconnect_StopsFlagFlushGoroutine(t *testing.T) {
 	rt.disconnect(context.Background())
 	assert.Nil(t, rt.flagFlushDone, "flagFlushDone should be nil after disconnect")
 
-	fc.client.stopWS()
+	fc.client.stopEventStream()
 }
 
-// ========== WS event handler tests ==========
+// ========== pushed-event handler tests ==========
 
 func TestHandleFlagChanged_ScopedFetch_ContentChanged(t *testing.T) {
 	var fetchCount int32
@@ -3434,7 +3477,7 @@ func TestHandleFlagChanged_ScopedFetch_ContentChanged(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(&fetchCount), "should call GetFlag once")
 	require.NotNil(t, received, "listener should fire when content changed")
 	assert.Equal(t, "my-flag", received.ID)
-	assert.Equal(t, "websocket", received.Source)
+	assert.Equal(t, "push", received.Source)
 	assert.False(t, received.Deleted)
 }
 
@@ -3648,7 +3691,7 @@ func TestFireKeyListenersOnly_WithHandle(t *testing.T) {
 	var handleFired bool
 	handle.OnChange(func(e *FlagChangeEvent) { handleFired = true })
 
-	rt.fireKeyListenersOnly("feature", "websocket")
+	rt.fireKeyListenersOnly("feature", "push")
 	assert.True(t, handleFired)
 }
 
@@ -3900,7 +3943,7 @@ func TestFlagsRuntime_EnsureInit_SuccessAfterBackoff(t *testing.T) {
 	assert.Equal(t, 0, fc.runtime.flagBuffer.pendingCount(), "buffer must be committed after successful init")
 
 	fc.Disconnect(context.Background())
-	fc.client.stopWS()
+	fc.client.stopEventStream()
 }
 
 func TestFlagsRuntime_AdvanceBackoff_Doubling(t *testing.T) {
@@ -3955,16 +3998,16 @@ func TestFlagsRuntime_WSSubscribedOnce(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, fc.runtime.connected)
 
-	// Verify WS handlers registered exactly once.
-	ws := fc.runtime.wsManager
-	require.NotNil(t, ws)
-	ws.listenersMu.Lock()
-	count := len(ws.listeners["flag_changed"])
-	ws.listenersMu.Unlock()
+	// Verify event handlers registered exactly once.
+	stream := fc.runtime.streamManager
+	require.NotNil(t, stream)
+	stream.listenersMu.Lock()
+	count := len(stream.listeners["flag_changed"])
+	stream.listenersMu.Unlock()
 	assert.Equal(t, 1, count, "flag_changed handler must be registered exactly once")
 
 	fc.Disconnect(context.Background())
-	fc.client.stopWS()
+	fc.client.stopEventStream()
 }
 
 // ========== Standalone NewFlagsClient ==========
@@ -4005,20 +4048,20 @@ func TestNewFlagsClient_Standalone_ConfigError(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestNewFlagsClient_Standalone_EnsureWS_Own(t *testing.T) {
+func TestNewFlagsClient_Standalone_EnsureEventStream_Own(t *testing.T) {
 	fc, err := NewFlagsClient(
 		Config{APIKey: "sk_test", Environment: "test", Service: "svc", DisableTelemetry: true},
 		withBaseURLOverride("https://app.smplkit.com"),
 	)
 	require.NoError(t, err)
 
-	// Standalone ensureWS builds and owns its own socket.
-	ws1 := fc.ensureWS()
-	ws2 := fc.ensureWS()
-	assert.Same(t, ws1, ws2)
-	require.NotNil(t, fc.ownWS)
+	// Standalone ensureEventStream builds and owns its own stream.
+	s1 := fc.ensureEventStream()
+	s2 := fc.ensureEventStream()
+	assert.Same(t, s1, s2)
+	require.NotNil(t, fc.ownStream)
 
-	ws1.stop()
+	s1.stop()
 }
 
 // newFlagsClient must build its own context buffer when the contexts seam is nil.
@@ -4078,11 +4121,11 @@ func TestNewFlagsClient_Standalone_LiveEvaluate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Pre-inject a sharedWebSocket so the first live use does not open a real socket.
-	fc.ownWS = &sharedWebSocket{
-		listeners: make(map[string][]eventCallback),
-		closeCh:   make(chan struct{}),
-		wsDone:    make(chan struct{}),
+	// Pre-inject a sharedEventStream so the first live use does not open a real stream.
+	fc.ownStream = &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
 	}
 
 	handle := fc.BooleanFlag("feature", false)

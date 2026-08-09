@@ -51,18 +51,18 @@ const notInstalledMessage = "Smpl Logging live operations require install() firs
 //     PRE-install configuration call (allowed before Install).
 //     Install opens the live connection (hooks the app's logging
 //     framework via adapters, discovers loggers, fetches + applies
-//     levels, opens the shared WebSocket). OnChange / Refresh require
+//     levels, opens the shared event stream). OnChange / Refresh require
 //     Install first; calling them earlier returns a *NotInstalledError.
 //
 // The client supports two construction shapes:
 //
 //   - Wired into SmplClient — borrows the parent's logging transport for both
-//     runtime fetch and CRUD and the parent's shared WebSocket for the
+//     runtime fetch and CRUD and the parent's shared event stream for the
 //     live channel. This is the common path.
 //   - Standalone — NewLoggingClient(cfg, ...) builds and owns its own
-//     logging transport and an app transport (the WebSocket gateway lives
+//     logging transport and an app transport (the event gateway lives
 //     on the app service), and on Install opens and owns its own
-//     WebSocket.
+//     event stream.
 type LoggingClient struct {
 	// client is the owning parent SmplClient when wired, nil when standalone.
 	client    *SmplClient
@@ -70,7 +70,7 @@ type LoggingClient struct {
 
 	// Parent-or-own state. When wired these mirror the parent's fields;
 	// when standalone they are resolved at construction so the live
-	// surface can open its own WebSocket without a parent.
+	// surface can open its own event stream without a parent.
 	environment string
 	service     string
 	metrics     *metricsReporter
@@ -79,18 +79,18 @@ type LoggingClient struct {
 
 	// callerUA is the User-Agent supplied via Config.ExtraHeaders (any
 	// casing), or "" when none was; it rides on the standalone-owned
-	// WebSocket handshake.
+	// event stream request.
 	callerUA string
 
 	// disableStreaming mirrors Config.DisableStreaming: Install still
 	// discovers, fetches, and applies levels once synchronously, but never
-	// opens a WebSocket or spawns background goroutines; threshold flushes
-	// run inline.
+	// opens an event stream or spawns background goroutines; threshold
+	// flushes run inline.
 	disableStreaming bool
 
-	// wsMu guards the lazily-created own WebSocket (standalone path).
-	wsMu  sync.Mutex
-	ownWS *sharedWebSocket
+	// streamMu guards the lazily-created own event stream (standalone path).
+	streamMu  sync.Mutex
+	ownStream *sharedEventStream
 
 	// CRUD sub-clients.
 	loggers   *LoggersClient
@@ -116,7 +116,9 @@ type LoggingClient struct {
 	adapters         []adapters.LoggingAdapter
 	explicitAdapters bool
 
-	wsManager *sharedWebSocket
+	streamManager *sharedEventStream
+	// refetchID unregisters the reconnect-refetch callback on close.
+	refetchID uintptr
 	flushDone chan struct{}
 }
 
@@ -155,8 +157,8 @@ func newLoggingClient(parent *SmplClient, gen genlogging.ClientInterface, metric
 
 // NewLoggingClient creates a standalone Smpl Logging client that builds
 // and owns its own generated logging transport and, on first live use,
-// its own WebSocket against the event gateway (the WebSocket gateway
-// lives on the app service).
+// its own event stream against the event gateway (which lives on the
+// app service).
 //
 // Logging needs environment + service: the environment scopes runtime
 // level resolution and discovery declarations, and the service scopes
@@ -227,20 +229,20 @@ func NewLoggingClient(cfg Config, opts ...ClientOption) (*LoggingClient, error) 
 	return c, nil
 }
 
-// ensureWS returns the shared WebSocket — the parent's when wired, else
-// our own (built lazily on first live use).
-func (c *LoggingClient) ensureWS() *sharedWebSocket {
+// ensureEventStream returns the shared event stream — the parent's when
+// wired, else our own (built lazily on first live use).
+func (c *LoggingClient) ensureEventStream() *sharedEventStream {
 	if c.client != nil {
-		return c.client.ensureWS()
+		return c.client.ensureEventStream()
 	}
-	c.wsMu.Lock()
-	defer c.wsMu.Unlock()
-	if c.ownWS == nil {
-		c.ownWS = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
-		c.ownWS.callerUA = c.callerUA
-		c.ownWS.start()
+	c.streamMu.Lock()
+	defer c.streamMu.Unlock()
+	if c.ownStream == nil {
+		c.ownStream = newSharedEventStream(c.appURL, c.apiKey, c.metrics)
+		c.ownStream.callerUA = c.callerUA
+		c.ownStream.start()
 	}
-	return c.ownWS
+	return c.ownStream
 }
 
 // close cleans up the logging client resources.
@@ -249,17 +251,18 @@ func (c *LoggingClient) close() {
 	for _, adapter := range c.adapters {
 		adapter.UninstallHook()
 	}
-	if c.wsManager != nil {
-		c.wsManager.off("logger_changed", c.handleLoggerChanged)
-		c.wsManager.off("logger_deleted", c.handleLoggerDeleted)
-		c.wsManager.off("group_changed", c.handleGroupChanged)
-		c.wsManager.off("group_deleted", c.handleGroupDeleted)
-		c.wsManager.off("loggers_changed", c.handleLoggersChanged)
-		if c.client == nil && c.ownWS != nil {
-			c.ownWS.stop()
-			c.ownWS = nil
+	if c.streamManager != nil {
+		c.streamManager.off("logger_changed", c.handleLoggerChanged)
+		c.streamManager.off("logger_deleted", c.handleLoggerDeleted)
+		c.streamManager.off("group_changed", c.handleGroupChanged)
+		c.streamManager.off("group_deleted", c.handleGroupDeleted)
+		c.streamManager.off("loggers_changed", c.handleLoggersChanged)
+		c.streamManager.offReconnectRefetch(c.refetchID)
+		if c.client == nil && c.ownStream != nil {
+			c.ownStream.stop()
+			c.ownStream = nil
 		}
-		c.wsManager = nil
+		c.streamManager = nil
 	}
 	if c.flushDone != nil {
 		close(c.flushDone)
@@ -293,7 +296,7 @@ func (c *LoggingClient) requireInstalled() error {
 // Install hooks smplkit into the application's logging machinery.
 //
 // Loads adapters, scans existing loggers, applies levels from the
-// smplkit server, and wires WebSocket handlers for live updates. This
+// smplkit server, and wires event handlers for live updates. This
 // IS the explicit consent gate — OnChange / Refresh require it first.
 //
 // Idempotent — safe to call multiple times.
@@ -352,18 +355,23 @@ func (c *LoggingClient) Install(ctx context.Context) error {
 		debug.Debug("resolution", "starting initial level resolution pass")
 		c.applyLevels()
 
-		// 7. Register WebSocket event handlers for real-time level updates
+		// 7. Register event handlers for real-time level updates
 		// and start the periodic flush timer. Skipped in stateless mode
 		// (Config.DisableStreaming): levels were applied once above, and
 		// Refresh re-fetches on demand.
 		if !c.disableStreaming {
-			ws := c.ensureWS()
-			c.wsManager = ws
-			ws.on("logger_changed", c.handleLoggerChanged)
-			ws.on("logger_deleted", c.handleLoggerDeleted)
-			ws.on("group_changed", c.handleGroupChanged)
-			ws.on("group_deleted", c.handleGroupDeleted)
-			ws.on("loggers_changed", c.handleLoggersChanged)
+			stream := c.ensureEventStream()
+			c.streamManager = stream
+			stream.on("logger_changed", c.handleLoggerChanged)
+			stream.on("logger_deleted", c.handleLoggerDeleted)
+			stream.on("group_changed", c.handleGroupChanged)
+			stream.on("group_deleted", c.handleGroupDeleted)
+			stream.on("loggers_changed", c.handleLoggersChanged)
+			// On reconnect the stream may have missed events; re-sync
+			// loggers + groups via the same bulk-refresh path the
+			// loggers_changed event uses, so change listeners fire only
+			// for loggers whose resolved level actually changed.
+			c.refetchID = stream.onReconnectRefetch(func() { c.handleLoggersChanged(nil) })
 
 			// Start periodic flush timer.
 			c.flushDone = make(chan struct{})
@@ -777,7 +785,7 @@ func (c *LoggingClient) periodicFlush(done chan struct{}) {
 
 func (c *LoggingClient) handleLoggerChanged(data map[string]interface{}) {
 	loggerKey, _ := data["id"].(string)
-	debug.Debug("websocket", "logger_changed event received, key=%q", loggerKey)
+	debug.Debug("events", "logger_changed event received, key=%q", loggerKey)
 
 	ctx := context.Background()
 
@@ -795,22 +803,22 @@ func (c *LoggingClient) handleLoggerChanged(data map[string]interface{}) {
 	before := c.snapshotResolvedLevels()
 	c.loggersCache[loggerKey] = updated
 	c.applyLevels()
-	c.fireResolvedLevelDeltas(before, "websocket")
+	c.fireResolvedLevelDeltas(before, "push")
 }
 
 func (c *LoggingClient) handleLoggerDeleted(data map[string]interface{}) {
 	loggerKey, _ := data["id"].(string)
-	debug.Debug("websocket", "logger_deleted event received, key=%q", loggerKey)
+	debug.Debug("events", "logger_deleted event received, key=%q", loggerKey)
 
 	before := c.snapshotResolvedLevels()
 	delete(c.loggersCache, loggerKey)
 	c.applyLevels()
-	c.fireResolvedLevelDeltas(before, "websocket")
+	c.fireResolvedLevelDeltas(before, "push")
 }
 
 func (c *LoggingClient) handleGroupChanged(data map[string]interface{}) {
 	groupKey, _ := data["id"].(string)
-	debug.Debug("websocket", "group_changed event received, key=%q", groupKey)
+	debug.Debug("events", "group_changed event received, key=%q", groupKey)
 
 	ctx := context.Background()
 
@@ -826,12 +834,12 @@ func (c *LoggingClient) handleGroupChanged(data map[string]interface{}) {
 	before := c.snapshotResolvedLevels()
 	c.groupsCache[groupKey] = updated
 	c.applyLevels()
-	c.fireResolvedLevelDeltas(before, "websocket")
+	c.fireResolvedLevelDeltas(before, "push")
 }
 
 func (c *LoggingClient) handleGroupDeleted(data map[string]interface{}) {
 	groupKey, _ := data["id"].(string)
-	debug.Debug("websocket", "group_deleted event received, key=%q", groupKey)
+	debug.Debug("events", "group_deleted event received, key=%q", groupKey)
 
 	if _, existed := c.groupsCache[groupKey]; !existed {
 		return
@@ -839,11 +847,11 @@ func (c *LoggingClient) handleGroupDeleted(data map[string]interface{}) {
 	before := c.snapshotResolvedLevels()
 	delete(c.groupsCache, groupKey)
 	c.applyLevels()
-	c.fireResolvedLevelDeltas(before, "websocket")
+	c.fireResolvedLevelDeltas(before, "push")
 }
 
 func (c *LoggingClient) handleLoggersChanged(_ map[string]interface{}) {
-	debug.Debug("websocket", "loggers_changed event received")
+	debug.Debug("events", "loggers_changed event received")
 
 	ctx := context.Background()
 
@@ -852,7 +860,7 @@ func (c *LoggingClient) handleLoggersChanged(_ map[string]interface{}) {
 		return
 	}
 	c.applyLevels()
-	c.fireResolvedLevelDeltas(before, "websocket")
+	c.fireResolvedLevelDeltas(before, "push")
 }
 
 // snapshotResolvedLevels resolves every cached logger against the

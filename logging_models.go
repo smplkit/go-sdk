@@ -332,6 +332,6 @@ type LoggerChangeEvent struct {
 	ID string
 	// Level is the newly-applied effective level.
 	Level *LogLevel
-	// Source identifies the trigger ("websocket", "manual").
+	// Source identifies the trigger ("push", "manual").
 	Source string
 }

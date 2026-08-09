@@ -39,9 +39,6 @@ updates:
       - dependency-name: "github.com/diegoholiveira/jsonlogic/v3"
         update-types:
           ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]
-      - dependency-name: "github.com/gorilla/websocket"
-        update-types:
-          ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "github.com/google/uuid"
         update-types:
           ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]

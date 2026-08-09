@@ -77,7 +77,7 @@ func TestHandleLoggerChanged_FiresOnContentChange(t *testing.T) {
 	lc.handleLoggerChanged(map[string]interface{}{"id": "my.logger"})
 	require.NotNil(t, received)
 	assert.Equal(t, "my.logger", received.ID)
-	assert.Equal(t, "websocket", received.Source)
+	assert.Equal(t, "push", received.Source)
 }
 
 func TestHandleLoggerChanged_NoFireWhenUnchanged(t *testing.T) {
@@ -186,7 +186,7 @@ func TestHandleGroupChanged_FiresLoggerListenerOnResolvedDelta(t *testing.T) {
 	require.Len(t, cap.keys["app.db"], 1)
 	require.NotNil(t, cap.keys["app.db"][0].Level)
 	assert.Equal(t, LogLevelError, *cap.keys["app.db"][0].Level)
-	assert.Equal(t, "websocket", cap.keys["app.db"][0].Source)
+	assert.Equal(t, "push", cap.keys["app.db"][0].Source)
 }
 
 func TestHandleGroupChanged_NoFireWhenResolvedLevelUnchanged(t *testing.T) {
@@ -451,7 +451,7 @@ func TestDiagnostic1_DotAncestorCascadeViaLoggerChanged(t *testing.T) {
 	got := make(map[string]LogLevel, len(cap.global))
 	for _, e := range cap.global {
 		require.NotNil(t, e.Level)
-		assert.Equal(t, "websocket", e.Source)
+		assert.Equal(t, "push", e.Source)
 		got[e.ID] = *e.Level
 	}
 	assert.Equal(t, LogLevelError, got["com.acme"])

@@ -1234,24 +1234,24 @@ func TestLoggingClient_Close_WithFlushDoneAndAdapter(t *testing.T) {
 }
 
 func TestLoggingClient_Close_StandaloneOwnWS(t *testing.T) {
-	ws := &sharedWebSocket{
-		listeners: make(map[string][]eventCallback),
-		closeCh:   make(chan struct{}),
-		wsDone:    make(chan struct{}),
+	stream := &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
 	}
-	close(ws.wsDone) // so stop() returns immediately
+	close(stream.streamDone) // so stop() returns immediately
 	c := &LoggingClient{
-		client:       nil, // standalone
-		ownWS:        ws,
-		wsManager:    ws,
-		loggersCache: map[string]map[string]interface{}{},
-		groupsCache:  map[string]map[string]interface{}{},
-		keyListeners: map[string][]func(*LoggerChangeEvent){},
-		buffer:       newLoggerRegistrationBuffer(),
+		client:        nil, // standalone
+		ownStream:     stream,
+		streamManager: stream,
+		loggersCache:  map[string]map[string]interface{}{},
+		groupsCache:   map[string]map[string]interface{}{},
+		keyListeners:  map[string][]func(*LoggerChangeEvent){},
+		buffer:        newLoggerRegistrationBuffer(),
 	}
 	c.close()
-	assert.Nil(t, c.ownWS)
-	assert.Nil(t, c.wsManager)
+	assert.Nil(t, c.ownStream)
+	assert.Nil(t, c.streamManager)
 }
 
 // ── fireChangeListeners ─────────────────────────────────────────────────────
@@ -1270,7 +1270,7 @@ func TestFireChangeListeners_EmptyKeyIsNoOp(t *testing.T) {
 	c := newBareLoggingClient(map[string]map[string]interface{}{})
 	var called bool
 	c.globalListeners = append(c.globalListeners, func(*LoggerChangeEvent) { called = true })
-	c.fireChangeListeners("", "websocket")
+	c.fireChangeListeners("", "push")
 	assert.False(t, called)
 }
 
@@ -1282,11 +1282,11 @@ func TestFireChangeListeners_GlobalAndKey(t *testing.T) {
 	c.globalListeners = append(c.globalListeners, func(e *LoggerChangeEvent) { globalEvent = e })
 	c.keyListeners["my.logger"] = append(c.keyListeners["my.logger"], func(e *LoggerChangeEvent) { keyEvent = e })
 
-	c.fireChangeListeners("my.logger", "websocket")
+	c.fireChangeListeners("my.logger", "push")
 
 	require.NotNil(t, globalEvent)
 	assert.Equal(t, "my.logger", globalEvent.ID)
-	assert.Equal(t, "websocket", globalEvent.Source)
+	assert.Equal(t, "push", globalEvent.Source)
 	require.NotNil(t, globalEvent.Level)
 	assert.Equal(t, LogLevelWarn, *globalEvent.Level)
 	require.NotNil(t, keyEvent)
@@ -1297,7 +1297,7 @@ func TestFireChangeListeners_LoggerNotInCacheNilLevel(t *testing.T) {
 	c := newBareLoggingClient(map[string]map[string]interface{}{})
 	var event *LoggerChangeEvent
 	c.globalListeners = append(c.globalListeners, func(e *LoggerChangeEvent) { event = e })
-	c.fireChangeListeners("unknown.logger", "websocket")
+	c.fireChangeListeners("unknown.logger", "push")
 	require.NotNil(t, event)
 	assert.Nil(t, event.Level)
 }
@@ -1311,7 +1311,7 @@ func TestFireChangeListeners_GlobalPanicRecovery(t *testing.T) {
 	c.globalListeners = append(c.globalListeners, func(*LoggerChangeEvent) { second = true })
 	log.SetOutput(io.Discard)
 	t.Cleanup(func() { log.SetOutput(io.Discard) })
-	c.fireChangeListeners("my.logger", "websocket")
+	c.fireChangeListeners("my.logger", "push")
 	assert.True(t, second)
 }
 
@@ -1324,7 +1324,7 @@ func TestFireChangeListeners_KeyPanicRecovery(t *testing.T) {
 	c.keyListeners["my.logger"] = append(c.keyListeners["my.logger"], func(*LoggerChangeEvent) { second = true })
 	log.SetOutput(io.Discard)
 	t.Cleanup(func() { log.SetOutput(io.Discard) })
-	c.fireChangeListeners("my.logger", "websocket")
+	c.fireChangeListeners("my.logger", "push")
 	assert.True(t, second)
 }
 
@@ -1500,7 +1500,7 @@ func installMux() *http.ServeMux {
 }
 
 // installTestClient builds a wired (connected=false) LoggingClient whose parent
-// has a pre-injected non-connecting WebSocket, so Install does not dial.
+// has a pre-injected non-connecting event stream, so Install does not connect.
 func installTestClient(t *testing.T, mux http.Handler) *LoggingClient {
 	t.Helper()
 	server := httptest.NewServer(mux)
@@ -1522,11 +1522,11 @@ func installTestClient(t *testing.T, mux http.Handler) *LoggingClient {
 		headerEditor,
 	)
 	c := &SmplClient{apiKey: "sk_test", environment: "test", service: "test-service", appURL: server.URL, httpClient: httpClient}
-	// Pre-inject a non-connecting WS so ensureWS()/ensureStarted() do not dial.
-	c.ws = &sharedWebSocket{
-		listeners: make(map[string][]eventCallback),
-		closeCh:   make(chan struct{}),
-		wsDone:    make(chan struct{}),
+	// Pre-inject a non-connecting stream so ensureEventStream()/ensureStarted() do not connect.
+	c.stream = &sharedEventStream{
+		listeners:  make(map[string][]eventCallback),
+		closeCh:    make(chan struct{}),
+		streamDone: make(chan struct{}),
 	}
 	c.started = true // skip background goroutines
 	lc := newLoggingClient(c, genLoggingClient, nil)
@@ -1545,15 +1545,59 @@ func TestInstall_NoAdaptersWarnsAndConnects(t *testing.T) {
 	t.Cleanup(lc.close)
 }
 
-func TestInstall_RegistersWSHandlers(t *testing.T) {
+// TestInstall_ReconnectRefetchReusesBulkRefresh proves Install registers a
+// reconnect-refetch callback with the shared stream, and that the callback
+// reuses the same bulk-refresh path the loggers_changed handler uses (a full
+// re-fetch of loggers AND groups), and that close unregisters it.
+func TestInstall_ReconnectRefetchReusesBulkRefresh(t *testing.T) {
+	var loggerLists, groupLists int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/loggers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			atomic.AddInt32(&loggerLists, 1)
+		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/api/v1/log_groups", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			atomic.AddInt32(&groupLists, 1)
+		}
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	lc := installTestClient(t, mux)
+	require.NoError(t, lc.Install(context.Background()))
+	require.Equal(t, int32(1), atomic.LoadInt32(&loggerLists), "Install fetches loggers once")
+	require.Equal(t, int32(1), atomic.LoadInt32(&groupLists), "Install fetches groups once")
+
+	// Simulate a stream reconnect: the registered callback must run the
+	// module's full refetch (loggers + groups again).
+	stream := lc.client.stream
+	stream.runRefetch()
+	assert.Equal(t, int32(2), atomic.LoadInt32(&loggerLists),
+		"reconnect refetch must re-fetch loggers via the bulk-refresh path")
+	assert.Equal(t, int32(2), atomic.LoadInt32(&groupLists),
+		"reconnect refetch must re-fetch groups via the bulk-refresh path")
+
+	// close unregisters the refetch callback: another reconnect must not refetch.
+	lc.close()
+	stream.runRefetch()
+	assert.Equal(t, int32(2), atomic.LoadInt32(&loggerLists),
+		"refetch must be unregistered after close")
+}
+
+func TestInstall_RegistersEventHandlers(t *testing.T) {
 	lc := installTestClient(t, installMux())
 	require.NoError(t, lc.Install(context.Background()))
 
-	ws := lc.client.ws
-	ws.listenersMu.Lock()
-	defer ws.listenersMu.Unlock()
+	stream := lc.client.stream
+	stream.listenersMu.Lock()
+	defer stream.listenersMu.Unlock()
 	for _, ev := range []string{"logger_changed", "logger_deleted", "group_changed", "group_deleted", "loggers_changed"} {
-		_, ok := ws.listeners[ev]
+		_, ok := stream.listeners[ev]
 		assert.True(t, ok, "%s should be registered", ev)
 	}
 	t.Cleanup(lc.close)
@@ -1753,11 +1797,11 @@ func TestNewLoggingClient_Standalone_EnsureWSOwnsSocket(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ws := lc.ensureWS()
-	require.NotNil(t, ws)
-	assert.Same(t, ws, lc.ownWS, "standalone ensureWS builds and owns its own socket")
-	assert.Same(t, ws, lc.ensureWS(), "ensureWS is idempotent")
-	lc.ownWS.stop()
+	stream := lc.ensureEventStream()
+	require.NotNil(t, stream)
+	assert.Same(t, stream, lc.ownStream, "standalone ensureEventStream builds and owns its own stream")
+	assert.Same(t, stream, lc.ensureEventStream(), "ensureEventStream is idempotent")
+	lc.ownStream.stop()
 }
 
 // ── shared capture adapter ──────────────────────────────────────────────────

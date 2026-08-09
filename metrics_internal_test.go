@@ -189,8 +189,8 @@ func TestMetricsReporter_GaugeReplacesValue(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	r.RecordGauge("platform.websocket_connections", 1, "connections", nil)
-	r.RecordGauge("platform.websocket_connections", 0, "connections", nil)
+	r.RecordGauge("platform.event_connections", 1, "connections", nil)
+	r.RecordGauge("platform.event_connections", 0, "connections", nil)
 
 	r.mu.Lock()
 	for _, g := range r.gauges {
@@ -204,7 +204,7 @@ func TestMetricsReporter_GaugeSeparateFromCounters(t *testing.T) {
 	defer r.Close()
 
 	r.Record("flags.evaluations", 1, "", nil)
-	r.RecordGauge("platform.websocket_connections", 1, "", nil)
+	r.RecordGauge("platform.event_connections", 1, "", nil)
 
 	r.mu.Lock()
 	assert.Len(t, r.counters, 1)
@@ -216,8 +216,8 @@ func TestMetricsReporter_GaugeUnitFirstWriteWins(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	r.RecordGauge("platform.websocket_connections", 1, "connections", nil)
-	r.RecordGauge("platform.websocket_connections", 0, "other", nil)
+	r.RecordGauge("platform.event_connections", 1, "connections", nil)
+	r.RecordGauge("platform.event_connections", 0, "other", nil)
 
 	r.mu.Lock()
 	for _, g := range r.gauges {
@@ -230,8 +230,8 @@ func TestMetricsReporter_GaugeUnitSetOnFirstNonEmpty(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	r.RecordGauge("platform.websocket_connections", 1, "", nil)
-	r.RecordGauge("platform.websocket_connections", 0, "connections", nil)
+	r.RecordGauge("platform.event_connections", 1, "", nil)
+	r.RecordGauge("platform.event_connections", 0, "connections", nil)
 
 	r.mu.Lock()
 	for _, g := range r.gauges {
@@ -278,7 +278,7 @@ func TestMetricsReporter_FlushIncludesGauges(t *testing.T) {
 	defer r.Close()
 
 	r.Record("flags.evaluations", 1, "evaluations", nil)
-	r.RecordGauge("platform.websocket_connections", 1, "connections", nil)
+	r.RecordGauge("platform.event_connections", 1, "connections", nil)
 	r.flush()
 
 	payload := getPayload()
@@ -294,7 +294,7 @@ func TestMetricsReporter_FlushIncludesGauges(t *testing.T) {
 		names[attrs["name"].(string)] = true
 	}
 	assert.True(t, names["flags.evaluations"])
-	assert.True(t, names["platform.websocket_connections"])
+	assert.True(t, names["platform.event_connections"])
 }
 
 func TestMetricsReporter_FlushResetsCounters(t *testing.T) {
@@ -302,7 +302,7 @@ func TestMetricsReporter_FlushResetsCounters(t *testing.T) {
 	defer r.Close()
 
 	r.Record("flags.evaluations", 1, "", nil)
-	r.RecordGauge("platform.websocket_connections", 1, "", nil)
+	r.RecordGauge("platform.event_connections", 1, "", nil)
 	r.flush()
 
 	r.mu.Lock()
@@ -585,7 +585,7 @@ func TestPayloadFormat_JSONAPIStructure(t *testing.T) {
 	defer r.Close()
 
 	r.Record("flags.evaluations", 42, "evaluations", map[string]string{"flag": "x"})
-	r.RecordGauge("platform.websocket_connections", 1, "connections", nil)
+	r.RecordGauge("platform.event_connections", 1, "connections", nil)
 	r.flush()
 
 	payload := getPayload()
@@ -622,20 +622,20 @@ func TestDisableTelemetry_Config(t *testing.T) {
 }
 
 // ===================================================================
-// WebSocket metrics instrumentation
+// Event-stream metrics instrumentation
 // ===================================================================
 
-func TestWebSocket_MetricsOnConnect(t *testing.T) {
+func TestEventStream_MetricsWired(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", r)
-	assert.Equal(t, r, ws.metrics)
+	s := newSharedEventStream("https://app.smplkit.com", "test", r)
+	assert.Equal(t, r, s.metrics)
 }
 
-func TestWebSocket_NoMetrics(t *testing.T) {
-	ws := newSharedWebSocket("https://app.smplkit.com", "test", nil)
-	assert.Nil(t, ws.metrics)
+func TestEventStream_NoMetrics(t *testing.T) {
+	s := newSharedEventStream("https://app.smplkit.com", "test", nil)
+	assert.Nil(t, s.metrics)
 }
 
 // ===================================================================
@@ -1017,7 +1017,7 @@ func TestMetricsReporter_RecordGaugeZero(t *testing.T) {
 	r := makeReporter(t)
 	defer r.Close()
 
-	r.RecordGauge("platform.websocket_connections", 0, "connections", nil)
+	r.RecordGauge("platform.event_connections", 0, "connections", nil)
 
 	r.mu.Lock()
 	assert.Len(t, r.gauges, 1)

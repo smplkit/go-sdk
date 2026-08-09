@@ -22,18 +22,18 @@ import (
 // CRUD. The live surface (BooleanFlag / StringFlag / NumberFlag /
 // JsonFlag / Refresh / Stats / OnChange) connects lazily on first use —
 // the first call flushes discovery, fetches all flag definitions into
-// the local cache, and opens the live-updates WebSocket. No explicit
+// the local cache, and opens the live-updates event stream. No explicit
 // install step is required.
 //
 // The client supports two construction shapes:
 //
 //   - Wired into SmplClient — borrows the parent's flags transport for both
-//     runtime fetch and CRUD, the parent's shared WebSocket for the live
+//     runtime fetch and CRUD, the parent's shared event stream for the live
 //     channel, and the platform contexts sub-client for evaluation-context
 //     registration. This is the common path.
 //   - Standalone — NewFlagsClient(cfg, ...) builds and owns its own flags
 //     and app transports, and on first live use opens and owns its own
-//     WebSocket.
+//     event stream.
 type FlagsClient struct {
 	// client is the owning parent SmplClient when wired, nil when standalone.
 	client       *SmplClient
@@ -42,7 +42,7 @@ type FlagsClient struct {
 
 	// Parent-or-own state. When wired these mirror the parent's fields;
 	// when standalone they are resolved at construction so the live
-	// surface can open its own WebSocket without a parent.
+	// surface can open its own event stream without a parent.
 	environment string
 	service     string
 	metrics     *metricsReporter
@@ -51,17 +51,17 @@ type FlagsClient struct {
 
 	// callerUA is the User-Agent supplied via Config.ExtraHeaders (any
 	// casing), or "" when none was; it rides on the standalone-owned
-	// WebSocket handshake.
+	// event stream request.
 	callerUA string
 
 	// disableStreaming mirrors Config.DisableStreaming: the live surface
-	// fetches synchronously and never opens a WebSocket or spawns
+	// fetches synchronously and never opens an event stream or spawns
 	// background goroutines; threshold flushes run inline.
 	disableStreaming bool
 
-	// wsMu guards the lazily-created own WebSocket (standalone path).
-	wsMu  sync.Mutex
-	ownWS *sharedWebSocket
+	// streamMu guards the lazily-created own event stream (standalone path).
+	streamMu  sync.Mutex
+	ownStream *sharedEventStream
 
 	// contexts is the platform contexts sub-client used as the
 	// evaluation-context registration seam (wired path).
@@ -98,7 +98,7 @@ func newFlagsClient(parent *SmplClient, gen genflags.ClientInterface, appGen gen
 
 // NewFlagsClient creates a standalone Smpl Flags client that builds and
 // owns its own generated flags + app transports and, on first live use,
-// its own WebSocket against the event gateway.
+// its own event stream against the event gateway.
 //
 // Flags needs environment + service: the environment scopes runtime flag
 // values and discovery declarations, and the service is auto-injected as
@@ -169,20 +169,20 @@ func NewFlagsClient(cfg Config, opts ...ClientOption) (*FlagsClient, error) {
 	return c, nil
 }
 
-// ensureWS returns the shared WebSocket — the parent's when wired, else
-// our own (built lazily on first live use).
-func (c *FlagsClient) ensureWS() *sharedWebSocket {
+// ensureEventStream returns the shared event stream — the parent's when
+// wired, else our own (built lazily on first live use).
+func (c *FlagsClient) ensureEventStream() *sharedEventStream {
 	if c.client != nil {
-		return c.client.ensureWS()
+		return c.client.ensureEventStream()
 	}
-	c.wsMu.Lock()
-	defer c.wsMu.Unlock()
-	if c.ownWS == nil {
-		c.ownWS = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
-		c.ownWS.callerUA = c.callerUA
-		c.ownWS.start()
+	c.streamMu.Lock()
+	defer c.streamMu.Unlock()
+	if c.ownStream == nil {
+		c.ownStream = newSharedEventStream(c.appURL, c.apiKey, c.metrics)
+		c.ownStream.callerUA = c.callerUA
+		c.ownStream.start()
 	}
-	return c.ownWS
+	return c.ownStream
 }
 
 // resourceToFlag converts a generated FlagResource to the SDK Flag type.

@@ -1178,7 +1178,7 @@ func TestClient_Subscribe_And_GetValue(t *testing.T) {
 	assert.Equal(t, "db", editable.ID)
 }
 
-// --- Standalone NewConfigClient (builds its own transport + WebSocket) ---
+// --- Standalone NewConfigClient (builds its own transport + event stream) ---
 
 func TestNewConfigClient_Standalone_CRUD(t *testing.T) {
 	mux := http.NewServeMux()
@@ -1235,7 +1235,7 @@ func TestNewConfigClient_Standalone_DebugEnables(t *testing.T) {
 	assert.True(t, smplkit.IsDebugEnabled())
 }
 
-func TestNewConfigClient_Standalone_LiveSurface_OpensOwnWS(t *testing.T) {
+func TestNewConfigClient_Standalone_LiveSurface_OpensOwnStream(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/configs", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -1250,7 +1250,7 @@ func TestNewConfigClient_Standalone_LiveSurface_OpensOwnWS(t *testing.T) {
 	mux.HandleFunc("/api/v1/configs/bulk", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	// Catch-all (the standalone client opens its own WebSocket against appURL).
+	// Catch-all (the standalone client opens its own event stream against appURL).
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -1264,7 +1264,7 @@ func TestNewConfigClient_Standalone_LiveSurface_OpensOwnWS(t *testing.T) {
 	require.NoError(t, err)
 
 	// First live use flushes discovery, fetches/resolves configs, and opens
-	// the client's OWN WebSocket via ensureWS (no parent SmplClient).
+	// the client's OWN event stream via ensureEventStream (no parent SmplClient).
 	proxy, err := cc.Subscribe(context.Background(), "db")
 	require.NoError(t, err)
 	assert.Equal(t, "localhost", proxy.Value()["host"])

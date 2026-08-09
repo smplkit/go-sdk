@@ -5,7 +5,6 @@ go 1.24.3
 require (
 	github.com/diegoholiveira/jsonlogic/v3 v3.9.1
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.3
 	github.com/oapi-codegen/runtime v1.4.1
 	github.com/stretchr/testify v1.11.1
 )

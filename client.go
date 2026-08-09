@@ -40,13 +40,13 @@ type SmplClient struct {
 	appGenerated genapp.ClientInterface
 
 	// callerUA is the User-Agent the caller supplied via Config.ExtraHeaders
-	// (any casing), or "" when none was supplied. It rides on the WebSocket
-	// handshake, where headers are not merged through the request editors.
+	// (any casing), or "" when none was supplied. It rides on the live event
+	// stream request, where headers are not merged through the request editors.
 	callerUA string
 
 	// disableStreaming mirrors Config.DisableStreaming: the config / flags /
 	// logging runtime surfaces fetch synchronously and never open the shared
-	// WebSocket or spawn background goroutines.
+	// event stream or spawn background goroutines.
 	disableStreaming bool
 
 	platform *PlatformClient
@@ -70,8 +70,8 @@ type SmplClient struct {
 
 	metrics *metricsReporter
 
-	wsMu sync.Mutex
-	ws   *sharedWebSocket
+	streamMu sync.Mutex
+	stream   *sharedEventStream
 
 	// Deferred background machinery (periodic flush + service-context
 	// registration) is started exactly once on the first config/flags/
@@ -297,14 +297,14 @@ func NewClient(cfg Config, opts ...ClientOption) (*SmplClient, error) {
 	// Account-level settings on one client; built from the shared app transport.
 	c.account = newAccountClient(genAppClient)
 	// Config's full surface on one client; borrows the shared config transport
-	// and the parent's WebSocket.
+	// and the parent's event stream.
 	c.config = newConfigClient(c, genConfigClient, c.metrics)
 	// Flags' full surface on one client; borrows the shared flags transport and
-	// WebSocket. The contexts sub-client is the injection seam for
+	// event stream. The contexts sub-client is the injection seam for
 	// evaluation-context registration, wired to client.Platform().Contexts().
 	c.flags = newFlagsClient(c, genFlagsClient, genAppClient, c.platform.contexts, c.metrics)
 	// Logging's full surface on one client; borrows the shared logging
-	// transport and WebSocket. The two management sub-clients live at
+	// transport and event stream. The two management sub-clients live at
 	// client.Logging().Loggers() / client.Logging().LogGroups().
 	c.logging = newLoggingClient(c, genLoggingClient, c.metrics)
 	// Audit's full surface on one client; environment scoping is body-driven
@@ -360,7 +360,7 @@ func (c *SmplClient) Account() *AccountClient { return c.account }
 // ensureStarted starts the deferred background machinery exactly once.
 //
 // Idempotent and thread-safe (lock + flag); a no-op after Close. Triggered by
-// the first config/flags/logging operation or WebSocket open — never at
+// the first config/flags/logging operation or event-stream open — never at
 // construction.
 //
 // With Config.DisableStreaming set there is no background machinery to start:
@@ -441,43 +441,43 @@ func (c *SmplClient) registerServiceContext(ctx context.Context) {
 	resp.Body.Close()
 }
 
-// ensureWS returns the shared WebSocket connection.
-func (c *SmplClient) ensureWS() *sharedWebSocket {
+// ensureEventStream returns the shared live event stream.
+func (c *SmplClient) ensureEventStream() *sharedEventStream {
 	c.ensureStarted()
-	c.wsMu.Lock()
-	defer c.wsMu.Unlock()
-	if c.ws == nil {
-		c.ws = newSharedWebSocket(c.appURL, c.apiKey, c.metrics)
-		c.ws.callerUA = c.callerUA
-		c.ws.start()
+	c.streamMu.Lock()
+	defer c.streamMu.Unlock()
+	if c.stream == nil {
+		c.stream = newSharedEventStream(c.appURL, c.apiKey, c.metrics)
+		c.stream.callerUA = c.callerUA
+		c.stream.start()
 	}
-	return c.ws
+	return c.stream
 }
 
 // WaitUntilReady optionally pre-warms the SDK and blocks until the live
-// socket is up.
+// event stream is up.
 //
 // Eagerly connects config and flags — flushing discovery, pre-fetching all
-// flags and configs into the local cache, opening the live-updates WebSocket
-// — and waits for the handshake to complete. After this returns, flag.Get() /
-// client.Config().Subscribe() hit cache (no first-request connect tax) and any
-// OnChange listeners receive every server event from this point forward.
+// flags and configs into the local cache, opening the live-updates event
+// stream — and waits for it to be established. After this returns, flag.Get()
+// / client.Config().Subscribe() hit cache (no first-request connect tax) and
+// any OnChange listeners receive every server event from this point forward.
 //
 // Optional: config and flags connect lazily on first live use, so this is
-// purely a pre-warm / WebSocket-ready barrier. Logging integration is not
+// purely a pre-warm / stream-ready barrier. Logging integration is not
 // connected here — call client.Logging().Install() separately if you want it
 // (it installs adapters and hooks into your application's logger, which should
 // be opt-in).
 //
 // timeout=0 uses the SDK default. Context cancellation also returns. Returns
-// a TimeoutError if the WebSocket fails to connect within timeout.
+// a TimeoutError if the live event stream fails to connect within timeout.
 //
-// With Config.DisableStreaming set there is no socket to wait for: the call
+// With Config.DisableStreaming set there is no stream to wait for: the call
 // still pre-warms the flag and config caches, then returns without opening a
-// WebSocket.
+// live connection.
 func (c *SmplClient) WaitUntilReady(ctx context.Context, timeout time.Duration) error {
 	if timeout == 0 {
-		timeout = wsConnectTimeout
+		timeout = eventsConnectTimeout
 	}
 	if err := c.flags.runtime.ensureInit(ctx); err != nil {
 		return err
@@ -488,7 +488,7 @@ func (c *SmplClient) WaitUntilReady(ctx context.Context, timeout time.Duration) 
 	if c.disableStreaming {
 		return nil
 	}
-	return c.ensureWS().waitConnected(ctx, timeout)
+	return c.ensureEventStream().waitConnected(ctx, timeout)
 }
 
 // Close releases all resources held by the client and its sub-clients.
@@ -507,19 +507,19 @@ func (c *SmplClient) Close() error {
 	if c.audit != nil {
 		_ = c.audit.Close()
 	}
-	c.stopWS()
+	c.stopEventStream()
 	if c.metrics != nil {
 		c.metrics.Close()
 	}
 	return nil
 }
 
-// stopWS stops the shared WebSocket connection.
-func (c *SmplClient) stopWS() {
-	c.wsMu.Lock()
-	ws := c.ws
-	c.wsMu.Unlock()
-	if ws != nil {
-		ws.stop()
+// stopEventStream stops the shared live event stream.
+func (c *SmplClient) stopEventStream() {
+	c.streamMu.Lock()
+	stream := c.stream
+	c.streamMu.Unlock()
+	if stream != nil {
+		stream.stop()
 	}
 }

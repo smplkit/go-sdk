@@ -44,7 +44,7 @@ func main() {
 
     // ── Runtime: resolve config values ──────────────────────────────────
     // Get returns a LiveConfig proxy; reads always reflect the latest
-    // values pushed by the WebSocket.
+    // values pushed by the server.
     cfg, err := client.Config().Get(ctx, "user_service")
     if err != nil {
         log.Fatal(err)
@@ -168,7 +168,7 @@ if err != nil {
 
 ## Feature Flags
 
-Full management + runtime client with real-time WebSocket updates and a typed-handle evaluation API.
+Full management + runtime client with real-time live updates and a typed-handle evaluation API.
 
 ### Management API
 
@@ -213,7 +213,7 @@ _ = mgmt.Delete(ctx, "checkout-v2")
 flags := client.Flags()
 
 // Typed flag handles (no Connect step — runtime initializes lazily on
-// first Get and opens the live-updates WebSocket in the background).
+// first Get and opens the live-updates connection in the background).
 checkout := flags.BooleanFlag("checkout-v2", false)
 banner   := flags.StringFlag("banner-color", "red")
 retries  := flags.NumberFlag("max-retries", 3)
@@ -247,7 +247,7 @@ checkout.OnChange(func(evt *smplkit.FlagChangeEvent) {
     fmt.Println("checkout-v2 specifically changed")
 })
 
-// Manual re-fetch (bypasses the WebSocket — useful in short-lived scripts).
+// Manual re-fetch (bypasses live updates — useful in short-lived scripts).
 if err := flags.Refresh(ctx); err != nil {
     log.Fatal(err)
 }
@@ -260,7 +260,7 @@ fmt.Printf("hits=%d misses=%d\n", stats.CacheHits, stats.CacheMisses)
 // stop the runtime sub-client without tearing down the rest.
 ```
 
-If you need on-change listeners to receive events for writes that happen immediately after construction (e.g. in showcases or tests), call `client.WaitUntilReady(ctx, 0)` once after `NewClient` to block until the WebSocket subscription has been registered server-side.
+If you need on-change listeners to receive events for writes that happen immediately after construction (e.g. in showcases or tests), call `client.WaitUntilReady(ctx, 0)` once after `NewClient` to block until the live-update subscription has been registered server-side.
 
 ### Flag Types
 
@@ -309,12 +309,13 @@ if err := client.Logging().Install(ctx); err != nil {
     log.Fatal(err)
 }
 
-// Force a re-fetch of managed levels without waiting for the WebSocket.
+// Force a re-fetch of managed levels without waiting for a live update.
 if err := client.Logging().Refresh(ctx); err != nil {
     log.Fatal(err)
 }
 
-// Listen for level changes from the platform.
+// Listen for level changes from the platform. evt.Source is "push" for
+// changes delivered live by the server and "manual" for Refresh calls.
 client.Logging().OnChange(func(evt *smplkit.LoggerChangeEvent) {
     fmt.Println("logger changed:", evt.ID, "level:", evt.Level, "source:", evt.Source)
 })
@@ -393,7 +394,7 @@ if err := group.Save(ctx); err != nil {
 
 ## Debug Logging
 
-Set `SMPLKIT_DEBUG=1` to enable verbose diagnostic output to stderr. This is useful for troubleshooting real-time level changes, WebSocket connectivity, and SDK initialization. Debug output bypasses the managed logging framework and writes directly to stderr.
+Set `SMPLKIT_DEBUG=1` to enable verbose diagnostic output to stderr. This is useful for troubleshooting real-time level changes, live-update connectivity, and SDK initialization. Debug output bypasses the managed logging framework and writes directly to stderr.
 
 ```bash
 SMPLKIT_DEBUG=1 ./my-app
